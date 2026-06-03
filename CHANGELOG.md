@@ -772,3 +772,44 @@ Background→Performance toggle replaced repeated FPS readings). Version `?v=25`
 - Audio level is a by-ear call I can't make from here (game is driven muted + headless throttles
   audio) — confirm on your machine; if 0.05 is still too present, say so or I'll add the slider /
   a full mute toggle.
+
+---
+
+# Increment 25 — Overdrive is finally playable + self-serve audio (overnight pass)
+
+A fresh agent picked this up overnight. The headline: **Overdrive (Star Power) existed but was
+mouse-only** — you had to click a tiny flame to use it, so in practice nobody ever fired it. And
+**Space silently restarted your whole run mid-song** (a real footgun). Fixed both, then added the
+audio control the last few increments kept asking for. All verified in a real browser (muted),
+`node --check` clean each step, zero console errors throughout.
+
+### 57. Overdrive on the keyboard + Space no longer nukes your run  ✅ verified live
+`game.js` + `index.html`. **Space now activates Overdrive** when the meter is charged (was
+`restartGame()` — an accidental run-killer; Restart still lives in the pause menu). Added a
+one-shot **"OVERDRIVE READY"** flash the moment the meter fills, an activation **riser SFX**
+(`playOverdriveSfx` — a short two-saw synth sweep, mute-gated, no asset) + triple haptic, and
+discovery cues: the gauge reads **"OVERDRIVE · SPACE"** with a tooltip, the in-game footer hint
+fixed (`SPACE RESTART` → `SPACE OVERDRIVE`), and How-to-Play gained **STAR** + **OVERDRIVE** cards.
+Verified end-to-end: charge → READY flash → Space engages (2× multiplier, 8 s timer, flame active),
+re-press while active is a no-op, Space mid-run keeps the clock running (footgun gone).
+
+### 58. Self-serve audio — Music + Hit-Sound sliders  ✅ verified
+`game.js` + `index.html`. Two persisted Settings sliders (in `rr_settings`): **Music Volume**
+(0–100%, multiplies the music gain via `applyGate`/`DemoPlayer`) and **Hit Sound** (0–50% →
+`SFX_LEVEL`, default 10% = the current 0.05, so nothing changes unless you move it). Ends the
+SFX-tuning round-trips (the chug was dialed `0.85 → 0.05` over four increments). Hoisted the
+`SFX_LEVEL` declaration so persisted prefs can set it without a temporal-dead-zone error.
+Verified: round-trip + persistence + live apply; settings panel populates from saved prefs.
+
+### 59. UX flow + a11y polish  ✅ verified
+- **Results screen keyboard flow**: Enter = Play Again, Esc = Menu (was mouse-only), with an
+  on-screen hint — chain runs without the mouse.
+- **Pause overlay**: "ESC Resume" hint.
+- **a11y**: `aria-label`s on all Settings sliders; shared `.results-keys` style (warm on-brand).
+
+### Dev hooks added (still test-only — strip before launch)
+`__rrDebug.chargeOd()` / `.od()` (overdrive state) and `.audio()` (music gain / mute / SFX level),
+used to verify the above deterministically despite headless audio/rAF throttling.
+
+Versions `?v=25 → ?v=29` (bumped per commit batch). Git: this pass initialised a local repo and
+landed as focused commits (baseline + one per batch).

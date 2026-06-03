@@ -101,7 +101,8 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
   styles / `window.__rrChartStats` / `window.__rrDebug`. Always check `preview_console_logs`
   (level error) at the end. `node --check game.js` after every JS edit.
 - **`window.__rrDebug`** (dev hook): `.state() .jt() .score() .lanes() .nextHold() .press(lane)
-  .release(lane)`. **`window.__rrChartStats`** = note/hold/chord/bomb/filler counts after a chart builds.
+  .release(lane) .chargeOd() .od() .audio()`. **`window.__rrChartStats`** = note/hold/chord/bomb/filler
+  counts after a chart builds.
 - To verify visuals I can't see (flames at mult≥2, lightning at combo%25): confirm the code is
   node-valid + no console errors, and tell the user it'll show on their 60/30fps machine.
 
@@ -109,13 +110,17 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
 `window.__rrDebug`, `window.__rrChartStats`, the **FPS-meter** `<script>` block in index.html,
 and the `?novideo`/`?fps`/`?mock` flags are test-only. Remove before shipping to `/play`.
 
-## CURRENT STATE (as of v25)
+## CURRENT STATE (as of v29)
 Feature-complete v1: full 852-track live catalog (search/sort/fresh-first, all playable via
 in-browser charting), hold notes, chords, bombs, gap-fill density, palm-mute hit SFX + miss
 squelch (music never ducks), exact string alignment, game-feel HUD (Oxanium/Chakra Petch,
 corner brackets, animated score count-up), strings-catch-fire + catcher flames + lightning on
 combo, branded animated atom loading screen, How-to-Play overlay, prominent header search,
-no-cache server. Brand colors locked (no purple). See CHANGELOG increments 1–21 for detail.
+no-cache server. Brand colors locked (no purple). See CHANGELOG increments 1–25 for detail.
+**v26–v29 (overnight):** Overdrive/Star Power is now keyboard-playable (**Space**, was mouse-only)
+with a READY cue + riser SFX; Space no longer restarts your run (footgun removed). New self-serve
+**Music Volume** + **Hit Sound** sliders in Settings (persisted). Results/Pause keyboard flow
+(Enter/Esc) + slider a11y labels. Now under local git (focused commits per batch).
 
 ## OPEN / NEXT
 1. **FPS** — the user still owes a `?novideo=1` vs normal reading; 30fps is likely the moon

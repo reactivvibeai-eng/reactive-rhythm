@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=29" />
+<link rel="stylesheet" href="jukebox.css?v=30" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1768,17 +1768,17 @@
 
       <div class="set-row">
         <span class="set-l">Note Speed</span>
-        <input type="range" id="set-scroll" min="0.6" max="1.8" step="0.05" value="1" />
+        <input type="range" id="set-scroll" min="0.6" max="1.8" step="0.05" value="1" aria-label="Note speed" />
         <span class="set-v" id="set-scroll-v">1.0×</span>
       </div>
       <div class="set-row">
         <span class="set-l">Music Volume</span>
-        <input type="range" id="set-music" min="0" max="1" step="0.05" value="1" />
+        <input type="range" id="set-music" min="0" max="1" step="0.05" value="1" aria-label="Music volume" />
         <span class="set-v" id="set-music-v">100%</span>
       </div>
       <div class="set-row">
         <span class="set-l">Hit Sound</span>
-        <input type="range" id="set-sfx" min="0" max="0.5" step="0.01" value="0.05" />
+        <input type="range" id="set-sfx" min="0" max="0.5" step="0.01" value="0.05" aria-label="Hit sound volume" />
         <span class="set-v" id="set-sfx-v">10%</span>
       </div>
       <div class="set-row">
@@ -2142,9 +2142,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=29"></script>
-<script src="jukebox.js?v=29"></script>
-<script src="catalog.js?v=29"></script>
+<script src="game.js?v=30"></script>
+<script src="jukebox.js?v=30"></script>
+<script src="catalog.js?v=30"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
