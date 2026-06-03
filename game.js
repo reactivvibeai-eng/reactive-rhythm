@@ -80,6 +80,8 @@
   let fxLite = false;        // lite visual mode (perf): gates god-rays/embers
   let reduceMotion = false;  // accessibility: gate heavy ambient motion (CSS + canvas)
   let bgMode = 'cinematic';  // 'cinematic' = moon video backdrop | 'performance' = no video (higher FPS)
+  let musicVol = 1;          // master music level (0..1), self-serve in Settings
+  let SFX_LEVEL = 0.05;      // hit-chug accent level (0..0.5); self-serve in Settings (default barely-there)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
     if (s.scroll) userScroll = s.scroll;
@@ -87,6 +89,8 @@
     if (s.bgMode === 'performance' || s.bgMode === 'cinematic') bgMode = s.bgMode;
     if (typeof s.reduceMotion === 'boolean') reduceMotion = s.reduceMotion;
     else if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) reduceMotion = true;
+    if (typeof s.music === 'number') musicVol = Math.max(0, Math.min(1, s.music));
+    if (typeof s.sfx === 'number') SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx));
   } catch (e) {}
   // ?novideo=1 forces performance mode (FPS diagnostic / quick override)
   try { if (/[?&]novideo=1/.test(location.search)) bgMode = 'performance'; } catch (e) {}
@@ -262,7 +266,7 @@
   // ---- hit SFX: a real palm-mute guitar chug, decoded once into a buffer for zero-latency,
   // overlapping playback. Replaces the old synth beep. (Falls back to the beep if it can't load.)
   let hitBuffer = null, missBuffer = null, hitSfxTried = false;
-  let SFX_LEVEL = 0.05;   // master accent for hits — kept very low (barely-there, per user; lowered again 0.12→0.05)
+  // SFX_LEVEL is declared near the top (settings block) so persisted prefs can set it before this point.
   function loadHitSfx() {
     if (hitSfxTried) return;
     hitSfxTried = true;
@@ -303,7 +307,7 @@
       this.src = this.ctx.createBufferSource();
       this.src.buffer = this.buffer;
       this.gain = this.ctx.createGain();
-      this.gain.gain.value = muted ? 0 : 1;
+      this.gain.gain.value = muted ? 0 : musicVol;
       this.src.connect(this.gain); this.gain.connect(this.ctx.destination);
       const when = this.ctx.currentTime + 0.12;
       this.src.start(when);
@@ -318,7 +322,7 @@
     getDuration() { return this.duration; }
     pause() { if (!this.ctx) return; this._pausedAt = this.ctx.currentTime; try { this.ctx.suspend(); } catch (e) {} }
     resume() { if (this._pausedAt == null) return; this._pauseAccum += this.ctx.currentTime - this._pausedAt; this._pausedAt = null; try { this.ctx.resume(); } catch (e) {} }
-    setMuted(m) { if (this.gain) this.gain.gain.value = m ? 0 : 1; }
+    setMuted(m) { if (this.gain) this.gain.gain.value = m ? 0 : musicVol; }
     setGain(v) { if (this.gain && this.ctx) { try { this.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.012); } catch (e) { this.gain.gain.value = v; } } }
     stop() {
       if (this.src) { try { this.src.onended = null; this.src.stop(); } catch (e) {} }
@@ -575,9 +579,11 @@
     if (s && typeof s.fxLite === 'boolean') fxLite = s.fxLite;
     if (s && typeof s.reduceMotion === 'boolean') { reduceMotion = s.reduceMotion; applyReduceMotion(); }
     if (s && (s.bgMode === 'performance' || s.bgMode === 'cinematic')) { bgMode = s.bgMode; applyBgMode(); }
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode })); } catch (e) {}
+    if (s && typeof s.music === 'number') { musicVol = Math.max(0, Math.min(1, s.music)); applyGate(); }
+    if (s && typeof s.sfx === 'number') { SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx)); }
+    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL })); } catch (e) {}
   };
-  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode });
+  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }
   applyReduceMotion();
   // performance background: hide + pause the moon video (kills its compositing cost so the
@@ -904,7 +910,9 @@
     }
     if (state === 'playing' || state === 'paused') {
       if (e.key === 'Escape') { if (state === 'playing') pauseGame(); else resumeGame(); return; }
-      if (e.code === 'Space') { e.preventDefault(); restartGame(); return; }
+      // Space = activate Overdrive / Star Power (when charged). Restart lives in the pause menu now
+      // (Space-to-restart was an accidental run-killer mid-song).
+      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat && state === 'playing') activateOverdrive(); return; }
     }
     if (state !== 'playing') return;
     // ignore OS key-repeat: only the first press judges; the key staying down drives the sustain
@@ -961,7 +969,7 @@
 
   // music gate: silence the track briefly on a miss, restore otherwise
   function applyGate() {
-    const target = muted ? 0 : (songTime() < muteUntil ? DIP_LEVEL : 1);
+    const target = muted ? 0 : (songTime() < muteUntil ? DIP_LEVEL * musicVol : musicVol);
     if (Math.abs(target - curGain) > 0.001) { curGain = target; if (player && player.setGain) player.setGain(target); }
   }
 
@@ -2114,6 +2122,8 @@
   function openSettings() {
     const s = window.RhythmGame.getSettings();
     $('set-scroll').value = s.scroll; $('set-scroll-v').textContent = s.scroll.toFixed(1) + '×';
+    { const m = $('set-music'); if (m) { m.value = s.music; const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(s.music * 100) + '%'; } }
+    { const x = $('set-sfx'); if (x) { x.value = s.sfx; const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((s.sfx / 0.5) * 100) + '%'; } }
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
@@ -2137,6 +2147,14 @@
     const v = parseFloat(e.target.value); $('set-scroll-v').textContent = v.toFixed(1) + '×';
     window.RhythmGame.applySettings({ scroll: v });
   });
+  { const m = $('set-music'); if (m) m.addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value); const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(v * 100) + '%';
+    window.RhythmGame.applySettings({ music: v });
+  }); }
+  { const x = $('set-sfx'); if (x) x.addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value); const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((v / 0.5) * 100) + '%';
+    window.RhythmGame.applySettings({ sfx: v });
+  }); }
   [...$('set-fx').children].forEach(b => b.addEventListener('click', () => {
     [...$('set-fx').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ fxLite: b.dataset.fx === 'lite' });
