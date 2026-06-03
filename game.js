@@ -731,7 +731,13 @@
     renderResults(results, accPct, grade);
     showScreen('results');
 
-    // live submit (play_token round-trip) — handled by catalog layer
+    // ALWAYS record locally (per-song best + lifetime career stats) — works even for the
+    // in-browser-charted tracks that have no server submit, so the grade chips + Career are real.
+    if (window.RhythmCatalog && window.RhythmCatalog.recordLocal) {
+      try { window.RhythmCatalog.recordLocal(results); } catch (e) {}
+    }
+
+    // live submit (play_token round-trip) — handled by catalog layer (leaderboard only)
     if (session && session.submit) {
       try {
         const out = await session.submit(results);
@@ -744,6 +750,19 @@
 
   function renderResults(results, accPct, grade) {
     $('results-grade').textContent = grade;
+    // star rating from accuracy — a quick visual read layered on the letter grade
+    { const starN = accPct >= 95 ? 5 : accPct >= 85 ? 4 : accPct >= 72 ? 3 : accPct >= 55 ? 2 : accPct >= 30 ? 1 : 0;
+      const sh = $('results-stars');
+      if (sh) {
+        sh.innerHTML = '';
+        for (let i = 0; i < 5; i++) {
+          const st = document.createElement('span');
+          st.className = 'rstar' + (i < starN ? ' on' : '');
+          st.textContent = '★';
+          if (i < starN) st.style.animationDelay = (0.5 + i * 0.12) + 's';
+          sh.appendChild(st);
+        }
+      } }
     // count-up the score & accuracy for a satisfying results reveal
     const scoreEl = $('rs-score'), accEl = $('rs-acc');
     const startT = performance.now(), dur = 900;
@@ -2183,7 +2202,6 @@
     $('set-scroll').value = s.scroll; $('set-scroll-v').textContent = s.scroll.toFixed(1) + '×';
     { const m = $('set-music'); if (m) { m.value = s.music; const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(s.music * 100) + '%'; } }
     { const x = $('set-sfx'); if (x) { x.value = s.sfx; const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((s.sfx / 0.5) * 100) + '%'; } }
-    { const ms = $('set-miss'); if (ms) { ms.value = s.miss; const mv = $('set-miss-v'); if (mv) mv.textContent = Math.round(s.miss * 100) + '%'; } }
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
@@ -2214,10 +2232,6 @@
   { const x = $('set-sfx'); if (x) x.addEventListener('input', (e) => {
     const v = parseFloat(e.target.value); const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((v / 0.5) * 100) + '%';
     window.RhythmGame.applySettings({ sfx: v });
-  }); }
-  { const ms = $('set-miss'); if (ms) ms.addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value); const mv = $('set-miss-v'); if (mv) mv.textContent = Math.round(v * 100) + '%';
-    window.RhythmGame.applySettings({ miss: v });
   }); }
   [...$('set-fx').children].forEach(b => b.addEventListener('click', () => {
     [...$('set-fx').children].forEach(x => x.classList.remove('active')); b.classList.add('active');

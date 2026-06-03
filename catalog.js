@@ -534,20 +534,63 @@
     $('sheet-back').addEventListener('click', closeSheet);
   }
 
-  // ---------- Leaderboard render (called by engine after submit) ----------
-  function onSubmitResult(out, results) {
-    // detect a personal best BEFORE we overwrite it, then record it
-    if (currentTrack && results) {
-      const prev = getBest(currentTrack.id);
-      const isNewBest = results.score > 0 && (!prev || results.score > (prev.score || 0));
+  // ---------- per-user career (lifetime aggregate stats; localStorage) ----------
+  function loadCareer() { try { return JSON.parse(localStorage.getItem('rr_career') || '{}'); } catch (e) { return {}; } }
+  function getCareer() {
+    const c = loadCareer();
+    return {
+      runs: c.runs || 0, score: c.score || 0,
+      notesHit: c.notesHit || 0, notesTotal: c.notesTotal || 0,
+      bestCombo: c.bestCombo || 0, fullCombos: c.fullCombos || 0,
+      grades: Object.assign({ S: 0, A: 0, B: 0, C: 0, D: 0 }, c.grades || {}),
+      songs: c.songs || {}, firstPlay: c.firstPlay || 0, lastPlay: c.lastPlay || 0,
+    };
+  }
+  const GRADE_ORDER = { D: 0, C: 1, B: 2, A: 3, S: 4 };
+
+  // ---------- ALWAYS-on local recorder — called by the engine on EVERY completed run,
+  // including in-browser-charted tracks that have no server submit (i.e. all live tracks
+  // today). This is what makes the cover-art grade chips + the Career profile reflect your
+  // real play instead of only the mock seed. Leaderboard submit (below) stays separate.
+  function recordLocal(results) {
+    if (!results) return;
+    const grade = results.grade || gradeFor(results.accuracy || 0);
+    // 1) lifetime career aggregate
+    try {
+      const c = loadCareer();
+      c.runs = (c.runs || 0) + 1;
+      c.score = (c.score || 0) + (results.score || 0);
+      c.notesHit = (c.notesHit || 0) + (results.notes_hit || 0);
+      c.notesTotal = (c.notesTotal || 0) + (results.notes_total || 0);
+      c.bestCombo = Math.max(c.bestCombo || 0, results.max_combo || 0);
+      if (results.full_combo) c.fullCombos = (c.fullCombos || 0) + 1;
+      c.grades = c.grades || {}; c.grades[grade] = (c.grades[grade] || 0) + 1;
+      if (currentTrack && currentTrack.id) { c.songs = c.songs || {}; c.songs[currentTrack.id] = (c.songs[currentTrack.id] || 0) + 1; }
+      const now = Date.now();
+      if (!c.firstPlay) c.firstPlay = now;
+      c.lastPlay = now;
+      localStorage.setItem('rr_career', JSON.stringify(c));
+    } catch (e) {}
+    // 2) per-song best + NEW BEST / GRADE UP badges (compare vs REAL saved scores, not the mock seed)
+    if (currentTrack && currentTrack.id && results.score > 0) {
+      let prevReal = null;
+      try {
+        const s = loadScores();
+        ['easy', 'medium', 'hard'].forEach(d => { const r = s[currentTrack.id + '|' + d]; if (r && (!prevReal || r.score > prevReal.score)) prevReal = r; });
+      } catch (e) {}
+      const isNewBest = !prevReal || results.score > (prevReal.score || 0);
+      const isGradeUp = !!prevReal && (GRADE_ORDER[grade] || 0) > (GRADE_ORDER[prevReal.grade] || 0);
       saveBest(currentTrack.id, results);
-      if (isNewBest) {
-        const badges = document.getElementById('results-badges');
-        if (badges && !/new best/i.test(badges.textContent)) {
-          badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">New Best</span>');
-        }
+      const badges = document.getElementById('results-badges');
+      if (badges) {
+        if (isNewBest && !/new best/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">New Best</span>');
+        if (isGradeUp && !/grade up/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">Grade Up · ' + grade + '</span>');
       }
     }
+  }
+
+  // ---------- Leaderboard render (called by engine after a live server submit) ----------
+  function onSubmitResult(out, results) {
     const wrap = $('results-leaderboard');
     if (!wrap) return;
     if (!out || out.error) {
@@ -573,7 +616,7 @@
   }
 
   window.RhythmCatalog = {
-    onSubmitResult, liveProvider, openSheet,
+    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     search, sortTracks, sections, getBest,

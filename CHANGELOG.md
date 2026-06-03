@@ -813,3 +813,59 @@ used to verify the above deterministically despite headless audio/rAF throttling
 
 Versions `?v=25 → ?v=29` (bumped per commit batch). Git: this pass initialised a local repo and
 landed as focused commits (baseline + one per batch).
+
+---
+
+# Increment 26 — the reward loop: real persistence + Career profile + results payoff (overnight)
+
+> Context: a second agent was editing this folder **concurrently**. I detected the live edits
+> (my writes kept bouncing with "file modified since read"), backed out of the files it was
+> actively writing to avoid corrupting its work (audio + Overdrive — Increment 25 above), waited
+> for it to go quiet, then built the one big system nobody had touched: **progression / the reward
+> loop** (ROADMAP Pillar B, deferred since day one). Sole-editor once the coast was clear;
+> `node --check` clean each step, verified in a real (headless) browser, **zero console errors**.
+
+### 60. Real plays now PERSIST — the reward loop was cosmetic before  ✅ verified
+`game.js` + `catalog.js`. Root cause: `endGame` only saved a best **inside `if (session.submit)`**,
+which only the (currently unused) server-chart path has — so for every in-browser-charted track
+(**all 852 live tracks today**) and the demo, `saveBest` never ran. The cover-art grade chips and
+the "BEST" rail were showing only the **mock seed** (`_mockBest`), never your real play. Fixed:
+`endGame` now ALWAYS calls a new `RhythmCatalog.recordLocal(results)` (separate from the leaderboard
+submit). `recordLocal` saves the per-song best (compared against your REAL saved scores, not the
+seed) and accumulates lifetime **career** stats. `onSubmitResult` is now leaderboard-only (no double
+record). Verified: a simulated run round-trips into `getBest` + `getCareer` with correct totals
+(2 runs → score 42,345, best combo 140, full-combos 1, grades A:1/S:1, lifetime acc 96.0%).
+
+### 61. Career / Controller Profile  ✅ verified
+`index.html` (self-contained — a header button, an overlay, CSS, a render script reading
+`RhythmCatalog.getCareer()`; backed by `rr_career` in localStorage). A new **person icon** in the
+library header opens a branded overlay (Oxanium/Chakra Petch, crimson, mirrors the How-to-Play
+card): lifetime **Score / Runs / Songs Played / Best Combo / Accuracy / Full Combos**, a **grade
+distribution** (S·A·B·C·D counts), and a flavor **rank title** that climbs with play
+(SIGNAL INITIATE → RIFT TAPPER → ECHO RUNNER → … → SIGNAL ARCHITECT). Empty-state for new players;
+a two-tap **RESET CAREER** (wipes `rr_career` + `rr_scores`); Esc / backdrop closes. Verified live:
+opens, renders 6 stat cells + 5 grade cells + the rank from real data, closes clean; 0 errors.
+
+### 62. Results payoff — star rating + GRADE UP  ✅ verified
+`index.html` + `game.js` + `catalog.js`. The results screen now shows a **1–5 star rating**
+(derived from accuracy) that pops in sequentially right after the big grade stamps — a quick visual
+"how'd I do" on top of the letter. And beating your prior grade on a track fires a gold
+**"GRADE UP · <grade>"** badge alongside the existing FULL COMBO / NEW BEST. (Star fill + badge are
+node-valid and wired; the pop animation shows on a real run, like the other combo visuals.)
+
+### Why these, and not the OPEN/NEXT list
+The other agent had the obvious roadmap covered (audio sliders, Overdrive). The genuinely
+un-addressed, high-value gap was **progression** — the "why keep playing" layer the game never had.
+It's also what makes the *other* agent's polish pay off: your S-ranks, combos and grades are now
+*yours*, and they accumulate across sessions.
+
+### Notes / deliberate non-actions
+- A **miss-SFX volume slider was intentionally not added** — the other agent's mixing board
+  (Music + Hit Sound) is their design and covers the real need (hit-chug control). I removed my
+  stray `set-miss` stubs rather than compete on audio.
+- New storage key **`rr_career`** (lifetime aggregate). `rr_scores` (per-song best) now fills from
+  real play, not just the seed.
+- Server-chart tracks (when they exist) still submit to the leaderboard exactly as before — local
+  recording is additive and always-on, so practice runs build your Career too.
+
+Version `?v=32 → ?v=33`. Landed as focused git commits on top of the other agent's history.

@@ -41,7 +41,7 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
 - **`index.html`** — the shell: all CSS (one big `<style>`), all screen markup (start, jukebox,
   game HUD, settings, how-to-play, results, loading), `window.RHYTHM_CONFIG` (Supabase URL +
   anon key + API base), dev FPS-meter script, `?novideo` script. Local JS/CSS carry a
-  **`?v=NN` cache-bust query — bump NN on every JS/CSS change** (currently **v25**).
+  **`?v=NN` cache-bust query — bump NN on every JS/CSS change** (currently **v33**).
 - **`game.js`** (~115KB, THE engine) — game loop (rAF), Canvas render, input (key/touch/MIDI/
   gamepad), scoring, the chart builder (`buildNotes`), the in-browser onset analyzer
   (`analyzeBeats`), providers (`demoProvider`, `bufferedProvider`/`playUrl`), audio (DemoPlayer
@@ -110,17 +110,23 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
 `window.__rrDebug`, `window.__rrChartStats`, the **FPS-meter** `<script>` block in index.html,
 and the `?novideo`/`?fps`/`?mock` flags are test-only. Remove before shipping to `/play`.
 
-## CURRENT STATE (as of v29)
+## CURRENT STATE (as of v33)
 Feature-complete v1: full 852-track live catalog (search/sort/fresh-first, all playable via
 in-browser charting), hold notes, chords, bombs, gap-fill density, palm-mute hit SFX + miss
 squelch (music never ducks), exact string alignment, game-feel HUD (Oxanium/Chakra Petch,
 corner brackets, animated score count-up), strings-catch-fire + catcher flames + lightning on
 combo, branded animated atom loading screen, How-to-Play overlay, prominent header search,
-no-cache server. Brand colors locked (no purple). See CHANGELOG increments 1–25 for detail.
-**v26–v29 (overnight):** Overdrive/Star Power is now keyboard-playable (**Space**, was mouse-only)
-with a READY cue + riser SFX; Space no longer restarts your run (footgun removed). New self-serve
-**Music Volume** + **Hit Sound** sliders in Settings (persisted). Results/Pause keyboard flow
-(Enter/Esc) + slider a11y labels. Now under local git (focused commits per batch).
+no-cache server. Brand colors locked (no purple). See CHANGELOG increments 1–26 for detail.
+**v26–v29 (overnight, agent A):** Overdrive/Star Power is now keyboard-playable (**Space**, was
+mouse-only) with a READY cue + riser SFX; Space no longer restarts your run (footgun removed). New
+self-serve **Music Volume** + **Hit Sound** sliders in Settings (persisted). Results/Pause keyboard
+flow (Enter/Esc) + slider a11y labels. Now under local git (focused commits per batch).
+**v33 (overnight, agent B) — the reward loop / progression:** real plays now **persist** (every run
+records locally via `RhythmCatalog.recordLocal` → per-song best + lifetime career; the cover grades
+were previously only the mock `_mockBest` seed). New **Career / Controller Profile** overlay (person
+icon in the library header) — lifetime score/runs/songs/best-combo/accuracy/full-combos, a grade
+distribution, and a climbing rank title; backed by `rr_career`. Results screen gained a **star
+rating** + a **GRADE UP** badge. (Built sole-editor after a concurrent agent — agent A — went idle.)
 
 ## OPEN / NEXT
 1. **FPS** — the user still owes a `?novideo=1` vs normal reading; 30fps is likely the moon
