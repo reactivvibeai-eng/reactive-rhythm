@@ -423,9 +423,11 @@
   .ho-chord img:last-child { transform: translate(9px,4px); }
   .ho-hold i { width: 13px; height: 46px; border-radius: 7px; background: linear-gradient(180deg, #ff5a44, #b3121f); box-shadow: 0 0 16px rgba(255,42,48,0.7); }
   .ho-bomb { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 26px; color: #ffd8be; background: radial-gradient(circle at 40% 35%, #3a1216, #080304); border: 1px solid rgba(255,64,40,0.6); box-shadow: 0 0 14px rgba(255,42,48,0.5); border-radius: 50%; }
+  .ho-od { font-size: 30px; filter: drop-shadow(0 0 12px rgba(255,170,80,0.8)); }
   .howto-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .howto-txt b { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
   .howto-txt span { font-family: 'Chakra Petch', monospace; font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
+  .howto-txt kbd, .results-keys kbd { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--chrome); background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
   .howto-txt em { color: var(--crimson); font-style: normal; font-weight: 700; }
   #howto-close { min-width: 240px; margin-top: 4px; }
   @media (max-width: 560px) { .howto-grid { grid-template-columns: 1fr; } .howto-title { font-size: 32px; } }
@@ -1745,6 +1747,14 @@
           <div class="howto-ico ho-bomb">✕</div>
           <div class="howto-txt"><b>BOMB</b><span>Do <em>not</em> hit — let the ✕ pass by.</span></div>
         </div>
+        <div class="howto-item">
+          <div class="howto-ico"><img src="assets/note-star.png" alt=""></div>
+          <div class="howto-txt"><b>STAR</b><span>Gold notes charge your <em>Overdrive</em> meter fast.</span></div>
+        </div>
+        <div class="howto-item">
+          <div class="howto-ico ho-od">🔥</div>
+          <div class="howto-txt"><b>OVERDRIVE</b><span>Meter full? Hit <kbd>SPACE</kbd> for a score-multiplier surge.</span></div>
+        </div>
       </div>
       <button class="ghost-btn primary" id="howto-close">GOT IT — LET’S PLAY</button>
     </div>
@@ -2015,7 +2025,7 @@
     </div>
 
     <div class="footer-hint">
-      <span id="footer-keys"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span> · <kbd>ESC</kbd> PAUSE · <kbd>SPACE</kbd> RESTART
+      <span id="footer-keys"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span> · <kbd>ESC</kbd> PAUSE · <kbd>SPACE</kbd> OVERDRIVE
     </div>
   </div>
 
@@ -2070,6 +2080,9 @@
         <button class="ghost-btn primary" id="results-replay">PLAY AGAIN</button>
         <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
         <button class="ghost-btn" id="results-share">COPY SCORE</button>
+      </div>
+      <div class="results-keys" style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-dim);text-transform:uppercase;">
+        <kbd>ENTER</kbd> Play again · <kbd>ESC</kbd> Menu
       </div>
     </div>
   </div>

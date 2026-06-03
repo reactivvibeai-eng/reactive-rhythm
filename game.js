@@ -280,7 +280,7 @@
     if (muted || !missBuffer) return;
     try {
       const ac = getAC();
-      const g = ac.createGain(); g.gain.value = 0.5;
+      const g = ac.createGain(); g.gain.value = missVol;
       const s = ac.createBufferSource(); s.buffer = missBuffer;
       s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
     } catch (e) {}
@@ -906,6 +906,12 @@
     }
     if (state === 'menu') {
       if (e.key === 'Enter') { e.preventDefault(); $('play-btn').click(); }
+      return;
+    }
+    // results screen: keyboard flow so you can chain runs without the mouse
+    if (state === 'results') {
+      if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
+      else if (e.key === 'Escape') { e.preventDefault(); const b = $('results-menu'); if (b) b.click(); }
       return;
     }
     if (state === 'playing' || state === 'paused') {
@@ -2124,6 +2130,7 @@
     $('set-scroll').value = s.scroll; $('set-scroll-v').textContent = s.scroll.toFixed(1) + '×';
     { const m = $('set-music'); if (m) { m.value = s.music; const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(s.music * 100) + '%'; } }
     { const x = $('set-sfx'); if (x) { x.value = s.sfx; const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((s.sfx / 0.5) * 100) + '%'; } }
+    { const ms = $('set-miss'); if (ms) { ms.value = s.miss; const mv = $('set-miss-v'); if (mv) mv.textContent = Math.round(s.miss * 100) + '%'; } }
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
@@ -2154,6 +2161,10 @@
   { const x = $('set-sfx'); if (x) x.addEventListener('input', (e) => {
     const v = parseFloat(e.target.value); const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((v / 0.5) * 100) + '%';
     window.RhythmGame.applySettings({ sfx: v });
+  }); }
+  { const ms = $('set-miss'); if (ms) ms.addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value); const mv = $('set-miss-v'); if (mv) mv.textContent = Math.round(v * 100) + '%';
+    window.RhythmGame.applySettings({ miss: v });
   }); }
   [...$('set-fx').children].forEach(b => b.addEventListener('click', () => {
     [...$('set-fx').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
