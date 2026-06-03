@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(curl -sL \"https://api.anthropic.com/v1/design/h/QNX-095Be4KHqjqOT0BEjw\" -o design_raw.html -w \"HTTP %{http_code} | size %{size_download} bytes | type %{content_type}\\\\n\")",
+      "Read(//d/d/sunoai music plan/animev1/veo 3 round 2/can i pet that dog/cloudcode/v2/**)",
+      "Bash(xxd)",
+      "Bash(cp design_raw.html design_raw.gz)",
+      "Bash(gunzip -k -f design_raw.gz)",
+      "Bash(tar -tf design_raw)",
+      "Bash(mkdir -p _extracted)",
+      "Bash(tar -xf design_raw -C _extracted guitar-hero-ai/README.md guitar-hero-ai/project/DEPLOY.md guitar-hero-ai/project/ROADMAP.md guitar-hero-ai/project/integration/README.md)",
+      "Bash(tar -xf design_raw -C _extracted guitar-hero-ai/chats/chat1.md 'guitar-hero-ai/project/Rhythm Rift.html' 'guitar-hero-ai/project/Rhythm Rift \\(Mobile Preview\\).html' 'guitar-hero-ai/project/Reactive Rhythm \\(phone\\).html' guitar-hero-ai/project/game.js guitar-hero-ai/project/catalog.js guitar-hero-ai/project/jukebox.js guitar-hero-ai/project/jukebox.css guitar-hero-ai/project/integration/analyzer-params.md guitar-hero-ai/project/integration/chart_v1.schema.json guitar-hero-ai/project/integration/game_scores.sql guitar-hero-ai/project/integration/generate-chart.ts)"
+    ]
+  }
+}

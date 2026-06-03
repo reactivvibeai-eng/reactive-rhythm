@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "chart_v1",
+  "description": "Lane-agnostic beat chart stored in radio_tracks.chart_v1 (jsonb). The game client derives easy/medium/hard at runtime from this single object — do NOT store per-difficulty charts.",
+  "type": "object",
+  "required": ["version", "duration", "onsets"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "Schema version. Bump only on breaking changes; game checks this."
+    },
+    "analyzer": {
+      "type": "string",
+      "description": "Algorithm tag for reproducibility.",
+      "example": "lowpass-200hz-rms-23ms-peak1.45"
+    },
+    "bpm": {
+      "type": "number",
+      "description": "Estimated tempo (inter-onset-interval histogram). Informational; gameplay does not require it.",
+      "example": 128
+    },
+    "duration": {
+      "type": "number",
+      "description": "Track length in seconds (float).",
+      "example": 214.32
+    },
+    "beats": {
+      "type": "array",
+      "description": "Detected bass/kick onsets in chronological order. This is the chart.",
+      "items": {
+        "type": "object",
+        "required": ["t", "strength"],
+        "properties": {
+          "t": {
+            "type": "number",
+            "description": "Onset time in seconds from track start, rounded to 3 decimals (ms)."
+          },
+          "strength": {
+            "type": "number",
+            "description": "Strength = peak energy / local mean, clamped 0..3, rounded to 2 decimals. Drives note size + which beats survive density filtering on easier difficulties."
+          }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "description": "Optional QA metadata — lets you flag bad analyses without replaying.",
+      "properties": {
+        "beatCount": { "type": "integer" },
+        "meanGap": { "type": "number", "description": "Avg seconds between onsets." },
+        "peakStrength": { "type": "number" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": 1,
+      "analyzer": "lowpass-200hz-rms-23ms-peak1.45",
+      "bpm": 128,
+      "duration": 214.32,
+      "beats": [
+        { "t": 1.243, "strength": 1.87 },
+        { "t": 1.71, "strength": 0.94 },
+        { "t": 2.18, "strength": 2.41 }
+      ],
+      "stats": { "beatCount": 412, "meanGap": 0.41, "peakStrength": 3.0 }
+    }
+  ]
+}

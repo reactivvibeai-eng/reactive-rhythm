@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prize Wheel Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial Black', 'Arial Bold', sans-serif;
+            background: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #ffffff;
+            background-image:
+                repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,0,0,0.03) 10px, rgba(255,0,0,0.03) 20px),
+                repeating-linear-gradient(-45deg, transparent, transparent 10px, rgba(255,0,0,0.03) 10px, rgba(255,0,0,0.03) 20px);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .sidebar {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 3px solid #ff0000;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(255,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            flex: 0 0 350px;
+            max-height: 850px;
+            overflow-y: auto;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: #000;
+            border-radius: 5px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #ff0000;
+            border-radius: 5px;
+        }
+
+        .wheel-section {
+            flex: 1;
+            min-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        h1 {
+            color: #ff0000;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 3.5em;
+            text-shadow:
+                0 0 10px #ff0000,
+                0 0 20px #ff0000,
+                0 0 30px #ff0000,
+                3px 3px 0px #000;
+            width: 100%;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            color: #ff0000;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+            text-shadow: 0 0 10px #ff0000;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #ffffff;
+            text-transform: uppercase;
+            font-size: 0.9em;
+            letter-spacing: 1px;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ff0000;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #0a0a0a;
+            color: #ffffff;
+            transition: all 0.3s;
+            font-family: Arial, sans-serif;
+        }
+
+        input[type="text"]:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: #ff0000;
+            box-shadow: 0 0 15px rgba(255,0,0,0.5);
+            background: #000000;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        button {
+            background: linear-gradient(145deg, #ff0000, #cc0000);
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(255,0,0,0.4);
+        }
+
+        button:hover {
+            background: linear-gradient(145deg, #cc0000, #ff0000);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255,0,0,0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #333;
+            border-color: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .list {
+            margin-top: 15px;
+        }
+
+        .list-item {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border: 2px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .list-item:hover {
+            border-color: #ff0000;
+            box-shadow: 0 0 15px rgba(255,0,0,0.3);
+        }
+
+        .list-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .list-item-name {
+            font-weight: bold;
+            color: #ff0000;
+            font-size: 1.1em;
+        }
+
+        .list-item-weight {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #aaa;
+        }
+
+        .weight-input {
+            width: 80px;
+            padding: 5px;
+            background: #000;
+            border: 1px solid #ff0000;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .weight-percentage {
+            color: #ff0000;
+            font-weight: bold;
+            min-width: 60px;
+        }
+
+        .remove-btn {
+            background: linear-gradient(145deg, #800000, #600000);
+            color: white;
+            border: 1px solid #ff0000;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            width: auto;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .remove-btn:hover {
+            background: linear-gradient(145deg, #ff0000, #cc0000);
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 550px;
+            height: 550px;
+            background: radial-gradient(circle, #1a1a1a, #000000);
+            border-radius: 50%;
+            box-shadow:
+                0 0 50px rgba(255,0,0,0.5),
+                inset 0 0 50px rgba(0,0,0,0.8);
+            padding: 25px;
+            border: 5px solid #ff0000;
+        }
+
+        #wheel-canvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(0deg);
+            transition: transform 8s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+
+        #wheel-canvas.spinning {
+            transition: transform 8s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+
+        .wheel-center {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: radial-gradient(circle, #ff0000, #8b0000);
+            border: 5px solid #ffffff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            box-shadow:
+                0 0 20px rgba(255,0,0,0.8),
+                inset 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .wheel-center::after {
+            content: 'SPIN';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 5px #000;
+        }
+
+        .pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 30px solid transparent;
+            border-right: 30px solid transparent;
+            border-top: 60px solid #ff0000;
+            z-index: 11;
+            filter: drop-shadow(0 5px 10px rgba(0,0,0,0.8));
+        }
+
+        .pointer::after {
+            content: '';
+            position: absolute;
+            top: -60px;
+            left: -25px;
+            width: 50px;
+            height: 50px;
+            border: 4px solid #ffffff;
+            border-radius: 0;
+            clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+        }
+
+        .spin-button {
+            background: linear-gradient(145deg, #ff0000, #990000);
+            font-size: 28px;
+            padding: 25px 60px;
+            width: auto;
+            margin-top: 30px;
+            border: 4px solid #ffffff;
+            box-shadow:
+                0 8px 30px rgba(255,0,0,0.6),
+                inset 0 1px 0 rgba(255,255,255,0.2);
+            letter-spacing: 3px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                box-shadow:
+                    0 8px 30px rgba(255,0,0,0.6),
+                    inset 0 1px 0 rgba(255,255,255,0.2);
+            }
+            50% {
+                box-shadow:
+                    0 8px 40px rgba(255,0,0,0.9),
+                    inset 0 1px 0 rgba(255,255,255,0.2);
+            }
+        }
+
+        .spin-button:hover {
+            background: linear-gradient(145deg, #cc0000, #ff0000);
+            animation: none;
+        }
+
+        .spin-button:disabled {
+            animation: none;
+        }
+
+        .winner-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .winner-modal.show {
+            display: flex;
+            animation: fadeIn 0.3s;
+        }
+
+        .winner-content {
+            background: linear-gradient(145deg, #1a1a1a, #000000);
+            padding: 60px;
+            border-radius: 20px;
+            border: 5px solid #ff0000;
+            text-align: center;
+            max-width: 600px;
+            animation: scaleIn 0.5s, winnerGlow 2s infinite;
+            box-shadow:
+                0 0 50px rgba(255,0,0,0.8),
+                inset 0 0 30px rgba(255,0,0,0.2);
+        }
+
+        @keyframes winnerGlow {
+            0%, 100% {
+                box-shadow:
+                    0 0 50px rgba(255,0,0,0.8),
+                    inset 0 0 30px rgba(255,0,0,0.2);
+            }
+            50% {
+                box-shadow:
+                    0 0 80px rgba(255,0,0,1),
+                    inset 0 0 30px rgba(255,0,0,0.4);
+            }
+        }
+
+        .winner-content h2 {
+            font-size: 3em;
+            color: #ff0000;
+            margin-bottom: 20px;
+            text-shadow:
+                0 0 20px #ff0000,
+                0 0 40px #ff0000;
+        }
+
+        .winner-prize {
+            font-size: 2.5em;
+            color: #ffffff;
+            margin: 20px 0;
+            font-weight: bold;
+            text-shadow:
+                0 0 10px #ff0000,
+                2px 2px 0px #000;
+        }
+
+        .winner-player-name {
+            font-size: 1.8em;
+            color: #ff0000;
+            margin: 20px 0;
+            text-shadow: 0 0 10px #ff0000;
+        }
+
+        .confetti {
+            position: fixed;
+            width: 15px;
+            height: 15px;
+            z-index: 999;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.5) rotate(-180deg);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        @keyframes confetti-fall {
+            to {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .current-player {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            padding: 25px;
+            border-radius: 15px;
+            border: 3px solid #ff0000;
+            text-align: center;
+            box-shadow: 0 0 30px rgba(255,0,0,0.5);
+            width: 100%;
+            max-width: 550px;
+        }
+
+        .current-player h3 {
+            color: #ffffff;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .current-player .player-name {
+            font-size: 2em;
+            color: #ff0000;
+            font-weight: bold;
+            text-shadow: 0 0 10px #ff0000;
+        }
+
+        .no-items {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .wheel-container {
+                width: 350px;
+                height: 350px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .sidebar {
+                flex: 1 1 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Prize Wheel</h1>
+
+    <div class="container">
+        <!-- Left Sidebar - Prize Management -->
+        <div class="sidebar">
+            <h2>Prizes</h2>
+            <div class="input-group">
+                <label for="prize-input">Prize Name:</label>
+                <input type="text" id="prize-input" placeholder="Enter prize name">
+                <label for="weight-input" style="margin-top: 10px;">Weight (Rarity):</label>
+                <input type="number" id="weight-input" placeholder="Enter weight (1-100)" min="1" max="100" value="10">
+                <button onclick="addPrize()">Add Prize</button>
+            </div>
+            <div class="list" id="prize-list">
+                <div class="no-items">No prizes added yet</div>
+            </div>
+        </div>
+
+        <!-- Center - Wheel -->
+        <div class="wheel-section">
+            <div class="current-player" id="current-player-display" style="display: none;">
+                <h3>Current Player:</h3>
+                <div class="player-name" id="current-player-name"></div>
+            </div>
+
+            <div class="wheel-container">
+                <div class="pointer"></div>
+                <canvas id="wheel-canvas" width="500" height="500"></canvas>
+                <div class="wheel-center"></div>
+            </div>
+
+            <button class="spin-button" id="spin-btn" onclick="spin()" disabled>
+                SPIN!
+            </button>
+        </div>
+
+        <!-- Right Sidebar - Player Management -->
+        <div class="sidebar">
+            <h2>Players</h2>
+            <div class="input-group">
+                <label for="player-input">Player Name:</label>
+                <input type="text" id="player-input" placeholder="Enter player name">
+                <button onclick="addPlayer()">Add Player</button>
+            </div>
+            <div class="list" id="player-list">
+                <div class="no-items">No players added yet</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Winner Modal -->
+    <div class="winner-modal" id="winner-modal">
+        <div class="winner-content">
+            <h2>WINNER!</h2>
+            <div class="winner-player-name" id="winner-player-name"></div>
+            <div style="color: #aaa; margin: 10px 0;">Won:</div>
+            <div class="winner-prize" id="winner-prize"></div>
+            <button onclick="closeWinnerModal()" style="margin-top: 30px;">Close</button>
+        </div>
+    </div>
+
+    <script>
+        let prizes = []; // Each prize: { name: string, weight: number }
+        let players = [];
+        let currentPlayerIndex = 0;
+        let isSpinning = false;
+        let currentRotation = 0;
+
+        // Black and red color scheme
+        const colors = [
+            '#ff0000', '#cc0000', '#990000', '#ff3333', '#cc0000',
+            '#8b0000', '#ff1a1a', '#b30000', '#ff4d4d', '#800000',
+            '#ff0000', '#e60000', '#ff6666', '#990000', '#ff0000'
+        ];
+
+        // Enhanced sound effects
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let soundEnabled = true;
+
+        // Initialize audio context on first user interaction
+        document.addEventListener('click', () => {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }, { once: true });
+
+        function playTickSound() {
+            if (!soundEnabled) return;
+
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 1200;
+                oscillator.type = 'square';
+
+                gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.05);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function playSpinSound() {
+            if (!soundEnabled) return;
+
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.5);
+                oscillator.type = 'sawtooth';
+
+                gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function playWinSound() {
+            if (!soundEnabled) return;
+
+            try {
+                // Victory chord progression
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, index) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(freq, audioContext.currentTime + index * 0.15);
+
+                    gainNode.gain.setValueAtTime(0, audioContext.currentTime + index * 0.15);
+                    gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + index * 0.15 + 0.05);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + index * 0.15 + 0.4);
+
+                    oscillator.start(audioContext.currentTime + index * 0.15);
+                    oscillator.stop(audioContext.currentTime + index * 0.15 + 0.4);
+                });
+
+                // Add drum hit
+                const drumOsc = audioContext.createOscillator();
+                const drumGain = audioContext.createGain();
+                drumOsc.connect(drumGain);
+                drumGain.connect(audioContext.destination);
+
+                drumOsc.frequency.setValueAtTime(150, audioContext.currentTime);
+                drumOsc.frequency.exponentialRampToValueAtTime(30, audioContext.currentTime + 0.1);
+                drumGain.gain.setValueAtTime(0.5, audioContext.currentTime);
+                drumGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+                drumOsc.start(audioContext.currentTime);
+                drumOsc.stop(audioContext.currentTime + 0.1);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function addPrize() {
+            const input = document.getElementById('prize-input');
+            const weightInput = document.getElementById('weight-input');
+            const prizeName = input.value.trim();
+            const weight = parseInt(weightInput.value) || 10;
+
+            if (prizeName) {
+                prizes.push({ name: prizeName, weight: Math.max(1, Math.min(100, weight)) });
+                input.value = '';
+                weightInput.value = '10';
+                updatePrizeList();
+                drawWheel();
+                updateSpinButton();
+            }
+        }
+
+        function removePrize(index) {
+            prizes.splice(index, 1);
+            updatePrizeList();
+            drawWheel();
+            updateSpinButton();
+        }
+
+        function updatePrizeWeight(index, newWeight) {
+            prizes[index].weight = Math.max(1, Math.min(100, parseInt(newWeight) || 1));
+            updatePrizeList();
+            drawWheel();
+        }
+
+        function calculatePercentage(weight) {
+            const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+            return ((weight / totalWeight) * 100).toFixed(1);
+        }
+
+        function updatePrizeList() {
+            const list = document.getElementById('prize-list');
+
+            if (prizes.length === 0) {
+                list.innerHTML = '<div class="no-items">No prizes added yet</div>';
+            } else {
+                list.innerHTML = prizes.map((prize, index) => `
+                    <div class="list-item">
+                        <div class="list-item-header">
+                            <span class="list-item-name">${prize.name}</span>
+                            <button class="remove-btn" onclick="removePrize(${index})">Remove</button>
+                        </div>
+                        <div class="list-item-weight">
+                            <span>Weight:</span>
+                            <input type="number" class="weight-input" value="${prize.weight}"
+                                   min="1" max="100"
+                                   onchange="updatePrizeWeight(${index}, this.value)">
+                            <span class="weight-percentage">${calculatePercentage(prize.weight)}%</span>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function addPlayer() {
+            const input = document.getElementById('player-input');
+            const player = input.value.trim();
+
+            if (player) {
+                players.push(player);
+                input.value = '';
+                updatePlayerList();
+                updateCurrentPlayer();
+            }
+        }
+
+        function removePlayer(index) {
+            players.splice(index, 1);
+            if (currentPlayerIndex >= players.length) {
+                currentPlayerIndex = 0;
+            }
+            updatePlayerList();
+            updateCurrentPlayer();
+        }
+
+        function updatePlayerList() {
+            const list = document.getElementById('player-list');
+
+            if (players.length === 0) {
+                list.innerHTML = '<div class="no-items">No players added yet</div>';
+            } else {
+                list.innerHTML = players.map((player, index) => `
+                    <div class="list-item">
+                        <div class="list-item-header">
+                            <span class="list-item-name">${player}</span>
+                            <button class="remove-btn" onclick="removePlayer(${index})">Remove</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function updateCurrentPlayer() {
+            const display = document.getElementById('current-player-display');
+            const nameDisplay = document.getElementById('current-player-name');
+
+            if (players.length > 0) {
+                display.style.display = 'block';
+                nameDisplay.textContent = players[currentPlayerIndex];
+            } else {
+                display.style.display = 'none';
+            }
+        }
+
+        function updateSpinButton() {
+            const spinBtn = document.getElementById('spin-btn');
+            spinBtn.disabled = prizes.length === 0;
+        }
+
+        function drawWheel() {
+            const canvas = document.getElementById('wheel-canvas');
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = canvas.width / 2;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (prizes.length === 0) {
+                // Draw empty wheel
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.fillStyle = '#666';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Add prizes to begin', centerX, centerY);
+                return;
+            }
+
+            // Calculate angles based on weights
+            const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+            let currentAngle = -Math.PI / 2;
+
+            prizes.forEach((prize, index) => {
+                const sliceAngle = (prize.weight / totalWeight) * 2 * Math.PI;
+                const endAngle = currentAngle + sliceAngle;
+
+                // Draw slice
+                ctx.fillStyle = colors[index % colors.length];
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, currentAngle, endAngle);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw border
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Draw text
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(currentAngle + sliceAngle / 2);
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 18px Arial';
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 5;
+
+                // Draw prize name
+                ctx.fillText(prize.name, radius * 0.6, -5);
+
+                // Draw percentage
+                ctx.font = 'bold 14px Arial';
+                ctx.fillStyle = '#ffff00';
+                ctx.fillText(calculatePercentage(prize.weight) + '%', radius * 0.6, 15);
+
+                ctx.restore();
+
+                currentAngle = endAngle;
+            });
+
+            // Draw outer ring
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius - 3, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+
+        function getWeightedRandomPrize() {
+            const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+            let random = Math.random() * totalWeight;
+
+            for (let i = 0; i < prizes.length; i++) {
+                random -= prizes[i].weight;
+                if (random <= 0) {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        function spin() {
+            if (isSpinning || prizes.length === 0) return;
+
+            // Resume audio context if needed
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            isSpinning = true;
+            document.getElementById('spin-btn').disabled = true;
+
+            playSpinSound();
+
+            const canvas = document.getElementById('wheel-canvas');
+            canvas.classList.add('spinning');
+
+            // Get weighted random winner
+            const winningIndex = getWeightedRandomPrize();
+
+            // Calculate angle to land on winner
+            const totalWeight = prizes.reduce((sum, p) => sum + p.weight, 0);
+            let targetAngle = 0;
+
+            for (let i = 0; i < winningIndex; i++) {
+                targetAngle += (prizes[i].weight / totalWeight) * 360;
+            }
+
+            // Add half of winner slice to hit center
+            targetAngle += (prizes[winningIndex].weight / totalWeight) * 360 / 2;
+
+            // Add multiple rotations (8-10 full spins) and randomness within slice
+            const extraRotations = 8 + Math.random() * 2;
+            const randomWithinSlice = (Math.random() - 0.5) * (prizes[winningIndex].weight / totalWeight) * 360 * 0.5;
+            const totalRotation = currentRotation + (extraRotations * 360) + (360 - targetAngle) + randomWithinSlice;
+
+            // Tick sound interval - plays throughout the spin
+            let lastAngle = currentRotation;
+            let tickCount = 0;
+            const spinDuration = 8000; // 8 seconds
+
+            const tickInterval = setInterval(() => {
+                // Get current transform and extract rotation
+                const transform = window.getComputedStyle(canvas).transform;
+                let currentAngle = currentRotation;
+
+                if (transform && transform !== 'none') {
+                    const values = transform.split('(')[1].split(')')[0].split(',');
+                    const a = parseFloat(values[0]);
+                    const b = parseFloat(values[1]);
+                    currentAngle = Math.round(Math.atan2(b, a) * (180 / Math.PI));
+                }
+
+                // Play tick sound at intervals based on rotation speed
+                const rotationProgress = (Date.now() - spinStartTime) / spinDuration;
+                const tickInterval = Math.max(30, 150 * rotationProgress); // Slower ticks as it slows down
+
+                if (Math.floor(currentAngle / 10) !== Math.floor(lastAngle / 10)) {
+                    playTickSound();
+                    tickCount++;
+                }
+                lastAngle = currentAngle;
+
+                if (tickCount > 100) {
+                    clearInterval(tickInterval);
+                }
+            }, 40);
+
+            // Store spin start time
+            const spinStartTime = Date.now();
+
+            // Apply the rotation with translate to keep it centered
+            canvas.style.transform = `translate(-50%, -50%) rotate(${totalRotation}deg)`;
+            currentRotation = totalRotation;
+
+            setTimeout(() => {
+                clearInterval(tickInterval);
+                canvas.classList.remove('spinning');
+                playWinSound();
+                showWinner(prizes[winningIndex].name);
+                createConfetti();
+
+                isSpinning = false;
+                document.getElementById('spin-btn').disabled = false;
+
+                // Move to next player
+                if (players.length > 0) {
+                    currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+                    updateCurrentPlayer();
+                }
+            }, spinDuration);
+        }
+
+        function showWinner(prizeName) {
+            const modal = document.getElementById('winner-modal');
+            const prizeDisplay = document.getElementById('winner-prize');
+            const playerDisplay = document.getElementById('winner-player-name');
+
+            prizeDisplay.textContent = prizeName;
+
+            if (players.length > 0) {
+                playerDisplay.textContent = players[currentPlayerIndex];
+                playerDisplay.style.display = 'block';
+            } else {
+                playerDisplay.style.display = 'none';
+            }
+
+            modal.classList.add('show');
+        }
+
+        function closeWinnerModal() {
+            const modal = document.getElementById('winner-modal');
+            modal.classList.remove('show');
+        }
+
+        function createConfetti() {
+            const confettiColors = ['#ff0000', '#ffffff', '#cc0000', '#ffff00'];
+
+            for (let i = 0; i < 150; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.top = '-20px';
+                    confetti.style.background = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+                    confetti.style.animation = `confetti-fall ${2 + Math.random() * 2}s linear`;
+                    confetti.style.width = (10 + Math.random() * 10) + 'px';
+                    confetti.style.height = confetti.style.width;
+                    document.body.appendChild(confetti);
+
+                    setTimeout(() => confetti.remove(), 4000);
+                }, i * 30);
+            }
+        }
+
+        // Allow Enter key to add prizes and players
+        document.getElementById('prize-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPrize();
+        });
+
+        document.getElementById('weight-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPrize();
+        });
+
+        document.getElementById('player-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPlayer();
+        });
+
+        // Initial draw
+        drawWheel();
+    </script>
+</body>
+</html>

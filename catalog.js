@@ -1,0 +1,612 @@
+// ===========================================================================
+// RHYTHM RIFT — Catalog / Live layer
+// Wires the engine (window.RhythmGame) to the ReactivVibe game-catalog API.
+//
+// Modes (auto-detected on load):
+//   • ?trackId=<uuid>  -> LIVE single track (fetch chart, stream HLS, submit score)
+//   • ?picker=1        -> LIVE picker (GET /tracks, choose one)
+//   • (default)        -> DEMO  (local mp3 + in-browser analyzer; no score submit)
+//
+// Config comes from window.RHYTHM_CONFIG (set in the HTML <head>). When embedded
+// same-origin at /play, supabase-js reads the shared session from localStorage.
+// ===========================================================================
+
+(() => {
+  const CFG = window.RHYTHM_CONFIG || {};
+  const API_BASE = (CFG.API_BASE || '').replace(/\/$/, '');
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Supabase auth (optional) ----------
+  let supa = null;
+  if (window.supabase && CFG.SUPABASE_URL && CFG.SUPABASE_KEY) {
+    try {
+      // Match the parent site's client config exactly so the iframe inherits the
+      // session from shared localStorage (default storageKey, no override).
+      supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, {
+        auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true },
+      });
+    } catch (e) { console.warn('supabase init failed', e); }
+  }
+  async function getToken() {
+    if (!supa) return null;
+    try {
+      const { data } = await supa.auth.getSession();
+      return data && data.session ? data.session.access_token : null;
+    } catch (e) { return null; }
+  }
+
+  // ---------- API client ----------
+  async function api(path, { method = 'GET', body = null, auth = false } = {}) {
+    const headers = { 'content-type': 'application/json' };
+    if (auth) { const tk = await getToken(); if (tk) headers.authorization = 'Bearer ' + tk; }
+    const res = await fetch(API_BASE + path, {
+      method, headers, body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      let detail = ''; try { detail = (await res.json()).error || ''; } catch (e) {}
+      throw new Error('API ' + res.status + (detail ? ' · ' + detail : '') + ' (' + path + ')');
+    }
+    return res.json();
+  }
+
+  // ---------- shared, gesture-unlocked <audio> element (mobile autoplay) ----------
+  // iOS only allows programmatic play() on an element previously started inside a
+  // user gesture. We bless ONE persistent element on first touch and reuse it for
+  // every live track, so play() works after the countdown.
+  let liveAudioEl = null;
+  function getLiveAudio() {
+    if (!liveAudioEl) { liveAudioEl = new Audio(); liveAudioEl.preload = 'auto'; }
+    return liveAudioEl;
+  }
+  function unlockLiveAudio() {
+    const a = getLiveAudio();
+    // tiny silent wav
+    if (!a.src) a.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+    const p = a.play();
+    if (p && p.then) p.then(() => { a.pause(); try { a.currentTime = 0; } catch (e) {} }).catch(() => {});
+  }
+  ['pointerdown', 'touchstart'].forEach(ev =>
+    window.addEventListener(ev, unlockLiveAudio, { once: true, passive: true }));
+
+  // ===========================================================================
+  // LivePlayer — Mux HLS via hls.js OR a direct file, with a smoothed clock.
+  // currentTime updates coarsely on <audio>, so we interpolate with perf time
+  // between updates for jitter-free note motion.
+  // ===========================================================================
+  // ===========================================================================
+  // LivePlayer — plays either an HLS manifest (Mux .m3u8) OR a direct audio file
+  // (WAV / mp3 / m4a). Uses an <audio> element with a smoothed clock so note
+  // motion stays jitter-free between coarse currentTime updates.
+  //
+  // For direct files we DO NOT set crossOrigin: media elements play cross-origin
+  // without CORS (we never read PCM, so WebAudio/CORS isn't needed). Setting
+  // crossOrigin would needlessly gate playback on CORS headers the storage
+  // bucket may not send.
+  // ===========================================================================
+  class LivePlayer {
+    constructor(url, duration, isHls) {
+      this.url = url; this.duration = duration;
+      this.isHls = isHls != null ? isHls : /\.m3u8(\?|$)/i.test(url || '');
+      this.audio = null; this.hls = null;
+      this._lastA = 0; this._lastWall = 0; this._paused = true; this._ended = false;
+      this.onended = null;
+    }
+    async prepare() {
+      if (!this.url) throw new Error('No playable audio source for this track');
+      const audio = getLiveAudio(); // reuse the gesture-blessed element
+      audio.preload = 'auto';
+      audio.muted = window.RhythmGame.isMuted();
+      this.audio = audio;
+      this._endedHandler = () => { this._ended = true; if (this.onended) this.onended(); };
+      audio.addEventListener('ended', this._endedHandler);
+
+      const nativeHls = audio.canPlayType('application/vnd.apple.mpegurl');
+      await new Promise((resolve, reject) => {
+        const to = setTimeout(() => reject(new Error('Audio load timeout — source unreachable')), 20000);
+        const ok = () => { clearTimeout(to); resolve(); };
+        const fail = (msg) => { clearTimeout(to); reject(new Error(msg)); };
+
+        if (this.isHls && !nativeHls && window.Hls && window.Hls.isSupported()) {
+          // HLS via hls.js (non-Safari)
+          const hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
+          this.hls = hls;
+          hls.loadSource(this.url); hls.attachMedia(audio);
+          hls.on(window.Hls.Events.MANIFEST_PARSED, ok);
+          hls.on(window.Hls.Events.ERROR, (_e, data) => { if (data && data.fatal) fail('hls fatal: ' + data.type); });
+        } else {
+          // Native HLS (Safari) OR a direct file (wav/mp3/m4a)
+          audio.src = this.url;
+          audio.addEventListener('canplay', ok, { once: true });
+          audio.addEventListener('loadeddata', ok, { once: true });
+          audio.addEventListener('error', () => fail('audio error code=' + (audio.error && audio.error.code)), { once: true });
+          audio.load();
+        }
+      });
+    }
+    play() {
+      this._paused = false; this._lastA = 0; this._lastWall = performance.now();
+      try { this.audio.currentTime = 0; } catch (e) {}
+      const pr = this.audio.play();
+      if (pr && pr.catch) pr.catch(err => console.warn('play() blocked', err));
+    }
+    getTime() {
+      if (!this.audio) return -3;
+      const a = this.audio.currentTime; const now = performance.now();
+      if (a !== this._lastA) { this._lastA = a; this._lastWall = now; }
+      if (this._paused) return this._lastA;
+      return this._lastA + (now - this._lastWall) / 1000;
+    }
+    getDuration() { return this.duration || this.audio.duration || 0; }
+    pause() { this._paused = true; this._lastA = this.audio.currentTime; try { this.audio.pause(); } catch (e) {} }
+    resume() { this._paused = false; this._lastWall = performance.now(); this._lastA = this.audio.currentTime; try { this.audio.play(); } catch (e) {} }
+    setMuted(m) { if (this.audio) this.audio.muted = m; }
+    setGain(v) { if (this.audio) { try { this.audio.volume = Math.max(0, Math.min(1, v)); } catch (e) {} } }
+    stop() {
+      try {
+        if (this.audio) {
+          this.audio.pause();
+          if (this._endedHandler) this.audio.removeEventListener('ended', this._endedHandler);
+          this.audio.removeAttribute('src');
+          this.audio.load();
+        }
+      } catch (e) {}
+      if (this.hls) { try { this.hls.destroy(); } catch (e) {} this.hls = null; }
+      this.audio = null;
+    }
+  }
+
+  // ===========================================================================
+  // LIVE provider factory — returns an async provider for a given trackId.
+  // Re-fetches /track/:id on every call so each play gets a FRESH play_token
+  // (single-use, 10-min TTL).
+  // ===========================================================================
+  // ---- pack context + play/use tracking (revenue attribution) ---------------
+  // The player enters a level "from Pack X" — passed as ?pack=<uuid> when the game
+  // is embedded. null = freeplay. The catalog also returns pack_ids[] per track.
+  let packId = null;
+  try { const m = location.search.match(/[?&]pack=([^&]+)/); if (m) packId = decodeURIComponent(m[1]); } catch (e) {}
+  function getPackId() { return packId; }
+
+  // Non-scored events (preview / loaded / skipped / auto_play / menu_demo).
+  // Fire-and-forget; auth optional (anon previews fine, user_id added when JWT present).
+  function logUse(trackId, eventType, opts) {
+    if (!API_BASE || !trackId) return;
+    opts = opts || {};
+    const body = {
+      track_id: trackId, event_type: eventType,
+      pack_id: opts.pack_id !== undefined ? opts.pack_id : packId,
+      duration_ms: opts.duration_ms || 0,
+      client_info: { ua: navigator.userAgent, ts: Date.now() },
+    };
+    try { api('/uses', { method: 'POST', body, auth: true }).catch(() => {}); } catch (e) {}
+  }
+
+  function liveProvider(trackId) {
+    return async () => {
+      const t = await api('/track/' + trackId, { auth: true });
+      if (!t.chart || t.chart_status !== 'ready') {
+        throw new Error('This track isn\u2019t ready to play yet.');
+      }
+      // Source priority: prefer a real HLS manifest, else any direct audio file.
+      // CRITICAL: stream_url is NOT always HLS — your ready tracks ship a direct
+      // .wav in stream_url. Detect HLS by the .m3u8 extension, otherwise play the
+      // file directly through <audio> (no hls.js, which would fail on a wav).
+      const srcUrl = t.stream_url || t.wav_url || t.analysis_url || null;
+      if (!srcUrl) throw new Error('No playable audio source for this track');
+      const isHls = /\.m3u8(\?|$)/i.test(srcUrl);
+      const dur = t.duration_seconds || t.chart.duration;
+      const player = new LivePlayer(srcUrl, dur, isHls);
+      const meta = { title: t.title, artist: t.artist_credit_name || t.artist_name, genre: t.genre, artwork: t.artwork_url };
+      const playToken = t.play_token || null;
+
+      return {
+        beats: t.chart.beats,
+        duration: t.duration_seconds || t.chart.duration,
+        player, meta, live: true, trackId, playToken,
+        submit: async (results) => {
+          if (!playToken) return { error: 'not-authed' }; // unscored (no session / not ready)
+          const payload = {
+            track_id: trackId,
+            difficulty: results.difficulty,
+            score: results.score,
+            accuracy: results.accuracy,      // 0..1
+            max_combo: results.max_combo,
+            notes_hit: results.notes_hit,
+            notes_total: results.notes_total,
+            play_token: playToken,
+            pack_id: packId,                 // 50/50 payout reconciliation (null = freeplay)
+          };
+          const out = await api('/plays', { method: 'POST', body: payload, auth: true });
+          let board = [];
+          try { board = await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10'); }
+          catch (e) { /* leaderboard optional */ }
+          return { rank_global: out.rank_global, leaderboard: board };
+        },
+      };
+    };
+  }
+
+  // ===========================================================================
+  // Catalog data
+  // ===========================================================================
+  function escapeHtml(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function cleanGenre(g) { return (!g || String(g).toLowerCase() === 'none') ? '' : g; }
+  function fmtDur(s) {
+    if (!s) return '';
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
+  }
+
+  // ---------- deterministic hash (stable per id, for covers + seeded grades) ----
+  function hashStr(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0); }
+
+  // ---------- 1000-song MOCK catalog (preview / when live catalog is small) -----
+  // Mirrors the real API shape so the design is fully stress-tested at scale; the
+  // moment the backend backfill lands, live data takes over with zero UI changes.
+  const GENRES = ['Lo-Fi', 'Synthwave', 'Phonk', 'Trap', 'Hyperpop', 'Drum & Bass', 'Ambient', 'House', 'Future Bass', 'Metal', 'R&B', 'Drill', 'Vaporwave', 'Techno', 'Cinematic', 'Pop'];
+  const ARTISTS = [
+    'Kunin Kitsune', 'Neon Oracle', 'VØID Signal', 'Crimson Halo', 'Aria Vale', 'Ghost Frequency', 'Lunar Kid', 'Static Saint', 'Phantom Bloom', 'Wired Wolf',
+    'Echo Mortis', 'Velvet Circuit', 'Astral Drift', 'Kohl', 'Saber Tooth', 'Midnight Tape', 'Hollow Sun', 'Feral Synth', 'Golden Reaper', 'Liquid Mirage',
+    'Zephyr', 'Cyber Geisha', 'Molten Choir', 'Frostbyte', 'Sacred Noise', 'Burning Doll', 'Glass Wren', 'Iron Lotus', 'Neon Temple', 'Pale Engine',
+    'Dusk Protocol', 'Ruby Static', 'Hex Moon', 'Vapor Saint', 'Onyx Pulse', 'Silk Reactor', 'Ash Maiden', 'Chrome Coyote', 'Blood Orange Sky', 'Tidal Ghost',
+    'Quartz Rebel', 'Seraph Bit', 'Nova Husk', 'Riot Lullaby',
+  ];
+  const TW_A = ['Crimson', 'Lunar', 'Velvet', 'Phantom', 'Neon', 'Hollow', 'Astral', 'Broken', 'Midnight', 'Static', 'Golden', 'Frozen', 'Savage', 'Electric', 'Sacred', 'Liquid', 'Wired', 'Crystal', 'Burning', 'Silent', 'Cyber', 'Feral', 'Ghost', 'Molten', 'Scarlet', 'Hyper', 'Endless', 'Violet'];
+  const TW_B = ['Waves', 'Moon', 'Pulse', 'Dreams', 'Echo', 'Bloom', 'Circuit', 'Requiem', 'Mirage', 'Anthem', 'Voltage', 'Horizon', 'Ritual', 'Halo', 'Rift', 'Tides', 'Engine', 'Reverie', 'Fang', 'Sky', 'Drift', 'Oath', 'Bass', 'Heart', 'Ghost', 'Fire', 'Signal', 'Bones'];
+  const GRADES = ['S', 'A', 'B', 'C', 'D'];
+
+  function buildMockCatalog(n) {
+    const now = Date.now();
+    const out = [];
+    // demo track first — real audio, always playable in preview
+    out.push({ id: 'demo', title: 'Lunar Waves', artist_name: 'Kunin Kitsune', genre: 'Synthwave', bpm: 120, duration_seconds: 184, demo: true, created_at: now, play_count: 9999, featured: true, has_chart: true, chart_status: 'ready' });
+    for (let i = 0; i < n; i++) {
+      const h = hashStr('rrtrk' + i);
+      const a = TW_A[h % TW_A.length];
+      const b = TW_B[(h >>> 5) % TW_B.length];
+      const title = (h % 7 === 0) ? a : (a + ' ' + b);
+      const artist = ARTISTS[(h >>> 3) % ARTISTS.length];
+      const genre = GENRES[(h >>> 7) % GENRES.length];
+      const bpm = 80 + (h % 96);
+      const dur = 120 + ((h >>> 4) % 165);
+      const ageDays = (h >>> 9) % 400;
+      const t = {
+        id: 'm' + i, title, artist_name: artist, genre, bpm,
+        duration_seconds: dur,
+        created_at: now - ageDays * 86400000,
+        play_count: Math.floor(((h >>> 11) % 1000) * (1 + ((h >>> 2) % 9))),
+        featured: (h % 53 === 0),
+      };
+      // simulate the live backfill: most ready, some still processing, a few failed
+      const r = h % 100;
+      t.chart_status = r < 66 ? 'ready' : r < 85 ? 'analyzing' : r < 97 ? 'pending' : 'failed';
+      t.has_chart = t.chart_status === 'ready';
+      // seed a best-grade on ~30% of READY tracks so the mastery UI shows variety
+      if (t.has_chart && h % 10 < 4) {
+        const g = GRADES[(h >>> 13) % GRADES.length];
+        t._mockBest = { grade: g, score: 40000 + (h % 600000), accuracy: 0.6 + ((h >>> 6) % 40) / 100, difficulty: ['easy', 'medium', 'hard'][(h >>> 8) % 3] };
+      }
+      out.push(t);
+    }
+    return out;
+  }
+
+  let catalogLive = false;
+  let catalogTracks = [];
+  let catalogRawCount = 0;       // total returned (incl. not-yet-ready), for display
+
+  async function loadCatalog() {
+    const forceMock = /[?&]mock=1/.test(location.search);
+    if (API_BASE && !forceMock) {
+      try {
+        // pull the whole library in pages (scale-ready — up to ~12k tracks)
+        let all = [], page = 0, LIMIT = 200;
+        for (; page < 60; page++) {
+          const list = await api('/tracks?limit=' + LIMIT + '&offset=' + (page * LIMIT));
+          if (!list || !list.length) break;
+          all = all.concat(list);
+          if (list.length < LIMIT) break;
+        }
+        if (all.length) {
+          all.forEach(t => {
+            if (!t) return;
+            // some rows pack the description into the title field — keep just the first line
+            if (t.title) t.title = String(t.title).split('\n')[0].trim().slice(0, 80);
+            // created_at arrives as an ISO string (live) or ms number (mock) — unify to ms
+            // so "New"/fresh-upload sorting works and a just-uploaded track surfaces first
+            t.created_at = (+new Date(t.created_at)) || 0;
+          });
+          catalogRawCount = all.length;
+          // ONLY show songs that actually play — no dead taps, ever.
+          catalogTracks = all.filter(trackReady);
+          catalogLive = true;
+          return;
+        }
+      } catch (e) { console.warn('catalog fetch failed → preview catalog', e); }
+    }
+    catalogLive = false;
+    const mock = buildMockCatalog(1000);
+    catalogRawCount = mock.length;
+    catalogTracks = mock.filter(trackReady);   // preview also shows only playable
+  }
+
+  // re-fetch the catalog (the library grows constantly on the platform)
+  let reloading = false;
+  async function reloadCatalog() {
+    if (reloading) return;
+    reloading = true;
+    try { await loadCatalog(); renderHome(); }
+    finally { reloading = false; }
+  }
+
+  // ---------- track readiness (no dead songs) ----------
+  // A DIRECT, decodable audio file (NOT an HLS manifest) the browser can analyze + play.
+  function trackAudioUrl(t) {
+    if (!t) return null;
+    const cands = [t.audio_url, t.wav_url, t.analysis_url, t.stream_url];
+    for (let i = 0; i < cands.length; i++) {
+      const u = cands[i];
+      if (u && !/\.m3u8(\?|$)/i.test(u)) return u;   // skip HLS — can't decode it for charting
+    }
+    return null;
+  }
+  function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
+  function trackReady(t) {
+    if (!t) return false;
+    if (t.demo) return true;
+    if (hasServerChart(t)) return true;        // pre-baked chart → scored + leaderboard
+    return !!trackAudioUrl(t);                 // else playable via in-browser charting (fast path)
+  }
+  function trackStatus(t) {
+    if (!t) return 'pending';
+    if (trackReady(t)) return 'ready';
+    const s = t.chart_status;
+    if (s === 'analyzing') return 'analyzing';
+    if (s === 'failed') return 'failed';
+    if (s === 'needs_wav') return 'needs_audio';
+    return 'pending';
+  }
+  const STATUS_LABEL = { ready: 'Ready', analyzing: 'Analyzing…', pending: 'In queue', needs_audio: 'Needs audio', failed: 'Unavailable' };
+  function statusLabel(s) { return STATUS_LABEL[s] || 'In queue'; }
+  function readyCount() { return catalogTracks.length; }
+  function rawCount() { return catalogRawCount; }
+
+  // ---------- per-user best scores (localStorage now; API-backed later) --------
+  function loadScores() { try { return JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { return {}; } }
+  function gradeFor(acc) { return acc >= 0.97 ? 'S' : acc >= 0.9 ? 'A' : acc >= 0.8 ? 'B' : acc >= 0.65 ? 'C' : 'D'; }
+  function getBest(trackId) {
+    const s = loadScores(); let best = null;
+    ['easy', 'medium', 'hard'].forEach(d => { const r = s[trackId + '|' + d]; if (r && (!best || r.score > best.score)) best = Object.assign({ difficulty: d }, r); });
+    if (best) return best;
+    const t = catalogTracks.find(x => x.id === trackId);
+    return (t && t._mockBest) || null;
+  }
+  function saveBest(trackId, res) {
+    if (!trackId || !res) return;
+    try {
+      const s = loadScores(); const key = trackId + '|' + res.difficulty;
+      const grade = res.grade || gradeFor(res.accuracy || 0);
+      const prev = s[key];
+      if (!prev || res.score > prev.score) { s[key] = { grade, score: res.score, accuracy: res.accuracy }; localStorage.setItem('rr_scores', JSON.stringify(s)); }
+    } catch (e) {}
+  }
+  let currentTrack = null;
+
+  // ---------- catalog query helpers (consumed by the library UI) --------------
+  function allTracks() { return catalogTracks; }
+  function genreList() {
+    const m = {};
+    catalogTracks.forEach(t => { const g = cleanGenre(t.genre); if (g) m[g] = (m[g] || 0) + 1; });
+    return Object.keys(m).sort().map(g => ({ name: g, count: m[g] }));
+  }
+  function artistList() {
+    const m = {};
+    catalogTracks.forEach(t => { const a = t.artist_name; if (a) m[a] = (m[a] || 0) + 1; });
+    return Object.keys(m).sort().map(a => ({ name: a, count: m[a] }));
+  }
+  function byGenre(g) { return catalogTracks.filter(t => cleanGenre(t.genre) === g); }
+  function byArtist(a) { return catalogTracks.filter(t => t.artist_name === a); }
+  function search(q) {
+    q = (q || '').trim().toLowerCase();
+    if (!q) return catalogTracks;
+    return catalogTracks.filter(t =>
+      (t.title || '').toLowerCase().includes(q) ||
+      (t.artist_name || '').toLowerCase().includes(q) ||
+      (cleanGenre(t.genre) || '').toLowerCase().includes(q));
+  }
+  function sortTracks(list, mode) {
+    const a = list.slice();
+    if (mode === 'az') a.sort((x, y) => (x.title || '').localeCompare(y.title || ''));
+    else if (mode === 'new') a.sort((x, y) => (y.created_at || 0) - (x.created_at || 0));
+    else if (mode === 'hot') a.sort((x, y) => (y.play_count || 0) - (x.play_count || 0));
+    else if (mode === 'bpm') a.sort((x, y) => (x.bpm || 0) - (y.bpm || 0));
+    return a;
+  }
+  function sections() {
+    // ready tracks lead every rail so the jukebox always opens on something playable
+    const readyFirst = (arr) => arr.slice().sort((x, y) => (trackReady(y) ? 1 : 0) - (trackReady(x) ? 1 : 0));
+    const feat = catalogTracks.filter(t => t.featured && trackReady(t));
+    const featured = readyFirst(feat.length ? feat : catalogTracks).slice(0, 24);
+    const hot = readyFirst(sortTracks(catalogTracks, 'hot')).slice(0, 24);
+    const fresh = readyFirst(sortTracks(catalogTracks, 'new')).slice(0, 24);
+    const readyPool = catalogTracks.filter(trackReady);
+    const shuffled = (readyPool.length ? readyPool : catalogTracks).slice().sort(() => Math.random() - 0.5).slice(0, 24);
+    return { featured, hot, new: fresh, surprise: shuffled };
+  }
+
+  // ---------- preview player (short clip when a song is focused) ---------------
+  let previewEl = null, previewToken = 0, previewTrackId = null, previewStart = 0;
+  function stopPreview() {
+    previewToken++;
+    if (previewEl) { try { previewEl.pause(); } catch (e) {} }
+    if (previewTrackId) { logUse(previewTrackId, 'preview', { duration_ms: Date.now() - previewStart }); previewTrackId = null; }
+  }
+  async function preview(track) {
+    if (window.RhythmGame && window.RhythmGame.isMuted && window.RhythmGame.isMuted()) return;
+    const tok = ++previewToken;
+    if (!previewEl) { previewEl = new Audio(); previewEl.preload = 'none'; }
+    try { previewEl.pause(); } catch (e) {}
+    let src = 'assets/lunar-waves.mp3'; // mock/demo fallback
+    if (catalogLive && track && track.id && track.id !== 'demo') {
+      try { const t = await api('/track/' + track.id, { auth: true }); src = t.analysis_url || t.wav_url || t.stream_url || src; } catch (e) { return; }
+    }
+    if (tok !== previewToken) return;
+    try {
+      previewEl.src = src; previewEl.volume = 0; previewEl.currentTime = 0;
+      await previewEl.play();
+      previewTrackId = (track && track.id) || null; previewStart = Date.now();
+      // gentle fade-in, auto-stop after ~10s
+      let v = 0; const fade = setInterval(() => { if (tok !== previewToken) { clearInterval(fade); return; } v = Math.min(0.45, v + 0.05); previewEl.volume = v; if (v >= 0.45) clearInterval(fade); }, 40);
+      setTimeout(() => { if (tok === previewToken) stopPreview(); }, 10000);
+    } catch (e) { /* autoplay may be blocked until a gesture — fine */ }
+  }
+
+  // delegate home rendering to the library module (jukebox.js)
+  function renderHome() {
+    if (window.RhythmLibrary) window.RhythmLibrary.render();
+  }
+
+  // ===========================================================================
+  // SONG SHEET
+  // ===========================================================================
+  const sheet = $('song-sheet');
+
+  function openSheet(track) {
+    const artEl = $('sheet-art');
+    if (track.artwork_url) {
+      artEl.innerHTML = '<img src="' + escapeHtml(track.artwork_url) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" onerror="this.parentNode.textContent=\'♪\'" />';
+    } else {
+      artEl.textContent = '♪';
+    }
+    $('sheet-title').textContent = track.title;
+    $('sheet-artist').textContent = track.artist_name || '';
+    const moodOrGenre = track.mood || cleanGenre(track.genre);   // mood falls back to genre until populated
+    const metaBits = [moodOrGenre, track.bpm ? track.bpm + ' BPM' : '', fmtDur(track.duration_seconds)].filter(Boolean).join('  ·  ');
+    $('sheet-meta').textContent = metaBits;
+    if (catalogLive && track.id && track.id !== 'demo') logUse(track.id, 'loaded');
+
+    const liveTrack = catalogLive && track.id && track.id !== 'demo';
+    const ready = trackReady(track);
+    const status = trackStatus(track);
+
+    const playBtn = $('play-btn');
+    const playLabel = playBtn ? playBtn.querySelector('span') : null;
+    if (!ready) {
+      $('sheet-hint').textContent = status === 'failed'
+        ? 'This track couldn\u2019t be processed for the game.'
+        : 'This track is still being prepared for play \u2014 check back soon.';
+      if (playBtn) { playBtn.disabled = true; playBtn.classList.add('not-ready'); }
+      if (playLabel) playLabel.textContent = statusLabel(status);
+    } else {
+      $('sheet-hint').textContent = liveTrack
+        ? 'Tap the lanes as the notes reach the bridge'
+        : 'Preview audio \u2014 your real track streams on ReactivVibe';
+      if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('not-ready'); }
+      if (playLabel) playLabel.textContent = 'Initiate the Signal';
+    }
+
+    // wire the play button (game.js #play-btn → _menuPlayHandler)
+    window.RhythmGame.setMenuPlayHandler(() => {
+      if (!trackReady(track)) return;          // hard guard: never start a dead song
+      closeSheet();
+      stopPreview();
+      currentTrack = track;
+      if (liveTrack && hasServerChart(track)) {
+        window.RhythmGame.play(liveProvider(track.id));               // server chart → scored + leaderboard
+      } else if (liveTrack && trackAudioUrl(track)) {
+        window.RhythmGame.playUrl(trackAudioUrl(track), {            // fast path → chart in-browser
+          title: track.title,
+          artist: track.artist_credit_name || track.artist_name,
+          genre: track.genre,
+          artwork: track.artwork_url,
+        });
+      } else {
+        window.RhythmGame.playDemo();
+      }
+    });
+
+    sheet.classList.add('open');
+  }
+  function closeSheet() { sheet.classList.remove('open'); }
+
+  if (sheet) {
+    $('sheet-scrim').addEventListener('click', closeSheet);
+    $('sheet-back').addEventListener('click', closeSheet);
+  }
+
+  // ---------- Leaderboard render (called by engine after submit) ----------
+  function onSubmitResult(out, results) {
+    // detect a personal best BEFORE we overwrite it, then record it
+    if (currentTrack && results) {
+      const prev = getBest(currentTrack.id);
+      const isNewBest = results.score > 0 && (!prev || results.score > (prev.score || 0));
+      saveBest(currentTrack.id, results);
+      if (isNewBest) {
+        const badges = document.getElementById('results-badges');
+        if (badges && !/new best/i.test(badges.textContent)) {
+          badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">New Best</span>');
+        }
+      }
+    }
+    const wrap = $('results-leaderboard');
+    if (!wrap) return;
+    if (!out || out.error) {
+      wrap.innerHTML = '<div class="lb-note">' +
+        (out && out.error === 'not-authed'
+          ? 'Sign in on ReactivVibe to save your score & climb the leaderboard.'
+          : 'Local practice — scores aren\u2019t saved.') + '</div>';
+      wrap.style.display = '';
+      return;
+    }
+    const rows = (out.leaderboard || []).map((r) =>
+      '<div class="lb-row">' +
+        '<span class="lb-rank">#' + r.rank + '</span>' +
+        '<span class="lb-name">' + escapeHtml(r.display_name || 'anon') + '</span>' +
+        '<span class="lb-score">' + Number(r.score).toLocaleString() + '</span>' +
+        '<span class="lb-acc">' + (r.accuracy * 100).toFixed(1) + '%</span>' +
+      '</div>').join('');
+    wrap.innerHTML =
+      '<div class="lb-head"><span>Leaderboard' +
+        (out.rank_global ? ' · you ranked #' + out.rank_global : '') +
+      '</span></div>' + rows;
+    wrap.style.display = '';
+  }
+
+  window.RhythmCatalog = {
+    onSubmitResult, liveProvider, openSheet,
+    // data layer for the library UI (jukebox.js)
+    allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
+    search, sortTracks, sections, getBest,
+    preview, stopPreview,
+    fmtDur, cleanGenre, escapeHtml, hashStr,
+    // readiness (no dead songs)
+    trackReady, trackStatus, statusLabel, readyCount, reloadCatalog,
+    totalCount: () => catalogTracks.length, rawCount,
+    // revenue attribution
+    getPackId, logUse,
+  };
+
+  // ===========================================================================
+  // BOOT
+  // ===========================================================================
+  async function boot() {
+    if (!window.RhythmGame) { console.error('engine not loaded'); return; }
+    await loadCatalog();
+    renderHome();
+
+    // deep link: /play?trackId=<uuid> → open that song's sheet directly
+    const trackId = new URLSearchParams(location.search).get('trackId');
+    if (trackId && API_BASE) {
+      try {
+        const t = await api('/track/' + trackId, { auth: true });
+        openSheet({
+          id: t.id, title: t.title, artist_name: t.artist_name, genre: t.genre,
+          bpm: t.chart && t.chart.bpm, duration_seconds: t.duration_seconds, artwork_url: t.artwork_url,
+        });
+      } catch (e) { console.warn('deep-link track load failed', e); }
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
