@@ -1536,6 +1536,19 @@
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.32)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch);
 
+    // OVERDRIVE window: warm gold edge-glow framing the whole screen (on-brand, warm,
+    // additive so it never reads purple). Pulses unless reduce-motion is on.
+    if (odActive) {
+      const pulse = reduceMotion ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() / 140));
+      const a = 0.14 + 0.13 * pulse;
+      const og = ctx.createRadialGradient(cw / 2, ch * 0.5, ch * 0.34, cw / 2, ch * 0.5, ch * 0.8);
+      og.addColorStop(0, 'rgba(255,200,120,0)');
+      og.addColorStop(1, 'rgba(255,180,90,' + a.toFixed(3) + ')');
+      ctx.save(); ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = og; ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+    }
+
     if (glitchAmount > 0.05) {
       const tears = 3 + Math.floor(glitchAmount * 6);
       for (let i = 0; i < tears; i++) {
