@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=28" />
+<link rel="stylesheet" href="jukebox.css?v=29" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -428,6 +428,7 @@
   .howto-txt b { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
   .howto-txt span { font-family: 'Chakra Petch', monospace; font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
   .howto-txt kbd, .results-keys kbd { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--chrome); background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+  .results-keys { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--ink-dim); text-transform: uppercase; }
   .howto-txt em { color: var(--crimson); font-style: normal; font-weight: 700; }
   #howto-close { min-width: 240px; margin-top: 4px; }
   @media (max-width: 560px) { .howto-grid { grid-template-columns: 1fr; } .howto-title { font-size: 32px; } }
@@ -1986,6 +1987,7 @@
           <button class="ghost-btn" id="restart-btn">RESTART</button>
           <button class="ghost-btn" id="exit-btn">EXIT</button>
         </div>
+        <div class="results-keys" style="margin-top:16px;"><kbd>ESC</kbd> Resume</div>
       </div>
     </div>
 
@@ -2081,7 +2083,7 @@
         <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
         <button class="ghost-btn" id="results-share">COPY SCORE</button>
       </div>
-      <div class="results-keys" style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--ink-dim);text-transform:uppercase;">
+      <div class="results-keys" style="margin-top:14px;">
         <kbd>ENTER</kbd> Play again · <kbd>ESC</kbd> Menu
       </div>
     </div>
@@ -2140,9 +2142,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=28"></script>
-<script src="jukebox.js?v=28"></script>
-<script src="catalog.js?v=28"></script>
+<script src="game.js?v=29"></script>
+<script src="jukebox.js?v=29"></script>
+<script src="catalog.js?v=29"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
