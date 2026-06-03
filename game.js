@@ -281,9 +281,33 @@
     if (muted || !missBuffer) return;
     try {
       const ac = getAC();
-      const g = ac.createGain(); g.gain.value = missVol;
+      const g = ac.createGain(); g.gain.value = 0.5;
       const s = ac.createBufferSource(); s.buffer = missBuffer;
       s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
+    } catch (e) {}
+  }
+  // Overdrive activation: a short synthesized power-up riser (no asset needed).
+  // Gated by mute; rides at a modest fixed level so it accents over the music.
+  function playOverdriveSfx() {
+    if (muted) return;
+    try {
+      const ac = getAC(); const now = ac.currentTime;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.22, now + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+      g.connect(ac.destination);
+      // two detuned saws sweeping up = a bright riser
+      [0, 7].forEach((semi, i) => {
+        const o = ac.createOscillator();
+        o.type = 'sawtooth';
+        const base = 220 * Math.pow(2, semi / 12);
+        o.frequency.setValueAtTime(base, now);
+        o.frequency.exponentialRampToValueAtTime(base * 4, now + 0.45);
+        const og = ac.createGain(); og.gain.value = i ? 0.5 : 0.7;
+        o.connect(og); og.connect(g);
+        o.start(now); o.stop(now + 0.55);
+      });
     } catch (e) {}
   }
   // first user gesture anywhere unlocks audio for the session
@@ -843,6 +867,8 @@
       holding: () => holdNote.map((h, i) => h ? { lane: i, scored: +holdScored[i].toFixed(2) } : null).filter(Boolean),
       press: (lane) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now()); } },
       release: (lane) => onLaneRelease(lane),
+      chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
+      od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive }),
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) })
     };
   } catch (e) {}
@@ -878,6 +904,8 @@
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
+    playOverdriveSfx();
+    if (navigator.vibrate) { try { navigator.vibrate([20, 30, 40]); } catch (e) {} }
     updateHUD();
   }
   if (odFlame) {
