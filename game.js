@@ -70,6 +70,7 @@
   let overdrive = 0;                            // 0..1 meter
   let odActive = false;                         // overdrive mode engaged (x2 payoff)
   let odTimer = 0;                              // seconds of overdrive remaining
+  let odReadyAnnounced = false;                // one-shot "OVERDRIVE READY" cue per fill
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
   let bgPulse = 0;
@@ -617,7 +618,7 @@
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null);
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
-    odActive = false; odTimer = 0; lastMult = 1;
+    odActive = false; odTimer = 0; lastMult = 1; odReadyAnnounced = false;
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
   }
@@ -1171,7 +1172,11 @@
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
     // overdrive gauge
     const of = $('od-fill'); if (of) of.style.height = (overdrive * 100) + '%';
-    const odf = $('od-flame'); if (odf) odf.classList.toggle('ready', overdrive >= 1);
+    const odReady = overdrive >= 1 && !odActive;
+    const odf = $('od-flame'); if (odf) odf.classList.toggle('ready', odReady);
+    // announce once when the meter first fills, so players know Space is armed
+    if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; flashJudgment('OVERDRIVE READY', '#ffd98a'); }
+    else if (!odReady) odReadyAnnounced = false;
     $('jc-perfect').textContent = counts.perfect;
     $('jc-great').textContent = counts.great;
     $('jc-good').textContent = counts.good;
