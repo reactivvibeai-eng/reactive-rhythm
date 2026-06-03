@@ -795,13 +795,19 @@
   function hidePause() { $('pause-overlay').classList.remove('show'); }
 
   // ---------- INPUT ----------
+  function syncDiffButtons() {
+    document.querySelectorAll('#diff-grid .diff-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.diff === difficulty));
+  }
   document.querySelectorAll('#diff-grid .diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#diff-grid .diff-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
       difficulty = btn.dataset.diff;
+      syncDiffButtons();
+      try { localStorage.setItem('rr_diff', difficulty); } catch (e) {}
     });
   });
+  // restore the last-chosen difficulty so it sticks across sessions
+  try { const d = localStorage.getItem('rr_diff'); if (d && DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); } } catch (e) {}
   $('resume-btn').addEventListener('click', resumeGame);
   $('restart-btn').addEventListener('click', () => { hidePause(); restartGame(); });
   $('exit-btn').addEventListener('click', () => { hidePause(); stopGame(); showScreen('menu'); });
@@ -2240,7 +2246,7 @@
     play,                              // play(provider)
     playDemo: () => play(demoProvider),
     playUrl: (url, meta) => play(() => bufferedProvider(url, meta)),   // in-browser chart a live track
-    setDifficulty: (d) => { if (DIFF_STEP[d]) difficulty = d; },
+    setDifficulty: (d) => { if (DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); try { localStorage.setItem('rr_diff', d); } catch (e) {} } },
     getDifficulty: () => difficulty,
     setMenuPlayHandler: (fn) => { _menuPlayHandler = fn; },
     // input config (consumed by Settings UI; exposed for tooling/tests)
