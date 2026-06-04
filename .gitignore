@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 .DS_Store
 serve.log
+launch-game.bat

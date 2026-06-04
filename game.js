@@ -85,6 +85,7 @@
   let bgMode = 'cinematic';  // 'cinematic' = moon video backdrop | 'performance' = no video (higher FPS)
   let musicVol = 1;          // master music level (0..1), self-serve in Settings
   let SFX_LEVEL = 0.05;      // hit-chug accent level (0..0.5); self-serve in Settings (default barely-there)
+  let failMode = false;      // Settings → Fail Mode: an empty stability meter ends the run (default off = no-fail)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
     if (s.scroll) userScroll = s.scroll;
@@ -94,6 +95,7 @@
     else if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) reduceMotion = true;
     if (typeof s.music === 'number') musicVol = Math.max(0, Math.min(1, s.music));
     if (typeof s.sfx === 'number') SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx));
+    if (typeof s.failMode === 'boolean') failMode = s.failMode;
   } catch (e) {}
   // ?novideo=1 forces performance mode (FPS diagnostic / quick override)
   try { if (/[?&]novideo=1/.test(location.search)) bgMode = 'performance'; } catch (e) {}
@@ -113,6 +115,7 @@
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
   let stability = 1.0;
+  let runFailed = false;   // true when the current run ended via the (optional) fail-out
 
   // audio/input latency offset (seconds). Positive = player hits late -> shift
   // the judgment clock earlier to compensate. Set via tap calibration.
@@ -624,9 +627,10 @@
     if (s && (s.bgMode === 'performance' || s.bgMode === 'cinematic')) { bgMode = s.bgMode; applyBgMode(); }
     if (s && typeof s.music === 'number') { musicVol = Math.max(0, Math.min(1, s.music)); applyGate(); }
     if (s && typeof s.sfx === 'number') { SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx)); }
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL })); } catch (e) {}
+    if (s && typeof s.failMode === 'boolean') failMode = s.failMode;
+    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode })); } catch (e) {}
   };
-  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL });
+  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }
   applyReduceMotion();
   // performance background: hide + pause the moon video (kills its compositing cost so the
@@ -653,7 +657,7 @@
   updateFooterHint();
 
   function resetScoring() {
-    score = 0; combo = 0; maxCombo = 0; scoreDisplay = 0;
+    score = 0; combo = 0; maxCombo = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
@@ -724,6 +728,15 @@
 
   function restartGame() { stopGame(); beginPlay(); }
 
+  // optional fail-out (Settings → Fail Mode): the stability meter emptied → the run collapses
+  function failRun() {
+    if (runFailed || state !== 'playing') return;
+    runFailed = true;
+    cameraShake = Math.max(cameraShake, 14); glitchAmount = 1;
+    flashJudgment('SIGNAL LOST', '#ff1f2e');
+    endGame();
+  }
+
   async function endGame() {
     stopGame();
     const total = notes.length;
@@ -744,10 +757,15 @@
       notes_total: total,
       grade,
       full_combo: counts.miss === 0 && total > 0,
+      failed: runFailed,
     };
 
     renderResults(results, accPct, grade);
     showScreen('results');
+    if (runFailed) {
+      const bl = $('results-blurb'); if (bl) bl.textContent = 'Signal lost — the stability meter collapsed. Recalibrate and run it back.';
+      const bd = $('results-badges'); if (bd && !/signal lost/i.test(bd.textContent)) bd.insertAdjacentHTML('afterbegin', '<span class="rbadge fail">⚠ Signal Lost</span>');
+    }
 
     // ALWAYS record locally (per-song best + lifetime career stats) — works even for the
     // in-browser-charted tracks that have no server submit, so the grade chips + Career are real.
@@ -1353,6 +1371,7 @@
     glitchAmount = Math.max(0, glitchAmount - dt * 0.4);
     cameraShake = Math.max(0, cameraShake - dt * 30);
     lightningT = Math.max(0, lightningT - dt);
+    if (failMode && state === 'playing' && stability <= 0 && !runFailed) failRun();
     // STREAK FLAMES — the catchers catch fire as your multiplier climbs (Guitar-Hero feel)
     const _mlt = curMult();
     if (_mlt >= 2 && !reduceMotion && !fxLite) {
@@ -2254,6 +2273,7 @@
     { const x = $('set-sfx'); if (x) { x.value = s.sfx; const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((s.sfx / 0.5) * 100) + '%'; } }
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
+    { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
     renderKeycaps(); updateInputsStatus(); renderDeviceStatus();
     settingsScreen.classList.add('active');
@@ -2290,6 +2310,10 @@
   { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.addEventListener('click', () => {
     [...rm.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ reduceMotion: b.dataset.rm === 'on' });
+  })); }
+  { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.addEventListener('click', () => {
+    [...ff.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.applySettings({ failMode: b.dataset.fail === 'on' });
   })); }
   { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.addEventListener('click', () => {
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');

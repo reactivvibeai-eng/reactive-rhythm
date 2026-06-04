@@ -920,3 +920,23 @@ demo) with no sheet. Esc/backdrop closes. Jukebox free-play untouched.
   songs per level, add tiers, or gate by stars for a campaign — pending the user's vision of "levels."
 
 Version `?v=36 → ?v=37`.
+
+---
+
+# Increment 29 — optional fail-state + desktop launcher
+
+### 67. Fail Mode — optional rock-meter death  ✅ node-verified (inert by default)
+`game.js` + `index.html`. The stability meter was cosmetic; now it can matter. New
+**Settings → Fail Mode** toggle (**No-Fail** default / **Fail Out**): when on, an emptied stability
+meter collapses the run — `failRun()` flashes "SIGNAL LOST", ends the run, and the results screen
+shows a crimson **⚠ Signal Lost** badge + a fail blurb. Persisted in `rr_settings`; the per-frame
+check is gated on `failMode`, so the default-off path is completely inert (one boolean short-circuit,
+no behavior change). Addresses the "no stakes" GH-standard gap; opt-in so casual/beta runs aren't
+punished. `node --check` clean; settings plumbing mirrors the proven reduce-motion toggle.
+
+### 68. Desktop launcher + shortcut  ✅
+`launch-game.bat` (gitignored — machine-local) + a **"Reactive Rhythm" desktop shortcut** (created on
+the user's OneDrive Desktop, with Chrome's icon). One click ensures serve.py is up on :8787 and opens
+the game in a clean **Chrome app window** (`--app=`). For convenient local dev access until the site deploy.
+
+Version `?v=37 → ?v=38`.
