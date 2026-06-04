@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=33" />
+<link rel="stylesheet" href="jukebox.css?v=36" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -726,14 +726,17 @@
     pointer-events: none;
     z-index: 20;
     opacity: 0;
+    text-shadow: 0 0 22px currentColor, 0 2px 12px rgba(0,0,0,0.55);
   }
   .judge-flash.show {
-    animation: jflash 0.5s ease-out forwards;
+    animation: jflash 0.55s cubic-bezier(.2,1.4,.3,1) forwards;
   }
   @keyframes jflash {
-    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
-    25% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+    0%   { opacity: 0; transform: translate(-50%, -42%) scale(0.55); filter: blur(5px); }
+    18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.22); filter: blur(0); }
+    36%  { transform: translate(-50%, -50%) scale(0.97); }
+    52%  { transform: translate(-50%, -51%) scale(1.03); }
+    100% { opacity: 0; transform: translate(-50%, -58%) scale(1.0); }
   }
 
   .combo-display {
@@ -2136,6 +2139,7 @@
       <div class="pause-actions" style="margin-top: 40px;">
         <button class="ghost-btn primary" id="results-replay">PLAY AGAIN</button>
         <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
+        <button class="ghost-btn" id="results-career">CAREER</button>
         <button class="ghost-btn" id="results-share">COPY SCORE</button>
       </div>
       <div class="results-keys" style="margin-top:14px;">
@@ -2197,9 +2201,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=33"></script>
-<script src="jukebox.js?v=33"></script>
-<script src="catalog.js?v=33"></script>
+<script src="game.js?v=36"></script>
+<script src="jukebox.js?v=36"></script>
+<script src="catalog.js?v=36"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -2300,6 +2304,7 @@
   function close() { disarm(); screen.classList.remove('active'); }
   var ob = $('profile-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('profile-close'); if (cb) cb.addEventListener('click', close);
+  var rcb = $('results-career'); if (rcb) rcb.addEventListener('click', open);
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   var rb = $('profile-reset');
   if (rb) rb.addEventListener('click', function () {

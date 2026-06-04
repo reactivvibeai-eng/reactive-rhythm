@@ -74,6 +74,8 @@
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
   let bgPulse = 0;
+  // audio-reactive: an AnalyserNode tap on the music gain drives a beat pulse into bgPulse
+  let musicAnalyser = null, musicFreq = null, beatLevel = 0;
   let energy = 0;            // smoothed musical intensity (0..1) from chart density
   let energyTarget = 0;
   // user settings (persisted)
@@ -334,6 +336,8 @@
       this.gain = this.ctx.createGain();
       this.gain.gain.value = muted ? 0 : musicVol;
       this.src.connect(this.gain); this.gain.connect(this.ctx.destination);
+      // audio-reactive tap — additive, does NOT change the audio reaching the speakers
+      try { musicAnalyser = this.ctx.createAnalyser(); musicAnalyser.fftSize = 256; musicAnalyser.smoothingTimeConstant = 0.78; this.src.connect(musicAnalyser); musicFreq = new Uint8Array(musicAnalyser.frequencyBinCount); } catch (e) { musicAnalyser = null; musicFreq = null; }
       const when = this.ctx.currentTime + 0.12;
       this.src.start(when);
       this._start = when;
@@ -353,6 +357,7 @@
       if (this.src) { try { this.src.onended = null; this.src.stop(); } catch (e) {} }
       // do NOT close the shared context — it's reused across plays
       if (this.ctx && this.ctx.state === 'running') { try { this.ctx.resume(); } catch (e) {} }
+      musicAnalyser = null; musicFreq = null;
       this.ctx = null; this.src = null;
     }
   }
@@ -474,6 +479,23 @@
     if (ring) ring.style.strokeDashoffset = String(628 * (1 - Math.max(0, Math.min(100, pct)) / 100));
   }
 
+  // fetch audio with a hard timeout so a dead/slow network can't hang the loading screen forever
+  async function fetchAudio(url, opts) {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (e) {} }, 30000) : 0;
+    try {
+      const res = await fetch(url, Object.assign({ signal: ctrl ? ctrl.signal : undefined }, opts || {}));
+      if (!res.ok) throw new Error('Track audio unavailable (' + res.status + ')');
+      return await res.arrayBuffer();
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error('Network timed out — check your connection and try again');
+      if (e && /unavailable \(/.test(e.message || '')) throw e;
+      throw new Error('Couldn’t load this track’s audio — try another, or check your connection');
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async function demoProvider() {
     showScreen('loading');
     $('loading-stage').textContent = 'DECODING SIGNAL';
@@ -481,10 +503,8 @@
       setLoading('Awakening ECH0', 5);
       const audioEl = $('audio-el');
       const src = audioEl ? audioEl.src : 'assets/lunar-waves.mp3';
-      const res = await fetch(src);
-      if (!res.ok) throw new Error('Failed to fetch audio');
+      const arr = await fetchAudio(src);
       setLoading('Decoding waveform', 25);
-      const arr = await res.arrayBuffer();
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       cachedBuffer = await ac.decodeAudioData(arr);
       ac.close();
@@ -510,10 +530,8 @@
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
     if (!buf) {
       setLoading('Fetching track', 8);
-      const res = await fetch(url, { mode: 'cors' });
-      if (!res.ok) throw new Error('Could not load this track’s audio (' + res.status + ')');
+      const arr = await fetchAudio(url, { mode: 'cors' });
       setLoading('Decoding waveform', 25);
-      const arr = await res.arrayBuffer();
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       buf = await ac.decodeAudioData(arr);
       try { ac.close(); } catch (e) {}
@@ -1078,9 +1096,13 @@
     counts[kind]++; combo++; if (combo > maxCombo) maxCombo = combo;
     // combo milestone → LIGHTNING STRIKE (Guitar-Hero-style streak reward)
     if (combo > 0 && combo % 25 === 0) {
-      lightningT = 0.3; cameraShake = Math.max(cameraShake, 11); bgPulse = 1;
-      flashJudgment(combo + ' STREAK', '#ffe08a');
-      if (navigator.vibrate) { try { navigator.vibrate([10, 20, 10]); } catch (e) {} }
+      const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
+      lightningT = Math.min(0.55, 0.3 + tier * 0.05);
+      cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
+      bgPulse = 1;
+      const big = combo % 100 === 0;                            // every 100 is a bigger moment
+      flashJudgment(combo + (big ? ' STREAK!!' : ' STREAK'), big ? '#fff2cd' : '#ffe08a');
+      if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
     }
     const comboTier = Math.min(3, 1 + Math.floor(combo / 12));        // 1..3 from combo
     const mult = Math.min(MAX_MULT, odActive ? comboTier + 1 : comboTier); // Overdrive = +1 tier (caps at 4)
@@ -1177,7 +1199,10 @@
         color: Math.random() < 0.5 ? burst : color.rgb, spark: true });
     }
     particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.45, color: color.rgb, max: 90 });
-    if (isPerfect) particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.6, color: '255,255,255', max: 130 });
+    if (isPerfect) {
+      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.6, color: '255,255,255', max: 130 });
+      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.55, color: '255,72,78', max: 210 });  // crimson shockwave — perfects "crack"
+    }
     particles.push({ column: true, x: laneX, y: hitY, age: 0, life: 0.34, color: color.rgb, w: _fg.lw });
     // shard fragments — the rock breaks apart on impact
     for (let i = 0; i < 7; i++) {
@@ -1315,6 +1340,16 @@
       }
     }
     bgPulse = Math.max(0, bgPulse - dt * 1.8);
+    // AUDIO-REACTIVE: pulse the whole scene on the music's bass onsets (kick/beat) via the analyser tap
+    if (musicAnalyser && musicFreq && state === 'playing') {
+      try {
+        musicAnalyser.getByteFrequencyData(musicFreq);
+        let bass = 0; for (let i = 0; i < 6; i++) bass += musicFreq[i];
+        bass /= (6 * 255);
+        if (!reduceMotion && bass > 0.22 && bass > beatLevel * 1.25) bgPulse = Math.max(bgPulse, Math.min(0.7, bass * 0.8));
+        beatLevel += (bass - beatLevel) * 0.25;
+      } catch (e) {}
+    } else { beatLevel *= 0.9; }
     glitchAmount = Math.max(0, glitchAmount - dt * 0.4);
     cameraShake = Math.max(0, cameraShake - dt * 30);
     lightningT = Math.max(0, lightningT - dt);
@@ -1554,6 +1589,21 @@
     const vg = ctx.createRadialGradient(cw / 2, ch * 0.56, ch * 0.3, cw / 2, ch * 0.56, ch * 0.82);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.32)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch);
+
+    // COMBO HEAT — the screen edges glow hotter (crimson) as your multiplier climbs (x1→x4).
+    // Additive + crimson so it reads as brand energy, never purple; reduce-motion dials it back.
+    if (state === 'playing') {
+      const heat = Math.min(1, Math.max(0, (curMult() - 1) / 3));
+      if (heat > 0.01) {
+        const pulse = reduceMotion ? 1 : (0.85 + 0.15 * Math.sin(performance.now() / 130));
+        const hg = ctx.createRadialGradient(cw / 2, ch * 0.56, ch * 0.34, cw / 2, ch * 0.56, ch * 0.85);
+        hg.addColorStop(0, 'rgba(255,40,46,0)');
+        hg.addColorStop(1, 'rgba(205,22,30,' + (0.32 * heat * pulse).toFixed(3) + ')');
+        ctx.save(); ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = hg; ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
+      }
+    }
 
     // OVERDRIVE window: warm gold edge-glow framing the whole screen (on-brand, warm,
     // additive so it never reads purple). Pulses unless reduce-motion is on.

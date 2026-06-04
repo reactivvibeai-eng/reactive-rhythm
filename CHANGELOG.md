@@ -869,3 +869,31 @@ It's also what makes the *other* agent's polish pay off: your S-ranks, combos an
   recording is additive and always-on, so practice runs build your Career too.
 
 Version `?v=32 → ?v=33`. Landed as focused git commits on top of the other agent's history.
+
+---
+
+# Increment 27 — post-feedback: juice pass, results "Career" shortcut, network hardening
+
+User tested the audio-reactive build and is happy ("mechanics feel precise and good"). This pass adds
+the game-feel juice they asked for, a results→career shortcut, and the first Track-B hardening.
+
+### 63. Game-feel juice  ✅ (verified live by the user)
+`game.js` + `index.html`. **Combo heat** — screen edges glow hotter crimson as the multiplier climbs
+x1→x4 (additive, reduce-motion aware). **Perfect shockwave** — a big crimson ring cracks out on
+PERFECT hits. **Punchier judgment** — the PERFECT/GREAT popup overshoots in with a blur-pop +
+color-matched glow + float-up. **Audio-reactive scene** — an AnalyserNode taps the music *pre-gain*
+(so it reacts even when muted) and pulses `bgPulse` on bass onsets, so the whole scene breathes with
+the actual track, not just on hits. **Escalating combo milestones** — every 25-combo streak ramps the
+lightning/shake; every 100 is a bigger "STREAK!!" moment.
+
+### 64. Results → CAREER shortcut  ✅
+`index.html`. A **CAREER** button on the results screen opens the Career/Controller Profile overlay
+(reuses the header button's handler) — finish a run, jump straight to your stats.
+
+### 65. Track B (hardening) — network timeout  ✅ node-verified
+`game.js`. New `fetchAudio()` wraps both providers (demo + live) with a 30s `AbortController` timeout,
+so a dead/slow connection fails cleanly (toast + back to menu) instead of hanging the loading screen
+forever. Friendlier error copy. First of the launch-hardening track (dev-hook stripping deferred to
+just-before-deploy so debug tools stay available during the build).
+
+Version `?v=33 → ?v=36`.
