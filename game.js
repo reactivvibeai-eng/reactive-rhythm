@@ -913,10 +913,30 @@
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     updateHUD();
   }
-  // let go before the tail finished — keep what was earned, no combo break (forgiving)
+  // let go before the tail — TIGHT now: holding the home stretch (>= GRACE) still completes it,
+  // but dropping earlier is a real miss of the sustain (combo break + a dead, dimming beam) so
+  // you genuinely have to hold it down, not just tap the head.
   function endHoldEarly(lane) {
-    if (!holdNote[lane]) return;
+    const hn = holdNote[lane]; if (!hn) return;
+    const GRACE = 0.75;                 // held at least this far → the release is forgiven (tail grace)
     holdNote[lane] = null;
+    if (holdScored[lane] >= GRACE) {    // home stretch → count it as a clean hold
+      const rem = Math.max(0, 1 - holdScored[lane]);
+      if (rem > 0.001) score += rem * HOLD_TOTAL * curMult();
+      holdScored[lane] = 1;
+      laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
+      spawnHitParticles(lane, 'great');
+      flashJudgment('HOLD!', '#e0a93f');
+      if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    } else {                            // genuine drop → you let go too early
+      hn.dropped = true;
+      combo = 0;
+      stability = Math.max(0, stability - 0.03);
+      lanePluckT[lane] = 9;             // the string goes dead in this lane
+      flashJudgment('DROPPED', '#ff6b78');
+      playMissSfx();
+    }
+    updateHUD();
   }
   // dev-only harness for deterministic input/sustain testing (no effect on real play)
   try {
@@ -1487,10 +1507,13 @@
     // notes — glossy spheres sliding down the strings toward the catchers
     for (const n of notes) {
       const held = (n.type === 'hold' && holdNote[n.lane] === n);   // struck & actively sustaining
-      if (n.judged && n.hit !== 'miss' && !held) continue;
+      // a struck-then-dropped hold keeps showing its (shrinking) beam until the tail passes —
+      // it goes dim and dies in place, so a let-go reads clearly instead of vanishing instantly
+      const resolving = (n.type === 'hold' && n.dropped && t < n.time + n.hold);
+      if (n.judged && n.hit !== 'miss' && !held && !resolving) continue;
       let d = (n.time - t) / approach;
-      if (!held && (d > 1.02 || d < -0.12)) continue;
-      if (held) d = Math.max(0, d);                 // pin the struck head on the catcher line
+      if (!held && !resolving && (d > 1.02 || d < -0.12)) continue;
+      if (held || resolving) d = Math.max(0, d);    // pin the struck head on the catcher line
       const sc = 1 - 0.7 * d;
       const nx = noteX(n.lane, d), ny = noteY(d);
       // BOMB hazard — a dark "✕, do not hit" orb; skips the normal marble + trail
@@ -1528,33 +1551,36 @@
       // edges, a hot white core, and lava pulses flowing down toward the catcher. While
       // held it retracts into the catcher as it pays out; brightens once struck.
       if (n.type === 'hold' && n.hold > 0) {
-        const dEnd = held
-          ? Math.max(0, (n.time + n.hold - t) / approach)   // remaining length, retracting
+        const struck = held || resolving;
+        const dEnd = struck
+          ? Math.max(0, (n.time + n.hold - t) / approach)   // remaining length, retracting into the catcher
           : Math.min(1.04, d + n.hold / approach);          // full tail ahead of the head
         const hx = noteX(n.lane, dEnd), hy = noteY(dEnd);
-        const lit = held || (n.hit && n.hit !== 'miss');     // brighten once struck
+        const lit = held || (!resolving && n.hit && n.hit !== 'miss');  // brighten while held; NOT when dropped
         const wB = lw * 0.30 * (0.7 + 0.3 * sc);             // slim beam (no fat slab)
-        const aM = lit ? 1 : 0.8;
+        const aM = resolving ? 0.32 : (lit ? 1 : 0.8);       // dropped beam = dim & dying
         ctx.save(); ctx.lineCap = 'round'; ctx.globalCompositeOperation = 'lighter';
-        ctx.shadowColor = '#ff2a30';
+        ctx.shadowColor = resolving ? '#6e0f15' : '#ff2a30';
         const beam = (w, col, blur) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.shadowBlur = blur; ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(hx, hy); ctx.stroke(); };
         // feathered crimson glow — wide & soft → tighter & brighter (additive = soft edges)
         beam(wB * 2.1, 'rgba(255,38,46,' + (0.14 * aM) + ')', 20);
         beam(wB * 1.3,  'rgba(255,52,54,' + (0.30 * aM) + ')', 11);
         beam(wB * 0.78, 'rgba(255,104,84,' + (0.52 * aM) + ')', 6);
-        // molten pulses flowing DOWN the beam toward the catcher (animated dashes)
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = 'rgba(255,184,120,' + (lit ? 0.9 : 0.5) + ')';
-        ctx.lineWidth = wB * 0.62;
-        ctx.setLineDash([wB * 0.85, wB * 2.4]);
-        ctx.lineDashOffset = -((performance.now() * 0.22) % 100000);  // scroll toward the head
-        ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(nx, ny); ctx.stroke();
-        ctx.setLineDash([]);
-        // hot white core thread
-        beam(Math.max(1.1, wB * 0.2), 'rgba(255,242,236,' + (lit ? 0.95 : 0.62) + ')', 4);
+        if (!resolving) {
+          // molten pulses flowing DOWN the beam toward the catcher (animated dashes) — alive only while playable
+          ctx.shadowBlur = 8;
+          ctx.strokeStyle = 'rgba(255,184,120,' + (lit ? 0.9 : 0.5) + ')';
+          ctx.lineWidth = wB * 0.62;
+          ctx.setLineDash([wB * 0.85, wB * 2.4]);
+          ctx.lineDashOffset = -((performance.now() * 0.22) % 100000);  // scroll toward the head
+          ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(nx, ny); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // hot white core thread (cool & faint when dropped)
+        beam(Math.max(1.1, wB * 0.2), 'rgba(255,242,236,' + (resolving ? 0.26 : (lit ? 0.95 : 0.62)) + ')', 4);
         ctx.restore();
       }
-      drawNote(nx, ny, lw * 0.46 * sc, n);
+      if (!resolving) drawNote(nx, ny, lw * 0.46 * sc, n);
     }
 
     for (const p of particles) {

@@ -940,3 +940,26 @@ the user's OneDrive Desktop, with Chrome's icon). One click ensures serve.py is 
 the game in a clean **Chrome app window** (`--app=`). For convenient local dev access until the site deploy.
 
 Version `?v=37 → ?v=38`.
+
+---
+
+# Increment 30 — holds feel TIGHT (user feedback: the sustain mechanic was loose)
+
+User: hitting a long-note's head cleared it without holding, and the beam "disappeared rapidly" —
+the hold didn't feel as tight as the taps. Root cause: holds were "forgiving by design" (Increment
+21) — the head scored like a tap, holding was an optional bonus, and the beam vanished the instant
+you weren't actively holding.
+
+### 69. Tight holds — you actually have to hold them  ✅ node-verified (feel is the user's to confirm)
+`game.js`. Two changes:
+- **Beam persists + depletes.** A struck hold's beam stays and retracts into the catcher across its
+  full length; let go early and it goes **dim and dies in place** (a new `resolving` render state)
+  instead of vanishing — so a drop reads clearly.
+- **Holding is required.** Release before **75%** held = a **DROPPED**: combo break + miss squelch +
+  the lane's string goes dead. Release in the home stretch (≥75%) still completes cleanly (fair tail
+  grace); holding to the tail gives the crisp **HOLD!** payout as before. A quick tap no longer
+  clears a sustain — you have to push it down.
+- Tunable: `GRACE = 0.75` in `endHoldEarly` (raise = more forgiving). The combo break can be
+  softened/removed if it reads too harsh on auto-charts.
+
+Version `?v=38 → ?v=39`.
