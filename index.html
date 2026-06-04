@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=40" />
+<link rel="stylesheet" href="jukebox.css?v=41" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -85,6 +85,11 @@
     transition: opacity 0.35s ease;
   }
   .screen.active { opacity: 1; pointer-events: auto; }
+  /* polished entrance for the modal overlays (How-to / Levels / Career) — they used to pop in flat */
+  .screen.active .howto-card,
+  .screen.active .levels-card,
+  .screen.active .profile-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(16px) scale(0.965); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .calib-screen { z-index: 250; }
 
   /* ============ TYPOGRAPHY ============ */
@@ -808,7 +813,7 @@
   .pause-overlay.show { opacity: 1; pointer-events: auto; }
   .pause-overlay h2 { font-family: 'Unbounded', sans-serif; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #f6eef0; text-shadow: 0 0 28px rgba(255,31,46,0.85), 0 0 12px rgba(255,31,46,0.6), 0 3px 0 #2a0206; }
   .pause-overlay p { font-family: 'JetBrains Mono', monospace; color: var(--crimson); font-size: 13px; letter-spacing: 0.34em; text-transform: uppercase; text-shadow: 0 0 12px rgba(255,31,46,0.5); }
-  .pause-actions { display: flex; gap: 12px; margin-top: 12px; }
+  .pause-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 12px; }
   .ghost-btn {
     padding: 15px 24px;
     background: rgba(20,6,10,0.55);
@@ -2252,9 +2257,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=40"></script>
-<script src="jukebox.js?v=40"></script>
-<script src="catalog.js?v=40"></script>
+<script src="game.js?v=41"></script>
+<script src="jukebox.js?v=41"></script>
+<script src="catalog.js?v=41"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop

@@ -981,3 +981,20 @@ identity, so **Medium and Hard charts are byte-for-byte unchanged** — only Eas
 hazards, already the slowest/sparsest) — important for beta testers who've never touched a rhythm game.
 
 Version `?v=39 → ?v=40`.
+
+---
+
+# Increment 32 — UI polish pass (conservative, on-brand)
+
+The high-traffic screens (start/library/results) are already strongly designed + brand-locked, so
+this pass is deliberately conservative — safe, additive touches justified from the code. (I can't
+screenshot the animated canvas, so deeper aesthetic polish is best done with the user's eye.)
+
+### 71. Overlay entrances + results-row wrap  ✅
+`index.html` (CSS). (1) The modal overlays — **How-to, Levels, Career** — now **scale/fade in**
+(`cardIn`, reduce-motion aware) instead of popping in flat, matching the crafted entrances elsewhere
+(logo slam, grade reveal). (2) The results action row now **wraps + centers** (`flex-wrap`) — it had
+grown to 4 buttons (PLAY AGAIN / MENU / CAREER / COPY SCORE) and could crowd a narrow desktop row.
+Deeper screen-level aesthetic polish deferred to user-directed iteration.
+
+Version `?v=40 → ?v=41`.
