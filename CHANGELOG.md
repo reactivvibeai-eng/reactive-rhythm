@@ -963,3 +963,21 @@ you weren't actively holding.
   softened/removed if it reads too harsh on auto-charts.
 
 Version `?v=38 → ?v=39`.
+
+---
+
+# Increment 31 — Easy difficulty restructure (a real on-ramp)
+
+Per the GH-standard critique: difficulty only changed speed/density, not structure — Easy was just a
+slower 6-lane chart. Now Easy is genuinely simpler (GH uses fewer frets on lower difficulties).
+
+### 70. Easy = fewer lanes + no bombs  ✅ node-verified (Medium/Hard provably unchanged)
+`game.js` (buildNotes). A per-difficulty active-lane window: **Easy uses 4 centered strings**
+(lanes 1–4), **Medium/Hard use all 6**. Implemented as `LANE_SPAN = {easy:4, medium:6, hard:6}` + an
+`inSpan()` wrap on every lane pick (main, chords, bombs, gap-fill). Span 6 makes `inSpan` the
+identity, so **Medium and Hard charts are byte-for-byte unchanged** — only Easy is restructured.
+**Bombs are also removed from Easy** (a "don't-hit" hazard is confusing for newcomers). Added
+`lanesUsed` to `__rrChartStats` for verification. Result: Easy is a clean on-ramp (4 strings, no
+hazards, already the slowest/sparsest) — important for beta testers who've never touched a rhythm game.
+
+Version `?v=39 → ?v=40`.

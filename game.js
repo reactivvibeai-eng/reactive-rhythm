@@ -376,12 +376,18 @@
   function buildNotes() {
     const step = DIFF_STEP[difficulty];
     const filtered = beats.filter((_, i) => i % step === 0);
+    // Guitar-Hero-style difficulty ramp: Easy uses fewer, centered strings; Medium/Hard use all 6
+    // (span 6 → inSpan is the identity, so Medium/Hard charts are unchanged).
+    const LANE_SPAN = { easy: 4, medium: 6, hard: 6 };
+    const span = LANE_SPAN[difficulty] || LANE_COUNT;
+    const laneBase = Math.floor((LANE_COUNT - span) / 2);                          // centered active window
+    const inSpan = (l) => laneBase + ((((l - laneBase) % span) + span) % span);    // wrap any index into the active set
     let last = -1, last2 = -1;
     notes = filtered.map((b, idx) => {
       const seed = Math.floor(b.t * 8.97 + b.strength * 3.1 + idx * 1.7);
-      let lane = ((seed % LANE_COUNT) + LANE_COUNT) % LANE_COUNT;
+      let lane = laneBase + (((seed % span) + span) % span);
       let guard = 0;
-      while ((lane === last || lane === last2) && guard < 4) { lane = (lane + 1) % LANE_COUNT; guard++; }
+      while ((lane === last || lane === last2) && guard < 4) { lane = inSpan(lane + 1); guard++; }
       last2 = last; last = lane;
       let type = 'tap';
       if (idx > 4 && idx % 31 === 0) type = 'star';        // rare gold "surge" note
@@ -412,10 +418,10 @@
         if ((n.type === 'tap' || n.type === 'accent') && (i - lastChord) >= 8 && i % 4 === 0) {
           chordId++;
           const lanes = [n.lane];
-          let pl = (n.lane + 2) % LANE_COUNT; if (pl === n.lane) pl = (pl + 1) % LANE_COUNT; lanes.push(pl);
+          let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
           // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
           if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0)) {
-            let p2 = (n.lane + 4) % LANE_COUNT; if (lanes.indexOf(p2) < 0) lanes.push(p2);
+            let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
           }
           n.chord = true; n.chordId = chordId; n.chordLanes = lanes; n.chordLead = true;
           for (let k = 1; k < lanes.length; k++) {
@@ -426,14 +432,14 @@
       }
     }
     // ---- BOMBS: hazards in the gaps — DON'T hit this lane while one is at the bridge ----
-    const bombGap = difficulty === 'hard' ? 11 : difficulty === 'medium' ? 15 : 22;
+    const bombGap = difficulty === 'hard' ? 11 : difficulty === 'medium' ? 15 : Infinity;   // no bombs on Easy — a clean on-ramp
     let lastBomb = -99;
     for (let i = 0; i < base.length - 1; i++) {
       const n = base[i], nx = base[i + 1];
       if (n.type === 'hold') continue;
       const gap = nx.time - n.time;
       if (gap > 0.7 && (i - lastBomb) >= bombGap) {
-        notes.push({ time: n.time + gap * 0.5, strength: 1, lane: (n.lane + 3) % LANE_COUNT, type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false });
+        notes.push({ time: n.time + gap * 0.5, strength: 1, lane: inSpan(n.lane + 3), type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false });
         lastBomb = i;
       }
     }
@@ -453,8 +459,8 @@
       for (let k = 1; k < segs; k++) {
         const t = end + (gap * k / segs);
         const seed = Math.floor(t * 97.3 + k * 13);
-        let lane = ((seed % LANE_COUNT) + LANE_COUNT) % LANE_COUNT;
-        if (lane === a.lane) lane = (lane + 1) % LANE_COUNT;
+        let lane = laneBase + (((seed % span) + span) % span);
+        if (lane === a.lane) lane = inSpan(lane + 1);
         fillers.push({ time: t, strength: 0.85, lane: lane, type: 'tap', hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _fill: true });
       }
     }
@@ -467,6 +473,7 @@
         chords: notes.filter(n => n.chord).length,
         bombs: notes.filter(n => n.type === 'bomb').length,
         fillers: fillers.length,
+        lanesUsed: [...new Set(notes.map(n => n.lane))].sort((a, b) => a - b),
         difficulty: difficulty
       };
     } catch (e) {}
