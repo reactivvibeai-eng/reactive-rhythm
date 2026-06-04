@@ -897,3 +897,26 @@ forever. Friendlier error copy. First of the launch-hardening track (dev-hook st
 just-before-deploy so debug tools stay available during the build).
 
 Version `?v=33 → ?v=36`.
+
+---
+
+# Increment 28 — LEVELS: a tiered Level Select (the "different levels to play")
+
+User asked for "different levels that could be played" + a level picker. (My earlier star-gated
+"campaign" pitch over-complicated it — backed out of the unlock economy.) v1 is a clean tiered
+**Level Select** layered on the live catalog, no gating.
+
+### 66. Level Select  ✅ verified (structure + launch wiring; visuals show on the user's screen)
+`catalog.js` + `index.html`. A new **LEVELS** button (stacked-layers icon) in the library header
+opens a branded overlay with **three tiers — WARM-UP (Easy) · PULSE (Medium) · FRACTURE (Hard)** —
+each a row of **4 level cards** drawn from the live library (12 distinct real tracks, spread across
+the catalog, each with cover art + title + artist + your best-grade chip). Tap a card → it sets that
+tier's difficulty and launches the track straight into play, via a new
+`RhythmCatalog.launchTrack(track)` that reuses the sheet's routing (server-chart vs. in-browser vs.
+demo) with no sheet. Esc/backdrop closes. Jukebox free-play untouched.
+- Verified live (headless eval): `launchTrack` exposed, catalog 872 tracks, overlay opens with 3
+  tiers / 12 distinct real cards, closes clean, **0 console errors**.
+- v1 notes: songs are auto-assigned from the catalog (spread for variety). Easy to curate specific
+  songs per level, add tiers, or gate by stars for a campaign — pending the user's vision of "levels."
+
+Version `?v=36 → ?v=37`.

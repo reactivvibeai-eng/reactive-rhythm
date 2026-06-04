@@ -529,6 +529,24 @@
   }
   function closeSheet() { sheet.classList.remove('open'); }
 
+  // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
+  function launchTrack(track) {
+    if (!track || !trackReady(track)) return false;
+    stopPreview();
+    currentTrack = track;
+    const liveTrack = catalogLive && track.id && track.id !== 'demo';
+    if (liveTrack && hasServerChart(track)) {
+      window.RhythmGame.play(liveProvider(track.id));
+    } else if (liveTrack && trackAudioUrl(track)) {
+      window.RhythmGame.playUrl(trackAudioUrl(track), {
+        title: track.title, artist: track.artist_credit_name || track.artist_name, genre: track.genre, artwork: track.artwork_url,
+      });
+    } else {
+      window.RhythmGame.playDemo();
+    }
+    return true;
+  }
+
   if (sheet) {
     $('sheet-scrim').addEventListener('click', closeSheet);
     $('sheet-back').addEventListener('click', closeSheet);
@@ -616,7 +634,7 @@
   }
 
   window.RhythmCatalog = {
-    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet,
+    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     search, sortTracks, sections, getBest,

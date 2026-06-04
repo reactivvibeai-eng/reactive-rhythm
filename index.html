@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=36" />
+<link rel="stylesheet" href="jukebox.css?v=37" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -456,6 +456,33 @@
   .profile-screen.is-empty .profile-stats, .profile-screen.is-empty .profile-grades-wrap { opacity: 0.32; }
   #profile-reset { color: var(--ink-dim); }
   @media (max-width: 560px) { .profile-stats { grid-template-columns: repeat(2, 1fr); } .profile-title { font-size: 36px; } }
+
+  /* ============ LEVELS (tiered Level Select) ============ */
+  .levels-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
+  .levels-card { width: min(880px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px 10px; text-align: center; }
+  .levels-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 48px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
+  .levels-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 0 0 8px; max-width: 520px; }
+  .levels-body { width: 100%; display: flex; flex-direction: column; gap: 22px; }
+  .lv-tier { width: 100%; }
+  .lv-tier-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
+  .lv-tier-head .t-n { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.12em; color: var(--ink); }
+  .lv-tier-head .t-d { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
+  .lv-tier-head .t-d.easy { color: #6fe0a0; } .lv-tier-head .t-d.medium { color: #e0a93f; } .lv-tier-head .t-d.hard { color: var(--crimson); }
+  .lv-tier-head .t-line { flex: 1; height: 1px; background: var(--line); }
+  .lv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .lv-card { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,0.02); cursor: pointer; transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; text-align: left; padding: 0; }
+  .lv-card:hover { transform: translateY(-3px); border-color: var(--crimson); box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(255,31,46,0.25); }
+  .lv-card:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+  .lv-art { width: 100%; aspect-ratio: 1 / 1; background: linear-gradient(135deg, #2a0a10, #120407); display: flex; align-items: center; justify-content: center; font-size: 30px; color: rgba(255,255,255,0.25); position: relative; }
+  .lv-art img { width: 100%; height: 100%; object-fit: cover; }
+  .lv-num { position: absolute; top: 7px; left: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.85); letter-spacing: 0.05em; }
+  .lv-grade { position: absolute; top: 6px; right: 7px; min-width: 24px; height: 24px; padding: 0 4px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; background: rgba(7,6,10,0.72); border: 1px solid currentColor; }
+  .lv-grade.g-S { color: #e0a93f; } .lv-grade.g-A { color: #ff6b78; } .lv-grade.g-B { color: var(--chrome); } .lv-grade.g-C { color: var(--ink-dim); } .lv-grade.g-D { color: #8a5a3a; }
+  .lv-meta { padding: 9px 10px 11px; }
+  .lv-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .levels-empty { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); padding: 30px; line-height: 1.6; }
+  @media (max-width: 720px) { .lv-grid { grid-template-columns: repeat(2, 1fr); } .levels-title { font-size: 38px; } }
 
   /* ============ COUNTDOWN ============ */
   .countdown {
@@ -1552,6 +1579,9 @@
           <button class="icon-btn" id="profile-open" aria-label="Your career profile">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M5.5 21a6.5 6.5 0 0 1 13 0"></path></svg>
           </button>
+          <button class="icon-btn" id="levels-open" aria-label="Levels">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
+          </button>
         </div>
       </header>
 
@@ -1815,6 +1845,19 @@
         <button class="ghost-btn" id="profile-reset">RESET CAREER</button>
         <button class="ghost-btn primary" id="profile-close">DONE</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       LEVELS — tiered Level Select (Warm-Up / Pulse / Fracture)
+       ============================================================ -->
+  <div class="screen levels-screen" id="levels-screen">
+    <div class="levels-card">
+      <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// CAMPAIGN</div>
+      <h2 class="levels-title">LEVELS</h2>
+      <p class="levels-sub">Climb the tiers — each level is a track to clear. Free-play any song from the library anytime.</p>
+      <div class="levels-body" id="levels-body"></div>
+      <button class="ghost-btn primary" id="levels-close" style="margin-top:20px;min-width:200px;">DONE</button>
     </div>
   </div>
 
@@ -2201,9 +2244,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=36"></script>
-<script src="jukebox.js?v=36"></script>
-<script src="catalog.js?v=36"></script>
+<script src="game.js?v=37"></script>
+<script src="jukebox.js?v=37"></script>
+<script src="catalog.js?v=37"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -2312,6 +2355,73 @@
     try { localStorage.removeItem('rr_career'); localStorage.removeItem('rr_scores'); } catch (e) {}
     disarm(); render();
   });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+  }, true);
+})();
+</script>
+
+<!-- LEVELS — tiered Level Select (reads RhythmCatalog.allTracks + getBest, launches via launchTrack) -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var screen = $('levels-screen'); if (!screen) return;
+  var TIERS = [
+    { n: 'TIER I · WARM-UP', d: 'easy' },
+    { n: 'TIER II · PULSE', d: 'medium' },
+    { n: 'TIER III · FRACTURE', d: 'hard' }
+  ];
+  var PER = 4;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function pickTracks() {
+    var RC = window.RhythmCatalog;
+    if (!RC || !RC.allTracks) return [];
+    var all = RC.allTracks().filter(function (t) { return RC.trackReady ? RC.trackReady(t) : true; });
+    if (!all.length) return [];
+    var need = TIERS.length * PER, out = [];
+    if (all.length <= need) { out = all.slice(0, need); }
+    else { var step = all.length / need; for (var i = 0; i < need; i++) out.push(all[Math.floor(i * step)]); }
+    return out;
+  }
+  var current = [];
+  function build() {
+    var RC = window.RhythmCatalog, body = $('levels-body'); if (!body) return;
+    current = pickTracks();
+    if (!current.length) { body.innerHTML = '<div class="levels-empty">Levels are loading from your library — give it a moment, then reopen.</div>'; return; }
+    var html = '';
+    for (var ti = 0; ti < TIERS.length; ti++) {
+      var tier = TIERS[ti], slice = current.slice(ti * PER, ti * PER + PER);
+      if (!slice.length) continue;
+      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span></div><div class="lv-grid">';
+      for (var i = 0; i < slice.length; i++) {
+        var t = slice[i], num = ti * PER + i + 1;
+        var best = (RC && RC.getBest) ? RC.getBest(t.id) : null, grade = best ? best.grade : '';
+        var art = t.artwork_url ? '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.style.display=\'none\'">' : '♪';
+        var gradeChip = grade ? '<span class="lv-grade g-' + grade + '">' + grade + '</span>' : '';
+        html += '<button class="lv-card" data-tier="' + ti + '" data-i="' + i + '">' +
+          '<div class="lv-art">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + gradeChip + '</div>' +
+          '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || '') + '</div></div>' +
+          '</button>';
+      }
+      html += '</div></div>';
+    }
+    body.innerHTML = html;
+    var cards = body.querySelectorAll('.lv-card');
+    for (var c = 0; c < cards.length; c++) {
+      cards[c].addEventListener('click', function () {
+        var ti = +this.getAttribute('data-tier'), i = +this.getAttribute('data-i');
+        var t = current[ti * PER + i]; if (!t) return;
+        close();
+        try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(TIERS[ti].d); } catch (e) {}
+        try { if (window.RhythmCatalog && window.RhythmCatalog.launchTrack) window.RhythmCatalog.launchTrack(t); } catch (e) {}
+      });
+    }
+  }
+  function open() { build(); screen.classList.add('active'); }
+  function close() { screen.classList.remove('active'); }
+  var ob = $('levels-open'); if (ob) ob.addEventListener('click', open);
+  var cb = $('levels-close'); if (cb) cb.addEventListener('click', close);
+  screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
   }, true);
