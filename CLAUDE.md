@@ -128,11 +128,54 @@ icon in the library header) — lifetime score/runs/songs/best-combo/accuracy/fu
 distribution, and a climbing rank title; backed by `rr_career`. Results screen gained a **star
 rating** + a **GRADE UP** badge. (Built sole-editor after a concurrent agent — agent A — went idle.)
 
-## OPEN / NEXT
-1. **FPS** — the user still owes a `?novideo=1` vs normal reading; 30fps is likely the moon
-   video compositing OR their monitor refresh. Decides whether to swap the backdrop.
-3. **"Your Tracks" shelf** — needs the backend to return an owner id / `/my-tracks` (brief it).
-4. **Server-side search** — switch the header search to the `?q=` endpoint when the library
-   grows into the thousands (currently client-side over all 852, instant).
-5. **Launch prep** — strip dev hooks, then deploy to `reactivvibe.com/play`.
-6. Playtest dial-ins the user may request: chug/squelch volume, bomb/chord frequency, fire intensity.
+**v34–v43 (this pass):** tighter **holds** (you bank a sustain by holding the key — early-release
+drops it, with a 0.75 grace), a real **Easy on-ramp** (fewer lanes, no bombs; Medium/Hard byte-
+identical), optional **Fail Mode** + a desktop launcher, **beta resilience** (global error capture →
+`rr_errlog`, auto-pause on window blur), conservative **UI polish** (overlay entrance animations,
+results-row wrap), a first-run **calibration nudge**, and a **Musical-vs-Classic chart A/B** toggle.
+A **Levels overlay scaffold** (`#levels-screen`, layers icon; tiers WARM-UP/PULSE/FRACTURE × 4 cards)
+and a **Career/Controller** overlay (`#profile-screen`, person icon) exist and launch tracks via
+`RhythmCatalog.launchTrack`. **README.md** + **BETA_GATE_BRIEF.md** written. Local git on `main`;
+`origin` = github.com/reactivvibeai-eng/reactive-rhythm (full history, clean tree).
+
+## OPEN / NEXT — now split across two agents (see HANDOFF below)
+- **Track A (SHIP):** align repos → move the game into the Lovable repo at `/play` → build the
+  game-side **beta-code gate** (per `BETA_GATE_BRIEF.md`) → **strip dev hooks LAST**. Currently
+  blocked on a one-time **user** git auth (see HANDOFF → Auth blocker).
+- **Track B (CONTENT):** grow the Levels scaffold into real, distinct **playable levels** + a
+  **level picker** + Guitar-Hero-grade **add-ons/modes** (practice w/ section loop, endless, daily
+  challenge, modifiers, achievements, multiplier/overdrive feel).
+- **Carryover:** FPS `?novideo=1` reading; "Your Tracks" shelf (needs backend owner id); server-side
+  `?q=` search when the library hits thousands; playtest dial-ins (chug/squelch vol, bomb/chord
+  frequency, fire intensity); user to pick Classic-vs-Musical chart + Fail-Mode default for beta.
+
+## HANDOFF (v43) — deploy/auth reality + the two-track split
+
+### GitHub / Lovable — there is an ACCOUNT SPLIT (read before touching git)
+- This folder is a git repo (`main`, full history). `origin` =
+  **github.com/reactivvibeai-eng/reactive-rhythm** (PRIVATE) — local git **can push here**.
+- **Lovable** (the platform that deploys reactivvibe.com) is connected to a **different** repo:
+  **github.com/reactiv435/reactivvibeailive**. The user owns BOTH accounts.
+- **Goal:** get the deployable game into `reactiv435/reactivvibeailive` at a **`/play`** path, on a
+  **BRANCH → PR → the user merges**. Never push straight to its live `main`.
+- **Auth blocker (CONFIRMED — do not burn time re-trying in-agent):** a sandboxed coding agent
+  cannot complete a *fresh* GitHub sign-in — no browser popup and no device code surfaces from the
+  agent's shell (tried browser mode, `GCM_GITHUB_AUTHMODES=device`, and
+  `-c credential.gitHubAuthModes=device`; all hang at "Cloning into…" with no prompt). Pushing to an
+  ALREADY-cached account works; acquiring a NEW account's token does not.
+- **One-time fix (the USER runs this in their OWN PowerShell):**
+  `git ls-remote https://github.com/reactiv435/reactivvibeailive.git` → a browser opens → click
+  **Authorize** as **reactiv435** → the token caches in Windows Credential Manager → local git (and
+  any agent on this machine) can then clone/push `reactivvibeailive`.
+- **Alternative:** make `reactive-rhythm` public briefly and have the Lovable agent PULL it and
+  integrate `/play` itself.
+
+### Deployable file set (what goes to `/play`)
+`index.html`, `game.js`, `jukebox.js`, `catalog.js`, `jukebox.css`, `assets/`. **NOT** `serve.py`,
+the `*.md` docs/briefs, `launch-game.bat`, or `design-source/`. Fix asset paths if `/play` is a subpath.
+
+### Coordination (two agents, one codebase)
+Both tracks touch `index.html`/`game.js`. To avoid the file-collision seen earlier: **pull before
+each work block, commit small focused batches, push often, bump `?v=NN` on every JS/CSS edit**, and
+**Track A must NOT strip dev hooks until the user declares content-freeze.** Safest of all: run
+**content first, then ship.**
