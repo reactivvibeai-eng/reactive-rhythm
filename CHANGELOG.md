@@ -998,3 +998,22 @@ grown to 4 buttons (PLAY AGAIN / MENU / CAREER / COPY SCORE) and could crowd a n
 Deeper screen-level aesthetic polish deferred to user-directed iteration.
 
 Version `?v=40 → ?v=41`.
+
+---
+
+# Increment 33 — beta resilience: error capture + auto-pause on focus loss
+
+Safe, invisible Track-B hardening (no feel/visual risk) toward beta-readiness.
+
+### 72. Global error guard  ✅
+`index.html`. Uncaught errors + promise rejections were vanishing silently; now they're captured to
+`localStorage.rr_errlog` (last 25, with message + source + timestamp), retrievable via
+`window.__rrErrors()` and cleared via `__rrClearErrors()`. Registered before the app scripts so it
+also catches load-time errors. Foundation for beta bug reports / future telemetry (no backend yet).
+
+### 73. Auto-pause on focus loss  ✅
+`game.js`. Tabbing away mid-song used to keep the track playing → the run was ruined. The window
+`blur` handler now also pauses while playing (audio suspends, pause overlay shows; resume on return).
+Pairs with the existing lane-release-on-blur safety.
+
+Version `?v=41 → ?v=42`.

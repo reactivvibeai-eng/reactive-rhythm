@@ -1049,7 +1049,7 @@
     if (k in keyMap) onLaneRelease(keyMap[k]);
   });
   // safety: if the window loses focus mid-hold, a keyup may never arrive — release all
-  window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); });
+  window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing') { try { pauseGame(); } catch (e) {} } });
 
   // ---------- MIDI + GAMEPAD INPUT (desktop instruments & controllers) ----------
   // One responsive codebase: phones use touch tap-zones; desktop adds keyboard,

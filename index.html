@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=41" />
+<link rel="stylesheet" href="jukebox.css?v=42" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2253,13 +2253,33 @@
   };
 </script>
 
+<!-- global error guard — capture uncaught errors/rejections so beta bugs are debuggable (not silent) -->
+<script>
+(function () {
+  var KEY = 'rr_errlog';
+  function load() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } }
+  function record(kind, msg, where) {
+    try {
+      var log = load();
+      log.push({ t: Date.now(), kind: kind, msg: String(msg == null ? '' : msg).slice(0, 280), where: String(where || '').slice(0, 160) });
+      while (log.length > 25) log.shift();
+      localStorage.setItem(KEY, JSON.stringify(log));
+    } catch (e) {}
+  }
+  window.addEventListener('error', function (ev) { record('error', ev && ev.message, ((ev && ev.filename) || '') + (ev && ev.lineno ? ':' + ev.lineno : '')); });
+  window.addEventListener('unhandledrejection', function (ev) { var r = ev && ev.reason; record('promise', (r && r.message) || r, ''); });
+  window.__rrErrors = function () { return load(); };            // retrieve recent errors (beta diagnostics)
+  window.__rrClearErrors = function () { try { localStorage.removeItem(KEY); } catch (e) {} };
+})();
+</script>
+
 <!-- libraries: hls.js (Mux HLS playback) + supabase-js (shared auth session) -->
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=41"></script>
-<script src="jukebox.js?v=41"></script>
-<script src="catalog.js?v=41"></script>
+<script src="game.js?v=42"></script>
+<script src="jukebox.js?v=42"></script>
+<script src="catalog.js?v=42"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
