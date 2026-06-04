@@ -1017,3 +1017,22 @@ also catches load-time errors. Foundation for beta bug reports / future telemetr
 Pairs with the existing lane-release-on-blur safety.
 
 Version `?v=41 → ?v=42`.
+
+---
+
+# Increment 34 — onboarding calibration nudge + musical-chart A/B (toward beta)
+
+### 74. First-run calibration nudge  ✅
+`index.html` + `game.js`. The How-to overlay (auto-shows first run) now nudges new players to
+calibrate — a "⊹ CALIBRATE MY TIMING" button + a one-line prompt that opens the existing A/V
+calibration. Timing is the core of the feel; an uncalibrated setup makes even great charts feel off,
+so this matters for a beta tester's first impression.
+
+### 75. "Musical" chart mode (A/B toggle, default Classic)  ✅ node-verified (feel is the user's A/B)
+`game.js` + `index.html`. A safe swing at the #1 GH gap: **Settings → Chart Feel: Classic / Musical**,
+default **Classic** (current behaviour, byte-identical). In **Musical** mode, each note snaps to the
+**strongest onset within its step-window** instead of a blind every-Nth onset — so notes land on the
+song's actual hits (kicks/snares) at the same density. Toggle + replay a track to A/B. (Hard is
+unaffected — step 1 = every onset already; mostly reshapes Easy/Medium.) The user's ears decide if it wins.
+
+Version `?v=42 → ?v=43`.

@@ -86,6 +86,7 @@
   let musicVol = 1;          // master music level (0..1), self-serve in Settings
   let SFX_LEVEL = 0.05;      // hit-chug accent level (0..0.5); self-serve in Settings (default barely-there)
   let failMode = false;      // Settings → Fail Mode: an empty stability meter ends the run (default off = no-fail)
+  let chartMode = 'classic'; // Settings → Chart Feel: 'classic' (every Nth onset) | 'musical' (snap each note to the strongest onset in its window)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
     if (s.scroll) userScroll = s.scroll;
@@ -96,6 +97,7 @@
     if (typeof s.music === 'number') musicVol = Math.max(0, Math.min(1, s.music));
     if (typeof s.sfx === 'number') SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx));
     if (typeof s.failMode === 'boolean') failMode = s.failMode;
+    if (s.chartMode === 'classic' || s.chartMode === 'musical') chartMode = s.chartMode;
   } catch (e) {}
   // ?novideo=1 forces performance mode (FPS diagnostic / quick override)
   try { if (/[?&]novideo=1/.test(location.search)) bgMode = 'performance'; } catch (e) {}
@@ -375,7 +377,19 @@
   // ===========================================================================
   function buildNotes() {
     const step = DIFF_STEP[difficulty];
-    const filtered = beats.filter((_, i) => i % step === 0);
+    let filtered;
+    if (chartMode === 'musical') {
+      // MUSICAL: land each note on the STRONGEST onset within its step-window, so notes hit the
+      // song's actual emphasis (kicks/snares) instead of an arbitrary every-Nth onset. Same density.
+      filtered = [];
+      for (let i = 0; i < beats.length; i += step) {
+        let best = beats[i];
+        for (let j = i + 1; j < Math.min(beats.length, i + step); j++) { if (beats[j].strength > best.strength) best = beats[j]; }
+        filtered.push(best);
+      }
+    } else {
+      filtered = beats.filter((_, i) => i % step === 0);   // CLASSIC: every Nth onset (default)
+    }
     // Guitar-Hero-style difficulty ramp: Easy uses fewer, centered strings; Medium/Hard use all 6
     // (span 6 → inSpan is the identity, so Medium/Hard charts are unchanged).
     const LANE_SPAN = { easy: 4, medium: 6, hard: 6 };
@@ -635,9 +649,10 @@
     if (s && typeof s.music === 'number') { musicVol = Math.max(0, Math.min(1, s.music)); applyGate(); }
     if (s && typeof s.sfx === 'number') { SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx)); }
     if (s && typeof s.failMode === 'boolean') failMode = s.failMode;
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode })); } catch (e) {}
+    if (s && (s.chartMode === 'classic' || s.chartMode === 'musical')) chartMode = s.chartMode;
+    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode })); } catch (e) {}
   };
-  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode });
+  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }
   applyReduceMotion();
   // performance background: hide + pause the moon video (kills its compositing cost so the
@@ -2307,6 +2322,7 @@
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
+    { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
     renderKeycaps(); updateInputsStatus(); renderDeviceStatus();
     settingsScreen.classList.add('active');
@@ -2318,6 +2334,7 @@
     if (ho && hs) ho.addEventListener('click', () => hs.classList.add('active'));
     const closeHowto = () => { if (hs) hs.classList.remove('active'); try { localStorage.setItem('rr_howto_seen', '1'); } catch (e) {} };
     if (hc) hc.addEventListener('click', closeHowto);
+    { const hcal = $('howto-calibrate'); if (hcal) hcal.addEventListener('click', () => { closeHowto(); openCalib(); }); }
     if (hs) hs.addEventListener('click', (e) => { if (e.target === hs) closeHowto(); });   // click backdrop to dismiss
     // first-time players get it once, automatically
     try { if (hs && !localStorage.getItem('rr_howto_seen')) setTimeout(() => hs.classList.add('active'), 800); } catch (e) {}
@@ -2347,6 +2364,10 @@
   { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.addEventListener('click', () => {
     [...ff.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ failMode: b.dataset.fail === 'on' });
+  })); }
+  { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.addEventListener('click', () => {
+    [...cf.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.applySettings({ chartMode: b.dataset.chart });
   })); }
   { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.addEventListener('click', () => {
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');

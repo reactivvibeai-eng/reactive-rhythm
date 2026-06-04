@@ -41,7 +41,7 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
 - **`index.html`** — the shell: all CSS (one big `<style>`), all screen markup (start, jukebox,
   game HUD, settings, how-to-play, results, loading), `window.RHYTHM_CONFIG` (Supabase URL +
   anon key + API base), dev FPS-meter script, `?novideo` script. Local JS/CSS carry a
-  **`?v=NN` cache-bust query — bump NN on every JS/CSS change** (currently **v42**).
+  **`?v=NN` cache-bust query — bump NN on every JS/CSS change** (currently **v43**).
 - **`game.js`** (~115KB, THE engine) — game loop (rAF), Canvas render, input (key/touch/MIDI/
   gamepad), scoring, the chart builder (`buildNotes`), the in-browser onset analyzer
   (`analyzeBeats`), providers (`demoProvider`, `bufferedProvider`/`playUrl`), audio (DemoPlayer
@@ -110,7 +110,7 @@ python serve.py        # serves http://127.0.0.1:8787  (localhost-only, NO-CACHE
 `window.__rrDebug`, `window.__rrChartStats`, the **FPS-meter** `<script>` block in index.html,
 and the `?novideo`/`?fps`/`?mock` flags are test-only. Remove before shipping to `/play`.
 
-## CURRENT STATE (as of v42)
+## CURRENT STATE (as of v43)
 Feature-complete v1: full 852-track live catalog (search/sort/fresh-first, all playable via
 in-browser charting), hold notes, chords, bombs, gap-fill density, palm-mute hit SFX + miss
 squelch (music never ducks), exact string alignment, game-feel HUD (Oxanium/Chakra Petch,

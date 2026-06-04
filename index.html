@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=42" />
+<link rel="stylesheet" href="jukebox.css?v=43" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1829,6 +1829,8 @@
           <div class="howto-txt"><b>OVERDRIVE</b><span>Meter full? Hit <kbd>SPACE</kbd> for a score-multiplier surge.</span></div>
         </div>
       </div>
+      <p class="howto-sub" style="margin-top:6px;">New here? <b style="color:var(--chrome);">Calibrate your timing</b> first so hits land exactly on the beat.</p>
+      <button class="ghost-btn" id="howto-calibrate" style="min-width:240px;">⊹ CALIBRATE MY TIMING</button>
       <button class="ghost-btn primary" id="howto-close">GOT IT — LET’S PLAY</button>
     </div>
   </div>
@@ -1906,6 +1908,13 @@
         <div class="set-seg" id="set-fail">
           <button data-fail="off" class="active">No-Fail</button>
           <button data-fail="on">Fail Out</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="set-l">Chart Feel</span>
+        <div class="set-seg" id="set-chart">
+          <button data-chart="classic" class="active">Classic</button>
+          <button data-chart="musical">Musical</button>
         </div>
       </div>
       <div class="set-row">
@@ -2277,9 +2286,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=42"></script>
-<script src="jukebox.js?v=42"></script>
-<script src="catalog.js?v=42"></script>
+<script src="game.js?v=43"></script>
+<script src="jukebox.js?v=43"></script>
+<script src="catalog.js?v=43"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
