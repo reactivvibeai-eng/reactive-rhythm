@@ -1036,3 +1036,13 @@ song's actual hits (kicks/snares) at the same density. Toggle + replay a track t
 unaffected — step 1 = every onset already; mostly reshapes Easy/Medium.) The user's ears decide if it wins.
 
 Version `?v=42 → ?v=43`.
+
+---
+
+# Increment 35 — deploy handoff: README + GitHub push steps (#3)
+
+Added `README.md` (repo front-page: run / file map / deploy / the one-time GitHub push + Lovable
+connection / backend notes). The repo is clean with full history; the only step that needs the user
+is GitHub auth — create a private repo, `git remote add`, `git push`, then connect Lovable so its
+agent pulls the latest. After that, every change here is one push from a gated beta on
+`reactivvibe.com/play`. No game code changed (no `?v` bump).
