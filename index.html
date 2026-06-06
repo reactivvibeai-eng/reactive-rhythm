@@ -509,6 +509,31 @@
   .lv-card.is-next { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 0 22px rgba(255,31,46,0.3); }
   .lv-card.is-next .lv-art { animation: lvnextpulse 1.8s ease-in-out infinite; }
   @keyframes lvnextpulse { 0%,100% { box-shadow: inset 0 0 0 0 rgba(255,31,46,0); } 50% { box-shadow: inset 0 0 34px 0 rgba(255,31,46,0.28); } }
+  /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
+  .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
+  .lv-ring { position: relative; width: 72px; height: 72px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; }
+  .lv-ring .lv-ring-num { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 20px; color: #e0a93f; line-height: 1; text-shadow: 0 0 12px rgba(224,169,63,0.45); }
+  .lv-ring .lv-ring-of { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--ink-dim); letter-spacing: 0.12em; margin-top: 2px; }
+  .lv-hero-text { flex: 1; text-align: left; min-width: 0; }
+  .lv-hero-rank { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 18px rgba(255,42,48,0.4); line-height: 1.1; }
+  .lv-hero-sub { font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim); margin-top: 4px; }
+  .lv-hero-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #e0a93f; }
+  /* per-tier completion bar inside the tier head */
+  .lv-tier-head .t-bar { flex: 0 0 96px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .lv-tier-head .t-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--crimson), #ff7a4a 70%, #e0a93f); border-radius: 999px; transition: width 0.45s cubic-bezier(.2,.8,.2,1); }
+  /* initial-letter cover fallback (no artwork_url) */
+  .lv-art .lv-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 46px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 14px rgba(0,0,0,0.55); letter-spacing: -0.02em; }
+  .lv-art.has-initial { background: linear-gradient(150deg, var(--lv-art-a, #2a0a10), var(--lv-art-b, #120407)); }
+  .lv-art.has-initial::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 18%, rgba(255,122,74,0.22), transparent 60%); pointer-events: none; }
+  /* polished states */
+  .lv-card.cleared { border-color: rgba(224,169,63,0.45); }
+  .lv-card.cleared .lv-art::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 1px rgba(224,169,63,0.35); pointer-events: none; }
+  .lv-card.locked .lv-art { filter: grayscale(0.55) brightness(0.7); }
+  .lv-card.locked .lv-art::before { content: ''; position: absolute; inset: 0; background: rgba(8,5,5,0.42); backdrop-filter: blur(1px); pointer-events: none; }
+  .lv-next-glyph { position: absolute; left: 8px; bottom: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--crimson); color: #160606; display: grid; place-items: center; font-size: 11px; box-shadow: 0 0 14px rgba(255,31,46,0.7); }
+  .lv-card.is-next:hover { transform: translateY(-4px); }
+  .lv-card:focus-visible .lv-art { box-shadow: inset 0 0 0 2px var(--crimson); }
+  @media (max-width: 560px) { .lv-hero { flex-wrap: wrap; gap: 12px; } .lv-tier-head .t-bar { flex-basis: 64px; } }
 
   /* ============ COUNTDOWN ============ */
   .countdown {
@@ -2031,6 +2056,7 @@
       <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// CAMPAIGN</div>
       <h2 class="levels-title">LEVELS</h2>
       <p class="levels-sub">Climb the tiers — each level is a track to clear. Free-play any song from the library anytime.</p>
+      <div class="lv-hero" id="levels-hero" hidden></div>
       <div class="levels-body" id="levels-body"></div>
       <button class="ghost-btn primary" id="levels-close" style="margin-top:20px;min-width:200px;">DONE</button>
     </div>
@@ -2737,6 +2763,15 @@
     return { stars: st, unlocked: unlocked };
   }
   function starRow(n) { var h = ''; for (var i = 0; i < 3; i++) h += '<span class="lv-star' + (i < n ? ' on' : '') + '">★</span>'; return '<div class="lv-stars">' + h + '</div>'; }
+  // deterministic warm cover tone per slot (no artwork → branded initial, not a placeholder glyph)
+  var LV_TONES = [['#2a0a10','#120407'],['#33120a','#160806'],['#2d0b14','#10060a'],['#3a1208','#180a06'],['#250a12','#0f0608'],['#321008','#170805']];
+  function initialOf(t) { var s = (t && (t.title || '')).trim(); return esc(s ? s.charAt(0).toUpperCase() : '♪'); }
+  function artHTML(t, idx) {
+    if (t && t.artwork_url) return '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + initialOf(t) + '</span>\'">';
+    return '<span class="lv-initial">' + initialOf(t) + '</span>';
+  }
+  function toneStyle(idx) { var tn = LV_TONES[idx % LV_TONES.length]; return '--lv-art-a:' + tn[0] + ';--lv-art-b:' + tn[1] + ';'; }
+  function tierStars(ti, tracks) { var ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars; return ts; }
   function build() {
     var body = $('levels-body'); if (!body) return;
     var tracks = levelTracks();
@@ -2747,16 +2782,33 @@
     var html = '<div class="lv-progress"><div class="lv-prog-bar"><span style="width:' + Math.round(totalStars / possible * 100) + '%"></span></div>'
       + '<div class="lv-prog-txt">★ ' + totalStars + ' / ' + possible + (DEV ? ' · DEV' : '') + '</div>'
       + (DEV ? '<button class="lv-devbtn" id="lv-unlockall">' + (DEV_UNLOCK_ALL ? '↩ progression' : '⚿ unlock all') + '</button>' : '') + '</div>';
+    // hero header band: ring + rank + overall pct
+    var hero = $('levels-hero');
+    if (hero) {
+      var pct = Math.round(totalStars / possible * 100);
+      var rank = pct >= 100 ? 'CAMPAIGN CLEARED' : pct >= 66 ? 'FRACTURE RUNNER' : pct >= 33 ? 'PULSE RIDER' : pct > 0 ? 'WARM-UP' : 'ROOKIE';
+      var deg = Math.round(pct * 3.6);
+      hero.hidden = false;
+      hero.innerHTML =
+        '<div class="lv-ring" style="background:conic-gradient(#e0a93f ' + deg + 'deg, rgba(255,255,255,0.07) ' + deg + 'deg);">'
+        + '<div style="position:absolute;inset:6px;border-radius:50%;background:#0a0706;display:grid;place-items:center;text-align:center;">'
+        + '<div class="lv-ring-num">' + totalStars + '</div><div class="lv-ring-of">/ ' + possible + '</div></div></div>'
+        + '<div class="lv-hero-text"><div class="lv-hero-rank">' + rank + '</div>'
+        + '<div class="lv-hero-sub">' + (LIVE ? 'Campaign progress' : 'Preview — unlocks at release') + ' · <span class="lv-hero-pct">' + pct + '%</span> complete</div></div>';
+    }
     if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release — free-play any song from the library anytime</div>';
     for (var ti = 0; ti < TIERS.length; ti++) {
       var tier = TIERS[ti], ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars;
-      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-stars">★ ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
+      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-bar"><span style="width:' + Math.round(ts / (PER * 3) * 100) + '%"></span></span><span class="t-stars">★ ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
       for (var i = 0; i < PER; i++) {
         var idx = ti * PER + i, t = tracks[idx], num = idx + 1, st = lvState(idx, tracks);
-        var art = t.artwork_url ? '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.style.display=\'none\'">' : '♪';
+        var hasArt = !!(t && t.artwork_url);
+        var art = artHTML(t, idx);
         var corner = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
-        html += '<button class="lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + '" data-idx="' + idx + '">' +
-          '<div class="lv-art">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner + '</div>' +
+        var nextGlyph = (st.unlocked && idx === nextIdx) ? '<span class="lv-next-glyph" aria-hidden="true">▶</span>' : '';
+        var cls = 'lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + (st.stars > 0 ? ' cleared' : '');
+        html += '<button class="' + cls + '" data-idx="' + idx + '">' +
+          '<div class="lv-art' + (hasArt ? '' : ' has-initial') + '" style="' + (hasArt ? '' : toneStyle(idx)) + '">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner + nextGlyph + '</div>' +
           '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || t.artist_credit_name || '') + '</div>' + starRow(st.stars) + '</div>' +
           '</button>';
       }
@@ -2764,6 +2816,19 @@
     }
     body.innerHTML = html;
     var ua = $('lv-unlockall'); if (ua) ua.addEventListener('click', function () { DEV_UNLOCK_ALL = !DEV_UNLOCK_ALL; build(); });
+    // arrow-key roving focus: ← → ↑ ↓ move between cards, Enter/Space activates (cards are <button>)
+    body.onkeydown = function (e) {
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].indexOf(e.key) < 0) return;
+      var list = Array.prototype.slice.call(body.querySelectorAll('.lv-card'));
+      var cur = list.indexOf(document.activeElement); if (cur < 0) cur = 0;
+      var cols = 4; try { cols = (window.matchMedia && window.matchMedia('(max-width:720px)').matches) ? 2 : 4; } catch (e2) {}
+      var nx = cur;
+      if (e.key === 'ArrowRight') nx = Math.min(list.length - 1, cur + 1);
+      else if (e.key === 'ArrowLeft') nx = Math.max(0, cur - 1);
+      else if (e.key === 'ArrowDown') nx = Math.min(list.length - 1, cur + cols);
+      else if (e.key === 'ArrowUp') nx = Math.max(0, cur - cols);
+      if (list[nx]) { e.preventDefault(); list[nx].focus(); }
+    };
     var cards = body.querySelectorAll('.lv-card');
     for (var c = 0; c < cards.length; c++) {
       cards[c].addEventListener('click', function () {
@@ -2782,6 +2847,19 @@
   function close() { screen.classList.remove('active'); }
   var ob = $('levels-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('levels-close'); if (cb) cb.addEventListener('click', close);
+  // public hooks ------------------------------------------------------------
+  // RhythmLibrary.openLevels() — open the picker programmatically (e.g. results "NEXT LEVEL")
+  try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openLevels = open; } catch (e) {}
+  // RhythmCatalog.campaignProgress() — read campaign totals (for HUD / results badges)
+  try {
+    if (window.RhythmCatalog) window.RhythmCatalog.campaignProgress = function () {
+      var tracks = levelTracks(); if (!tracks.length) return { stars: 0, possible: TOTAL * 3, pct: 0, nextIdx: -1, live: LIVE };
+      var s = 0, nx = -1;
+      for (var i = 0; i < tracks.length; i++) { var ss = lvState(i, tracks); s += ss.stars; if (nx < 0 && ss.unlocked && ss.stars === 0) nx = i; }
+      var poss = TOTAL * 3;
+      return { stars: s, possible: poss, pct: Math.round(s / poss * 100), nextIdx: nx, live: LIVE };
+    };
+  } catch (e) {}
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
