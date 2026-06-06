@@ -509,6 +509,52 @@
   .lv-card.is-next { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 0 22px rgba(255,31,46,0.3); }
   .lv-card.is-next .lv-art { animation: lvnextpulse 1.8s ease-in-out infinite; }
   @keyframes lvnextpulse { 0%,100% { box-shadow: inset 0 0 0 0 rgba(255,31,46,0); } 50% { box-shadow: inset 0 0 34px 0 rgba(255,31,46,0.28); } }
+  /* ---- authored card: bigger key art on hover/focus (pure visual; reduceMotion-safe) ---- */
+  .lv-card.authored .lv-art img { transition: transform 0.28s cubic-bezier(.2,.8,.2,1); transform: scale(1); }
+  .lv-card.authored:hover .lv-art img,
+  .lv-card.authored:focus-visible .lv-art img { transform: scale(1.12); }
+  html.rr-reduce-motion .lv-card.authored .lv-art img,
+  html.rr-reduce-motion .lv-card.authored:hover .lv-art img { transition: none; transform: none; }
+  /* ============ PER-LEVEL INTRO SPLASH (themed key-art card over the loading screen) ============ */
+  #rr-lvl-splash {
+    position: fixed; inset: 0; z-index: 400; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--rs-accent, #ff1f2e) 22%, transparent), transparent 60%), rgba(8,6,6,0.92);
+    backdrop-filter: blur(10px);
+    --rs-accent: #ff1f2e;
+  }
+  #rr-lvl-splash.show { display: flex; pointer-events: auto; }
+  #rr-lvl-splash.show .rs-card { animation: rsCardIn 0.5s cubic-bezier(.2,1,.3,1) both; }
+  #rr-lvl-splash.fade { opacity: 0; transition: opacity 0.45s ease; }
+  .rs-card {
+    width: min(420px, 86vw); display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 26px 22px 24px; text-align: center;
+    border: 1px solid color-mix(in srgb, var(--rs-accent, #ff1f2e) 55%, var(--line));
+    border-radius: 20px; background: rgba(12,8,9,0.72);
+    box-shadow: 0 24px 70px rgba(0,0,0,0.65), 0 0 46px color-mix(in srgb, var(--rs-accent, #ff1f2e) 30%, transparent);
+  }
+  .rs-tier { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--rs-accent, #ff1f2e); }
+  .rs-art {
+    width: 188px; height: 188px; border-radius: 16px; overflow: hidden; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--rs-accent,#ff1f2e) 22%, #160406), #0a0706);
+    border: 1px solid color-mix(in srgb, var(--rs-accent, #ff1f2e) 45%, var(--line));
+    box-shadow: 0 0 40px color-mix(in srgb, var(--rs-accent, #ff1f2e) 28%, transparent);
+  }
+  .rs-art img { width: 100%; height: 100%; object-fit: cover; }
+  .rs-art .rs-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 78px; color: color-mix(in srgb, var(--rs-accent, #ff1f2e) 80%, #fff); text-shadow: 0 0 28px color-mix(in srgb, var(--rs-accent,#ff1f2e) 55%, transparent); }
+  .rs-art::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 30%, transparent 52%, rgba(0,0,0,0.42)); }
+  .rs-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 30px; line-height: 1.04; letter-spacing: 0.02em; color: var(--ink); text-shadow: 0 0 26px color-mix(in srgb, var(--rs-accent,#ff1f2e) 45%, transparent); }
+  .rs-sub  { font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--ink-dim); }
+  .rs-boss { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.18em; color: #ffd9c2; background: rgba(20,5,7,0.82); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 9px; box-shadow: 0 0 14px rgba(255,31,46,0.5); }
+  .rs-skip { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-dim); opacity: 0.8; margin-top: 2px; }
+  .rs-bar  { width: 150px; height: 3px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08); }
+  .rs-bar > span { display: block; height: 100%; width: 0; background: var(--rs-accent, #ff1f2e); animation: rsBar var(--rs-dur, 1500ms) linear forwards; }
+  @keyframes rsCardIn { from { opacity: 0; transform: translateY(18px) scale(0.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes rsBar { from { width: 0; } to { width: 100%; } }
+  html.rr-reduce-motion #rr-lvl-splash { backdrop-filter: none; }
+  html.rr-reduce-motion #rr-lvl-splash.show .rs-card { animation: none; }
+  html.rr-reduce-motion .rs-bar { display: none; }
 
   /* ============ LEADERBOARD (global + per-song) ============ */
   .leaderboard-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
@@ -3004,21 +3050,41 @@
   var LEVELDESIGN_MODS = false;   // FLAG (default OFF): apply per-level mods to gameplay.
   var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1 };   // violet = per-level gothic palette (UI stays crimson)
   var AUTHORED = [
+    // ====================================================================
+    //  LEVEL SCHEMA — edit / add entries to co-design the campaign. Each obj
+    //  is one authored card (rendered before the stride fillers in its tier).
+    //  id    (req) unique string        stable key (rr_levelprog + unlock chain)
+    //  tier  (req) easy|medium|hard      which tier band
+    //  title (req) string                card + splash title
+    //  song  (req) {stride:N}|{trackId:"..."}|{demo:true}   ★ pin a real song: {trackId:"<id>"}
+    //  theme (opt) crimson|ember|gold|chrome|violet         per-level accent + splash palette (violet=gothic)
+    //  cover (opt) 'assets/levels/x.jpg' key art on card + splash (missing → title initial)
+    //  bgArt (opt) backdrop poster · bgVideo (opt) backdrop loop (404 → moon)
+    //  mods  (opt) {speed,mirror,failOn} applied only if LEVELDESIGN_MODS=true (off)
+    //  boss  (opt) true · unlock (opt) {stars:N, entitlement:{item_type,item_id}}
+    // ====================================================================
     // ---- TIER I · WARM-UP (easy) ----
     { id:'warm-01', tier:'easy', title:'First Light',  song:{ stride:0 },  theme:'gold',
-      bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:0 } },
+      cover:'assets/levels/warmup-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:0 } },
     { id:'warm-02', tier:'easy', title:'Steady Hands', song:{ stride:1 },  theme:'gold',
-      bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
+      cover:'assets/levels/steadyhands-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
+    { id:'warm-03', tier:'easy', title:'Ember Drift',  song:{ stride:2 },  theme:'ember',
+      cover:'assets/levels/emberdrift-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
     // ---- TIER II · PULSE (medium) ----
     { id:'pulse-01', tier:'medium', title:'Heartbeat', song:{ stride:6 },  theme:'crimson',
-      bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.0 }, unlock:{ stars:1 } },
+      cover:'assets/levels/heartbeat-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.0 }, unlock:{ stars:1 } },
     { id:'pulse-02', tier:'medium', title:'Overdrive', song:{ stride:7 },  theme:'ember',
-      bgArt:'assets/levels/pulse-bg.jpg', bgVideo:'assets/levels/pulse-loop.mp4',
+      cover:'assets/levels/overdrive-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', bgVideo:'assets/levels/pulse-loop.mp4',
       mods:{ speed:1.1 }, unlock:{ stars:1 } },
+    { id:'pulse-03', tier:'medium', title:'Chrome Veins', song:{ stride:8 }, theme:'chrome',
+      cover:'assets/levels/chromeveins-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.1 }, unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ stride:12 }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/fracture-bg.jpg',
       mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },
+    { id:'frac-02', tier:'hard', title:'Hollow Choir', song:{ stride:14 }, theme:'violet',
+      cover:'assets/levels/hollowchoir-cover.jpg', bgArt:'assets/levels/fracture-bg.jpg',
+      mods:{ speed:1.15 }, unlock:{ stars:1 } },
     { id:'frac-boss', tier:'hard', title:'THE BREAKER', song:{ stride:13 }, theme:'violet',
       cover:'assets/levels/necromancer.jpg', bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
       mods:{ speed:1.2, failOn:true },
@@ -3059,6 +3125,88 @@
     if (L.unlock && L.unlock.entitlement && !DEV) return ownsEntitlement(L.unlock.entitlement);
     return true;
   }
+  // ---- PER-LEVEL INTRO SPLASH: a themed key-art card layered OVER the loading screen the instant an
+  // authored level launches. Self-owned overlay (NOT a .screen). reduceMotion/fxLite-safe + skippable.
+  // Non-blocking: if anything throws, the level still launches.
+  var SPLASH_THEME = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' };
+  var _splashEl = null, _splashTimer = 0;
+  function splashReduce() {
+    try {
+      if (document.documentElement.classList.contains('rr-reduce-motion')) return true;
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+      var s = window.RhythmGame && window.RhythmGame.getSettings && window.RhythmGame.getSettings();
+      if (s && (s.reduceMotion || s.fxLite)) return true;
+    } catch (e) {}
+    return false;
+  }
+  function ensureSplashEl() {
+    if (_splashEl) return _splashEl;
+    var el = document.createElement('div');
+    el.id = 'rr-lvl-splash';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML =
+      '<div class="rs-card" role="dialog" aria-label="Level starting">' +
+        '<div class="rs-tier" id="rs-tier"></div>' +
+        '<div class="rs-art" id="rs-art"></div>' +
+        '<div class="rs-title" id="rs-title"></div>' +
+        '<div class="rs-sub" id="rs-sub"></div>' +
+        '<div class="rs-bar"><span id="rs-bar-fill"></span></div>' +
+        '<div class="rs-skip">tap to skip</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    el.addEventListener('click', hideSplash);
+    el.__keyHandler = function (e) {
+      if (!el.classList.contains('show')) return;
+      if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); e.stopPropagation(); hideSplash(); }
+    };
+    window.addEventListener('keydown', el.__keyHandler, true);
+    _splashEl = el;
+    return el;
+  }
+  function tierLabelFor(d) {
+    for (var i = 0; i < TIERS.length; i++) if (TIERS[i].d === d) return TIERS[i].n;
+    return (d || '').toUpperCase();
+  }
+  function showSplash(L, track) {
+    try {
+      if (!L) return;
+      var el = ensureSplashEl();
+      var accent = (L.theme && SPLASH_THEME[L.theme]) ? SPLASH_THEME[L.theme] : '#ff1f2e';
+      var reduce = splashReduce();
+      var dur = reduce ? 900 : 1600;
+      el.style.setProperty('--rs-accent', accent);
+      el.style.setProperty('--rs-dur', dur + 'ms');
+      $('rs-tier').textContent = (L.boss ? 'BOSS · ' : '') + tierLabelFor(L.tier);
+      $('rs-title').textContent = L.title || (track && track.title) || 'Level';
+      var artist = track ? (track.artist_name || track.artist_credit_name || '') : '';
+      $('rs-sub').textContent = artist || (track && track.title) || 'Get ready';
+      var artBox = $('rs-art');
+      var initial = esc((L.title || (track && track.title) || 'L').charAt(0).toUpperCase());
+      var bossTag = L.boss ? '<span class="rs-boss" style="position:absolute;left:8px;bottom:8px;">BOSS</span>' : '';
+      var coverSrc = L.cover || (track && track.artwork_url) || '';
+      if (coverSrc) {
+        artBox.innerHTML = '<img src="' + esc(coverSrc) + '" alt="">' + bossTag;
+        var img = artBox.querySelector('img');
+        if (img) img.onerror = function () { artBox.innerHTML = '<span class="rs-initial">' + initial + '</span>' + bossTag; };
+      } else {
+        artBox.innerHTML = '<span class="rs-initial">' + initial + '</span>' + bossTag;
+      }
+      var fill = $('rs-bar-fill'); if (fill) { fill.style.animation = 'none'; void fill.offsetWidth; fill.style.animation = ''; }
+      el.classList.remove('fade');
+      el.classList.add('show');
+      el.setAttribute('aria-hidden', 'false');
+      if (_splashTimer) { clearTimeout(_splashTimer); _splashTimer = 0; }
+      _splashTimer = setTimeout(hideSplash, dur);
+    } catch (e) {}
+  }
+  function hideSplash() {
+    var el = _splashEl; if (!el || !el.classList.contains('show')) return;
+    if (_splashTimer) { clearTimeout(_splashTimer); _splashTimer = 0; }
+    if (splashReduce()) { el.classList.remove('show', 'fade'); el.setAttribute('aria-hidden', 'true'); return; }
+    el.classList.add('fade');
+    setTimeout(function () { el.classList.remove('show', 'fade'); el.setAttribute('aria-hidden', 'true'); }, 460);
+  }
+  try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.hideLevelSplash = hideSplash; } catch (e) {}
   var _activeLevel = null;
   function launchLevel(L, ready) {
     if (!L) return;
@@ -3067,6 +3215,7 @@
     try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
     applyLevelTheme(L);
+    showSplash(L, track);   // themed intro card over the loading screen (skippable, reduceMotion/fxLite-safe)
     if (LEVELDESIGN_MODS && L.mods) { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(L.mods); } catch (e) {} }
     else { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {} }
     close();
