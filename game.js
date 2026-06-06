@@ -170,6 +170,8 @@
     countdown: $('countdown-screen'), results: $('results'),
   };
   function showScreen(name) {
+    // clear any per-level visual theme when we leave the game (menu/results); harmless otherwise
+    if (name !== 'game' && name !== 'countdown') { try { window.RhythmLibrary && window.RhythmLibrary.clearLevelTheme && window.RhythmLibrary.clearLevelTheme(); } catch (e) {} }
     Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
     state = name === 'game' ? 'playing' : name;
   }
@@ -796,6 +798,12 @@
   window.RhythmGame = window.RhythmGame || {};
   window.RhythmGame.showToast = showToast;
   window.RhythmGame.playBoss = (prov) => play(prov, { boss: true });   // Boss Stage launcher (Levels boss card wires here)
+  // ---- Level-DESIGN seams (additive; default-inert) ----
+  let _levelCtx = null, _levelMods = null, _lastResults = null;
+  window.RhythmGame.setLevelContext = (L) => { _levelCtx = L || null; };
+  window.RhythmGame.setLevelMods = (m) => { _levelMods = (m && typeof m === 'object') ? m : null; };
+  window.RhythmGame.lastResults = () => _lastResults;
+  window.RhythmGame.__demoProvider = () => demoProvider;
   window.RhythmGame.applySettings = (s) => {
     if (s && typeof s.scroll === 'number') userScroll = Math.max(0.5, Math.min(2, s.scroll));
     if (s && typeof s.fxLite === 'boolean') fxLite = s.fxLite;
@@ -955,6 +963,7 @@
       failed: runFailed,
       boss: bossMode,
     };
+    _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
 
     renderResults(results, accPct, grade);
     showScreen('results');

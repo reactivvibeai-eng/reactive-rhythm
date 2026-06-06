@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=74" />
+<link rel="stylesheet" href="jukebox.css?v=75" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -623,6 +623,25 @@
   .lv-card.is-next:hover { transform: translateY(-4px); }
   .lv-card:focus-visible .lv-art { box-shadow: inset 0 0 0 2px var(--crimson); }
   @media (max-width: 560px) { .lv-hero { flex-wrap: wrap; gap: 12px; } .lv-tier-head .t-bar { flex-basis: 64px; } }
+  /* ---- Level-DESIGN system: authored cards, per-level theme, paid/boss states ---- */
+  .lv-card.authored .lv-num { color: #ffd9c2; }
+  .lv-card.boss { border-color: rgba(255,31,46,0.55); }
+  .lv-card.boss .lv-art { background: linear-gradient(150deg, #3a0c10, #160406); }
+  .lv-card.boss .lv-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, rgba(255,31,46,0.30), transparent 62%); pointer-events: none; }
+  .lv-bossbadge { position: absolute; left: 8px; bottom: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.16em; color: #ffd9c2; background: rgba(20,5,7,0.82); border: 1px solid var(--crimson); border-radius: 6px; padding: 3px 7px; box-shadow: 0 0 12px rgba(255,31,46,0.45); }
+  .lv-paid { position: absolute; top: 6px; left: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.12em; color: #160606; background: var(--gold); border-radius: 6px; padding: 2px 6px; box-shadow: 0 0 12px rgba(224,169,63,0.5); }
+  .lv-mod { display: inline-block; margin-right: 5px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 5px; padding: 1px 5px; }
+  .lv-mods { display: flex; flex-wrap: wrap; gap: 0; margin-top: 6px; }
+  #game.rr-lvl-themed[data-rrtheme="ember"]  { --rr-lvl-accent: #ff7a4a; }
+  #game.rr-lvl-themed[data-rrtheme="gold"]   { --rr-lvl-accent: #e0a93f; }
+  #game.rr-lvl-themed[data-rrtheme="chrome"] { --rr-lvl-accent: #dad7d2; }
+  #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
+  #game.rr-lvl-themed .game-center::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse at 50% 8%, color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 16%, transparent), transparent 60%);
+    mix-blend-mode: screen; opacity: 0.55; transition: opacity 0.4s ease; }
+  #results-next { display: none; }
+  #results-next.show { display: inline-flex; }
+  #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
 
   /* ============ COUNTDOWN ============ */
   .countdown {
@@ -2679,6 +2698,7 @@
 
       <div class="pause-actions" style="margin-top: 40px;">
         <button class="ghost-btn primary" id="results-replay">PLAY AGAIN</button>
+        <button class="ghost-btn gold" id="results-next">NEXT LEVEL ▶</button>
         <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
         <button class="ghost-btn" id="results-career">CAREER</button>
         <button class="ghost-btn" id="results-share">COPY SCORE</button>
@@ -2843,9 +2863,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=74"></script>
-<script src="jukebox.js?v=74"></script>
-<script src="catalog.js?v=74"></script>
+<script src="game.js?v=75"></script>
+<script src="jukebox.js?v=75"></script>
+<script src="catalog.js?v=75"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -2967,6 +2987,110 @@
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var screen = $('levels-screen'); if (!screen) return;
+  // ============================================================
+  //  LEVEL-DESIGN SYSTEM (authorable levels) — additive over the stride picker.
+  //  Edit AUTHORED below to design real levels. Tier slots without an authored
+  //  entry fall back to the deterministic rr_levelmap stride pick (unchanged).
+  //  Modifiers (speed/mirror/failOn) are OFF unless LEVELDESIGN_MODS is true.
+  // ============================================================
+  var LEVELDESIGN_MODS = false;   // FLAG (default OFF): apply per-level mods to gameplay.
+  var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1 };
+  var AUTHORED = [
+    // ---- TIER I · WARM-UP (easy) ----
+    { id:'warm-01', tier:'easy', title:'First Light',  song:{ stride:0 },  theme:'gold',
+      bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:0 } },
+    { id:'warm-02', tier:'easy', title:'Steady Hands', song:{ stride:1 },  theme:'gold',
+      bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
+    // ---- TIER II · PULSE (medium) ----
+    { id:'pulse-01', tier:'medium', title:'Heartbeat', song:{ stride:6 },  theme:'crimson',
+      bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.0 }, unlock:{ stars:1 } },
+    { id:'pulse-02', tier:'medium', title:'Overdrive', song:{ stride:7 },  theme:'ember',
+      bgArt:'assets/levels/pulse-bg.jpg', bgVideo:'assets/levels/pulse-loop.mp4',
+      mods:{ speed:1.1 }, unlock:{ stars:1 } },
+    // ---- TIER III · FRACTURE (hard) ----
+    { id:'frac-01', tier:'hard', title:'Shatterline', song:{ stride:12 }, theme:'crimson',
+      bgArt:'assets/levels/fracture-bg.jpg', mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },
+    { id:'frac-boss', tier:'hard', title:'THE BREAKER', song:{ stride:13 }, theme:'crimson',
+      bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
+      mods:{ speed:1.2, failOn:true },
+      unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'boss_neon' } } },
+  ];
+  function authoredByTier(d) { return AUTHORED.filter(function (L) { return L.tier === d; }); }
+  function hasAuthored() { return AUTHORED.length > 0; }
+  function levelTrack(L, ready) {
+    if (!L || !ready || !ready.length) return null;
+    if (L.song && L.song.trackId) { for (var i = 0; i < ready.length; i++) if (ready[i].id === L.song.trackId) return ready[i]; return null; }
+    if (L.song && typeof L.song.stride === 'number') return ready[((L.song.stride % ready.length) + ready.length) % ready.length] || null;
+    if (L.song && L.song.demo) return { id: 'demo', title: 'Lunar Waves', artist_name: 'Kunning Klash', _demo: true };
+    return null;
+  }
+  function lvProg() { try { return JSON.parse(localStorage.getItem('rr_levelprog') || '{}'); } catch (e) { return {}; } }
+  function saveLvProg(p) { try { localStorage.setItem('rr_levelprog', JSON.stringify(p)); } catch (e) {} }
+  function starsForLevel(L, track) {
+    var p = lvProg()[L.id]; if (p && p.stars) return p.stars;
+    return track ? starsFor(track, L.tier) : 0;
+  }
+  function ownsEntitlement(ent) {
+    if (!ent) return true;
+    try {
+      var RC = window.RhythmCatalog;
+      if (RC && typeof RC.ownsItem === 'function') return !!RC.ownsItem(ent.item_type, ent.item_id);
+      if (RC && RC._entitlements && RC._entitlements.owns) return RC._entitlements.owns.some(function (o) { return o.item_type === ent.item_type && o.item_id === ent.item_id; });
+    } catch (e) {}
+    return false;
+  }
+  function authoredUnlocked(L, ready, flatList, idxInFlat) {
+    if (!LIVE) return false;
+    if (DEV_UNLOCK_ALL) return ownsEntitlement(L.unlock && L.unlock.entitlement) || DEV;
+    if (idxInFlat > 0) {
+      var prev = flatList[idxInFlat - 1], prevTrack = levelTrack(prev, ready);
+      var need = (L.unlock && typeof L.unlock.stars === 'number') ? L.unlock.stars : 1;
+      if (starsForLevel(prev, prevTrack) < need) return false;
+    }
+    if (L.unlock && L.unlock.entitlement && !DEV) return ownsEntitlement(L.unlock.entitlement);
+    return true;
+  }
+  var _activeLevel = null;
+  function launchLevel(L, ready) {
+    if (!L) return;
+    var track = levelTrack(L, ready); if (!track) { try { window.RhythmGame.showToast('This level’s track isn’t ready yet'); } catch (e) {} return; }
+    _activeLevel = L;
+    try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
+    try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
+    applyLevelTheme(L);
+    if (LEVELDESIGN_MODS && L.mods) { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(L.mods); } catch (e) {} }
+    else { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {} }
+    close();
+    if (L.boss) {
+      try {
+        if (track._demo) { window.RhythmGame.playBoss && window.RhythmGame.playBoss(window.RhythmGame.__demoProvider && window.RhythmGame.__demoProvider()); return; }
+        if (window.RhythmCatalog && window.RhythmCatalog.bossProviderFor) { var pv = window.RhythmCatalog.bossProviderFor(track); if (pv) { window.RhythmGame.playBoss(pv); return; } }
+      } catch (e) {}
+    }
+    if (track._demo) { try { window.RhythmGame.playDemo(); } catch (e) {} return; }
+    try { if (window.RhythmCatalog && window.RhythmCatalog.launchTrack) window.RhythmCatalog.launchTrack(track); } catch (e) {}
+  }
+  var _bgSaved = null;
+  function applyLevelTheme(L) {
+    var g = $('game'); if (!g) return;
+    if (L && L.theme && LV_THEMES[L.theme]) { g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme); }
+    else { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    var v = $('bg-video');
+    if (v && (L && (L.bgVideo || L.bgArt))) {
+      if (_bgSaved == null) _bgSaved = { src: v.getAttribute('src'), poster: v.getAttribute('poster') };
+      if (L.bgVideo) {
+        // if the per-level video asset isn't generated yet (404), self-heal back to the moon backdrop
+        v.onerror = function () { try { v.onerror = null; if (_bgSaved && _bgSaved.src) { v.setAttribute('src', _bgSaved.src); v.load(); v.play().catch(function(){}); } } catch (e) {} };
+        v.setAttribute('src', L.bgVideo); try { v.load(); v.play().catch(function(){}); } catch (e) {}
+      }
+      if (L.bgArt) v.setAttribute('poster', L.bgArt);
+    }
+  }
+  function clearLevelTheme() {
+    var g = $('game'); if (g) { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    var v = $('bg-video');
+    if (v && _bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); if (_bgSaved.poster != null) v.setAttribute('poster', _bgSaved.poster); else v.removeAttribute('poster'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; }
+  }
   // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
   // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
   var CAMPAIGN_PUBLIC = false;
@@ -3055,18 +3179,48 @@
         + '<div class="lv-hero-sub">' + (LIVE ? 'Campaign progress' : 'Preview — unlocks at release') + ' · <span class="lv-hero-pct">' + pct + '%</span> complete</div></div>';
     }
     if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release — free-play any song from the library anytime</div>';
+    var flatAuthored = []; for (var fi = 0; fi < TIERS.length; fi++) { var at = authoredByTier(TIERS[fi].d); for (var aj = 0; aj < at.length; aj++) flatAuthored.push(at[aj]); }
+    var ready = rcReady();
     for (var ti = 0; ti < TIERS.length; ti++) {
-      var tier = TIERS[ti], ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars;
+      var tier = TIERS[ti];
+      var authoredHere = authoredByTier(tier.d);
+      var ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars;   // stride star tally (unchanged display)
       html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-bar"><span style="width:' + Math.round(ts / (PER * 3) * 100) + '%"></span></span><span class="t-stars">★ ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
-      for (var i = 0; i < PER; i++) {
+      // ---- authored cards (rendered first) ----
+      for (var ai = 0; ai < authoredHere.length; ai++) {
+        var L = authoredHere[ai], lt = levelTrack(L, ready);
+        var fIdx = flatAuthored.indexOf(L);
+        var unlocked = authoredUnlocked(L, ready, flatAuthored, fIdx);
+        var stN = starsForLevel(L, lt);
+        var paid = !!(L.unlock && L.unlock.entitlement);
+        var owns = paid ? ownsEntitlement(L.unlock.entitlement) || DEV : true;
+        var hasArt = !!(lt && lt.artwork_url);
+        var art = artHTML(lt, ai);
+        var corner = !unlocked ? '<span class="lv-lock">🔒</span>' : '';
+        var modBits = '';
+        if (LEVELDESIGN_MODS && L.mods) { if (L.mods.speed && L.mods.speed !== 1) modBits += '<span class="lv-mod">' + (L.mods.speed > 1 ? 'fast' : 'slow') + '</span>'; if (L.mods.mirror) modBits += '<span class="lv-mod">mirror</span>'; if (L.mods.failOn) modBits += '<span class="lv-mod">no-fail-off</span>'; }
+        var cls = 'lv-card authored' + (L.boss ? ' boss' : '') + (unlocked ? '' : ' locked') + (stN > 0 ? ' cleared' : '');
+        html += '<button class="' + cls + '" data-lvl="' + esc(L.id) + '">' +
+          '<div class="lv-art' + (hasArt ? '' : ' has-initial') + '" style="' + (hasArt ? '' : toneStyle(ai)) + '">' + art +
+            '<span class="lv-num">' + esc((L.title || (lt && lt.title) || '').slice(0, 14) || ('0' + (ai + 1))) + '</span>' +
+            (paid ? '<span class="lv-paid">' + (owns ? 'OWNED' : 'PAID') + '</span>' : '') +
+            (L.boss ? '<span class="lv-bossbadge">BOSS</span>' : '') + corner + '</div>' +
+          '<div class="lv-meta"><div class="lv-t">' + esc(L.title || (lt && lt.title) || 'Level') + '</div>' +
+            '<div class="lv-a">' + esc(lt ? (lt.artist_name || lt.artist_credit_name || '') : 'track pending') + '</div>' +
+            starRow(stN) + (modBits ? '<div class="lv-mods">' + modBits + '</div>' : '') + '</div>' +
+          '</button>';
+      }
+      // ---- stride-filled remainder (UNCHANGED behavior) ----
+      var fill = Math.max(0, PER - authoredHere.length);
+      for (var i = 0; i < fill; i++) {
         var idx = ti * PER + i, t = tracks[idx], num = idx + 1, st = lvState(idx, tracks);
-        var hasArt = !!(t && t.artwork_url);
-        var art = artHTML(t, idx);
-        var corner = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
+        var hasArt2 = !!(t && t.artwork_url);
+        var art2 = artHTML(t, idx);
+        var corner2 = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
         var nextGlyph = (st.unlocked && idx === nextIdx) ? '<span class="lv-next-glyph" aria-hidden="true">▶</span>' : '';
-        var cls = 'lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + (st.stars > 0 ? ' cleared' : '');
-        html += '<button class="' + cls + '" data-idx="' + idx + '">' +
-          '<div class="lv-art' + (hasArt ? '' : ' has-initial') + '" style="' + (hasArt ? '' : toneStyle(idx)) + '">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner + nextGlyph + '</div>' +
+        var cls2 = 'lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + (st.stars > 0 ? ' cleared' : '');
+        html += '<button class="' + cls2 + '" data-idx="' + idx + '">' +
+          '<div class="lv-art' + (hasArt2 ? '' : ' has-initial') + '" style="' + (hasArt2 ? '' : toneStyle(idx)) + '">' + art2 + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner2 + nextGlyph + '</div>' +
           '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || t.artist_credit_name || '') + '</div>' + starRow(st.stars) + '</div>' +
           '</button>';
       }
@@ -3088,8 +3242,24 @@
       if (list[nx]) { e.preventDefault(); list[nx].focus(); }
     };
     var cards = body.querySelectorAll('.lv-card');
+    var readyForClick = rcReady();
     for (var c = 0; c < cards.length; c++) {
       cards[c].addEventListener('click', function () {
+        // ---- authored level branch ----
+        var lvId = this.getAttribute('data-lvl');
+        if (lvId) {
+          var L = null; for (var k = 0; k < AUTHORED.length; k++) if (AUTHORED[k].id === lvId) { L = AUTHORED[k]; break; }
+          if (!L) return;
+          var flat = []; for (var fk = 0; fk < TIERS.length; fk++) { var atk = authoredByTier(TIERS[fk].d); for (var ak = 0; ak < atk.length; ak++) flat.push(atk[ak]); }
+          if (!authoredUnlocked(L, readyForClick, flat, flat.indexOf(L))) {
+            var paidLocked = L.unlock && L.unlock.entitlement && !ownsEntitlement(L.unlock.entitlement) && !DEV;
+            try { window.RhythmGame.showToast(paidLocked ? 'Unlock this level in the Store' : (LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release — free-play any song anytime')); } catch (e) {}
+            return;
+          }
+          launchLevel(L, readyForClick);
+          return;
+        }
+        // ---- stride card branch (UNCHANGED) ----
         var idx = +this.getAttribute('data-idx'), t = tracks[idx]; if (!t) return;
         if (!lvState(idx, tracks).unlocked) {
           try { window.RhythmGame.showToast(LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release — free-play any song anytime'); } catch (e) {}
@@ -3108,6 +3278,46 @@
   // public hooks ------------------------------------------------------------
   // RhythmLibrary.openLevels() — open the picker programmatically (e.g. results "NEXT LEVEL")
   try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openLevels = open; } catch (e) {}
+  // ---- Level-DESIGN public hooks (additive) ----
+  try {
+    window.RhythmLibrary = window.RhythmLibrary || {};
+    window.RhythmLibrary.activeLevel = function () { return _activeLevel; };
+    window.RhythmLibrary.retryLevel = function () { if (_activeLevel) launchLevel(_activeLevel, rcReady()); else open(); };
+    window.RhythmLibrary.nextLevel = function () {
+      var ready = rcReady();
+      var flat = []; for (var i = 0; i < TIERS.length; i++) { var at = authoredByTier(TIERS[i].d); for (var j = 0; j < at.length; j++) flat.push(at[j]); }
+      var cur = _activeLevel ? flat.indexOf(_activeLevel) : -1;
+      for (var n = cur + 1; n < flat.length; n++) { if (authoredUnlocked(flat[n], ready, flat, n)) { launchLevel(flat[n], ready); return true; } }
+      open(); return false;
+    };
+    window.RhythmLibrary.recordLevelClear = function (results) {
+      if (!_activeLevel || !results) return;
+      var g = results.grade || 'C';
+      var stars = (g === 'S' || g === 'A') ? 3 : (g === 'B') ? 2 : 1;
+      var p = lvProg(); var prev = (p[_activeLevel.id] && p[_activeLevel.id].stars) || 0;
+      p[_activeLevel.id] = { stars: Math.max(prev, results.failed ? 0 : stars), grade: g, ts: Date.now() };
+      saveLvProg(p);
+    };
+    window.RhythmLibrary.clearLevelTheme = clearLevelTheme;
+  } catch (e) {}
+  // ---- results-screen level loop wiring (defers to free-play when no level active) ----
+  (function wireResultsLoop() {
+    var nextBtn = $('results-next'), replayBtn = $('results-replay'), resScreen = $('results');
+    function refresh() { var L = _activeLevel; if (nextBtn) nextBtn.classList.toggle('show', !!L); }
+    if (resScreen) {
+      var mo = new MutationObserver(function () {
+        if (resScreen.classList.contains('active')) {
+          refresh();
+          try { window.RhythmLibrary.recordLevelClear(window.RhythmGame.lastResults && window.RhythmGame.lastResults()); } catch (e) {}
+        }
+      });
+      try { mo.observe(resScreen, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    }
+    if (nextBtn) nextBtn.addEventListener('click', function () { window.RhythmLibrary.nextLevel(); });
+    if (replayBtn) replayBtn.addEventListener('click', function (e) {
+      if (_activeLevel) { e.stopImmediatePropagation(); window.RhythmLibrary.retryLevel(); }
+    }, true);
+  })();
   // RhythmCatalog.campaignProgress() — read campaign totals (for HUD / results badges)
   try {
     if (window.RhythmCatalog) window.RhythmCatalog.campaignProgress = function () {
