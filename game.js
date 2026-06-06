@@ -2306,6 +2306,20 @@
         ctx.fillRect(gr.gx, sweepY - 1.5, gr.gw, 3);
         ctx.restore();
       }
+      // OVERDRIVE ACTIVE: a living, COLOR-CYCLING energy wash over the board (amber↔crimson, beat-pulsed)
+      // so boost feels alive and varied — not a static yellow line. Additive; brand-warm (no blue).
+      if (odActive) {
+        const ph = t * 1.4, beat = 0.5 + 0.5 * Math.sin(t * 8);
+        const cg = Math.round(110 + 70 * Math.sin(ph)), cb = Math.round(50 + 30 * Math.sin(ph + 1.2));
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const owash = ctx.createLinearGradient(0, gr.gy + gr.gh * 0.3, 0, gr.gy + gr.gh);
+        const aa = (0.05 + 0.06 * beat).toFixed(3);
+        owash.addColorStop(0, 'rgba(255,' + cg + ',' + cb + ',0)');
+        owash.addColorStop(0.7, 'rgba(255,' + cg + ',' + cb + ',' + aa + ')');
+        owash.addColorStop(1, 'rgba(255,' + cg + ',' + cb + ',0)');
+        ctx.fillStyle = owash; ctx.fillRect(gr.gx, gr.gy + gr.gh * 0.3, gr.gw, gr.gh * 0.7);
+        ctx.restore();
+      }
     }
     // top mask so the LIVE hud reads cleanly
     {
