@@ -139,6 +139,7 @@
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
   let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
   let perspOverride = 0;   // ?persp=N URL override to A/B the highway depth (gh only); 0 = use the profile default
+  let warpOverride = -1;   // ?warp=N URL override for the gh neck-recede warp (-1 = use the profile default)
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
@@ -323,7 +324,7 @@
     gh: {
       count: 5, img: guitarImg5, store: 'rr_keymap_gh', padStore: 'rr_padmap_gh',
       // measured from assets/guitar5.png (pixel-calibrated via measure.html — do NOT even-space)
-      aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93, persp: 4,
+      aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93, persp: 4, warp: 0.2,
       nutXF:    [0.4599, 0.4825, 0.5024, 0.5275, 0.5504],
       bridgeXF: [0.3321, 0.4112, 0.4945, 0.5747, 0.6572],
       // Guitar-Hero fret colours (green/red/yellow/ORANGE) with the BLUE fret chrome-swapped (brand: no blue)
@@ -353,7 +354,7 @@
     activeGuitarImg = p.img;
     ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
     ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
-    ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95; ART.persp = p.persp || 0;
+    ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95; ART.persp = p.persp || 0; ART.warp = p.warp || 0;
     LANE_COLORS.length = 0; for (const c of p.colors) LANE_COLORS.push(c);
     keyMapStore = p.store; keyMap = loadKeyMapFor(p);
     padStore = p.padStore; padMap = loadPadMapFor(p.padStore, p.count);
@@ -829,6 +830,7 @@
     } catch (e) {}
     if (mode) applyLaneProfile(mode);
     try { const pm = location.search.match(/[?&]persp=([0-9.]+)/); if (pm) perspOverride = parseFloat(pm[1]) || 0; } catch (e) {}
+    try { const wm = location.search.match(/[?&]warp=([0-9.]+)/); if (wm) warpOverride = parseFloat(wm[1]); } catch (e) {}
   })();
 
   function resetScoring() {
@@ -1670,7 +1672,14 @@
     const zFar = (ART.persp > 1) ? (perspOverride || ART.persp) : 0;
     const P = (zFar > 1) ? (d) => { const z = 1 + d * (zFar - 1); return (1 - 1 / z) / (1 - 1 / zFar); } : (d) => d;
     const depthScale = (d) => (zFar > 1) ? (1 / (1 + Math.max(-0.2, d) * (zFar - 1))) : (1 - 0.7 * d);
-    const noteX = (i, d) => nearX[i] + (farX[i] - nearX[i]) * P(d);
+    // gh NECK-RECEDE WARP: narrow the board toward the FAR (nut) end about the centerline so the neck
+    // tilts away. The guitar IMAGE is sliced + narrowed by the SAME factor (see the draw block), so the
+    // lanes stay ON the painted strings. u = lane param (0 = catcher/near .. 1 = nut/far); near (u=0) is
+    // untouched → catcher alignment locked. warp=0 (standard) → identity → byte-identical.
+    const warp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
+    const cxw = fg.gx + 0.5 * fg.gw;
+    const warpX = (warp > 0) ? (x, u) => cxw + (x - cxw) * (1 - warp * Math.max(0, u)) : (x) => x;
+    const noteX = (i, d) => { const u = P(d); return warpX(nearX[i] + (farX[i] - nearX[i]) * u, u); };
     const noteY = (d) => nearY + (farY - nearY) * P(d);
     // scrolling fret lines — the highway itself rushes toward you (the #1 speed/depth cue, GH-style)
     if (zFar > 1 && !reduceMotion && !fxLite) {
@@ -1700,14 +1709,15 @@
       ctx.shadowColor = heat > 0.5 ? '#ff7a2a' : '#ff2a30'; ctx.shadowBlur = 7 + live * 18 + heat * 14;
       ctx.beginPath();
       const undu = Math.max(pl, heat * 0.5);                  // hot strings shimmer even un-plucked
-      if (undu < 0.05) { ctx.moveTo(nearX[i], nearY); ctx.lineTo(farX[i], farY); }
+      if (undu < 0.05 && warp <= 0) { ctx.moveTo(nearX[i], nearY); ctx.lineTo(farX[i], farY); }
       else {
         const segs = 16, amp = undu * 11;
         for (let s = 0; s <= segs; s++) {
           const u = s / segs;
           const bx = nearX[i] + (farX[i] - nearX[i]) * u, by = nearY + (farY - nearY) * u;
           const wob = Math.sin(u * Math.PI) * Math.sin(ph0 + u * 13 + i) * amp;
-          s === 0 ? ctx.moveTo(bx + wob, by) : ctx.lineTo(bx + wob, by);
+          const wx = warpX(bx, u) + wob;                       // follow the neck warp so strings ride the art
+          s === 0 ? ctx.moveTo(wx, by) : ctx.lineTo(wx, by);
         }
       }
       ctx.stroke(); ctx.restore();
@@ -1717,7 +1727,7 @@
       for (let i = 0; i < LANE_COUNT; i++) {
         if (Math.random() > heat * 0.5) continue;
         const u = 0.12 + Math.random() * 0.74;
-        const bx = nearX[i] + (farX[i] - nearX[i]) * u, by = nearY + (farY - nearY) * u;
+        const bx = warpX(nearX[i] + (farX[i] - nearX[i]) * u, u), by = nearY + (farY - nearY) * u;
         particles.push({ x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: -70 - Math.random() * 90,
           life: 0.3 + Math.random() * 0.25, age: 0, size: 1.2 + Math.random() * 1.8,
           color: Math.random() < 0.5 ? '255,150,60' : '255,90,46', spark: true });
@@ -2316,7 +2326,25 @@
     // draw the single coherent guitar (it already has neck, body, strings).
     if (activeGuitarImg._ready) {
       const gr = guitarRect();
-      ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
+      const gwarp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
+      if (gwarp > 0) {
+        // NECK-RECEDE WARP: slice the guitar into horizontal bands and narrow each toward the centerline
+        // by the SAME (1 - warp*u) factor the lanes use, so the painted strings recede WITH the note lanes
+        // (they stay aligned). u: 0 at the bridge row → 1 at the nut row (matches warpX). Body below the
+        // bridge (u<0) is left full-width. gh-only; standard takes the plain single drawImage below.
+        const nY = gr.gy + ART.bridgeFY * gr.gh, fY = gr.gy + ART.nutFY * gr.gh;
+        const cX = gr.gx + 0.5 * gr.gw, NS = 64, iw = activeGuitarImg.width, ih = activeGuitarImg.height;
+        for (let s = 0; s < NS; s++) {
+          const v0 = s / NS, v1 = (s + 1) / NS;
+          const dy0 = gr.gy + v0 * gr.gh, dy1 = gr.gy + v1 * gr.gh;
+          const u = ((dy0 + dy1) / 2 - nY) / (fY - nY);          // 0 bridge .. 1 nut
+          const sx = 1 - gwarp * Math.max(0, u);
+          const dw = gr.gw * sx;
+          ctx.drawImage(activeGuitarImg, 0, v0 * ih, iw, (v1 - v0) * ih, cX - dw / 2, dy0, dw, (dy1 - dy0) + 0.8);
+        }
+      } else {
+        ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
+      }
       // fade the headstock (top of the guitar) into the moon so the neck top doesn't hard-cut
       ctx.save(); ctx.globalCompositeOperation = 'destination-out';
       // gh cover-fit crops the headstock off-screen → fade the top of the SCREEN into the moon (neck dissolves at the top edge)
