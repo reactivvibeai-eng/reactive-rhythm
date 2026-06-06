@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=62" />
+<link rel="stylesheet" href="jukebox.css?v=63" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -728,19 +728,27 @@
   .hud-block .sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); line-height: 1.55; }
   .hud-block .sub.bright { color: var(--chrome); letter-spacing: 0.04em; }
 
-  /* progress / stability bars — thicker, rounded, with a crimson glow */
+  /* progress / stability / overdrive METERS — machined inset track + glossy energy fill (game-asset feel) */
   .song-progress {
-    height: 4px; border-radius: 3px;
-    background: rgba(222,216,212,0.09);
+    height: 8px; border-radius: 5px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(24,10,10,0.3));
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.7), inset 0 -1px 0 rgba(255,255,255,0.05);
     position: relative; margin-top: 8px; overflow: hidden;
   }
   .song-progress > i {
-    position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px;
+    position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px;
     background: linear-gradient(90deg, #b3121f, #ff3b48);
-    box-shadow: 0 0 10px rgba(255,31,46,0.6);
-    width: 0%;
-    transition: width 0.12s linear;
+    box-shadow: 0 0 12px rgba(255,31,46,0.7), inset 0 1px 0 rgba(255,255,255,0.35);
+    width: 0%; transition: width 0.12s linear;
   }
+  /* moving energy sheen across any filled meter — subtle "powered" motion, reads as game UI not a flat bar */
+  .song-progress > i::after {
+    content: ''; position: absolute; inset: 0; border-radius: 5px; pointer-events: none;
+    background: linear-gradient(90deg, transparent 35%, rgba(255,255,255,0.16) 50%, transparent 65%);
+    background-size: 55% 100%; background-repeat: no-repeat; animation: meterSheen 2.4s linear infinite;
+  }
+  @keyframes meterSheen { from { background-position: -55% 0; } to { background-position: 165% 0; } }
 
   /* judgment: a composition bar that shows the run at a glance + a clean counter grid */
   .judge-bar {
@@ -2273,7 +2281,7 @@
 
       <div class="hud-block">
         <span class="label">Reality Stability</span>
-        <div class="song-progress" style="height: 6px;">
+        <div class="song-progress" style="height: 8px;">
           <i id="hud-stability" style="background: linear-gradient(90deg, var(--crimson), var(--green)); width: 100%;"></i>
         </div>
         <span class="sub" id="stability-text">STABLE · 100%</span>
@@ -2505,9 +2513,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=62"></script>
-<script src="jukebox.js?v=62"></script>
-<script src="catalog.js?v=62"></script>
+<script src="game.js?v=63"></script>
+<script src="jukebox.js?v=63"></script>
+<script src="catalog.js?v=63"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
