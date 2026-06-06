@@ -152,6 +152,14 @@
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
   let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
+  // --- VISUAL-ONLY feedback timers (no scoring/timing impact) ---
+  let missFlash = 0;                 // crimson edge-vignette pulse on any miss/break (decays)
+  let laneDesat = Array(LANE_COUNT).fill(0);     // per-lane string desaturation on a missed/dropped note (0..1)
+  let catcherRecoil = Array(LANE_COUNT).fill(0); // per-lane catcher "kick back" on a miss (0..1)
+  let wipeoutT = 0;                  // MASS-FAIL one-shot intensity (0..1) — big surge/shake
+  let stringsCold = 0;               // strings go dark/cold for a beat after a wipeout (0..1)
+  let missTimes = [];                // timestamps (performance.now ms) of recent misses → mass-fail detector
+  let lastWipeout = -9;              // last wipeout time (s) — rate-limit so it can't spam
   let perspOverride = 0;   // ?persp=N URL override to A/B the highway depth (gh only); 0 = use the profile default
   let warpOverride = -1;   // ?warp=N URL override for the gh neck-recede warp (-1 = use the profile default)
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
@@ -861,6 +869,8 @@
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
+    missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
+    laneDesat = Array(LANE_COUNT).fill(0); catcherRecoil = Array(LANE_COUNT).fill(0);
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null);
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
@@ -1148,6 +1158,7 @@
       combo = 0;
       stability = Math.max(0, stability - 0.03);
       lanePluckT[lane] = 9;             // the string goes dead in this lane
+      registerMissFx(lane);
       flashJudgment('DROPPED', '#ff6b78');
       playMissSfx();
     }
@@ -1342,6 +1353,7 @@
       stability = Math.max(0, stability - bossDrain(0.06));
       glitchAmount = Math.min(1, glitchAmount + 0.25);
       cameraShake = Math.max(cameraShake, 9);
+      registerMissFx(lane);
       playMissSfx();   // squelch (music level stays full — no ducking)
       flashJudgment('✕ BOMB', '#ff1f2e');
       spawnHitParticles(lane, 'good');
@@ -1428,6 +1440,40 @@
     if (navigator.vibrate) { try { navigator.vibrate(kind === 'perfect' ? 16 : kind === 'great' ? 9 : 4); } catch (e) {} }
   }
 
+  // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
+  // Does NOT touch combo/score/stability — call it ALONGSIDE the existing miss logic.
+  function registerMissFx(lane) {
+    if (reduceMotion && fxLite) return;                 // both off → no juice at all
+    missFlash = Math.min(1, missFlash + 0.85);
+    if (typeof lane === 'number' && lane >= 0 && lane < laneDesat.length) {
+      laneDesat[lane] = 1;
+      catcherRecoil[lane] = 1;
+    }
+    const nowMs = performance.now();
+    missTimes.push(nowMs);
+    if (missTimes.length > 8) missTimes.shift();
+    const recent = missTimes.filter((m) => nowMs - m < 1200).length;
+    const tSec = nowMs / 1000;
+    const trigger = (recent >= 3) || (stability > 0 && stability < 0.28);
+    if (trigger && tSec - lastWipeout > 2.2) { lastWipeout = tSec; fireWipeout(); }
+  }
+  // VISUAL-ONLY: the "wipeout" surge — strong shake, crimson surge, strings go cold, combo-break burst.
+  function fireWipeout() {
+    if (reduceMotion) { wipeoutT = Math.max(wipeoutT, 0.5); missFlash = Math.min(1, missFlash + 0.4); return; }
+    wipeoutT = 1; stringsCold = 1;
+    missFlash = Math.min(1.4, missFlash + 0.6);
+    cameraShake = Math.max(cameraShake, 18);
+    glitchAmount = Math.min(1, glitchAmount + 0.35);
+    if (!fxLite) {
+      try {
+        const _fg = fretGeom();
+        for (let i = 0; i < LANE_COUNT; i++) {
+          particles.push({ ring: true, x: _fg.nearX[i], y: _fg.nearY, age: 0, life: 0.5, color: '150,28,32', max: 120 });
+        }
+      } catch (e) {}
+    }
+    if (navigator.vibrate) { try { navigator.vibrate([22, 40, 22]); } catch (e) {} }
+  }
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
     counts.miss++; combo = 0;
@@ -1436,6 +1482,7 @@
     stability = Math.max(0, stability - bossDrain(0.04));
     glitchAmount = Math.min(1, glitchAmount + 0.10);
     cameraShake = Math.max(cameraShake, 4);
+    registerMissFx(note.lane);
     playMissSfx();
     spawnMissDud(note.lane);
     flashJudgment('MISS', '#ff1f2e');
@@ -1648,6 +1695,14 @@
     cameraShake = Math.max(0, cameraShake - dt * 30);
     scanT = Math.max(0, scanT - dt);
     lightningT = Math.max(0, lightningT - dt);
+    // VISUAL-ONLY miss/fail FX decays
+    missFlash = Math.max(0, missFlash - dt * 2.2);
+    wipeoutT = Math.max(0, wipeoutT - dt * 1.6);
+    stringsCold = Math.max(0, stringsCold - dt * 1.4);
+    for (let i = 0; i < laneDesat.length; i++) {
+      laneDesat[i] = Math.max(0, laneDesat[i] - dt * 2.0);
+      catcherRecoil[i] = Math.max(0, catcherRecoil[i] - dt * 4.0);
+    }
     // Boss Stage: flip to the ENRAGE phase ~60% through, and the meter is always lethal.
     if (bossMode && state === 'playing' && !bossPhaseShown && songDuration > 0 && songTime() >= songDuration * 0.6) {
       bossPhase = 2; bossPhaseShown = true;
@@ -1752,12 +1807,22 @@
     const ph0 = performance.now() / 1000 * 46;
     for (let i = 0; i < LANE_COUNT; i++) {
       const pl = lanePluckT[i] != null ? Math.exp(-7 * lanePluckT[i]) : 0;
-      const live = Math.max(pl, heat * 0.85);                 // hot strings stay lit + alive
+      // wipeout: strings momentarily go dark/cold (kill the heat glow this frame)
+      const cold = stringsCold;
+      const hI = heat * (1 - cold);
+      const live = Math.max(pl, hI * 0.85);                   // hot strings stay lit + alive
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const g = Math.round(42 + heat * 130), b = Math.round(48 - heat * 22);
-      ctx.strokeStyle = 'rgba(255,' + g + ',' + b + ',' + (0.24 + live * 0.6) + ')';
-      ctx.lineWidth = 1.6 + live * 2.6 + heat * 1.6;
-      ctx.shadowColor = heat > 0.5 ? '#ff7a2a' : '#ff2a30'; ctx.shadowBlur = 7 + live * 18 + heat * 14;
+      // per-lane miss desaturation: blend the warm string toward dead chrome-grey
+      const dz = (laneDesat[i] || 0);
+      const baseR = 255, baseG = Math.round(42 + hI * 130), baseB = Math.round(48 - hI * 22);
+      const r = Math.round(baseR + (150 - baseR) * dz);
+      const g = Math.round(baseG + (150 - baseG) * dz);
+      const b = Math.round(baseB + (150 - baseB) * dz);
+      const sAlpha = (0.24 + live * 0.6) * (1 - 0.55 * dz) * (1 - 0.5 * cold);
+      ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + sAlpha.toFixed(3) + ')';
+      ctx.lineWidth = 1.6 + live * 2.6 + hI * 1.6;
+      ctx.shadowColor = dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30');
+      ctx.shadowBlur = (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);
       ctx.beginPath();
       const undu = Math.max(pl, heat * 0.5);                  // hot strings shimmer even un-plucked
       if (undu < 0.05 && warp <= 0) { ctx.moveTo(nearX[i], nearY); ctx.lineTo(farX[i], farY); }
@@ -1773,6 +1838,8 @@
       }
       ctx.stroke(); ctx.restore();
     }
+    // COMBO-REACTIVE neck energy — the board visibly "charges up" as the multiplier tier climbs.
+    drawComboEnergy(t, fg);
     // flame licks rising off the burning strings at high multiplier
     if (heat > 0.45 && !reduceMotion && !fxLite) {
       for (let i = 0; i < LANE_COUNT; i++) {
@@ -1790,7 +1857,11 @@
       const pulse = Math.max(lanePulse[i] * 0.5, laneHitPulse[i]);
       // held key glows white THROUGH drawCatcher (its ringWhite glow + press-down move
       // together, so nothing floats above the button); see the held-state clamp in loop().
-      drawCatcher(nearX[i], nearY, lw * 0.28, LANE_COLORS[i], pulse, 0.4 + Math.max(bgPulse, energy) * 0.6, lanePulse[i]);
+      // VISUAL-ONLY: recoil kicks the catcher down + briefly desaturates it on a miss in this lane.
+      const rk = (catcherRecoil[i] || 0);
+      const cY = nearY + rk * (lw * 0.10);                       // small downward kick (away from notes)
+      const cCol = rk > 0.25 ? { c: '#7a6f6a', rgb: '150, 140, 134' } : LANE_COLORS[i];
+      drawCatcher(nearX[i], cY, lw * 0.28, cCol, pulse, 0.4 + Math.max(bgPulse, energy) * 0.6, lanePulse[i]);
     }
 
     // notes — glossy spheres sliding down the strings toward the catchers
@@ -1952,6 +2023,29 @@
       ctx.restore();
     }
 
+    // MISS edge-vignette — a brief crimson frame pulse on a missed note / combo break (brand crimson).
+    if (missFlash > 0.01) {
+      const mv = Math.min(1, missFlash);
+      const vg = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.32, cw / 2, ch / 2, ch * 0.86);
+      vg.addColorStop(0, 'rgba(255,31,46,0)');
+      vg.addColorStop(1, 'rgba(255,31,46,' + (0.30 * mv).toFixed(3) + ')');
+      ctx.save(); ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+    }
+    // MASS-FAIL "wipeout" surge — a stronger full-screen crimson flash that snaps to cold.
+    if (wipeoutT > 0.01) {
+      const wv = Math.min(1, wipeoutT);
+      ctx.save(); ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(120,10,16,' + (0.34 * wv).toFixed(3) + ')';
+      ctx.fillRect(0, 0, cw, ch);
+      const wg = ctx.createRadialGradient(cw / 2, ch * 0.62, 0, cw / 2, ch * 0.62, cw * (0.3 + 0.5 * wv));
+      wg.addColorStop(0, 'rgba(255,40,46,' + (0.22 * wv).toFixed(3) + ')');
+      wg.addColorStop(1, 'rgba(255,40,46,0)');
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = wg; ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+    }
     if (glitchAmount > 0.05) {
       const tears = 3 + Math.floor(glitchAmount * 6);
       for (let i = 0; i < tears; i++) {
@@ -2332,6 +2426,54 @@
     }
   }
 
+  // VISUAL-ONLY: the lively combo-reactive energy layer. Drawn from render() AFTER the strings (so it's
+  // visible over the guitar image) but under the catchers/notes. Brightness/speed/warmth scale with the
+  // REAL multiplier tier (curMult), 1x → cap. Profile-aware (guitarRect/fretGeom → standard AND gh).
+  function drawComboEnergy(t, fg) {
+    if (state !== 'playing') return;
+    if (reduceMotion || fxLite) return;
+    if (!activeGuitarImg || !activeGuitarImg._ready) return;
+    const gr = guitarRect();
+    const mult = curMult();
+    const capN = (timingProf().comboCap || 3) + 1;
+    const tierF = Math.max(0, Math.min(1, (mult - 1) / Math.max(1, capN - 1)));
+    if (mult < 2 && combo < 8) return;
+    const inten = Math.max(tierF, Math.min(1, combo / 60));
+    const warm = Math.round(110 + tierF * 90);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const bands = 2 + Math.round(tierF * 2);
+    for (let b = 0; b < bands; b++) {
+      const ph = (t * (0.16 + tierF * 0.34) + b / bands) % 1;
+      const by = gr.gy + gr.gh * (0.14 + ph * 0.84), bh = gr.gh * (0.12 + tierF * 0.05);
+      const a = (0.10 + 0.30 * inten) * Math.sin(ph * Math.PI);
+      if (a <= 0.003) continue;
+      const eg = ctx.createLinearGradient(0, by - bh, 0, by + bh);
+      eg.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
+      eg.addColorStop(0.5, 'rgba(255,' + warm + ',72,' + a.toFixed(3) + ')');
+      eg.addColorStop(1, 'rgba(255,90,60,0)');
+      ctx.fillStyle = eg; ctx.fillRect(gr.gx, by - bh, gr.gw, bh * 2);
+    }
+    if (inten > 0.02) {
+      const wash = ctx.createLinearGradient(0, fg.farY, 0, fg.nearY);
+      const wa = (0.04 + 0.12 * inten).toFixed(3);
+      wash.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
+      wash.addColorStop(0.55, 'rgba(255,' + warm + ',72,' + wa + ')');
+      wash.addColorStop(1, 'rgba(255,120,80,0)');
+      ctx.fillStyle = wash; ctx.fillRect(gr.gx, fg.farY, gr.gw, fg.nearY - fg.farY);
+    }
+    if (inten > 0.15) {
+      const rimA = (0.05 + 0.25 * inten).toFixed(3);
+      const rw = Math.max(6, gr.gw * 0.06);
+      const lg = ctx.createLinearGradient(gr.gx, 0, gr.gx + rw, 0);
+      lg.addColorStop(0, 'rgba(255,40,46,' + rimA + ')'); lg.addColorStop(1, 'rgba(255,40,46,0)');
+      ctx.fillStyle = lg; ctx.fillRect(gr.gx, gr.gy, rw, gr.gh);
+      const rg = ctx.createLinearGradient(gr.gx + gr.gw, 0, gr.gx + gr.gw - rw, 0);
+      rg.addColorStop(0, 'rgba(255,40,46,' + rimA + ')'); rg.addColorStop(1, 'rgba(255,40,46,0)');
+      ctx.fillStyle = rg; ctx.fillRect(gr.gx + gr.gw - rw, gr.gy, rw, gr.gh);
+    }
+    ctx.restore();
+  }
   function drawCathedralBg(t) {
     // ---- VS3: reactive atmosphere behind the guitar (god-rays, haze, embers) ----
     const intensity0 = Math.max(bgPulse, energy * 0.85);
@@ -2442,26 +2584,8 @@
         ctx.fillStyle = owash; ctx.fillRect(gr.gx, gr.gy + gr.gh * 0.3, gr.gw, gr.gh * 0.7);
         ctx.restore();
       }
-      // COMBO-REACTIVE energy texture — the guitar visibly "charges up" as your streak grows: flowing
-      // warm energy bands that get brighter, faster and warmer with the combo tier (the lively animated layer).
-      {
-        const cTier = Math.min(4, 1 + Math.floor(combo / 12));
-        if (combo >= 8 && !reduceMotion && !fxLite) {
-          const inten = (cTier - 1) / 3;
-          ctx.save(); ctx.globalCompositeOperation = 'lighter';
-          for (let b = 0; b < 2; b++) {
-            const ph2 = (t * (0.12 + cTier * 0.10) + b * 0.5) % 1;
-            const by = gr.gy + gr.gh * (0.18 + ph2 * 0.82), bh = gr.gh * 0.16;
-            const eg = ctx.createLinearGradient(0, by - bh, 0, by + bh);
-            const a3 = (0.03 + 0.06 * inten).toFixed(3);
-            eg.addColorStop(0, 'rgba(255,150,70,0)');
-            eg.addColorStop(0.5, 'rgba(255,' + (120 + cTier * 22) + ',75,' + a3 + ')');
-            eg.addColorStop(1, 'rgba(255,80,60,0)');
-            ctx.fillStyle = eg; ctx.fillRect(gr.gx, by - bh, gr.gw, bh * 2);
-          }
-          ctx.restore();
-        }
-      }
+      // COMBO-REACTIVE energy texture moved to render() (drawn over the neck, above the guitar image
+      // but under the bright catchers/notes) so it's actually visible — see drawComboEnergy().
     }
     // top mask so the LIVE hud reads cleanly
     {
