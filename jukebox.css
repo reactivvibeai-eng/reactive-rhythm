@@ -172,6 +172,13 @@
   color: rgba(255,255,255,0.82); text-shadow: 0 2px 18px rgba(0,0,0,0.5);
 }
 .jb-cover.is-center .cover-card { box-shadow: 0 26px 64px rgba(0,0,0,0.7), 0 0 52px rgba(255,31,46,0.32), inset 0 1px 0 rgba(255,255,255,0.2); border-color: rgba(255,60,70,0.45); }
+/* living shimmer + breathing aura on the FOCUSED cover — feels reactive/alive, not a static tile */
+.jb-cover.is-center .cover-card::after {
+  content: ''; position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 3;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.13) 50%, transparent 60%);
+  background-size: 220% 100%; background-repeat: no-repeat; animation: coverSheen 3.6s ease-in-out infinite;
+}
+@keyframes coverSheen { 0% { background-position: 150% 0; } 100% { background-position: -50% 0; } }
 
 /* floor reflection */
 .cover-reflect {
