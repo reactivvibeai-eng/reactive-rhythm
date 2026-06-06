@@ -41,6 +41,30 @@ GOAL: a 5-fret/5-string mode for a real Guitar-Hero controller, **additive** to 
   to route through padMap AND now drives laneDown/onLaneRelease, so a controller can finally HOLD sustain notes.
   Built because a beta tester got a PS5 DualSense that detected but couldn't be configured. This is also the
   GH-guitar live calibrator. Verified: renders 6 chips standard / 5 gh, no errors. NOT deployed yet.
+## ⏭️ NEXT AGENT — START HERE (handoff @ v65)
+You're continuing a VISUAL OVERHAUL of the 5-string Guitar-Hero mode. Read this whole VISUAL OVERHAUL block,
+then CLAUDE.md (constraints) + the WS sections below. Quick orientation:
+- **Branch `visual-overhaul`** (on it now), off `main` = known-good v59 (commit 96a2949). `main` is the safe
+  rollback; DO NOT deploy / push to Lovable until the user explicitly says — the LIVE site works well + has happy
+  beta testers. Test loop: `python serve.py` (8787) serves the working dir → user reloads `localhost:8787/index.html?gh=1`.
+- **The 5-string "gh" mode** is a LANE PROFILE in game.js (`LANE_PROFILES.gh`); standard 6-string is byte-identical
+  and must STAY that way. gh is gated by `?gh=1` / Settings→Lane Mode toggle / saved `rr_lanemode`.
+- **Verify visuals via OFFLINE PowerShell renders** (System.Drawing → PNG → Read) replicating the game math —
+  live-canvas screenshots TIME OUT. DOM (HUD/jukebox) is checkable via preview_inspect/snapshot. `node --check
+  game.js` after every JS edit. Bump `?v=NN` in index.html on every JS/CSS edit. Commit small per increment.
+- **THE PENDING DECISION (ask user / they were choosing):** next build is either (1) **WS4 audio-reactive
+  WAVEFORM on the Browse page** (additive, lower-risk), or (2) **more NOTE-TYPE VARIETY in gameplay** (HOPOs /
+  open notes / double-notes / trills — GH-style) which is GAMEPLAY SURGERY on buildNotes+render+hit-detection,
+  MUST be flag-gated + USER PLAYTESTS each (gameplay currently "feels good" — don't destabilize blind).
+- **Image gen IS connected:** `mcp__357d4c14…__generate_image` (use `get_cost:true` to preflight + show user
+  before spending). Approach = procedural-first (CSS+Canvas); generate textures only where they truly help.
+- **Research (4 full reports):** `…/tasks/wpeulou1g.output` — perspective[applied], HUD/UI, song-select, combo-FX.
+  Plus earlier overnight research `…/tasks/w68ot6ks8.output` (GH mechanics — HOPO/scoring/calibration).
+- **gh geometry (game.js LANE_PROFILES.gh):** `fit:'cover'` (fills playfield, body to edges, headstock cropped),
+  `bottomAnchor:0.93`, `persp:4` (1/z highway depth; `?persp=N` override), `nutFY:0.16 bridgeFY:0.81`,
+  `nutXF/bridgeXF` line-fit measured + far-end vanishing convergence in fretGeom (cv 0.34, gh-only). guitar5.png
+  (background flood-fill keyed; master guitar5-orig.png has a BAKED checkerboard — re-key if regenerated).
+
 ## VISUAL OVERHAUL (branch `visual-overhaul`, off `main` checkpoint 96a2949 = known-good v59)
 Goal: make it look/feel like a real GAME ENGINE, not an "AI website." User is iterating with us; DO NOT push to
 the live site / Lovable until user says — what's deployed works well. All overhaul work is on the branch.
@@ -63,10 +87,20 @@ the live site / Lovable until user says — what's deployed works well. All over
   INSET tracks (beveled, inner-shadow) with glossy energy fills + a moving "powered" SHEEN sweep. REMAINING:
   deeper HUD framing (panels/score/judgment as framed game-asset components), iconography, scanline/vignette
   pass — see research report #2 (HUD/UI) in the workflow output.
-- **WS4 Browse/Jukebox = NOT STARTED** (biggest interactive effort — momentum scroll, focus glow, transitions;
-  research report #3). **WS5 Design System = NOT STARTED.** Best done with fresh focused context + user's eyes.
-- **Tasks tracked** (TaskList #1-5). **?v at 63.** Branch commits: 96a2949 (v59 base) → c60572a (persp) →
-  79c1e4a (Highway done) → 1f127e5 (boost wash) → 2dee27b (handoff) → [v63 meters].
+  v63-65 also added: combo number BLACK OUTLINE (readable over guitar), and a faint screen-space SCANLINE on
+  `.game-screen` (CRT game feel).
+- **WS4 Browse/Jukebox = barely started (v64):** living shimmer + aura on the FOCUSED coverflow cover
+  (`.jb-cover.is-center .cover-card::after`, reactive feel). REMAINING + user-requested: **audio-reactive
+  WAVEFORM on the browse page** (driven by the song-preview audio — main ask, "keep it reactive"), momentum-
+  scroll feel, the genres/artists tiles + all-songs LIST polish (user says those read "weak/AI"). Coverflow has
+  good bones (3D, motion-blur, center bloom) — enhance, don't rebuild. Research report #3 (song-select).
+- **WS2 also got (v65):** combo-reactive flowing ENERGY TEXTURE on the guitar (2 warm bands, brighter/faster
+  with combo tier — `combo`/`cTier` in render). WS2 still wants: per-tier DISTINCT combo effects + the GH-style
+  NOTE-TYPE VARIETY (the user's gameplay ask — see PENDING DECISION up top; flag-gated + playtested).
+- **WS5 Design System = NOT STARTED.**
+- **Tasks tracked** (TaskList #1-5). **?v at 65.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+  79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
+  scanline) → 1b...(v65 convergence+combo-outline+combo-texture). All clean, node-checked.
 
 ## (pre-overhaul history)
 - **?v at 55.** Version history: 47→48 profile system; 49 = gh transparency key-out + tap-zone trim;
