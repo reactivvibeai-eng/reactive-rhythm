@@ -508,6 +508,23 @@
   window.RhythmGame.isMuted = () => muted;
   window.RhythmGame.__render = (n) => { for (let i = 0; i < (n || 1); i++) render(0.016, false); };
 
+  // Quantize an arbitrary time to the nearest STRONG onset in `beats` within ±win seconds, so
+  // variety inserts land ON THE BEAT instead of floating. Returns the input unchanged if no onset
+  // is near. Pure + side-effect-free; beats = [{t,strength}] ascending.
+  function snapToOnset(t, win) {
+    win = win || 0.14;
+    let bestT = t, bestScore = -1;
+    for (let i = 0; i < beats.length; i++) {
+      const b = beats[i];
+      const dt = b.t - t;
+      if (dt < -win) continue;
+      if (dt > win) break;                       // beats ascending → safe early-break
+      const sc = (b.strength || 1) - Math.abs(dt) * 6;
+      if (sc > bestScore) { bestScore = sc; bestT = b.t; }
+    }
+    return bestT;
+  }
+
   // ===========================================================================
   // CHART -> NOTES (server-matched difficulty filter + deterministic lanes)
   // ===========================================================================
@@ -597,6 +614,44 @@
       }
     }
     notes.sort((a, b) => a.time - b.time);
+    // ---- BOMB ROWS (noteVariety only): a deliberate, telegraphed WALL of bombs across several
+    // lanes at one instant — a clear "dodge this" moment. Reuses the 'bomb' type (render+penalty+
+    // auto-avoid exist), adds NO scored notes, placed ONLY in a clean rest gap, never shares a time
+    // with a real note. Default (flag off) → none, chart byte-identical. ----
+    if (noteVariety && difficulty !== 'easy') {
+      const rowEveryT = difficulty === 'hard' ? 14 : 22;   // min seconds between rows
+      const leadIn = 0.85, restAfter = 0.85;
+      const rowLanes = Math.min(LANE_COUNT, difficulty === 'hard' ? 4 : 3);
+      let lastRowT = -999;
+      for (let i = 0; i < notes.length - 1; i++) {
+        const a = notes[i], b = notes[i + 1];
+        if (a.type === 'bomb' || b.type === 'bomb') continue;
+        const aEnd = a.time + (a.type === 'hold' ? a.hold : 0);
+        const gap = b.time - aEnd;
+        if (gap < leadIn + restAfter + 0.5) continue;
+        const center = aEnd + leadIn + 0.25;
+        if (center - lastRowT < rowEveryT) continue;
+        if (center > b.time - restAfter) continue;
+        const rowT = Math.round(snapToOnset(center, 0.16) * 1000) / 1000;
+        const COLLIDE = 0.17;                               // > max hitWindow (med 0.16) → dodge stays clean
+        const occupied = {};
+        for (const n of notes) { if (Math.abs(n.time - rowT) <= COLLIDE) occupied[n.lane] = true; }
+        const startLane = Math.max(0, Math.floor((LANE_COUNT - rowLanes) / 2));
+        const wall = [];
+        for (let k = 0; k < rowLanes; k++) {
+          const lane = startLane + k;
+          if (lane < 0 || lane >= LANE_COUNT) continue;
+          if (occupied[lane]) continue;
+          wall.push(lane);
+        }
+        if (wall.length < 2) continue;
+        for (const lane of wall) {
+          notes.push({ time: rowT, strength: 1, lane: lane, type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false, _bombRow: true });
+        }
+        lastRowT = rowT;
+      }
+      notes.sort((a, b) => a.time - b.time);
+    }
     // ---- TRILLS (noteVariety only): turn a FAST run of single notes into a rapid two-lane
     // ALTERNATION (the authentic GH trill feel). DENSITY-NEUTRAL — re-lanes existing notes, adds
     // none, keeps plain tap scoring (no hit-detection change). Works on dense charts (Hard) where
@@ -615,6 +670,36 @@
           let l1 = notes[i].lane, l2 = inSpan(l1 + 1); if (l2 === l1) l2 = inSpan(l1 + 2);
           for (let k = i; k <= j; k++) { notes[k].lane = ((k - i) % 2) ? l2 : l1; notes[k]._trill = true; }
           lastTrillT = notes[j].time;
+          i = j + 1;
+        } else { i++; }
+      }
+    }
+    // ---- STAIR RUNS + ZIPPERS (noteVariety only): walk a fast run the trill pass did NOT claim as a
+    // STAIR (lane sweep) or ZIPPER (bounce). DENSITY-NEUTRAL re-laning (adds none; plain tap scoring;
+    // times untouched so every note stays on its onset). Spaced out. Default off → skip. ----
+    if (noteVariety && difficulty !== 'easy') {
+      const patMaxGap = difficulty === 'hard' ? 0.30 : 0.60;
+      const minLen = 4;
+      const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord && !x._trill;
+      let lastPatT = -999, i = 0, patSeed = 7;
+      while (i < notes.length - 1) {
+        if (!single(notes[i])) { i++; continue; }
+        let j = i;
+        while (j + 1 < notes.length && single(notes[j + 1]) && (notes[j + 1].time - notes[j].time) <= patMaxGap) j++;
+        const runLen = j - i + 1;
+        if (runLen >= minLen && (notes[i].time - lastPatT) >= 5) {
+          patSeed = (patSeed * 1103515245 + 12345) & 0x7fffffff;
+          const shape = patSeed % 3;                           // 0=stair up, 1=stair down, 2=zipper
+          for (let k = i; k <= j; k++) {
+            const r = k - i;
+            let lane;
+            if (shape === 0)      lane = inSpan(notes[i].lane + r);
+            else if (shape === 1) lane = inSpan(notes[i].lane - r);
+            else                  lane = inSpan(notes[i].lane + (r % 2 ? r : -r));
+            notes[k].lane = lane;
+            notes[k]._pat = shape;
+          }
+          lastPatT = notes[j].time;
           i = j + 1;
         } else { i++; }
       }
@@ -648,6 +733,8 @@
         chords: notes.filter(n => n.chord).length,
         bombs: notes.filter(n => n.type === 'bomb').length,
         trills: notes.filter(n => n._trill).length,
+        bombRows: notes.filter(n => n._bombRow).length,
+        patNotes: notes.filter(n => typeof n._pat === 'number').length,
         fillers: fillers.length,
         noteVariety: noteVariety,
         lanesUsed: [...new Set(notes.map(n => n.lane))].sort((a, b) => a - b),
@@ -1564,6 +1651,9 @@
   window.RhythmGame.setTimingHint = (on) => { timingHint = !!on; try { localStorage.setItem('rr_timinghint', on ? '1' : '0'); } catch (e) {} return timingHint; };
   window.RhythmGame.setTimingFeel = (f) => { if (f === 'tight' || f === 'classic') { timingFeel = f; try { localStorage.setItem('rr_timing', f); } catch (e) {} } return timingFeel; };
   window.RhythmGame.getTimingFeel = () => timingFeel;
+  // Variety system on/off mirrors the existing ?notes flag (one source of truth).
+  window.RhythmGame.getNoteVariety = () => noteVariety;
+  window.RhythmGame.setNoteVariety = (on) => (typeof window.__rrNoteVariety === 'function') ? window.__rrNoteVariety(on) : noteVariety;
 
   // ---------- HUD ----------
   function updateHUD() {
@@ -1876,8 +1966,19 @@
       if (held || resolving) d = Math.max(0, d);    // pin the struck head on the catcher line
       const sc = depthScale(d);
       const nx = noteX(n.lane, d), ny = noteY(d);
-      // BOMB hazard — a dark "✕, do not hit" orb; skips the normal marble + trail
-      if (n.type === 'bomb') { drawBomb(nx, ny, lw * 0.48 * sc); continue; }
+      // BOMB hazard — a dark "✕, do not hit" orb; skips the normal marble + trail.
+      // A wall bomb (_bombRow) gets a faint ember warning ring as it approaches (visual only; gated).
+      if (n.type === 'bomb') {
+        if (n._bombRow && d > 0.12 && !reduceMotion && !fxLite) {
+          const warn = 0.25 + 0.25 * Math.sin(performance.now() / 90);
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = 'rgba(255,122,74,' + (warn * sc) + ')';
+          ctx.lineWidth = Math.max(1, lw * 0.06 * sc);
+          ctx.beginPath(); ctx.arc(nx, ny, lw * 0.66 * sc, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+        }
+        drawBomb(nx, ny, lw * 0.48 * sc); continue;
+      }
       // CHORD BAR — a glowing rail connecting the simultaneous notes ("hit the bar together")
       if (n.chordLead && n.chordLanes && n.chordLanes.length > 1 && !n.judged) {
         let x0 = Infinity, x1 = -Infinity;
@@ -2824,6 +2925,7 @@
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
     { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
     { const tg = $('set-timing'); if (tg) [...tg.children].forEach(b => b.classList.toggle('active', b.dataset.timing === window.RhythmGame.getTimingFeel())); }
+    { const nv = $('set-notes'); if (nv) { const on = window.RhythmGame.getNoteVariety(); [...nv.children].forEach(b => b.classList.toggle('active', (b.dataset.notes === 'on') === on)); } }
     { const th = $('set-timinghint'); if (th) { const on = (localStorage.getItem('rr_timinghint') !== '0'); [...th.children].forEach(b => b.classList.toggle('active', (b.dataset.thint === 'on') === on)); } }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
     { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.classList.toggle('active', b.dataset.lanemode === laneProfile)); }
@@ -2879,6 +2981,10 @@
   { const th = $('set-timinghint'); if (th) [...th.children].forEach(b => b.addEventListener('click', () => {
     [...th.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.setTimingHint(b.dataset.thint === 'on');
+  })); }
+  { const nv = $('set-notes'); if (nv) [...nv.children].forEach(b => b.addEventListener('click', () => {
+    [...nv.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.setNoteVariety(b.dataset.notes === 'on');
   })); }
   { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.addEventListener('click', () => {
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
