@@ -288,10 +288,14 @@
       nearX[i] = r.gx + bx * r.gw;
       farX[i] = r.gx + nx * r.gw;
     }
-    // gh Highway: converge the FAR end toward a vanishing point so the top of the board recedes steeper
-    // (the "angled down at the top" look). The NEAR end (bridge catchers) stays untouched = locked alignment.
-    if (ART.persp > 1) {
-      const vanishX = r.gx + 0.5 * r.gw, cv = 0.34;
+    // Far-end convergence DISABLED (cv=0). Pulling the far end toward a vanishing point made the note
+    // lanes drift OFF the painted strings near the nut (broke the illusion — user feedback). The painted
+    // strings already fan nut→bridge and depth comes from the persp 1/z Y-map, so with cv=0 the lanes
+    // ride the painted strings EXACTLY (verified by offline string-detection + overlay). Re-enable only
+    // with a re-measured cv if ever needed.
+    const cv = 0;
+    if (cv > 0) {
+      const vanishX = r.gx + 0.5 * r.gw;
       for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
     }
     // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform)
@@ -320,8 +324,8 @@
       count: 5, img: guitarImg5, store: 'rr_keymap_gh', padStore: 'rr_padmap_gh',
       // measured from assets/guitar5.png (pixel-calibrated via measure.html — do NOT even-space)
       aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93, persp: 4,
-      nutXF:    [0.4622, 0.4832, 0.5032, 0.5265, 0.5488],
-      bridgeXF: [0.3271, 0.4106, 0.4940, 0.5754, 0.6578],
+      nutXF:    [0.4599, 0.4825, 0.5024, 0.5275, 0.5504],
+      bridgeXF: [0.3321, 0.4112, 0.4945, 0.5747, 0.6572],
       // Guitar-Hero fret colours (green/red/yellow/ORANGE) with the BLUE fret chrome-swapped (brand: no blue)
       colors: [
         { c: '#3ad15a', rgb: '58, 209, 90'  }, { c: '#ff3c3c', rgb: '255, 60, 60'  },
