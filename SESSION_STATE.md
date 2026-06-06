@@ -59,8 +59,14 @@ the live site / Lovable until user says — what's deployed works well. All over
   every combo%25, tier-brightened, `scanT`/`scanTier`), OD-active COLOR-CYCLING beat-pulsed wash (kills the
   "static yellow line"). REMAINING: per-tier combo VARIETY (distinct effect/color at 25/50/100), particles,
   chromatic split, forked lightning recolor, and TEXTURE the Overdrive meter fill (the literal "yellow line").
-- **WS3 HUD/Meters, WS4 Browse/Jukebox, WS5 Design System = NOT STARTED.** See tasks + research reports 2/3.
-- **Tasks tracked** (TaskList #1-5). **?v at 62.**
+- **WS3 — HUD/METERS = STARTED (v63):** meters (`.song-progress`: Overdrive + stability) rebuilt as machined
+  INSET tracks (beveled, inner-shadow) with glossy energy fills + a moving "powered" SHEEN sweep. REMAINING:
+  deeper HUD framing (panels/score/judgment as framed game-asset components), iconography, scanline/vignette
+  pass — see research report #2 (HUD/UI) in the workflow output.
+- **WS4 Browse/Jukebox = NOT STARTED** (biggest interactive effort — momentum scroll, focus glow, transitions;
+  research report #3). **WS5 Design System = NOT STARTED.** Best done with fresh focused context + user's eyes.
+- **Tasks tracked** (TaskList #1-5). **?v at 63.** Branch commits: 96a2949 (v59 base) → c60572a (persp) →
+  79c1e4a (Highway done) → 1f127e5 (boost wash) → 2dee27b (handoff) → [v63 meters].
 
 ## (pre-overhaul history)
 - **?v at 55.** Version history: 47→48 profile system; 49 = gh transparency key-out + tap-zone trim;
