@@ -134,7 +134,17 @@ the live site / Lovable until user says — what's deployed works well. All over
   getSparks stub until backend). (7) **LOGIN_SPARKS_BRIEF.md** + **ROADMAP.md** written. All gh-only/
   additive; standard 6-string byte-identical. PENDING USER: playtest gh warp (tune ?warp), and answer
   ROADMAP Q3 (same-origin serving for SSO) + Q4 (Sparks economics) to activate Phase D w/ Lovable.
-- **Tasks tracked** (TaskList #1-5). **?v at 71.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **BACKEND LIVE + GAME FLIPPED (v72):** Lovable shipped all 7 endpoints (/me, /score, /leaderboard/:id,
+  /sparks/balance, /sparks/spend, /entitlements, /store) on the SAME Supabase project; domain is
+  **reactivvibeai.com** (not reactivvibe.com — fixed SITE_URL). Game flipped stub→live: getUser→`/me`
+  (real profile, session fallback), getSparks→`/sparks/balance` (USE_SPARKS_API=true), `lbRows()`
+  normalizer for the backend's `{leaderboard:[...]}` shape; /score+/leaderboard auto-active. Sparks prices
+  (pack 500/level 200/addon 100), NO gameplay earn at launch, top-up = deep-link to
+  reactivvibeai.com/live?sparks=open (existing Stripe). ⚠️ **These only light up SAME-ORIGIN + signed in →
+  needs the build DEPLOYED at reactivvibeai.com/play; on localhost it correctly shows guest.** NOT yet
+  consumed: `/entitlements` + `/store` + spend + the "Get Sparks" button = the in-game **Store (Phase D3,
+  next build)**. store_items seeded: starter_pack 500, boss_neon 200, theme_neon 100.
+- **Tasks tracked** (TaskList #1-5). **?v at 72.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
