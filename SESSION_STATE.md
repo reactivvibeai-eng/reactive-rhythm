@@ -161,7 +161,22 @@ the live site / Lovable until user says — what's deployed works well. All over
   **_build_roadmapsweep.md** (mobile 16px inputs + open-notes/HOPO flag-gated design + remaining checklist).
   Levels reference assets/levels/*.jpg|mp4 (NOT generated yet — see ASSET_PROMPTS.md; levels work w/ moon fallback
   until then). Workflow run: w61222pzx.
-- **Tasks tracked** (TaskList #1-5). **?v at 75.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **BUILD PASS 3 (workflow w6u684erh → serial integrate):** (v76) **GUITAR FX** — fixed the invisible v65
+  combo texture (was drawn in drawCathedralBg UNDER everything at ~0.09 alpha) → real drawComboEnergy() in
+  render() after the strings, brightens 1x→5x (standard+gh); + registerMissFx (crimson vignette + missed-string
+  desat + catcher recoil) wired into note/bomb/hold-drop; + fireWipeout() MASS-FAIL (≥3 misses/1.2s OR
+  stability<0.28). Pure-visual, default-on, reduceMotion/fxLite gated. (store-art, no v bump) client STORE_ART
+  fallback (assets/store/<id>.jpg) — created assets/store/; 3 prompts given to user. (v77) **CHARTING** — extends
+  noteVariety (?notes / Settings→Note Variety, default-off byte-identical): snapToOnset beat-align, telegraphed
+  BOMB ROWS (wall of bombs in clean gaps, COLLIDE 0.17, no scored notes/hit-detect change), stair/zipper
+  re-laning; ember warning ring on wall bombs; getNoteVariety/setNoteVariety; __rrChartStats +bombRows/patNotes.
+  Verified node-check + offline bomb-row invariant harness PASS. **Level picker also got** (this session, pre-pass-3)
+  per-level 'violet' theme + L.cover key art (necromancer/tarot on frac-boss/frac-01). ⚠️ STILL QUEUED:
+  **_build3_levelpicker.md** (per-level INTRO SPLASH using cover art + authoring polish) — its [E2] does a
+  WHOLE-BLOCK AUTHORED replace that would CLOBBER the cover/violet wiring → MERGE carefully (apply splash CSS/
+  markup/showSplash + skip or hand-merge [E2]). User still to: drop necromancer.jpg+tarot.jpg in assets/levels/
+  (folder has stray planet pngs), generate the 3 store jpgs, pick real song bindings for levels.
+- **Tasks tracked** (TaskList #1-5). **?v at 77.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
