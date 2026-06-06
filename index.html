@@ -3526,6 +3526,21 @@
   var SPARK_SVG = '<svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>';
   var SITE_SPARKS = 'https://reactivvibeai.com/live?sparks=open';
 
+  // ---- Client-side item-art fallback: used ONLY when the backend sends no meta.art_url. Drop a 1:1
+  // jpg at assets/store/<id>.jpg and it appears (missing → initial-letter tile via the <img onerror>). ----
+  var STORE_ART = {
+    starter_pack: 'assets/store/starter_pack.jpg',
+    boss_neon:    'assets/store/boss_neon.jpg',
+    theme_neon:   'assets/store/theme_neon.jpg'
+  };
+  function artUrl(it) {
+    var m = it && it.meta;
+    var img = m && (m.art_url || m.image || m.image_url || m.cover_url);
+    if (img) return img;
+    var fb = it && STORE_ART[String(it.item_id)];
+    return fb || '';
+  }
+
   var items = [], balance = 0, signedIn = false, owns = {}, busy = false;
 
   function typeLabel(t) { var m = { pack: 'Pack', level: 'Boss', addon: 'Theme', boss: 'Boss', theme: 'Theme' }; return m[String(t || '').toLowerCase()] || (t ? String(t) : 'Item'); }
@@ -3552,7 +3567,7 @@
   }
 
   function artHtml(it) {
-    var img = it.meta && (it.meta.art_url || it.meta.image || it.meta.image_url || it.meta.cover_url);
+    var img = artUrl(it);
     if (img) return '<img src="' + esc(img) + '" alt="" onerror="this.parentNode.innerHTML=\'<span class=&quot;si-initial&quot;>' + esc(initial(it.title)) + '</span>\'">';
     return '<span class="si-initial">' + esc(initial(it.title)) + '</span>';
   }
