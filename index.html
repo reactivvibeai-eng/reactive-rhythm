@@ -636,6 +636,7 @@
   #game.rr-lvl-themed[data-rrtheme="gold"]   { --rr-lvl-accent: #e0a93f; }
   #game.rr-lvl-themed[data-rrtheme="chrome"] { --rr-lvl-accent: #dad7d2; }
   #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
+  #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
   #game.rr-lvl-themed .game-center::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
     background: radial-gradient(ellipse at 50% 8%, color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 16%, transparent), transparent 60%);
     mix-blend-mode: screen; opacity: 0.55; transition: opacity 0.4s ease; }
@@ -2994,7 +2995,7 @@
   //  Modifiers (speed/mirror/failOn) are OFF unless LEVELDESIGN_MODS is true.
   // ============================================================
   var LEVELDESIGN_MODS = false;   // FLAG (default OFF): apply per-level mods to gameplay.
-  var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1 };
+  var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1 };   // violet = per-level gothic palette (UI stays crimson)
   var AUTHORED = [
     // ---- TIER I · WARM-UP (easy) ----
     { id:'warm-01', tier:'easy', title:'First Light',  song:{ stride:0 },  theme:'gold',
@@ -3008,10 +3009,11 @@
       bgArt:'assets/levels/pulse-bg.jpg', bgVideo:'assets/levels/pulse-loop.mp4',
       mods:{ speed:1.1 }, unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
-    { id:'frac-01', tier:'hard', title:'Shatterline', song:{ stride:12 }, theme:'crimson',
-      bgArt:'assets/levels/fracture-bg.jpg', mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },
-    { id:'frac-boss', tier:'hard', title:'THE BREAKER', song:{ stride:13 }, theme:'crimson',
-      bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
+    { id:'frac-01', tier:'hard', title:'The World', song:{ stride:12 }, theme:'violet',
+      cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/fracture-bg.jpg',
+      mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },
+    { id:'frac-boss', tier:'hard', title:'THE BREAKER', song:{ stride:13 }, theme:'violet',
+      cover:'assets/levels/necromancer.jpg', bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
       mods:{ speed:1.2, failOn:true },
       unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'boss_neon' } } },
   ];
@@ -3194,8 +3196,11 @@
         var stN = starsForLevel(L, lt);
         var paid = !!(L.unlock && L.unlock.entitlement);
         var owns = paid ? ownsEntitlement(L.unlock.entitlement) || DEV : true;
-        var hasArt = !!(lt && lt.artwork_url);
-        var art = artHTML(lt, ai);
+        var hasArt = !!(L.cover || (lt && lt.artwork_url));
+        // authored cover art (the level's key art) takes priority; falls back to initial if not dropped yet
+        var art = L.cover
+          ? ('<img src="' + esc(L.cover) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + esc((L.title || 'L').charAt(0).toUpperCase()) + '</span>\'">')
+          : artHTML(lt, ai);
         var corner = !unlocked ? '<span class="lv-lock">🔒</span>' : '';
         var modBits = '';
         if (LEVELDESIGN_MODS && L.mods) { if (L.mods.speed && L.mods.speed !== 1) modBits += '<span class="lv-mod">' + (L.mods.speed > 1 ? 'fast' : 'slow') + '</span>'; if (L.mods.mirror) modBits += '<span class="lv-mod">mirror</span>'; if (L.mods.failOn) modBits += '<span class="lv-mod">no-fail-off</span>'; }
