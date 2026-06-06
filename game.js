@@ -132,6 +132,7 @@
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
   let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
+  let perspOverride = 0;   // ?persp=N URL override to A/B the highway depth (gh only); 0 = use the profile default
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
@@ -306,7 +307,7 @@
     gh: {
       count: 5, img: guitarImg5, store: 'rr_keymap_gh', padStore: 'rr_padmap_gh',
       // measured from assets/guitar5.png (pixel-calibrated via measure.html — do NOT even-space)
-      aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93,
+      aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93, persp: 4,
       nutXF:    [0.4622, 0.4832, 0.5032, 0.5265, 0.5488],
       bridgeXF: [0.3271, 0.4106, 0.4940, 0.5754, 0.6578],
       // Guitar-Hero fret colours (green/red/yellow/ORANGE) with the BLUE fret chrome-swapped (brand: no blue)
@@ -336,7 +337,7 @@
     activeGuitarImg = p.img;
     ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
     ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
-    ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95;
+    ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95; ART.persp = p.persp || 0;
     LANE_COLORS.length = 0; for (const c of p.colors) LANE_COLORS.push(c);
     keyMapStore = p.store; keyMap = loadKeyMapFor(p);
     padStore = p.padStore; padMap = loadPadMapFor(p.padStore, p.count);
@@ -784,6 +785,7 @@
       else if (localStorage.getItem('rr_lanemode') === 'gh') mode = 'gh';   // else restore saved choice
     } catch (e) {}
     if (mode) applyLaneProfile(mode);
+    try { const pm = location.search.match(/[?&]persp=([0-9.]+)/); if (pm) perspOverride = parseFloat(pm[1]) || 0; } catch (e) {}
   })();
 
   function resetScoring() {
@@ -1618,8 +1620,26 @@
     const fg = fretGeom();
     const nearX = fg.nearX, farX = fg.farX, nearY = fg.nearY, farY = fg.farY;
     const lw = fg.lw;
-    const noteX = (i, d) => nearX[i] + (farX[i] - nearX[i]) * d;
-    const noteY = (d) => nearY + (farY - nearY) * d;
+    // PERSPECTIVE depth warp (gh Highway): map the linear timeline d (0=catcher, 1=nut) through a 1/z
+    // camera so far notes bunch up + crawl and near notes spread + ACCELERATE — the depth/vertigo cue.
+    // Hit timing is unaffected (it uses note TIME, not screen position); only the visual gains depth.
+    // Standard 6-string: zFar=0 → linear → unchanged.
+    const zFar = (ART.persp > 1) ? (perspOverride || ART.persp) : 0;
+    const P = (zFar > 1) ? (d) => { const z = 1 + d * (zFar - 1); return (1 - 1 / z) / (1 - 1 / zFar); } : (d) => d;
+    const depthScale = (d) => (zFar > 1) ? (1 / (1 + Math.max(-0.2, d) * (zFar - 1))) : (1 - 0.7 * d);
+    const noteX = (i, d) => nearX[i] + (farX[i] - nearX[i]) * P(d);
+    const noteY = (d) => nearY + (farY - nearY) * P(d);
+    // scrolling fret lines — the highway itself rushes toward you (the #1 speed/depth cue, GH-style)
+    if (zFar > 1 && !reduceMotion && !fxLite) {
+      const NF = 9, fretSpeed = 0.5;
+      for (let k = 0; k < NF; k++) {
+        const dk = ((k / NF - t * fretSpeed) % 1 + 1) % 1;
+        const yy = noteY(dk);
+        ctx.strokeStyle = 'rgba(255,96,72,' + (0.04 + 0.18 * (1 - P(dk))).toFixed(3) + ')';
+        ctx.lineWidth = 0.5 + 2 * depthScale(dk);
+        ctx.beginPath(); ctx.moveTo(noteX(0, dk), yy); ctx.lineTo(noteX(LANE_COUNT - 1, dk), yy); ctx.stroke();
+      }
+    }
 
     if (!gfx || Math.round(gfx.lw) !== Math.round(lw)) buildGameSprites(lw);
 
@@ -1679,7 +1699,7 @@
       let d = (n.time - t) / approach;
       if (!held && !resolving && (d > 1.02 || d < -0.12)) continue;
       if (held || resolving) d = Math.max(0, d);    // pin the struck head on the catcher line
-      const sc = 1 - 0.7 * d;
+      const sc = depthScale(d);
       const nx = noteX(n.lane, d), ny = noteY(d);
       // BOMB hazard — a dark "✕, do not hit" orb; skips the normal marble + trail
       if (n.type === 'bomb') { drawBomb(nx, ny, lw * 0.48 * sc); continue; }
