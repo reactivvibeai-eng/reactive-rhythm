@@ -152,11 +152,16 @@ the live site / Lovable until user says — what's deployed works well. All over
   gamepad/MIDI judging (evTime + frame-top poll; fixes ~1-frame device bias) + cosmetic early/late tick;
   FLAG-GATED Tight (GH) timing profile (?tune=1 / Settings→Timing Feel, default-off, classic byte-identical)
   w/ 1→5× combo — Tight runs are LOCAL PRACTICE ONLY (gated out of /score). **ASSET_PROMPTS.md** (19 gen
-  prompts: Store/Levels/Boss/UI) written for the user to generate. STILL QUEUED (packages written, not yet
-  integrated): **_build_leveldesign.md** (level-design system — its verify agent ERRORED, self-verify before
-  integrating; it edits the LEVELS IIFE already changed in v2-picker, watch collisions) + **_build_roadmapsweep.md**
-  (mobile 16px inputs + open-notes/HOPO flag-gated design + remaining checklist). Workflow run: w61222pzx.
-- **Tasks tracked** (TaskList #1-5). **?v at 74.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+  prompts: Store/Levels/Boss/UI) written for the user to generate. (v75) **LEVEL-DESIGN SYSTEM** integrated —
+  authorable `AUTHORED[]` levels (id/tier/song/theme/bgArt/bgVideo/mods/unlock/boss) render first per tier with
+  the stride fill unchanged behind; per-level theme accent + bg art/video (self-heals to moon if asset 404s);
+  results loop (NEXT LEVEL + level-aware retry; per-level stars in rr_levelprog); paid/boss gating reads
+  entitlements (graceful); modifiers flag-gated OFF (LEVELDESIGN_MODS). Starter 6-level config. Self-verified all
+  anchors (its workflow verify agent had errored — assumptions rcReady/starsFor confirmed real). STILL QUEUED:
+  **_build_roadmapsweep.md** (mobile 16px inputs + open-notes/HOPO flag-gated design + remaining checklist).
+  Levels reference assets/levels/*.jpg|mp4 (NOT generated yet — see ASSET_PROMPTS.md; levels work w/ moon fallback
+  until then). Workflow run: w61222pzx.
+- **Tasks tracked** (TaskList #1-5). **?v at 75.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
