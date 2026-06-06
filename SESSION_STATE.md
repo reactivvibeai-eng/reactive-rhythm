@@ -41,6 +41,28 @@ GOAL: a 5-fret/5-string mode for a real Guitar-Hero controller, **additive** to 
   to route through padMap AND now drives laneDown/onLaneRelease, so a controller can finally HOLD sustain notes.
   Built because a beta tester got a PS5 DualSense that detected but couldn't be configured. This is also the
   GH-guitar live calibrator. Verified: renders 6 chips standard / 5 gh, no errors. NOT deployed yet.
+## VISUAL OVERHAUL (branch `visual-overhaul`, off `main` checkpoint 96a2949 = known-good v59)
+Goal: make it look/feel like a real GAME ENGINE, not an "AI website." User is iterating with us; DO NOT push to
+the live site / Lovable until user says — what's deployed works well. All overhaul work is on the branch.
+- **Approach chosen:** procedural-first (CSS+Canvas — that's what reads as a game engine; raster AI assets read as
+  "AI"). Image-gen IS connected to the session: MCP `mcp__357d4c14...__generate_image` (use `get_cost:true` to
+  preflight credit cost + show the user BEFORE spending). So no ChatGPT key needed.
+- **Research (4 reports, FULL output saved):** `…/tasks/wpeulou1g.output` — (1) perspective [APPLIED], (2) HUD/UI,
+  (3) song-select, (4) combo-FX. Read #2/#3/#4 when building WS3/WS4/WS2-remaining.
+- **WS1 — THE HIGHWAY = DONE (v60-61):** 1/z PERSPECTIVE note map (far notes bunch+crawl, near notes spread+
+  accelerate = depth/vertigo) — gh profile `persp:4`, `?persp=N` URL override to A/B (3=subtle, 6=intense).
+  Scrolling FRET LINES (highway rushes at you). Top FADE-INTO-MOON (cover-fit fades the screen-top). Glowing SPAWN
+  band. All gh-only (standard 6-string byte-identical); HIT TIMING UNCHANGED (uses note time, not screen pos).
+  User confirmed "playing feels good." Implemented in render() noteX/noteY + P()/depthScale + fret loop; fade at
+  the guitar-draw block.
+- **WS2 — BOOST/COMBO FX = STARTED (v59 scan, v62 wash):** combo SCAN sweep (amber→crimson, on OD activation +
+  every combo%25, tier-brightened, `scanT`/`scanTier`), OD-active COLOR-CYCLING beat-pulsed wash (kills the
+  "static yellow line"). REMAINING: per-tier combo VARIETY (distinct effect/color at 25/50/100), particles,
+  chromatic split, forked lightning recolor, and TEXTURE the Overdrive meter fill (the literal "yellow line").
+- **WS3 HUD/Meters, WS4 Browse/Jukebox, WS5 Design System = NOT STARTED.** See tasks + research reports 2/3.
+- **Tasks tracked** (TaskList #1-5). **?v at 62.**
+
+## (pre-overhaul history)
 - **?v at 55.** Version history: 47→48 profile system; 49 = gh transparency key-out + tap-zone trim;
   50 = controller config UI; 51 = guitar adaptive zoom; 52 = level campaign; 53 = in-game lane-mode toggle
   (Settings); 54-55 = MOBILE/PHONE fixes.
