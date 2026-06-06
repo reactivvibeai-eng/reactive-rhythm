@@ -6,6 +6,18 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8787"],
       "port": 8787
+    },
+    {
+      "name": "crew-lab",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8766", "--bind", "127.0.0.1", "--directory", "C:/Users/tjean/OneDrive/Documents/Claude/NeuralBrain"],
+      "port": 8766
+    },
+    {
+      "name": "levels-lab",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8768", "--bind", "127.0.0.1", "--directory", "C:/Users/tjean/OneDrive/Documents/Claude/NeuralBrain"],
+      "port": 8768
     }
   ]
 }

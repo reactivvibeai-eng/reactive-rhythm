@@ -605,6 +605,25 @@
         if (isGradeUp && !/grade up/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">Grade Up · ' + grade + '</span>');
       }
     }
+    // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
+    // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.
+    if (API_BASE && currentTrack && currentTrack.id && currentTrack.id !== 'demo'
+        && results.score > 0 && !hasServerChart(currentTrack)) {
+      (async () => {
+        const tk = await getToken();
+        if (!tk) { onSubmitResult({ error: 'not-authed' }, results); return; }
+        try {
+          const out = await api('/score', { method: 'POST', auth: true, body: {
+            track_id: currentTrack.id, difficulty: results.difficulty,
+            score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
+            notes_hit: results.notes_hit, notes_total: results.notes_total,
+          } });
+          let board = [];
+          try { board = await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10'); } catch (e) {}
+          onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
+        } catch (e) { /* backend not live yet -> stay local-only (no regression) */ }
+      })();
+    }
   }
 
   // ---------- Leaderboard render (called by engine after a live server submit) ----------

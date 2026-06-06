@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=43" />
+<link rel="stylesheet" href="jukebox.css?v=59" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -77,7 +77,7 @@
     z-index: 1000;
   }
 
-  #app { position: relative; width: 100vw; height: 100vh; }
+  #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; }   /* dvh = real mobile viewport (excludes browser chrome) */
   .screen {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
@@ -488,6 +488,27 @@
   .lv-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .levels-empty { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); padding: 30px; line-height: 1.6; }
   @media (max-width: 720px) { .lv-grid { grid-template-columns: repeat(2, 1fr); } .levels-title { font-size: 38px; } }
+  .lv-card.locked { cursor: not-allowed; opacity: 0.58; filter: saturate(0.55); }
+  .lv-card.locked:hover { transform: none; border-color: var(--line); box-shadow: none; }
+  .lv-soon { position: absolute; top: 6px; right: 7px; font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--crimson); background: rgba(7,6,10,0.78); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 7px; }
+  .lv-lockbadge { display: inline-block; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--crimson); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; margin: 0 0 6px; }
+  .lv-lockbadge.dev { color: #6fe0a0; border-color: rgba(111,224,160,0.4); }
+  /* campaign progression UI */
+  .lv-progress { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 16px; }
+  .lv-prog-bar { flex: 1; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .lv-prog-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--crimson), #e0a93f); border-radius: 999px; transition: width 0.45s cubic-bezier(.2,.8,.2,1); }
+  .lv-prog-txt { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: #e0a93f; letter-spacing: 0.05em; white-space: nowrap; }
+  .lv-devbtn { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.08em; color: #6fe0a0; background: rgba(111,224,160,0.08); border: 1px solid rgba(111,224,160,0.4); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+  .lv-devbtn:hover { background: rgba(111,224,160,0.16); }
+  .lv-tier-head .t-stars { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; color: #e0a93f; letter-spacing: 0.04em; }
+  .lv-stars { display: flex; gap: 3px; margin-top: 6px; }
+  .lv-star { font-size: 12px; line-height: 1; color: rgba(255,255,255,0.15); }
+  .lv-star.on { color: #e0a93f; text-shadow: 0 0 8px rgba(224,169,63,0.6); }
+  .lv-lock { position: absolute; top: 6px; right: 7px; font-size: 13px; opacity: 0.92; }
+  .lv-next { position: absolute; top: 6px; right: 7px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.14em; color: #160606; background: var(--crimson); border-radius: 6px; padding: 3px 6px; box-shadow: 0 0 14px rgba(255,31,46,0.6); }
+  .lv-card.is-next { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 0 22px rgba(255,31,46,0.3); }
+  .lv-card.is-next .lv-art { animation: lvnextpulse 1.8s ease-in-out infinite; }
+  @keyframes lvnextpulse { 0%,100% { box-shadow: inset 0 0 0 0 rgba(255,31,46,0); } 50% { box-shadow: inset 0 0 34px 0 rgba(255,31,46,0.28); } }
 
   /* ============ COUNTDOWN ============ */
   .countdown {
@@ -625,6 +646,19 @@
   .gauge-lab { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.22em; color: var(--ink-dim); writing-mode: vertical-rl; text-orientation: mixed; }
   .gauge.mult .gauge-lab { transform: rotate(180deg); }
   .od-key { color: var(--crimson); font-weight: 700; letter-spacing: 0.12em; }
+
+  /* HUD Overdrive readout — segmented + combo-driven + a categorical READY state (research-backed clarity) */
+  .od-bar { position: relative; background: rgba(8,4,8,0.6); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
+  #hud-od-fill { display: block; height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #e0a93f, #ffd98a); box-shadow: 0 0 10px rgba(224,169,63,0.6); transition: width 0.2s ease; }
+  .od-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 2px), rgba(8,4,8,0.95) calc(25% - 2px), rgba(8,4,8,0.95) 25%); }
+  .od-hint { color: var(--ink-dim); font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+  #hud-od-text { color: var(--ink-dim); }
+  .hud-block.ready .od-bar { border-color: #ffe8b0; box-shadow: 0 0 16px rgba(255,216,138,0.85); animation: odpulse 0.7s ease-in-out infinite; }
+  .hud-block.ready #hud-od-fill { background: linear-gradient(90deg, #ffd98a, #fff6e0); }
+  .hud-block.ready #hud-od-text { color: #ffe8b0; font-weight: 700; }
+  .hud-block.active .od-bar { border-color: #ffcf9a; }
+  .hud-block.active #hud-od-fill { background: linear-gradient(90deg, #ff7a4a, #fff); animation: odactive 0.5s ease-in-out infinite; }
+  .hud-block.active #hud-od-text { color: #fff; font-weight: 700; }
 
   /* the four thumb tap-zones, pinned to the bottom of the highway */
   .tap-zones {
@@ -1516,9 +1550,85 @@
     .game-center { box-shadow: 0 0 0 1px var(--line), 0 0 90px rgba(0,0,0,0.55); }
     .hud-panel { position: relative; }
   }
+
+  /* ============================================================
+     BETA GATE — private-beta access-code overlay.
+     Fails OPEN: bypassed on localhost + when the backend is silent,
+     so it never blocks the game. Brand: black · crimson · chrome.
+     ============================================================ */
+  #beta-gate {
+    position: fixed; inset: 0; z-index: 100000;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background:
+      radial-gradient(ellipse at 50% 16%, rgba(163,6,15,0.32), transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(255,31,46,0.15), transparent 55%),
+      linear-gradient(180deg, #0a0706 0%, #050304 100%);
+    opacity: 1; transition: opacity .42s ease;
+    font-family: 'Chakra Petch','JetBrains Mono',ui-monospace,monospace;
+  }
+  #beta-gate.hidden { opacity: 0; pointer-events: none; }
+  #beta-gate .bg-card {
+    width: min(440px, 100%); position: relative; overflow: hidden; text-align: center;
+    background: linear-gradient(180deg, rgba(22,12,11,0.94), rgba(10,7,6,0.97));
+    border: 1px solid var(--line); border-radius: 18px; padding: 38px 34px 28px;
+    box-shadow: 0 0 0 1px rgba(255,31,46,0.10), 0 30px 80px rgba(0,0,0,0.6), 0 0 60px rgba(163,6,15,0.22);
+    animation: bgcard .5s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes bgcard { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+  #beta-gate .bg-card::before {
+    content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--crimson), transparent);
+  }
+  #beta-gate .bg-kicker { font-size: 12px; letter-spacing: .42em; text-transform: uppercase; color: var(--crimson); font-weight: 700; margin-bottom: 14px; }
+  #beta-gate .bg-title { font-family: 'Oxanium','Chakra Petch',sans-serif; font-size: 30px; line-height: 1.05; font-weight: 800; color: var(--ink); margin-bottom: 10px; }
+  #beta-gate .bg-title b { color: var(--crimson); }
+  #beta-gate .bg-sub { font-size: 13.5px; line-height: 1.5; color: var(--ink-dim); margin-bottom: 24px; }
+  #beta-gate form { display: flex; flex-direction: column; gap: 12px; }
+  #beta-gate input {
+    width: 100%; text-align: center; font-family: 'Oxanium',ui-monospace,monospace;
+    font-size: 19px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink);
+    background: rgba(0,0,0,0.45); border: 1.5px solid var(--line); border-radius: 12px;
+    padding: 15px 14px; outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  #beta-gate input::placeholder { color: rgba(138,127,124,0.55); letter-spacing: .14em; }
+  #beta-gate input:focus { border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(255,31,46,0.18); }
+  #beta-gate button {
+    width: 100%; cursor: pointer; font-family: 'Oxanium',sans-serif; font-size: 16px; font-weight: 800;
+    letter-spacing: .14em; text-transform: uppercase; color: #fff;
+    background: linear-gradient(180deg, var(--crimson), var(--red-deep)); border: none; border-radius: 12px;
+    padding: 15px; box-shadow: 0 8px 24px rgba(163,6,15,0.4); transition: transform .1s, filter .15s, opacity .15s;
+  }
+  #beta-gate button:hover { filter: brightness(1.08); }
+  #beta-gate button:active { transform: translateY(1px); }
+  #beta-gate button:disabled { opacity: .55; cursor: default; }
+  #beta-gate .bg-msg { min-height: 18px; font-size: 13px; margin-top: 2px; }
+  #beta-gate .bg-msg.err { color: #ff6b78; }
+  #beta-gate .bg-msg.ok { color: var(--gold); }
+  #beta-gate .bg-foot { margin-top: 22px; font-size: 11.5px; color: var(--ink-dim); line-height: 1.5; }
+  #beta-gate .bg-foot a { color: var(--chrome); text-decoration: none; border-bottom: 1px solid var(--line); }
+  #beta-gate .bg-checking { display: none; color: var(--ink-dim); font-size: 13px; }
+  #beta-gate[data-state="checking"] form, #beta-gate[data-state="checking"] .bg-foot { display: none; }
+  #beta-gate[data-state="checking"] .bg-checking { display: block; }
+  #beta-gate .bg-spin { width: 26px; height: 26px; margin: 10px auto 0; border-radius: 50%; border: 2.5px solid rgba(255,31,46,0.25); border-top-color: var(--crimson); animation: bgspin .8s linear infinite; }
+  @keyframes bgspin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
+<!-- ===== BETA GATE (private-beta access overlay; auto-bypasses on localhost + when backend absent) ===== -->
+<div id="beta-gate" data-state="checking" role="dialog" aria-modal="true" aria-label="Beta access">
+  <div class="bg-card">
+    <div class="bg-kicker">Private Beta</div>
+    <div class="bg-title">Reactive <b>Rhythm</b></div>
+    <div class="bg-sub">Your music — as a playable game. Enter your access code to step on stage.</div>
+    <div class="bg-checking">Checking access…<div class="bg-spin"></div></div>
+    <form id="bg-form" autocomplete="off">
+      <input id="bg-code" type="text" inputmode="text" maxlength="40" placeholder="ACCESS CODE" aria-label="Beta access code" spellcheck="false" autocapitalize="characters" />
+      <button id="bg-submit" type="submit">Unlock</button>
+      <div class="bg-msg" id="bg-msg" role="status" aria-live="polite"></div>
+    </form>
+    <div class="bg-foot">No code yet? <a href="https://reactivvibe.com" target="_blank" rel="noopener">Request access at reactivvibe.com</a></div>
+  </div>
+</div>
 <div id="app">
 
   <!-- ============================================================
@@ -1617,6 +1727,10 @@
           <button class="jb-browse" id="jb-browse">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
             Browse
+          </button>
+          <button class="jb-browse" id="jb-allsongs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            All Songs<span id="jb-allcount"></span>
           </button>
           <button class="jb-play" id="jb-play">Play <span style="font-size:13px;">▸</span></button>
         </div>
@@ -1925,6 +2039,13 @@
         </div>
       </div>
       <div class="set-row">
+        <span class="set-l">Lane Mode</span>
+        <div class="set-seg" id="set-lanemode">
+          <button data-lanemode="standard" class="active">6-Lane · Keys</button>
+          <button data-lanemode="gh">5-String · Guitar</button>
+        </div>
+      </div>
+      <div class="set-row">
         <span class="set-l">Inputs</span>
         <span class="set-status" id="set-inputs">Touch · Keyboard (A S D · J K L)</span>
       </div>
@@ -1941,6 +2062,15 @@
       <div class="set-row col">
         <span class="set-l">Controllers &amp; MIDI</span>
         <div class="set-devices" id="set-devices"></div>
+      </div>
+
+      <div class="set-row col">
+        <div class="set-row-top">
+          <span class="set-l">Controller Buttons</span>
+          <button class="set-mini" id="set-pad-reset">Reset</button>
+        </div>
+        <div class="set-keys" id="set-pad"></div>
+        <span class="set-note" style="margin-top:0;">Click a lane, then press the controller button for it. (Plug in &amp; press any button first so it's detected.)</span>
       </div>
 
       <div class="set-row col">
@@ -2133,6 +2263,14 @@
         </div>
       </div>
 
+      <div class="hud-block" id="hud-od-block">
+        <span class="label">Overdrive <span class="od-hint">· builds with your combo</span></span>
+        <div class="song-progress od-bar" style="height: 9px;">
+          <i id="hud-od-fill"></i>
+        </div>
+        <span class="sub" id="hud-od-text">CHARGING · 0%</span>
+      </div>
+
       <div class="hud-block">
         <span class="label">Reality Stability</span>
         <div class="song-progress" style="height: 6px;">
@@ -2257,9 +2395,90 @@
 <script>
   window.RHYTHM_CONFIG = {
     API_BASE: 'https://bxiejoktoknybpraxebm.supabase.co/functions/v1/game-catalog',
+    // Beta-gate endpoints base. Empty = derive as API_BASE + '/beta'. Set this to the exact
+    // path once the Lovable backend exposes /beta/status + /beta/redeem (per BETA_GATE_BRIEF.md).
+    BETA_API: '',
     SUPABASE_URL: 'https://bxiejoktoknybpraxebm.supabase.co',
     SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4aWVqb2t0b2tueWJwcmF4ZWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNTExNDIsImV4cCI6MjA4NzgyNzE0Mn0.mXL_YUhYmMXGO0kh9ouDIu088Epgqc9rB0lX57WYimo'
   };
+</script>
+
+<!-- ===== BETA GATE logic — server-authoritative, FAILS OPEN (never blocks the game if the backend is down/absent) ===== -->
+<script>
+(function () {
+  var gate = document.getElementById('beta-gate');
+  if (!gate) return;
+  var cfg = window.RHYTHM_CONFIG || {};
+  var API = (cfg.API_BASE || '').replace(/\/+$/, '');
+  var BETA = (cfg.BETA_API || (API ? API + '/beta' : '')).replace(/\/+$/, '');
+  var STATUS_URL = BETA ? BETA + '/status' : '';
+  var REDEEM_URL = BETA ? BETA + '/redeem' : '';
+  var CACHE = 'rr_beta_ok';
+  var host = location.hostname;
+  var isLocal = host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '::1' || host === '[::1]' || /\.local$/.test(host) || location.protocol === 'file:';
+
+  var form = document.getElementById('bg-form');
+  var input = document.getElementById('bg-code');
+  var submit = document.getElementById('bg-submit');
+  var msg = document.getElementById('bg-msg');
+
+  function reveal() { gate.classList.add('hidden'); setTimeout(function () { try { gate.style.display = 'none'; } catch (e) {} }, 460); }
+  function showForm() { gate.setAttribute('data-state', 'form'); try { input && input.focus(); } catch (e) {} }
+  function remember() { try { localStorage.setItem(CACHE, '1'); } catch (e) {} }
+  function cached() { try { return localStorage.getItem(CACHE) === '1'; } catch (e) { return false; } }
+
+  function token() {            // reuse the shared ReactivVibe (Supabase) login session if present
+    try {
+      var m = (cfg.SUPABASE_URL || '').match(/https?:\/\/([a-z0-9]+)\.supabase/i);
+      if (m) {
+        var raw = localStorage.getItem('sb-' + m[1] + '-auth-token');
+        if (raw) { var o = JSON.parse(raw); return (o && (o.access_token || (o.currentSession && o.currentSession.access_token))) || null; }
+      }
+    } catch (e) {}
+    return null;
+  }
+  function authHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    if (cfg.SUPABASE_KEY) h['apikey'] = cfg.SUPABASE_KEY;
+    h['Authorization'] = 'Bearer ' + (token() || cfg.SUPABASE_KEY || '');
+    return h;
+  }
+  function fetchT(url, opts, ms) {     // fetch with a hard timeout so the gate can never hang
+    return new Promise(function (resolve, reject) {
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var to = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} reject(new Error('timeout')); }, ms || 5000);
+      opts = opts || {}; if (ctrl) opts.signal = ctrl.signal;
+      fetch(url, opts).then(function (r) { clearTimeout(to); resolve(r); }, function (e) { clearTimeout(to); reject(e); });
+    });
+  }
+
+  // ---- decide: bypass (dev / cached / backend-absent) or enforce the gate ----
+  if (isLocal || !STATUS_URL) { reveal(); return; }     // dev or unconfigured → open
+  if (cached()) { reveal(); return; }                    // already unlocked on this device
+
+  fetchT(STATUS_URL, { headers: authHeaders(), credentials: 'omit' }, 5000)
+    .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+    .then(function (d) { if (d && d.access) { remember(); reveal(); } else { showForm(); } })
+    .catch(function () { reveal(); });                   // backend down/absent/error → FAIL OPEN
+
+  // ---- redeem a code ----
+  if (form) form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var code = (input.value || '').trim();
+    if (!code) { try { input.focus(); } catch (x) {} return; }
+    msg.className = 'bg-msg'; msg.textContent = '';
+    var label = submit.textContent; submit.disabled = true; submit.textContent = 'Unlocking…';
+    function done(cls, text) { msg.className = 'bg-msg ' + cls; msg.textContent = text; submit.disabled = false; submit.textContent = label; }
+    fetchT(REDEEM_URL, { method: 'POST', headers: authHeaders(), credentials: 'omit', body: JSON.stringify({ code: code }) }, 8000)
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d && d.ok) { msg.className = 'bg-msg ok'; msg.textContent = "You're in. Loading…"; remember(); setTimeout(reveal, 500); return; }
+        var map = { invalid: "That code isn't valid — double-check and try again.", expired: 'This code has expired.', used_up: 'This code has been fully used.', login_required: 'Please sign in on reactivvibe.com first, then reopen /play.' };
+        done('err', map[(d && d.error)] || "That code didn't work. Try again.");
+      })
+      .catch(function () { done('err', "Couldn't reach the server — check your connection and try again."); });
+  });
+})();
 </script>
 
 <!-- global error guard — capture uncaught errors/rejections so beta bugs are debuggable (not silent) -->
@@ -2286,9 +2505,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=43"></script>
-<script src="jukebox.js?v=43"></script>
-<script src="catalog.js?v=43"></script>
+<script src="game.js?v=59"></script>
+<script src="jukebox.js?v=59"></script>
+<script src="catalog.js?v=59"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -2314,10 +2533,12 @@
      DEV FPS METER (test build) — independent rAF meter showing the REAL frame rate
      the browser is delivering (includes GPU compositing, not just JS draw time).
      Top-left pill, color-coded. Press the ` (backtick) key to hide/show.
-     Add ?fps=0 to the URL to start hidden. Safe to delete this whole block to ship.
+     HIDDEN BY DEFAULT — add ?fps=1 to the URL to show it. Beta testers never see our telemetry.
+     Safe to delete this whole block before public launch.
      =========================================================================== -->
 <script>
 (function () {
+  try { if (!/[?&]fps=1/.test(location.search)) return; } catch (e) { return; }
   var el = document.createElement('div');
   el.id = 'fps-meter';
   el.style.cssText = 'position:fixed;top:6px;left:6px;z-index:99999;font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.2;padding:5px 9px;background:rgba(10,7,6,0.82);border:1px solid rgba(255,31,46,0.5);border-radius:7px;color:#dad7d2;letter-spacing:0.04em;pointer-events:none;white-space:nowrap;';
@@ -2408,53 +2629,97 @@
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var screen = $('levels-screen'); if (!screen) return;
+  // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
+  // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
+  var CAMPAIGN_PUBLIC = false;
+  var DEV = false;
+  try {
+    if (/[?&]dev=1/.test(location.search)) localStorage.setItem('rr_dev', '1');
+    if (/[?&]dev=0/.test(location.search)) localStorage.removeItem('rr_dev');
+    DEV = localStorage.getItem('rr_dev') === '1';
+  } catch (e) {}
+  var LIVE = DEV || CAMPAIGN_PUBLIC;
+  var DEV_UNLOCK_ALL = false;
   var TIERS = [
-    { n: 'TIER I · WARM-UP', d: 'easy' },
-    { n: 'TIER II · PULSE', d: 'medium' },
-    { n: 'TIER III · FRACTURE', d: 'hard' }
+    { n: 'TIER I · WARM-UP',    d: 'easy'   },
+    { n: 'TIER II · PULSE',     d: 'medium' },
+    { n: 'TIER III · FRACTURE', d: 'hard'   }
   ];
-  var PER = 4;
+  var PER = 6, TOTAL = TIERS.length * PER;
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
-  function pickTracks() {
+  function rcReady() {
     var RC = window.RhythmCatalog;
     if (!RC || !RC.allTracks) return [];
-    var all = RC.allTracks().filter(function (t) { return RC.trackReady ? RC.trackReady(t) : true; });
-    if (!all.length) return [];
-    var need = TIERS.length * PER, out = [];
-    if (all.length <= need) { out = all.slice(0, need); }
-    else { var step = all.length / need; for (var i = 0; i < need; i++) out.push(all[Math.floor(i * step)]); }
-    return out;
+    return RC.allTracks().filter(function (t) { return RC.trackReady ? RC.trackReady(t) : true; });
   }
-  var current = [];
+  // STABLE level -> track binding: persist chosen track IDs so a level is always the same song,
+  // even as the catalog grows/re-sorts. Empty slots fill deterministically (even stride, no repeats).
+  function levelTracks() {
+    var ready = rcReady(); if (!ready.length) return [];
+    var byId = {}; ready.forEach(function (t) { byId[t.id] = t; });
+    var saved = {}; try { saved = JSON.parse(localStorage.getItem('rr_levelmap') || '{}'); } catch (e) {}
+    var used = {}; Object.keys(saved).forEach(function (k) { if (byId[saved[k]]) used[saved[k]] = 1; });
+    var stride = ready.length / TOTAL, picks = [];
+    for (var s = 0; s < TOTAL; s++) {
+      if (saved[s] && byId[saved[s]]) { picks.push(byId[saved[s]]); continue; }
+      var chosen = null, start = Math.floor(s * stride);
+      for (var off = 0; off < ready.length; off++) { var t = ready[(start + off) % ready.length]; if (!used[t.id]) { chosen = t; break; } }
+      if (!chosen) chosen = ready[s % ready.length];
+      used[chosen.id] = 1; saved[s] = chosen.id; picks.push(chosen);
+    }
+    try { localStorage.setItem('rr_levelmap', JSON.stringify(saved)); } catch (e) {}
+    return picks;
+  }
+  function scoreMap() { try { return JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { return {}; } }
+  function starsFor(track, diff) {
+    if (!track) return 0;
+    var r = scoreMap()[track.id + '|' + diff]; if (!r) return 0;
+    var g = r.grade; return (g === 'S' || g === 'A') ? 3 : (g === 'B') ? 2 : 1;   // C/D = cleared = 1 star
+  }
+  function tierOf(idx) { return TIERS[Math.floor(idx / PER)]; }
+  function lvState(idx, tracks) {
+    var st = starsFor(tracks[idx], tierOf(idx).d);
+    var unlocked = LIVE && (idx === 0 || DEV_UNLOCK_ALL || starsFor(tracks[idx - 1], tierOf(idx - 1).d) >= 1);
+    return { stars: st, unlocked: unlocked };
+  }
+  function starRow(n) { var h = ''; for (var i = 0; i < 3; i++) h += '<span class="lv-star' + (i < n ? ' on' : '') + '">★</span>'; return '<div class="lv-stars">' + h + '</div>'; }
   function build() {
-    var RC = window.RhythmCatalog, body = $('levels-body'); if (!body) return;
-    current = pickTracks();
-    if (!current.length) { body.innerHTML = '<div class="levels-empty">Levels are loading from your library — give it a moment, then reopen.</div>'; return; }
-    var html = '';
+    var body = $('levels-body'); if (!body) return;
+    var tracks = levelTracks();
+    if (!tracks.length) { body.innerHTML = '<div class="levels-empty">Levels load from your library — give it a moment, then reopen.</div>'; return; }
+    var totalStars = 0; for (var a = 0; a < tracks.length; a++) totalStars += lvState(a, tracks).stars;
+    var possible = TOTAL * 3, nextIdx = -1;
+    for (var b = 0; b < tracks.length; b++) { var s0 = lvState(b, tracks); if (s0.unlocked && s0.stars === 0) { nextIdx = b; break; } }
+    var html = '<div class="lv-progress"><div class="lv-prog-bar"><span style="width:' + Math.round(totalStars / possible * 100) + '%"></span></div>'
+      + '<div class="lv-prog-txt">★ ' + totalStars + ' / ' + possible + (DEV ? ' · DEV' : '') + '</div>'
+      + (DEV ? '<button class="lv-devbtn" id="lv-unlockall">' + (DEV_UNLOCK_ALL ? '↩ progression' : '⚿ unlock all') + '</button>' : '') + '</div>';
+    if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release — free-play any song from the library anytime</div>';
     for (var ti = 0; ti < TIERS.length; ti++) {
-      var tier = TIERS[ti], slice = current.slice(ti * PER, ti * PER + PER);
-      if (!slice.length) continue;
-      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span></div><div class="lv-grid">';
-      for (var i = 0; i < slice.length; i++) {
-        var t = slice[i], num = ti * PER + i + 1;
-        var best = (RC && RC.getBest) ? RC.getBest(t.id) : null, grade = best ? best.grade : '';
+      var tier = TIERS[ti], ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars;
+      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-stars">★ ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
+      for (var i = 0; i < PER; i++) {
+        var idx = ti * PER + i, t = tracks[idx], num = idx + 1, st = lvState(idx, tracks);
         var art = t.artwork_url ? '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.style.display=\'none\'">' : '♪';
-        var gradeChip = grade ? '<span class="lv-grade g-' + grade + '">' + grade + '</span>' : '';
-        html += '<button class="lv-card" data-tier="' + ti + '" data-i="' + i + '">' +
-          '<div class="lv-art">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + gradeChip + '</div>' +
-          '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || '') + '</div></div>' +
+        var corner = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
+        html += '<button class="lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + '" data-idx="' + idx + '">' +
+          '<div class="lv-art">' + art + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner + '</div>' +
+          '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || t.artist_credit_name || '') + '</div>' + starRow(st.stars) + '</div>' +
           '</button>';
       }
       html += '</div></div>';
     }
     body.innerHTML = html;
+    var ua = $('lv-unlockall'); if (ua) ua.addEventListener('click', function () { DEV_UNLOCK_ALL = !DEV_UNLOCK_ALL; build(); });
     var cards = body.querySelectorAll('.lv-card');
     for (var c = 0; c < cards.length; c++) {
       cards[c].addEventListener('click', function () {
-        var ti = +this.getAttribute('data-tier'), i = +this.getAttribute('data-i');
-        var t = current[ti * PER + i]; if (!t) return;
+        var idx = +this.getAttribute('data-idx'), t = tracks[idx]; if (!t) return;
+        if (!lvState(idx, tracks).unlocked) {
+          try { window.RhythmGame.showToast(LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release — free-play any song anytime'); } catch (e) {}
+          return;
+        }
         close();
-        try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(TIERS[ti].d); } catch (e) {}
+        try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(tierOf(idx).d); } catch (e) {}
         try { if (window.RhythmCatalog && window.RhythmCatalog.launchTrack) window.RhythmCatalog.launchTrack(t); } catch (e) {}
       });
     }

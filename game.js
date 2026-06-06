@@ -9,13 +9,26 @@
 
 (() => {
   // -------- CONFIG ----------
-  const LANE_COUNT = 6;
+  let LANE_COUNT = 6;   // mutable — the active lane profile ('standard'=6, 'gh'=5) sets this
   const DEFAULT_KEY_MAP = { a: 0, s: 1, d: 2, j: 3, k: 4, l: 5 };
   // keyMap is { key -> lane }, user-remappable + persisted. Defaults match the
   // original A S D · J K L layout so existing muscle memory is unchanged.
   let keyMap = Object.assign({}, DEFAULT_KEY_MAP);
+  let keyMapStore = 'rr_keymap';   // active lane profile's keymap storage key (set by applyLaneProfile)
   try { const sv = JSON.parse(localStorage.getItem('rr_keymap') || 'null'); if (sv && typeof sv === 'object') keyMap = sv; } catch (e) {}
-  function saveKeyMap() { try { localStorage.setItem('rr_keymap', JSON.stringify(keyMap)); } catch (e) {} }
+  function saveKeyMap() { try { localStorage.setItem(keyMapStore, JSON.stringify(keyMap)); } catch (e) {} }
+  // gamepad button -> lane map (remappable in Settings, persisted per lane profile). Default = identity
+  // (button 0..N-1 -> lane 0..N-1) so existing controller behaviour is unchanged until a user remaps.
+  let padMap = {};
+  let padStore = 'rr_padmap';
+  function identityPad(n) { const m = {}; for (let i = 0; i < n; i++) m[i] = i; return m; }
+  function loadPadMapFor(store, n) {
+    try { const sv = JSON.parse(localStorage.getItem(store) || 'null'); if (sv && typeof sv === 'object' && Object.keys(sv).length) return sv; } catch (e) {}
+    return identityPad(n);
+  }
+  function savePadMap() { try { localStorage.setItem(padStore, JSON.stringify(padMap)); } catch (e) {} }
+  function padForLane(lane) { for (const k in padMap) if (padMap[k] === lane) return +k; return null; }
+  padMap = loadPadMapFor('rr_padmap', 6);
   function keyForLane(lane) { for (const k in keyMap) if (keyMap[k] === lane) return k; return null; }
   const LANE_COLORS = [
     { c: '#ff3c3c', rgb: '255, 60, 60'   },
@@ -86,6 +99,9 @@
   let musicVol = 1;          // master music level (0..1), self-serve in Settings
   let SFX_LEVEL = 0.05;      // hit-chug accent level (0..0.5); self-serve in Settings (default barely-there)
   let failMode = false;      // Settings → Fail Mode: an empty stability meter ends the run (default off = no-fail)
+  // Boss Stage: forces the meter lethal, drains it harder, ENRAGES at ~60%, and pays off win/lose.
+  let bossMode = false, bossPhase = 1, bossPhaseShown = false;
+  let bossFlag = false; try { bossFlag = /[?&]boss=1/.test(location.search); } catch (e) {}
   let chartMode = 'classic'; // Settings → Chart Feel: 'classic' (every Nth onset) | 'musical' (snap each note to the strongest onset in its window)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -115,6 +131,7 @@
   let score = 0, combo = 0, maxCombo = 0;
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
+  let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
@@ -144,6 +161,8 @@
   const neckImg = loadImg('assets/neck-cut.png');
   const bodyImg = loadImg('assets/body-cut.png');
   const guitarImg = loadImg('assets/guitar.png');
+  const guitarImg5 = loadImg('assets/guitar5.png');   // 5-string neck for the Guitar-Hero controller mode
+  let activeGuitarImg = guitarImg;                     // swapped by the active lane profile
   const noteImg = loadImg('assets/note-normal.png');
   const noteStarImg = loadImg('assets/note-star.png');
   const ringRed = loadImg('assets/ring-red.png');
@@ -163,6 +182,8 @@
   function layoutTapZones() {
     const zones = document.querySelectorAll('#tap-zones .tap-zone');
     if (!zones.length) return;
+    // only active lanes get a tap-zone — hide extras (e.g. the 6th button in 5-string GH mode)
+    for (let z = 0; z < zones.length; z++) zones[z].style.display = (z < LANE_COUNT) ? '' : 'none';
     // Touch lanes TRACK THE VISIBLE BUTTONS: each lane's column is centered on its
     // string-button, with boundaries at the midpoints between adjacent buttons and the
     // two outer lanes stretched to the playfield edges. Result: full-width coverage
@@ -225,14 +246,24 @@
     bridgeXF: [0.247, 0.358, 0.469, 0.570, 0.659, 0.750],   // at the bridge/catcher row (y≈0.75): wide saddle fan (confirmed good)
   };
   function guitarRect() {
-    const aspect = (guitarImg && guitarImg.width && guitarImg.height) ? guitarImg.width / guitarImg.height : ART.aspect;
-    // CONTAIN-FIT: scale the guitar to fill the playfield as much as possible without
-    // cropping the body sides, then anchor it so the bridge sits at a fixed screen height.
-    let gh = ch * ART.fillFY;
-    let gw = gh * aspect;
-    if (gw > cw * ART.fillFX) { gw = cw * ART.fillFX; gh = gw / aspect; }
-    const gx = (cw - gw) / 2;
-    const gy = ch * ART.bridgeScreenY - ART.bridgeFY * gh;
+    const aspect = (activeGuitarImg && activeGuitarImg.width && activeGuitarImg.height) ? activeGuitarImg.width / activeGuitarImg.height : ART.aspect;
+    let gw, gh, gx, gy;
+    if (ART.fit === 'cover') {
+      // COVER-FIT (5-string gh): FILL the playfield so there's no dead space left/right/under the
+      // guitar. The playfield is portrait, so this fills the WIDTH (body reaches the side edges) and
+      // the non-playable headstock crops off the TOP. Anchor the body's bottom at the screen bottom.
+      if (cw / ch > aspect) { gw = cw; gh = gw / aspect; }   // panel wider than guitar → fill width
+      else { gh = ch; gw = gh * aspect; }                    // panel narrower → fill height
+      gx = (cw - gw) / 2;
+      gy = ch - (ART.bottomAnchor || 0.95) * gh;             // body bottom ≈ screen bottom
+    } else {
+      // CONTAIN-FIT (standard 6-string): whole guitar visible, bridge anchored at a fixed screen height.
+      gh = ch * ART.fillFY;
+      gw = gh * aspect;
+      if (gw > cw * ART.fillFX) { gw = cw * ART.fillFX; gh = gw / aspect; }
+      gx = (cw - gw) / 2;
+      gy = ch * ART.bridgeScreenY - ART.bridgeFY * gh;
+    }
     return { gx: gx, gy: gy, gw: gw, gh: gh };
   }
   function fretGeom() {
@@ -254,6 +285,69 @@
     const lw = Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072);
     return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
   }
+
+  // ---- LANE PROFILES — 'standard' (6-string keyboard game) + 'gh' (5-string Guitar-Hero controller).
+  //      Additive & reversible: 'standard' reproduces the original engine exactly; only ?gh=1 / the
+  //      toggle switches to 5 lanes. Everything downstream reads LANE_COUNT / ART / LANE_COLORS live,
+  //      so swapping a profile re-shapes geometry, colours, keymap and per-lane state with no logic change.
+  const LANE_PROFILES = {
+    standard: {
+      count: 6, img: guitarImg, store: 'rr_keymap', padStore: 'rr_padmap',
+      aspect: 904 / 1268, nutFY: 0.05, bridgeFY: 0.75,
+      nutXF:    [0.450, 0.470, 0.490, 0.510, 0.530, 0.550],
+      bridgeXF: [0.247, 0.358, 0.469, 0.570, 0.659, 0.750],
+      colors: [
+        { c: '#ff3c3c', rgb: '255, 60, 60' }, { c: '#ece7e3', rgb: '236, 231, 227' },
+        { c: '#ff3c3c', rgb: '255, 60, 60' }, { c: '#ece7e3', rgb: '236, 231, 227' },
+        { c: '#ff3c3c', rgb: '255, 60, 60' }, { c: '#ece7e3', rgb: '236, 231, 227' },
+      ],
+      keyDefault: { a: 0, s: 1, d: 2, j: 3, k: 4, l: 5 },
+    },
+    gh: {
+      count: 5, img: guitarImg5, store: 'rr_keymap_gh', padStore: 'rr_padmap_gh',
+      // measured from assets/guitar5.png (pixel-calibrated via measure.html — do NOT even-space)
+      aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93,
+      nutXF:    [0.4622, 0.4832, 0.5032, 0.5265, 0.5488],
+      bridgeXF: [0.3271, 0.4106, 0.4940, 0.5754, 0.6578],
+      // Guitar-Hero fret colours (green/red/yellow/ORANGE) with the BLUE fret chrome-swapped (brand: no blue)
+      colors: [
+        { c: '#3ad15a', rgb: '58, 209, 90'  }, { c: '#ff3c3c', rgb: '255, 60, 60'  },
+        { c: '#ffd23c', rgb: '255, 210, 60' }, { c: '#ece7e3', rgb: '236, 231, 227' },
+        { c: '#ff8a2b', rgb: '255, 138, 43' },
+      ],
+      keyDefault: { a: 0, s: 1, d: 2, j: 3, k: 4 },
+    },
+  };
+  let laneProfile = 'standard';
+  function allocLaneArrays() {
+    lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
+    lanePluckT = Array(LANE_COUNT).fill(9); laneDown = Array(LANE_COUNT).fill(false);
+    holdNote = Array(LANE_COUNT).fill(null); holdScored = Array(LANE_COUNT).fill(0);
+    holdSparkT = Array(LANE_COUNT).fill(0);
+  }
+  function loadKeyMapFor(p) {
+    try { const sv = JSON.parse(localStorage.getItem(p.store) || 'null'); if (sv && typeof sv === 'object') return sv; } catch (e) {}
+    return Object.assign({}, p.keyDefault);
+  }
+  function applyLaneProfile(name) {
+    const p = LANE_PROFILES[name]; if (!p) return;
+    laneProfile = name;
+    LANE_COUNT = p.count;
+    activeGuitarImg = p.img;
+    ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
+    ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
+    ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95;
+    LANE_COLORS.length = 0; for (const c of p.colors) LANE_COLORS.push(c);
+    keyMapStore = p.store; keyMap = loadKeyMapFor(p);
+    padStore = p.padStore; padMap = loadPadMapFor(p.padStore, p.count);
+    allocLaneArrays();
+    try { localStorage.setItem('rr_lanemode', name); } catch (e) {}
+    try { if (typeof updateFooterHint === 'function') updateFooterHint(); } catch (e) {}
+    try { if (typeof renderKeycaps === 'function') renderKeycaps(); } catch (e) {}
+    try { if (typeof renderPadcaps === 'function') renderPadcaps(); } catch (e) {}
+    try { if (typeof layoutTapZones === 'function') layoutTapZones(); } catch (e) {}
+  }
+  try { window.__rrLaneMode = applyLaneProfile; window.__rrGetLaneMode = () => laneProfile; } catch (e) {}
 
   // ---------- SHARED, UNLOCKABLE AUDIO CONTEXT (mobile autoplay) ----------
   let sharedAC = null;
@@ -393,7 +487,7 @@
     // Guitar-Hero-style difficulty ramp: Easy uses fewer, centered strings; Medium/Hard use all 6
     // (span 6 → inSpan is the identity, so Medium/Hard charts are unchanged).
     const LANE_SPAN = { easy: 4, medium: 6, hard: 6 };
-    const span = LANE_SPAN[difficulty] || LANE_COUNT;
+    const span = Math.min(LANE_SPAN[difficulty] || LANE_COUNT, LANE_COUNT);   // never exceed lane count (5-string safe)
     const laneBase = Math.floor((LANE_COUNT - span) / 2);                          // centered active window
     const inSpan = (l) => laneBase + ((((l - laneBase) % span) + span) % span);    // wrap any index into the active set
     let last = -1, last2 = -1;
@@ -612,8 +706,9 @@
   // ===========================================================================
   // GAME LIFECYCLE
   // ===========================================================================
-  async function play(prov) {
+  async function play(prov, opts) {
     provider = prov;
+    bossMode = !!(opts && opts.boss) || bossFlag;   // Boss Stage: Levels boss card → playBoss(), or ?boss=1 to test
     $('play-btn').disabled = true;
     try {
       await beginPlay();
@@ -641,6 +736,7 @@
   }
   window.RhythmGame = window.RhythmGame || {};
   window.RhythmGame.showToast = showToast;
+  window.RhythmGame.playBoss = (prov) => play(prov, { boss: true });   // Boss Stage launcher (Levels boss card wires here)
   window.RhythmGame.applySettings = (s) => {
     if (s && typeof s.scroll === 'number') userScroll = Math.max(0.5, Math.min(2, s.scroll));
     if (s && typeof s.fxLite === 'boolean') fxLite = s.fxLite;
@@ -678,10 +774,23 @@
   }
   updateFooterHint();
 
+  // Boot the lane profile: ?gh=1 forces 5-string Guitar-Hero mode; otherwise restore the saved choice.
+  // Standard (6-lane keyboard) users hit NO new code path — applyLaneProfile only runs for gh.
+  (function bootLaneProfile() {
+    let mode = null;
+    try {
+      const m = location.search.match(/[?&]gh=([01])/);
+      if (m) mode = (m[1] === '1') ? 'gh' : 'standard';      // ?gh=1 → 5-string; ?gh=0 → reset to 6-string
+      else if (localStorage.getItem('rr_lanemode') === 'gh') mode = 'gh';   // else restore saved choice
+    } catch (e) {}
+    if (mode) applyLaneProfile(mode);
+  })();
+
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
+    bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null);
@@ -750,6 +859,9 @@
 
   function restartGame() { stopGame(); beginPlay(); }
 
+  // Boss Stage drains the meter harder — and harder still once ENRAGED (phase 2).
+  function bossDrain(base) { return bossMode ? base * (bossPhase === 2 ? 2.4 : 1.8) : base; }
+
   // optional fail-out (Settings → Fail Mode): the stability meter emptied → the run collapses
   function failRun() {
     if (runFailed || state !== 'playing') return;
@@ -780,6 +892,7 @@
       grade,
       full_combo: counts.miss === 0 && total > 0,
       failed: runFailed,
+      boss: bossMode,
     };
 
     renderResults(results, accPct, grade);
@@ -787,6 +900,14 @@
     if (runFailed) {
       const bl = $('results-blurb'); if (bl) bl.textContent = 'Signal lost — the stability meter collapsed. Recalibrate and run it back.';
       const bd = $('results-badges'); if (bd && !/signal lost/i.test(bd.textContent)) bd.insertAdjacentHTML('afterbegin', '<span class="rbadge fail">⚠ Signal Lost</span>');
+    }
+    if (bossMode) {
+      const bl = $('results-blurb');
+      if (runFailed) { if (bl) bl.textContent = 'The boss broke your signal. Steady your hands and run it back.'; }
+      else {
+        if (bl) bl.textContent = "BOSS DEFEATED — you held the line through the enrage. That's a finisher.";
+        const bd = $('results-badges'); if (bd) bd.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">★ BOSS DEFEATED</span>');
+      }
     }
 
     // ALWAYS record locally (per-song best + lifetime career stats) — works even for the
@@ -978,7 +1099,7 @@
   } catch (e) {}
   // while the test panel is open, poll gamepads (gameplay polls in its own loop)
   let probeRaf = 0;
-  function startProbePoll() { if (probeRaf) return; const tick = () => { if (!laneProbe) { probeRaf = 0; return; } pollGamepad(); probeRaf = requestAnimationFrame(tick); }; probeRaf = requestAnimationFrame(tick); }
+  function startProbePoll() { if (probeRaf) return; const tick = () => { if (!laneProbe && padRebindLane == null) { probeRaf = 0; return; } pollGamepad(); probeRaf = requestAnimationFrame(tick); }; probeRaf = requestAnimationFrame(tick); }
   function stopProbePoll() { if (probeRaf) cancelAnimationFrame(probeRaf); probeRaf = 0; }
 
   // ---------- TOUCH INPUT (tap-zones + mobile pause) ----------
@@ -1005,6 +1126,7 @@
   function activateOverdrive() {
     if (state !== 'playing' || overdrive < 1 || odActive) return;
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
+    scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
@@ -1086,18 +1208,27 @@
   }
   initMidi();
 
-  // gamepad (Guitar-Hero-style controllers): edge-detected button → lane
+  // gamepad (DualSense / Xbox / Guitar-Hero controllers): edge-detected button → MAPPED lane.
+  // Buttons route through the remappable padMap (configurable in Settings), and presses now drive
+  // laneDown/onLaneRelease too, so a controller can hold sustain notes (it couldn't before).
   const _padPrev = {};
+  let padRebindLane = null;            // lane awaiting a controller-button assignment (Settings remap)
   function pollGamepad() {
-    if ((state !== 'playing' && !laneProbe) || !navigator.getGamepads) return;
+    if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
     for (const gp of pads) {
       if (!gp) continue;
-      const n = Math.min(gp.buttons.length, LANE_COUNT);
-      for (let b = 0; b < n; b++) {
-        const pressed = gp.buttons[b].pressed; const key = gp.index + ':' + b;
-        if (pressed && !_padPrev[key]) onLaneInput(b, 'gamepad');
+      for (let b = 0; b < gp.buttons.length; b++) {
+        const pressed = gp.buttons[b].pressed; const key = gp.index + ':' + b; const was = _padPrev[key];
         _padPrev[key] = pressed;
+        if (pressed && !was) {
+          if (padRebindLane != null) { const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue; }
+          const lane = padMap[b];
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad'); }
+        } else if (!pressed && was) {
+          const lane = padMap[b];
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) onLaneRelease(lane);
+        }
       }
     }
   }
@@ -1135,7 +1266,7 @@
     if (target.type === 'bomb') {
       target.judged = true; target.hit = 'bomb';
       combo = 0; lastMult = 1;
-      stability = Math.max(0, stability - 0.06);
+      stability = Math.max(0, stability - bossDrain(0.06));
       glitchAmount = Math.min(1, glitchAmount + 0.25);
       cameraShake = Math.max(cameraShake, 9);
       playMissSfx();   // squelch (music level stays full — no ducking)
@@ -1158,6 +1289,7 @@
     if (combo > 0 && combo % 25 === 0) {
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
       lightningT = Math.min(0.55, 0.3 + tier * 0.05);
+      scanT = scanDur = 0.42; scanTier = tier;   // combo-milestone scan sweep, brighter with the streak
       cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
       bgPulse = 1;
       const big = combo % 100 === 0;                            // every 100 is a bigger moment
@@ -1222,7 +1354,7 @@
     counts.miss++; combo = 0;
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
     // a dull "dud" spatter on the missed string (Guitar-Hero "clam" feel).
-    stability = Math.max(0, stability - 0.04);
+    stability = Math.max(0, stability - bossDrain(0.04));
     glitchAmount = Math.min(1, glitchAmount + 0.10);
     cameraShake = Math.max(cameraShake, 4);
     playMissSfx();
@@ -1313,6 +1445,10 @@
     const of = $('od-fill'); if (of) of.style.height = (overdrive * 100) + '%';
     const odReady = overdrive >= 1 && !odActive;
     const odf = $('od-flame'); if (odf) odf.classList.toggle('ready', odReady);
+    // HUD Overdrive readout (the desktop-visible "hype bar") — combo-driven fill + clear CHARGING/READY/ACTIVE states
+    { const odb = $('hud-od-block'); if (odb) { odb.classList.toggle('ready', odReady); odb.classList.toggle('active', odActive); }
+      const odhf = $('hud-od-fill'); if (odhf) odhf.style.width = (overdrive * 100) + '%';
+      const odht = $('hud-od-text'); if (odht) odht.textContent = odActive ? 'OVERDRIVE ACTIVE!' : (odReady ? '▸ READY — PRESS SPACE' : 'CHARGING · ' + Math.round(overdrive * 100) + '%'); }
     // announce once when the meter first fills, so players know Space is armed
     if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; flashJudgment('OVERDRIVE READY', '#ffd98a'); }
     else if (!odReady) odReadyAnnounced = false;
@@ -1412,8 +1548,15 @@
     } else { beatLevel *= 0.9; }
     glitchAmount = Math.max(0, glitchAmount - dt * 0.4);
     cameraShake = Math.max(0, cameraShake - dt * 30);
+    scanT = Math.max(0, scanT - dt);
     lightningT = Math.max(0, lightningT - dt);
-    if (failMode && state === 'playing' && stability <= 0 && !runFailed) failRun();
+    // Boss Stage: flip to the ENRAGE phase ~60% through, and the meter is always lethal.
+    if (bossMode && state === 'playing' && !bossPhaseShown && songDuration > 0 && songTime() >= songDuration * 0.6) {
+      bossPhase = 2; bossPhaseShown = true;
+      cameraShake = Math.max(cameraShake, 16); glitchAmount = Math.min(1, glitchAmount + 0.5); bgPulse = 1;
+      flashJudgment('⚠ ENRAGED — HOLD THE LINE', '#ff1f2e');
+    }
+    if ((failMode || bossMode) && state === 'playing' && stability <= 0 && !runFailed) failRun();
     // STREAK FLAMES — the catchers catch fire as your multiplier climbs (Guitar-Hero feel)
     const _mlt = curMult();
     if (_mlt >= 2 && !reduceMotion && !fxLite) {
@@ -2108,15 +2251,32 @@
 
     // moon video is the backdrop (DOM, behind the transparent canvas).
     // draw the single coherent guitar (it already has neck, body, strings).
-    if (guitarImg._ready) {
+    if (activeGuitarImg._ready) {
       const gr = guitarRect();
-      ctx.drawImage(guitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
+      ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
       // fade the headstock (top of the guitar) into the moon so the neck top doesn't hard-cut
       ctx.save(); ctx.globalCompositeOperation = 'destination-out';
       const fadeTop = gr.gy, fadeBot = gr.gy + gr.gh * 0.20;
       const nf = ctx.createLinearGradient(0, fadeTop, 0, fadeBot);
       nf.addColorStop(0, 'rgba(0,0,0,1)'); nf.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = nf; ctx.fillRect(0, fadeTop - 4, cw, (fadeBot - fadeTop) + 8); ctx.restore();
+      // OVERDRIVE / combo SCAN — an additive amber→crimson band sweeps up the guitar (GH Star-Power wash)
+      if (scanT > 0) {
+        const fg = fretGeom();
+        const prog = Math.max(0, Math.min(1, 1 - scanT / scanDur));   // 0 (catcher) → 1 (nut)
+        const sweepY = fg.nearY + (fg.farY - fg.nearY) * prog;
+        const bandH = gr.gh * 0.14;
+        const a = Math.sin(prog * Math.PI) * (0.30 + 0.10 * Math.min(3, scanTier));
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const sg = ctx.createLinearGradient(0, sweepY - bandH, 0, sweepY + bandH);
+        sg.addColorStop(0, 'rgba(255,138,43,0)');
+        sg.addColorStop(0.5, 'rgba(255,180,90,' + a.toFixed(3) + ')');
+        sg.addColorStop(1, 'rgba(255,60,60,0)');
+        ctx.fillStyle = sg; ctx.fillRect(gr.gx, sweepY - bandH, gr.gw, bandH * 2);
+        ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillStyle = 'rgba(255,224,150,0.9)';
+        ctx.fillRect(gr.gx, sweepY - 1.5, gr.gw, 3);
+        ctx.restore();
+      }
     }
     // top mask so the LIVE hud reads cleanly
     {
@@ -2279,6 +2439,7 @@
   }
   // capture phase — a rebind grabs the next key before gameplay / mute handlers see it
   window.addEventListener('keydown', (e) => {
+    if (padRebindLane != null && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); cancelPadRebind(); return; }
     if (rebindLane == null) return;
     e.preventDefault(); e.stopImmediatePropagation();
     if (e.key === 'Escape') { cancelRebind(); return; }
@@ -2286,6 +2447,36 @@
     if (k.length === 1 || k === ' ') { const lane = rebindLane; rebindLane = null; bindLaneKey(lane, k); }
     else cancelRebind();   // ignore pure modifiers / fn keys
   }, true);
+
+  // ---- custom controller buttons (mirrors the keyboard remap: one button per lane) ----
+  function padGlyph(b) { return b == null ? '—' : ('B' + b); }
+  function bindLaneButton(lane, b) {
+    for (const k in padMap) if (padMap[k] === lane) delete padMap[k];   // each lane keeps one button
+    delete padMap[b];                                                   // each button maps to one lane
+    padMap[b] = lane;
+    savePadMap(); renderPadcaps(); renderDeviceStatus();
+  }
+  function resetPad() { padMap = identityPad(LANE_COUNT); savePadMap(); renderPadcaps(); }
+  function startPadRebind(lane) {
+    padRebindLane = lane;
+    const host = $('set-pad'); if (!host) return;
+    [...host.children].forEach(c => c.classList.toggle('listening', +c.dataset.lane === lane));
+    const cap = host.children[lane]; if (cap) cap.textContent = '…';
+    startProbePoll();   // poll so the next controller button press is captured
+  }
+  function cancelPadRebind() { padRebindLane = null; renderPadcaps(); }
+  function renderPadcaps() {
+    const host = $('set-pad'); if (!host) return;
+    host.innerHTML = '';
+    for (let lane = 0; lane < LANE_COUNT; lane++) {
+      const cap = document.createElement('button');
+      cap.className = 'keycap'; cap.dataset.lane = lane;
+      cap.textContent = padGlyph(padForLane(lane));
+      cap.addEventListener('click', () => startPadRebind(lane));
+      host.appendChild(cap);
+    }
+  }
+  try { window.__rrPadMap = () => JSON.parse(JSON.stringify(padMap)); } catch (e) {}
 
   // ---- controllers & MIDI: live status + input test ----
   function updateInputsStatus() {
@@ -2324,10 +2515,11 @@
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
     { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
-    renderKeycaps(); updateInputsStatus(); renderDeviceStatus();
+    { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.classList.toggle('active', b.dataset.lanemode === laneProfile)); }
+    renderKeycaps(); renderPadcaps(); updateInputsStatus(); renderDeviceStatus();
     settingsScreen.classList.add('active');
   }
-  function closeSettings() { setTest(false); cancelRebind(); settingsScreen.classList.remove('active'); }
+  function closeSettings() { setTest(false); cancelRebind(); cancelPadRebind(); settingsScreen.classList.remove('active'); }
   $('calib-open').addEventListener('click', openSettings);
   // ---------- How to Play (note-type legend) ----------
   { const ho = $('howto-open'), hs = $('howto-screen'), hc = $('howto-close');
@@ -2373,7 +2565,14 @@
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ bgMode: b.dataset.bg });
   })); }
+  { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.addEventListener('click', () => {
+    if (state === 'playing' || state === 'paused') { try { window.RhythmGame.showToast('Finish the run first to switch lane mode'); } catch (e) {} return; }
+    [...lm.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    applyLaneProfile(b.dataset.lanemode);
+    try { window.RhythmGame.showToast(b.dataset.lanemode === 'gh' ? '5-String Guitar mode — plug in a guitar controller & set it up in Settings' : '6-Lane Keyboard mode'); } catch (e) {}
+  })); }
   { const rk = $('set-keys-reset'); if (rk) rk.addEventListener('click', resetKeys); }
+  { const rp = $('set-pad-reset'); if (rp) rp.addEventListener('click', resetPad); }
   { const tb = $('set-test-btn'); if (tb) tb.addEventListener('click', () => setTest(!laneProbe)); }
   window.addEventListener('gamepadconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });
   window.addEventListener('gamepaddisconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });

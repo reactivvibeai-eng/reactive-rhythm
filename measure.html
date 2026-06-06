@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>String Calibrator — guitar5.png</title>
+<style>
+  :root { --bg:#0c0a09; --panel:#16120f; --line:#2a2320; --crimson:#ff3c3c; --chrome:#ece7e3; --ink:#e8e2dc; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 'Chakra Petch',system-ui,sans-serif; display:flex; gap:18px; padding:18px; }
+  h1 { font:600 16px/1 'Oxanium',sans-serif; margin:0 0 10px; letter-spacing:.04em; }
+  #stage { position:relative; }
+  canvas { display:block; background:#111 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="8" height="8" fill="%23222"/><rect x="8" y="8" width="8" height="8" fill="%23222"/></svg>'); cursor:crosshair; border:1px solid var(--line); border-radius:6px; }
+  .panel { width:380px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+  .row { display:flex; align-items:center; gap:8px; margin:7px 0; }
+  label { min-width:96px; color:#b9aea6; }
+  input[type=range] { flex:1; accent-color:var(--crimson); }
+  button { background:#241b17; color:var(--ink); border:1px solid #3a2c25; border-radius:6px; padding:7px 12px; font:600 12px 'Oxanium',sans-serif; cursor:pointer; letter-spacing:.03em; }
+  button:hover { border-color:var(--crimson); }
+  button.primary { background:var(--crimson); color:#160606; border-color:var(--crimson); }
+  pre { background:#0a0807; border:1px solid var(--line); border-radius:6px; padding:10px; font:12px/1.5 ui-monospace,monospace; color:#cfe; white-space:pre-wrap; word-break:break-word; margin:10px 0 0; }
+  .hint { color:#8a7e76; font-size:11px; margin-top:4px; }
+  .val { color:var(--crimson); font-weight:600; }
+  .legend span { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="cv" width="360" height="640"></canvas>
+  </div>
+  <div class="panel">
+    <h1>STRING CALIBRATOR</h1>
+    <div class="legend">
+      <div><span style="background:#3fe0ff"></span>NUT / spawn row — <span class="val" id="nutFYv">—</span></div>
+      <div><span style="background:#ffb13f"></span>BRIDGE / catcher row — <span class="val" id="brFYv">—</span></div>
+    </div>
+    <div class="row"><label>Nut row Y</label><input type="range" id="nutY" min="0.02" max="0.55" step="0.001" value="0.205"></div>
+    <div class="row"><label>Bridge row Y</label><input type="range" id="brY" min="0.45" max="0.98" step="0.001" value="0.84"></div>
+    <div class="row">
+      <button class="primary" id="auto">⟳ Auto-detect strings</button>
+      <button id="reset">Reset markers</button>
+    </div>
+    <div class="hint">Drag a guide line to move the whole row. Drag a dot to fine-tune one string. Click a line to snap the nearest dot to the cursor. 5 dots per line = the 5 strings.</div>
+    <pre id="out">loading guitar5.png…</pre>
+    <div class="hint">Values are fractions of the full image (width for X, height for Y) — drop straight into <b>ART</b> for the <b>gh</b> profile.</div>
+  </div>
+
+<script>
+(() => {
+  const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  const DW = cv.width, DH = cv.height;            // display size
+  const img = new Image();
+  // offscreen native-resolution canvas for accurate pixel sampling
+  let nat, nctx, natW=0, natH=0;
+  let nutFY = 0.205, brFY = 0.84;
+  let nutX = [], brX = [];                          // fractions of width, 5 each
+  let drag = null;                                  // {row:'nut'|'br', idx:number|null('line')}
+
+  const $ = id => document.getElementById(id);
+
+  img.onload = () => {
+    natW = img.naturalWidth; natH = img.naturalHeight;
+    nat = document.createElement('canvas'); nat.width = natW; nat.height = natH;
+    nctx = nat.getContext('2d', { willReadFrequently:true });
+    nctx.drawImage(img, 0, 0);
+    autodetect(); render();
+  };
+  img.onerror = () => { $('out').textContent = 'FAILED to load assets/guitar5.png'; };
+  img.src = 'assets/guitar5.png?cb=' + Date.now();
+
+  // ---- detection: find 5 bright string peaks on a horizontal row ----
+  function detectRow(rowFY) {
+    const y = Math.max(0, Math.min(natH-1, Math.round(rowFY*natH)));
+    const data = nctx.getImageData(0, y, natW, 1).data;
+    const lum = new Float32Array(natW);
+    for (let x=0;x<natW;x++){ const i=x*4, a=data[i+3];
+      lum[x] = a < 12 ? 0 : (0.299*data[i]+0.587*data[i+1]+0.114*data[i+2]); }
+    // light smoothing
+    const sm = new Float32Array(natW), r=3;
+    for(let x=0;x<natW;x++){let s=0,c=0;for(let k=-r;k<=r;k++){const xx=x+k;if(xx>=0&&xx<natW){s+=lum[xx];c++;}}sm[x]=s/c;}
+    let mean=0; for(let x=0;x<natW;x++) mean+=sm[x]; mean/=natW;
+    let sd=0; for(let x=0;x<natW;x++){const d=sm[x]-mean;sd+=d*d;} sd=Math.sqrt(sd/natW);
+    // lower threshold until we find at least 5 blobs (or give up)
+    for (let kk=0.9; kk>=-0.2; kk-=0.18) {
+      const thr = mean + kk*sd;
+      const blobs=[]; let inb=false,start=0;
+      for(let x=0;x<natW;x++){ if(sm[x]>thr){ if(!inb){inb=true;start=x;} } else { if(inb){inb=false;blobs.push([start,x-1]);} } }
+      if(inb) blobs.push([start,natW-1]);
+      let cand = blobs.map(([a,b])=>{let num=0,den=0,mx=0;for(let x=a;x<=b;x++){const w=sm[x]-thr;if(w>0){num+=x*w;den+=w;}if(sm[x]>mx)mx=sm[x];}return {x:den>0?num/den:(a+b)/2,s:mx,w:b-a};});
+      cand = cand.filter(c=>c.w>=1);
+      if (cand.length >= 5) {
+        cand.sort((p,q)=>q.s-p.s);
+        const top = cand.slice(0,5).sort((p,q)=>p.x-q.x);
+        return top.map(c=>+(c.x/natW).toFixed(4));
+      }
+      if (kk<=-0.2 && cand.length) { // best effort
+        cand.sort((p,q)=>p.x-q.x);
+        return cand.map(c=>+(c.x/natW).toFixed(4));
+      }
+    }
+    // fallback: even fan
+    return [0.40,0.45,0.50,0.55,0.60];
+  }
+
+  function autodetect(){ nutFY=+$('nutY').value; brFY=+$('brY').value; nutX=detectRow(nutFY); brX=detectRow(brFY); }
+
+  function render(){
+    ctx.clearRect(0,0,DW,DH);
+    if (img.complete && natW) ctx.drawImage(img,0,0,DW,DH);
+    // rows
+    drawRow(nutFY, nutX, '#3fe0ff');
+    drawRow(brFY,  brX,  '#ffb13f');
+    // output
+    $('nutFYv').textContent = nutFY.toFixed(3);
+    $('brFYv').textContent = brFY.toFixed(3);
+    const f = a => '['+a.map(v=>v.toFixed(4)).join(', ')+']';
+    $('out').textContent =
+      'nutFY: '+nutFY.toFixed(4)+',  bridgeFY: '+brFY.toFixed(4)+',\n'+
+      'nutXF:    '+f(nutX)+',\n'+
+      'bridgeXF: '+f(brX)+',';
+  }
+  function drawRow(fy, xs, col){
+    const y = fy*DH;
+    ctx.strokeStyle = col; ctx.lineWidth=1; ctx.globalAlpha=.55;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(DW,y); ctx.stroke(); ctx.globalAlpha=1;
+    xs.forEach((fx,i)=>{ const x=fx*DW;
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fill();
+      ctx.fillStyle='#000'; ctx.font='8px monospace'; ctx.textAlign='center'; ctx.fillText(i,x,y+3);
+    });
+  }
+
+  // ---- interaction ----
+  function pick(mx,my){
+    const fy=my/DH;
+    const rows=[['nut',nutFY,nutX],['br',brFY,brX]];
+    for(const [name,rfy,xs] of rows){
+      const ry=rfy*DH;
+      if(Math.abs(my-ry)<14){
+        // nearest dot
+        let bi=0,bd=1e9; xs.forEach((fx,i)=>{const d=Math.abs(fx*DW-mx); if(d<bd){bd=d;bi=i;}});
+        if(bd<14) return {row:name, idx:bi};
+        return {row:name, idx:'line'};
+      }
+    }
+    return null;
+  }
+  cv.addEventListener('pointerdown', e=>{
+    const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+    const p=pick(mx,my);
+    if(p){ drag=p; cv.setPointerCapture(e.pointerId);
+      if(p.idx==='line'){ // click on line moves nearest dot to cursor x immediately
+        const xs = p.row==='nut'?nutX:brX; let bi=0,bd=1e9; xs.forEach((fx,i)=>{const d=Math.abs(fx*DW-mx);if(d<bd){bd=d;bi=i;}}); xs[bi]=+(mx/DW).toFixed(4); drag={row:p.row,idx:bi}; }
+      render();
+    }
+  });
+  cv.addEventListener('pointermove', e=>{
+    if(!drag) return;
+    const rect=cv.getBoundingClientRect(); const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+    if(drag.idx==='lineY'){}
+    if(typeof drag.idx==='number'){ const xs=drag.row==='nut'?nutX:brX; xs[drag.idx]=+(Math.max(0,Math.min(1,mx/DW))).toFixed(4); }
+    render();
+  });
+  cv.addEventListener('pointerup', ()=>{ drag=null; });
+
+  // line vertical drag via the sliders (simpler + precise); sliders re-detect on change
+  $('nutY').addEventListener('input', ()=>{ nutFY=+$('nutY').value; nutX=detectRow(nutFY); render(); });
+  $('brY').addEventListener('input',  ()=>{ brFY=+$('brY').value;  brX=detectRow(brFY);  render(); });
+  $('auto').addEventListener('click', ()=>{ autodetect(); render(); });
+  $('reset').addEventListener('click', ()=>{ autodetect(); render(); });
+
+  // expose for headless reads
+  window.__measure = () => ({ nutFY:+nutFY.toFixed(4), bridgeFY:+brFY.toFixed(4),
+    nutXF: nutX.map(v=>+v.toFixed(4)), bridgeXF: brX.map(v=>+v.toFixed(4)),
+    natW, natH, aspect:+(natW/natH).toFixed(4) });
+})();
+</script>
+</body>
+</html>

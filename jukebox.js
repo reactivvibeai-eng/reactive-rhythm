@@ -41,7 +41,7 @@
   // =========================================================================
   const POOL = 13, HALF = 6;
   let stage, jukebox, covers = [];
-  let jbList = [], sectionKey = 'featured';
+  let jbList = [], sectionKey = 'new';   // open on the freshest (most recently added) music
   let pos = 0, target = 0, raf = 0, dragging = false, down = false, startX = 0, startPos = 0, justDragged = 0;
   let cv = 240; // cover size px
 
@@ -187,6 +187,7 @@
   function setSection(key) {
     sectionKey = key;
     jbList = RC().sections()[key] || [];
+    try { var _ac = $('jb-allcount'); if (_ac) { var _n = (RC().allTracks() || []).length; _ac.textContent = _n ? ' · ' + _n : ''; } } catch (e) {}
     pos = 0; target = 0;
     [...$('jb-tabs').children].forEach(b => b.classList.toggle('active', b.dataset.sec === key));
     layout(); settlePreview();
@@ -294,7 +295,7 @@
     songsReturn = ret || 'jukebox';
     $('songs-title').textContent = title || 'All Songs';
     $('songs-search').value = q || '';
-    $('songs-sort').value = 'featured';
+    $('songs-sort').value = 'new';
     showView('songs');
     refreshSongs();
   }
@@ -420,6 +421,7 @@
       }, { passive: false });
       // browse entry
       $('jb-browse').addEventListener('click', () => { renderBrowse(); showView('browse'); });
+      { const asb = $('jb-allsongs'); if (asb) asb.addEventListener('click', () => openSongs(RC().allTracks(), 'All Songs', 'jukebox')); }
       $('lib-search-btn').addEventListener('click', () => { const i = $('lib-search-input'); if (i) i.focus(); openSongs(RC().allTracks(), 'All Songs', 'jukebox'); });
       // prominent header search — type to find any song/artist across the whole library
       { const lsi = $('lib-search-input'), lsx = $('lib-search-clear'); let lsdt = 0;

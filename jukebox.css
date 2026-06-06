@@ -253,6 +253,33 @@
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
 .jb-play:active { transform: scale(0.97); }
+/* phones: the 3-button action row can't fit on one line — stack Play full-width on top,
+   BROWSE + ALL SONGS share a shrinkable row below (fixes Play getting cut off the right edge). */
+@media (max-width: 640px) {
+  .jb-actions { flex-wrap: wrap; gap: 10px; padding-top: 8px; }
+  .jb-actions .jb-play { flex: 1 1 100%; order: -1; height: 54px; }
+  .jb-actions .jb-browse { flex: 1 1 0; min-width: 0; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+}
+
+/* ===========================================================================
+   MOBILE RESPONSIVE FIXES (≤900px) — scroll tall content instead of clipping it,
+   and stop the 3D coverflow from eating all the vertical space.
+   (loaded last, so these override the base rules in index.html's <style>)
+   =========================================================================== */
+@media (max-width: 900px) {
+  /* JUKEBOX: let the song-select view scroll, and give the coverflow a sane fixed
+     height instead of flex:1 (which created the big empty gap + pushed Play off-screen). */
+  #view-jukebox.lib-view { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .jukebox { flex: 0 0 auto; height: clamp(230px, 50vh, 330px); touch-action: pan-x; }
+
+  /* tall OVERLAYS (How-to-Play, Career/Profile) were centered + clipped with no scroll —
+     top-align + scroll, but keep them centered (margin:auto) when they DO fit. */
+  .howto-screen, .profile-screen { align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .howto-card, .profile-card { margin: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+
+  /* the standalone audio-calibration overlay never got the scroll the Settings panel did */
+  #calib-screen .calib-wrap { max-height: 92dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+}
 
 /* ===========================================================================
    BROWSE (genre + artist tiles)
