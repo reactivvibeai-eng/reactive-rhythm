@@ -102,6 +102,12 @@
   // Boss Stage: forces the meter lethal, drains it harder, ENRAGES at ~60%, and pays off win/lose.
   let bossMode = false, bossPhase = 1, bossPhaseShown = false;
   let bossFlag = false; try { bossFlag = /[?&]boss=1/.test(location.search); } catch (e) {}
+  // NOTE-TYPE VARIETY (flag-gated, OFF by default → charts byte-identical until enabled): adds
+  // GH-style trills (rapid alternating tap bursts) + richer/more-frequent chords & double-stops.
+  // Reuses existing tap/chord scoring (no hit-detection changes). Enable: ?notes=1 or rr_notes=1.
+  let noteVariety = false;
+  try { noteVariety = /[?&]notes=1/.test(location.search) || localStorage.getItem('rr_notes') === '1'; } catch (e) {}
+  try { window.__rrNoteVariety = function (on) { if (on === undefined) return noteVariety; noteVariety = !!on; try { localStorage.setItem('rr_notes', on ? '1' : '0'); } catch (e) {} return noteVariety; }; } catch (e) {}
   let chartMode = 'classic'; // Settings → Chart Feel: 'classic' (every Nth onset) | 'musical' (snap each note to the strongest onset in its window)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -527,15 +533,18 @@
     const base = notes.slice();           // snapshot before we add to it
     const allowChord = difficulty !== 'easy';
     if (allowChord) {
+      // noteVariety packs chords tighter + adds more 3-note "double-stops"; defaults byte-identical
+      const chordGapMin = noteVariety ? 5 : 8;
+      const chordMod = noteVariety ? 3 : 4;
       let lastChord = -99, chordId = 0;
       for (let i = 0; i < base.length; i++) {
         const n = base[i];
-        if ((n.type === 'tap' || n.type === 'accent') && (i - lastChord) >= 8 && i % 4 === 0) {
+        if ((n.type === 'tap' || n.type === 'accent') && (i - lastChord) >= chordGapMin && i % chordMod === 0) {
           chordId++;
           const lanes = [n.lane];
           let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
           // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
-          if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0)) {
+          if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
             let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
           }
           n.chord = true; n.chordId = chordId; n.chordLanes = lanes; n.chordLead = true;
@@ -559,6 +568,28 @@
       }
     }
     notes.sort((a, b) => a.time - b.time);
+    // ---- TRILLS (noteVariety only): turn a FAST run of single notes into a rapid two-lane
+    // ALTERNATION (the authentic GH trill feel). DENSITY-NEUTRAL — re-lanes existing notes, adds
+    // none, keeps plain tap scoring (no hit-detection change). Works on dense charts (Hard) where
+    // there are no rest gaps to host inserts. Spaced out so trills stay special. Default (flag
+    // off) skips this entirely → chart byte-identical. ----
+    if (noteVariety && difficulty !== 'easy') {
+      const trillMaxGap = difficulty === 'hard' ? 0.26 : 0.55;   // "fast enough to read as a trill" (per pace)
+      const minLen = 3;                                          // notes needed to call it a trill (L-R-L)
+      let lastTrillT = -999, i = 0;
+      const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord;
+      while (i < notes.length - 1) {
+        if (!single(notes[i])) { i++; continue; }
+        let j = i;                                               // grow a run of fast consecutive singles
+        while (j + 1 < notes.length && single(notes[j + 1]) && (notes[j + 1].time - notes[j].time) <= trillMaxGap) j++;
+        if ((j - i + 1) >= minLen && (notes[i].time - lastTrillT) >= 6) {
+          let l1 = notes[i].lane, l2 = inSpan(l1 + 1); if (l2 === l1) l2 = inSpan(l1 + 2);
+          for (let k = i; k <= j; k++) { notes[k].lane = ((k - i) % 2) ? l2 : l1; notes[k]._trill = true; }
+          lastTrillT = notes[j].time;
+          i = j + 1;
+        } else { i++; }
+      }
+    }
     // ---- GAP FILL: no dead air. Insert spaced filler taps into long EMPTY stretches so a
     // section never feels empty (esp. Pulse/medium). A hold's tail already fills its own gap,
     // so we measure from the hold's END; bombs are skipped (left a clean lead-in). ----
@@ -587,7 +618,9 @@
         stars: notes.filter(n => n.type === 'star').length,
         chords: notes.filter(n => n.chord).length,
         bombs: notes.filter(n => n.type === 'bomb').length,
+        trills: notes.filter(n => n._trill).length,
         fillers: fillers.length,
+        noteVariety: noteVariety,
         lanesUsed: [...new Set(notes.map(n => n.lane))].sort((a, b) => a - b),
         difficulty: difficulty
       };

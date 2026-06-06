@@ -52,12 +52,19 @@ then CLAUDE.md (constraints) + the WS sections below. Quick orientation:
 - **Verify visuals via OFFLINE PowerShell renders** (System.Drawing → PNG → Read) replicating the game math —
   live-canvas screenshots TIME OUT. DOM (HUD/jukebox) is checkable via preview_inspect/snapshot. `node --check
   game.js` after every JS edit. Bump `?v=NN` in index.html on every JS/CSS edit. Commit small per increment.
-- **DECISION MADE (user chose "Both — waveform first"):** WS4 audio-reactive waveform is now **DONE (v66)**.
-  NEXT BUILD = (2) **NOTE-TYPE VARIETY in gameplay** (HOPOs / open notes / double-notes / trills — GH-style).
-  This is GAMEPLAY SURGERY on buildNotes+render+hit-detection: it MUST be **flag-gated** and the **USER MUST
-  PLAYTEST each addition** (gameplay currently "feels good" — don't destabilize blind). Add one note type at a
-  time behind a flag, keep standard 6-string byte-identical by default, and ship nothing to live until the user
-  confirms feel. Research report #2 (overnight `…/tasks/w68ot6ks8.output`) covers HOPO/scoring rules.
+- **DECISION MADE (user chose "Both — waveform first"):** WS4 waveform DONE (v66). NOTE-TYPE VARIETY phase
+  STARTED (v67): **trills + expanded chords/double-stops** built behind **`?notes=1`** (or
+  `localStorage.rr_notes='1'`, or console `__rrNoteVariety(true)`), **OFF by default → default charts
+  BYTE-IDENTICAL** (every change is gated by `noteVariety`; verified by `git diff` + an offline buildNotes
+  harness across medium/hard × 6-lane/5-lane: invariants hold, off-state unchanged, Easy untouched).
+  • **Trills** = density-NEUTRAL re-laning of a fast run of single notes into a 2-lane alternation (adds NO notes;
+    works on dense Hard where gap-inserts can't; `trillMaxGap` hard .26 / med .55, minLen 3, spaced ≥6s).
+  • **Chords** pack tighter (gapMin 8→5, every 3rd vs 4th note) + more 3-note double-stops (`i%9`).
+  Reuses tap/chord scoring — **NO hit-detection / render changes**. `__rrChartStats` now reports
+  `trills`/`noteVariety`. ⚠️ **USER MUST PLAYTEST `?notes=1` on medium+hard** (esp. that Hard isn't too busy)
+  before promoting — gameplay "feels good", don't ship blind. REMAINING note types (still flag-gate + playtest
+  each): **open notes** (strum whole neck — needs render + hit semantics), **HOPOs** (flow notes,
+  controller/strum-centric; overnight report #2 `…/tasks/w68ot6ks8.output` has HOPO scoring rules).
 - **Image gen IS connected:** `mcp__357d4c14…__generate_image` (use `get_cost:true` to preflight + show user
   before spending). Approach = procedural-first (CSS+Canvas); generate textures only where they truly help.
 - **Research (4 full reports):** `…/tasks/wpeulou1g.output` — perspective[applied], HUD/UI, song-select, combo-FX.
@@ -115,10 +122,10 @@ the live site / Lovable until user says — what's deployed works well. All over
   with combo tier — `combo`/`cTier` in render). WS2 still wants: per-tier DISTINCT combo effects + the GH-style
   NOTE-TYPE VARIETY (the user's gameplay ask — see PENDING DECISION up top; flag-gated + playtested).
 - **WS5 Design System = NOT STARTED.**
-- **Tasks tracked** (TaskList #1-5). **?v at 66.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **Tasks tracked** (TaskList #1-5). **?v at 67.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
-  scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → v66(WS4 audio-reactive waveform).
-  All clean, node-checked.
+  scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
+  v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
 
 ## (pre-overhaul history)
 - **?v at 55.** Version history: 47→48 profile system; 49 = gh transparency key-out + tap-zone trim;
