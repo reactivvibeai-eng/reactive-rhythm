@@ -1379,6 +1379,43 @@
   .start-screen { padding: 0; overflow: hidden; background: #07060a; }
   .start-bg { position: absolute; inset: 0; overflow: hidden; z-index: 1; }
   .start-flames { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+  /* ---- supernova / star ignition intro (canvas, plays on first paint of #start) ---- */
+  .start-ignite {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    z-index: 1;                 /* above #start-video (0), below .start-fore (2); rides with .start-flames */
+    pointer-events: none;
+    mix-blend-mode: screen;     /* additive look over the warm backdrop */
+  }
+  /* ignition flash overlay — a brief crimson→ember bloom synced to the title slam (CSS, GPU-cheap) */
+  .start-ignite-flash {
+    position: absolute; left: 50%; top: 44%;
+    transform: translate(-50%, -50%);
+    width: 60vmax; height: 60vmax; border-radius: 50%;
+    pointer-events: none; z-index: 1; opacity: 0;
+    background: radial-gradient(circle at center,
+      rgba(255,255,255,0.95) 0%, rgba(255,122,74,0.85) 14%,
+      rgba(255,31,46,0.55) 34%, rgba(163,6,15,0.18) 56%, transparent 72%);
+    animation: ignFlash 1.5s cubic-bezier(.15,.75,.25,1) 0.35s both;
+    filter: blur(2px);
+  }
+  @keyframes ignFlash {
+    0%   { opacity: 0;    transform: translate(-50%,-50%) scale(0.05); }
+    16%  { opacity: 1;    transform: translate(-50%,-50%) scale(0.42); }
+    48%  { opacity: 0.55; transform: translate(-50%,-50%) scale(1.0); }
+    100% { opacity: 0;    transform: translate(-50%,-50%) scale(1.6); }
+  }
+  /* reduced-motion: kill the bloom animation; the canvas draws one static frame in JS */
+  html.rr-reduce-motion .start-ignite-flash { animation: none; opacity: 0.18; transform: translate(-50%,-50%) scale(1); }
+  /* ---- ember-spark halo on the atom loader (keeps boot identity consistent) ---- */
+  .atom-loader .atom-halo {
+    position: absolute; inset: -14%; border-radius: 50%;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 50% 50%, transparent 58%, rgba(255,31,46,0.10) 66%, transparent 74%);
+    animation: atomHalo 3.4s ease-in-out infinite;
+  }
+  @keyframes atomHalo { 0%,100% { opacity: 0.5; transform: scale(0.98); } 50% { opacity: 1; transform: scale(1.04); } }
+  html.rr-reduce-motion .atom-loader .atom-halo { animation: none; opacity: 0.5; }
   #start-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
   .start-glow {
     position: absolute; left: 50%; top: 46%;
@@ -1653,6 +1690,8 @@
       <video id="start-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
       <div class="start-glow"></div>
       <canvas class="start-flames" id="start-flames"></canvas>
+      <canvas class="start-ignite" id="start-ignite" aria-hidden="true"></canvas>
+      <div class="start-ignite-flash" id="start-ignite-flash" aria-hidden="true"></div>
       <img class="start-mascot" src="assets/mascot.png" alt="" />
       <div class="start-embers" id="start-embers"></div>
       <div class="start-scrim"></div>
@@ -2111,6 +2150,7 @@
   <div class="screen loading-screen" id="loading">
     <div class="loading-wrap">
       <div class="atom-loader">
+        <span class="atom-halo" aria-hidden="true"></span>
         <svg class="atom-svg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true">
           <defs>
             <linearGradient id="rr-wood" x1="0" y1="0" x2="1" y2="1">
@@ -2773,6 +2813,152 @@
     }
   }
 
+  // ---- SUPERNOVA / STAR IGNITION (procedural canvas, crimson/ember/chrome) ----
+  // Plays once on first paint of #start, then settles into the rising-flame field below.
+  // Skippable: the existing enter() (tap/Enter/Space) calls RhythmIntro.stop().
+  var RhythmIntro = (function () {
+    var cv = document.getElementById('start-ignite');
+    var reduce = function () {
+      try {
+        return document.documentElement.classList.contains('rr-reduce-motion') ||
+          (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      } catch (e) { return false; }
+    };
+    if (!cv) return { stop: function(){}, replay: function(){}, isReducedMotion: reduce };
+    var cx = cv.getContext('2d');
+    var idpr = Math.min(2, window.devicePixelRatio || 1);
+    var raf = 0, running = false, t0 = 0, sparks = [], rings = [];
+    var DUR = 2.4;                                   // total seconds
+
+    function size() {
+      var r = cv.getBoundingClientRect();
+      cv.width = Math.max(1, Math.floor(r.width * idpr));
+      cv.height = Math.max(1, Math.floor(r.height * idpr));
+    }
+    function center() { return { x: cv.width * 0.5, y: cv.height * 0.44 }; }
+
+    // crimson→ember→chrome palette, picked by spark "heat"
+    function sparkColor(heat, a) {
+      if (heat > 0.86) return 'rgba(218,215,210,' + a + ')';   // chrome-white core flecks
+      if (heat > 0.6)  return 'rgba(255,122,74,'  + a + ')';   // ember #ff7a4a
+      if (heat > 0.32) return 'rgba(255,31,46,'   + a + ')';   // crimson #ff1f2e
+      return 'rgba(163,6,15,' + a + ')';                       // deep #a3060f
+    }
+
+    function burst() {
+      var c = center(), N = 120, base = Math.min(cv.width, cv.height);
+      sparks.length = 0; rings.length = 0;
+      for (var i = 0; i < N; i++) {
+        var ang = Math.random() * 6.2832;
+        var spd = (0.10 + Math.random() * 0.55) * base;        // px/sec radial
+        sparks.push({
+          x: c.x, y: c.y, ang: ang, spd: spd,
+          age: 0, life: 0.9 + Math.random() * 1.2,
+          r: (1.2 + Math.random() * 3.2) * idpr,
+          heat: Math.random(), seed: Math.random() * 6.28
+        });
+      }
+      // 2 expanding shockwave rings
+      rings.push({ age: 0, life: 1.1, max: base * 0.62, w: 3.5 * idpr });
+      rings.push({ age: 0.12, life: 1.3, max: base * 0.9, w: 2.0 * idpr });
+    }
+
+    function staticFrame() {                                    // reduced-motion: one calm draw
+      size();
+      var c = center(), base = Math.min(cv.width, cv.height);
+      cx.clearRect(0, 0, cv.width, cv.height);
+      cx.globalCompositeOperation = 'lighter';
+      var g = cx.createRadialGradient(c.x, c.y, 0, c.x, c.y, base * 0.34);
+      g.addColorStop(0, 'rgba(255,255,255,0.5)');
+      g.addColorStop(0.25, 'rgba(255,122,74,0.32)');
+      g.addColorStop(0.6, 'rgba(255,31,46,0.14)');
+      g.addColorStop(1, 'rgba(163,6,15,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(c.x, c.y, base * 0.34, 0, 6.2832); cx.fill();
+      cx.globalCompositeOperation = 'source-over';
+    }
+
+    function frame(now) {
+      if (!running) return;
+      raf = requestAnimationFrame(frame);
+      var br = cv.getBoundingClientRect();
+      var bw = Math.max(1, Math.floor(br.width * idpr)), bh = Math.max(1, Math.floor(br.height * idpr));
+      if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+      var t = (now - t0) / 1000;
+      var dt = Math.min(0.05, t - (frame._last || 0)); frame._last = t;
+      var c = center(), base = Math.min(cv.width, cv.height);
+      cx.clearRect(0, 0, cv.width, cv.height);
+      cx.globalCompositeOperation = 'lighter';
+
+      // ignition core: bright at t≈0, blooms then fades by ~1.2s
+      var ci = t < 1.3 ? Math.max(0, 1 - Math.abs(t - 0.35) / 0.95) : 0;
+      if (ci > 0) {
+        var cr = base * (0.06 + 0.30 * Math.min(1, t / 0.5));
+        var cg = cx.createRadialGradient(c.x, c.y, 0, c.x, c.y, cr);
+        cg.addColorStop(0, 'rgba(255,255,255,' + (0.95 * ci) + ')');
+        cg.addColorStop(0.3, 'rgba(255,122,74,' + (0.7 * ci) + ')');
+        cg.addColorStop(0.7, 'rgba(255,31,46,' + (0.4 * ci) + ')');
+        cg.addColorStop(1, 'rgba(163,6,15,0)');
+        cx.fillStyle = cg; cx.beginPath(); cx.arc(c.x, c.y, cr, 0, 6.2832); cx.fill();
+      }
+
+      // shockwave rings
+      for (var ri = rings.length - 1; ri >= 0; ri--) {
+        var R = rings[ri]; R.age += dt;
+        if (R.age <= 0) continue;
+        if (R.age >= R.life) { rings.splice(ri, 1); continue; }
+        var rk = R.age / R.life, rad = R.max * rk, ra = (1 - rk) * 0.55;
+        cx.strokeStyle = 'rgba(255,31,46,' + ra + ')';
+        cx.lineWidth = R.w * (1 - rk * 0.5);
+        cx.beginPath(); cx.arc(c.x, c.y, rad, 0, 6.2832); cx.stroke();
+        cx.strokeStyle = 'rgba(255,122,74,' + (ra * 0.6) + ')';
+        cx.beginPath(); cx.arc(c.x, c.y, rad * 0.93, 0, 6.2832); cx.stroke();
+      }
+
+      // radial spark burst — trails outward, drifts up into the flame field as it ages
+      for (var i = sparks.length - 1; i >= 0; i--) {
+        var p = sparks[i]; p.age += dt;
+        if (p.age >= p.life) { sparks.splice(i, 1); continue; }
+        var k = p.age / p.life;
+        var dist = p.spd * p.age * (1 - k * 0.4);
+        p.x = c.x + Math.cos(p.ang) * dist;
+        p.y = c.y + Math.sin(p.ang) * dist - (base * 0.18) * k * k   // buoyancy: rise late
+              + Math.sin(now / 240 + p.seed) * 1.4 * idpr;
+        var a = (1 - k) * 0.9;
+        var rad2 = p.r * (1 + k * 0.6);
+        var g2 = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad2 * 3);
+        g2.addColorStop(0, sparkColor(p.heat, a));
+        g2.addColorStop(1, 'rgba(120,8,14,0)');
+        cx.fillStyle = g2; cx.beginPath(); cx.arc(p.x, p.y, rad2 * 3, 0, 6.2832); cx.fill();
+      }
+
+      cx.globalCompositeOperation = 'source-over';
+      if (t >= DUR && sparks.length === 0 && rings.length === 0) { stop(); }
+    }
+
+    function stop() {
+      running = false;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      try { cx.clearRect(0, 0, cv.width, cv.height); } catch (e) {}
+    }
+    function start() {
+      if (reduce()) { staticFrame(); return; }
+      if (running) return;
+      size(); burst();
+      running = true; t0 = performance.now(); frame._last = 0;
+      raf = requestAnimationFrame(frame);
+      // resilience: timer-driven resize in case layout wasn't resolved at parse time
+      setTimeout(size, 60); setTimeout(size, 260);
+    }
+    function replay() { stop(); start(); }
+
+    window.addEventListener('resize', function () { if (reduce()) staticFrame(); });
+    start();
+    return { stop: stop, replay: replay, isReducedMotion: reduce };
+  })();
+  window.RhythmIntro = RhythmIntro;
+  // dev flag: ?intro=replay re-runs the ignition (test-only — strip with other ?flags before launch)
+  try { if (/[?&]intro=replay/.test(location.search)) RhythmIntro.replay(); } catch (e) {}
+
   // animated crimson flames rising behind the mascot
   var fcv = document.getElementById('start-flames');
   var flamesRunning = false;
@@ -2844,6 +3030,7 @@
     if (dismissed) return;
     dismissed = true;
     flamesRunning = false;           // stop the flame loop once we leave the start screen
+    try { RhythmIntro && RhythmIntro.stop(); } catch (e) {}   // halt the supernova ignition too
     start.classList.add('leaving');
     setTimeout(function () {
       start.classList.remove('active', 'leaving');
