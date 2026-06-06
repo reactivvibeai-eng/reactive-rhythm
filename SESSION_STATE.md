@@ -122,7 +122,19 @@ the live site / Lovable until user says — what's deployed works well. All over
   with combo tier — `combo`/`cTier` in render). WS2 still wants: per-tier DISTINCT combo effects + the GH-style
   NOTE-TYPE VARIETY (the user's gameplay ask — see PENDING DECISION up top; flag-gated + playtested).
 - **WS5 Design System = NOT STARTED.**
-- **Tasks tracked** (TaskList #1-5). **?v at 67.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **SESSION v68–v71 (alignment + warp + 4 features + brief):** (1) **gh string alignment FIXED** — disabled
+  the cv far-end convergence that pulled lanes off the painted strings; re-measured nut/bridge from
+  guitar5.png (cv=0). (2) **gh neck-recede WARP** (`?warp=N`, default 0.2, gh-only) — slices+narrows the
+  guitar image AND the lanes by the same factor so the neck "angles down" with lanes still on the strings.
+  (3) **Opening star-ignition** on #start (window.RhythmIntro, ?intro=replay). (4) **Level Picker v2**
+  (hero ring + per-tier bars + initial-art + states; hooks RhythmLibrary.openLevels /
+  RhythmCatalog.campaignProgress). (5) **Leaderboard section** (#leaderboard-screen, trophy icon; global +
+  per-song; catalog fetchLeaderboard/fetchGlobalLeaderboard, local fallback until /score lives).
+  (6) **Sparks + login UI shell** (header chip + identity; catalog getUser/onAuthChange/getSparks seams,
+  getSparks stub until backend). (7) **LOGIN_SPARKS_BRIEF.md** + **ROADMAP.md** written. All gh-only/
+  additive; standard 6-string byte-identical. PENDING USER: playtest gh warp (tune ?warp), and answer
+  ROADMAP Q3 (same-origin serving for SSO) + Q4 (Sparks economics) to activate Phase D w/ Lovable.
+- **Tasks tracked** (TaskList #1-5). **?v at 71.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.

@@ -8,6 +8,18 @@
 
 ---
 
+## ✅ SHIPPED THIS SESSION (v68–v71, branch `visual-overhaul`, NOT deployed)
+- ✅ **GH string alignment fixed** (v68) — lanes ride the painted strings (cv=0, re-measured).
+- ✅ **GH neck-recede WARP** (v69) — guitar "angles down"; image + lanes warp together, still aligned. `?warp=N` to tune (default 0.2).
+- ✅ **Opening star-ignition animation** (start screen).
+- ✅ **Level Picker v2** (hero ring, per-tier bars, initial-art, polished states + hooks).
+- ✅ **Leaderboard section** (global + per-song overlay; local fallback until `/score`).
+- ✅ **Sparks + login UI shell** (header chip + identity; catalog seams; stub until backend).
+- ✅ **LOGIN_SPARKS_BRIEF.md** (Lovable backend spec) + this ROADMAP.
+- ⏳ **NEEDS USER:** playtest the gh warp (tune `?warp`); answer **Q3** (same-origin serving for SSO) + **Q4** (Sparks economics) → unblocks Phase D with Lovable.
+
+---
+
 ## PHASE A — Finish the visual overhaul (C) — IN PROGRESS
 The "make it feel like a real game engine, not an AI website" pass.
 - ✅ Highway perspective (1/z), boost/combo FX, HUD meters, combo texture, scanline (v60–65)
