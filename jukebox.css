@@ -353,6 +353,8 @@
 }
 .songs-search::placeholder { color: var(--ink-dim); }
 .songs-search:focus { border-color: rgba(255,31,46,0.5); }
+/* MOBILE: 16px text input so iOS Safari won't auto-zoom on focus (desktop keeps 13px above). */
+@media (max-width: 640px) { .songs-search { font-size: 16px; } }
 .songs-sort {
   flex: 0 0 auto; height: 44px; padding: 0 12px;
   background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px;
