@@ -39,6 +39,18 @@
   // ONE source of truth for "who is signed in" — reads the SHARED website supabase-js session
   // (same client `supa` used by getToken). Stays null/guest when supabase-js or config absent.
   async function getUser() {
+    // LIVE: prefer GET /me (the site profile — display_name + avatar). It returns 200 {user:null}
+    // when logged out, and we fall back to the raw supabase session if the endpoint ever hiccups.
+    if (API_BASE) {
+      try {
+        const out = await api('/me', { auth: true });
+        if (out && 'user' in out) {
+          const u = out.user;
+          if (u && u.id) return { id: u.id, name: u.display_name || 'Player', email: u.email || null, avatar_url: u.avatar_url || null };
+          return null;   // explicit logged-out
+        }
+      } catch (e) { /* backend hiccup → fall back to the session below */ }
+    }
     if (!supa) return null;
     try {
       const { data } = await supa.auth.getUser();
@@ -61,9 +73,9 @@
   }
 
   // SPARKS balance. STUB today: returns a locally-cached number (default 0) so the chip renders.
-  // SEAM: when the backend ships `GET /sparks` (auth'd), flip USE_SPARKS_API = true — the method
-  // already calls api('/sparks', { auth:true }) and caches the result. No UI change needed.
-  const USE_SPARKS_API = false;
+  // LIVE: backend `GET /sparks/balance` (auth'd) is shipped; USE_SPARKS_API=true calls it + caches.
+  // Set USE_SPARKS_API=false to fall back to the local cache (e.g. if the endpoint is taken down).
+  const USE_SPARKS_API = true;   // LIVE: backend GET /sparks/balance shipped (Lovable)
   function loadSparksCache() { try { const v = parseInt(localStorage.getItem('rr_sparks') || '0', 10); return isNaN(v) ? 0 : v; } catch (e) { return 0; } }
   function saveSparksCache(n) { try { localStorage.setItem('rr_sparks', String(n | 0)); } catch (e) {} }
   async function getSparks() {
@@ -71,14 +83,14 @@
       try {
         const tk = await getToken();
         if (tk) {
-          const out = await api('/sparks', { auth: true });           // { balance: <int> }
+          const out = await api('/sparks/balance', { auth: true });   // { balance, signed_in, currency }
           const bal = (out && typeof out.balance === 'number') ? out.balance : loadSparksCache();
           saveSparksCache(bal);
           return bal;
         }
       } catch (e) { /* fall through to cache */ }
     }
-    return loadSparksCache();   // stub path (current behavior)
+    return loadSparksCache();   // logged-out / backend hiccup → last cached value
   }
 
   // ---------- API client ----------
@@ -264,7 +276,7 @@
           };
           const out = await api('/plays', { method: 'POST', body: payload, auth: true });
           let board = [];
-          try { board = await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10'); }
+          try { board = lbRows(await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10')); }
           catch (e) { /* leaderboard optional */ }
           return { rank_global: out.rank_global, leaderboard: board };
         },
@@ -720,7 +732,7 @@
             notes_hit: results.notes_hit, notes_total: results.notes_total,
           } });
           let board = [];
-          try { board = await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10'); } catch (e) {}
+          try { board = lbRows(await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
         } catch (e) { /* backend not live yet -> stay local-only (no regression) */ }
       })();
@@ -753,6 +765,16 @@
     wrap.style.display = '';
   }
 
+  // Normalize a /leaderboard/:id response to a plain rows ARRAY. Backend returns { leaderboard:[…] };
+  // tolerate a bare array or { rows:[…] } too, so a shape change never breaks the boards.
+  function lbRows(resp) {
+    if (!resp) return [];
+    if (Array.isArray(resp)) return resp;
+    if (Array.isArray(resp.leaderboard)) return resp.leaderboard;
+    if (Array.isArray(resp.rows)) return resp.rows;
+    return [];
+  }
+
   // ---------- read-only leaderboard fetchers (consumed by the Leaderboard overlay) ----------
   // Normalize to { rows:[{rank,display_name,score,accuracy}], youName }. Never throws — resolves
   // to { rows: [] } when the backend leaderboard isn't live yet, so the UI falls back to local.
@@ -770,8 +792,7 @@
     if (!API_BASE || !trackId) return { rows: [] };
     const qs = '?difficulty=' + encodeURIComponent(opts.difficulty || '') + '&limit=' + (opts.limit || 20);
     try {
-      const board = await api('/leaderboard/' + trackId + qs);
-      const rows = Array.isArray(board) ? board : (board && board.rows) || [];
+      const rows = lbRows(await api('/leaderboard/' + trackId + qs));
       return { rows, youName: await _myName() };
     } catch (e) { return { rows: [] }; }   // backend dormant → caller shows local fallback
   }
@@ -781,8 +802,7 @@
     opts = opts || {};
     if (!API_BASE) return { rows: [] };
     try {
-      const board = await api('/leaderboard/global?limit=' + (opts.limit || 20));
-      const rows = Array.isArray(board) ? board : (board && board.rows) || [];
+      const rows = lbRows(await api('/leaderboard/global?limit=' + (opts.limit || 20)));
       return { rows, youName: await _myName() };
     } catch (e) { return { rows: [] }; }
   }
