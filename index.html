@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=73" />
+<link rel="stylesheet" href="jukebox.css?v=74" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -924,6 +924,22 @@
   .judge-flash.show {
     animation: jflash 0.55s cubic-bezier(.2,1.4,.3,1) forwards;
   }
+  /* early/late timing hint — sits just under the judgment popup; ember=early, chrome=late */
+  .timing-tick {
+    position: absolute;
+    left: 50%; top: calc(38% + 52px);
+    transform: translate(-50%, -50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.16em;
+    pointer-events: none; z-index: 19; opacity: 0;
+    text-shadow: 0 0 10px currentColor, 0 1px 6px rgba(0,0,0,0.6);
+  }
+  .timing-tick.show { animation: ttick 0.5s ease-out forwards; }
+  @keyframes ttick {
+    0%   { opacity: 0; transform: translate(-50%, -40%) scale(0.85); }
+    22%  { opacity: 0.92; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -56%) scale(1); }
+  }
   @keyframes jflash {
     0%   { opacity: 0; transform: translate(-50%, -42%) scale(0.55); filter: blur(5px); }
     18%  { opacity: 1; transform: translate(-50%, -50%) scale(1.22); filter: blur(0); }
@@ -1710,6 +1726,7 @@
     .combo-display { top: 16%; }
     .combo-display .num { font-size: 56px; }
     .judge-flash { font-size: 44px; top: 42%; }
+    .timing-tick { font-size: 11px; top: calc(42% + 40px); }
 
     /* countdown */
     .countdown { font-size: clamp(160px, 50vw, 280px); }
@@ -2337,6 +2354,20 @@
         </div>
       </div>
       <div class="set-row">
+        <span class="set-l">Timing Feel</span>
+        <div class="set-seg" id="set-timing">
+          <button data-timing="classic" class="active">Classic</button>
+          <button data-timing="tight">Tight (GH)</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="set-l">Timing Hint</span>
+        <div class="set-seg" id="set-timinghint">
+          <button data-thint="on" class="active">Early/Late</button>
+          <button data-thint="off">Off</button>
+        </div>
+      </div>
+      <div class="set-row">
         <span class="set-l">Background</span>
         <div class="set-seg" id="set-bg">
           <button data-bg="cinematic" class="active">Cinematic</button>
@@ -2526,6 +2557,7 @@
         <div class="lab">COMBO</div>
       </div>
       <div class="judge-flash" id="judge-flash"></div>
+      <div class="timing-tick" id="timing-tick" aria-hidden="true"></div>
 
       <!-- thumb tap-zones (mobile) -->
       <div class="tap-zones" id="tap-zones">
@@ -2811,9 +2843,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=73"></script>
-<script src="jukebox.js?v=73"></script>
-<script src="catalog.js?v=73"></script>
+<script src="game.js?v=74"></script>
+<script src="jukebox.js?v=74"></script>
+<script src="catalog.js?v=74"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop

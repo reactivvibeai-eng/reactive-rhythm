@@ -46,6 +46,20 @@
     medium: { approach: 0.95, hitWindow: 0.16, name: 'PULSE — Medium'    },
     hard:   { approach: 0.68, hitWindow: 0.12, name: 'FRACTURE — Hard'   },
   };
+  // ---- TIMING FEEL (flag-gated, default-OFF → judging byte-identical to v73) ----
+  // 'classic' = today's wide, forgiving windows (the feel the user likes).
+  // 'tight'   = GH/Clone-Hero precision (tighter perfect/great split + richer 1→5× combo).
+  // Enable via ?tune=1 or Settings → Timing Feel. classic numbers reduce EXACTLY to the originals.
+  let timingFeel = 'classic';
+  try {
+    if (/[?&]tune=1/.test(location.search)) timingFeel = 'tight';
+    else { const tf = localStorage.getItem('rr_timing'); if (tf === 'tight' || tf === 'classic') timingFeel = tf; }
+  } catch (e) {}
+  const TIMING_PROFILES = {
+    classic: { winScale: 1.00, perfFrac: 0.30, greatFrac: 0.60, comboStep: 12, comboCap: 3 },
+    tight:   { winScale: 1.00, perfFrac: 0.22, greatFrac: 0.47, comboStep: 10, comboCap: 5 },
+  };
+  function timingProf() { return TIMING_PROFILES[timingFeel] || TIMING_PROFILES.classic; }
 
   // Scoring: base per-hit is LOW; the combo multiplier (1x–3x) and Overdrive (x2,
   // capped at 4x total) scale it up. Max per note = 375 * 4 = 1500, so the total
@@ -1088,8 +1102,10 @@
   }
   // current score multiplier (combo tier + overdrive), shared by taps and sustains
   function curMult() {
-    const ct = Math.min(3, 1 + Math.floor(combo / 12));
-    return Math.min(MAX_MULT, odActive ? ct + 1 : ct);
+    const _tp = timingProf();
+    const ct = Math.min(_tp.comboCap, 1 + Math.floor(combo / _tp.comboStep));
+    const cap = _tp.comboCap + 1;                       // overdrive adds one tier above the base cap
+    return Math.min(odActive ? cap : _tp.comboCap, odActive ? ct + 1 : ct);
   }
   // sustain reached its tail end while held — pay any remaining fraction + a release pop
   function completeHold(lane) {
@@ -1246,7 +1262,8 @@
       const refresh = () => { midiInputs = []; access.inputs.forEach(i => midiInputs.push(i.name || 'MIDI device')); };
       const bind = (input) => { input.onmidimessage = (msg) => {
         const d = msg.data || []; const cmd = d[0] & 0xf0, vel = d[2] || 0;
-        if (cmd === 0x90 && vel > 0) onLaneInput(laneFromMidi(d[1]), 'midi');
+        // msg.timeStamp is DOMHighResTimeStamp (same clock as performance.now) — feed the real lag.
+        if (cmd === 0x90 && vel > 0) onLaneInput(laneFromMidi(d[1]), 'midi', (msg.timeStamp || performance.now()));
       }; };
       access.inputs.forEach(bind); refresh();
       access.onstatechange = (e) => { if (e.port && e.port.type === 'input' && e.port.state === 'connected') bind(e.port); refresh(); };
@@ -1271,7 +1288,7 @@
         if (pressed && !was) {
           if (padRebindLane != null) { const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue; }
           const lane = padMap[b];
-          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad'); }
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }
         } else if (!pressed && was) {
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) onLaneRelease(lane);
@@ -1325,10 +1342,13 @@
     }
 
     const ad = targetDiff;
+    const _tp = timingProf();
     let kind;
-    if (ad < diff.hitWindow * 0.30) kind = 'perfect';
-    else if (ad < diff.hitWindow * 0.60) kind = 'great';
+    if (ad < diff.hitWindow * _tp.perfFrac) kind = 'perfect';
+    else if (ad < diff.hitWindow * _tp.greatFrac) kind = 'great';
     else kind = 'good';
+    // signed timing error (sec): >0 = pressed LATE, <0 = pressed EARLY. Drives the early/late tick.
+    const _signed = t - target.time;
 
     target.judged = true; target.hit = kind;
     counts[kind]++; combo++; if (combo > maxCombo) maxCombo = combo;
@@ -1343,8 +1363,10 @@
       flashJudgment(combo + (big ? ' STREAK!!' : ' STREAK'), big ? '#fff2cd' : '#ffe08a');
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
     }
-    const comboTier = Math.min(3, 1 + Math.floor(combo / 12));        // 1..3 from combo
-    const mult = Math.min(MAX_MULT, odActive ? comboTier + 1 : comboTier); // Overdrive = +1 tier (caps at 4)
+    const _tpM = timingProf();
+    const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _tpM.comboStep));
+    const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
+    const mult = Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier);
     score += JUDGE[kind].score * mult;
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
@@ -1354,6 +1376,7 @@
     stability = Math.min(1.0, stability + 0.01);
     spawnHitParticles(lane, kind);
     flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
+    flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane);
     // a struck hold note becomes an active sustain — it keeps paying out (and the
     // string keeps ringing) for as long as this lane stays pressed (see loop()).
@@ -1469,6 +1492,22 @@
     el.textContent = text; el.style.color = color;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
+  // tiny EARLY / LATE hint under the judgment popup. _signed > 0 = LATE, < 0 = EARLY (seconds).
+  // Perfects are dead-on → no tick. Suppressed when the hint setting is off. NEVER affects scoring.
+  let timingHint = true;
+  try { const th = localStorage.getItem('rr_timinghint'); if (th === '0') timingHint = false; } catch (e) {}
+  function flashTiming(kind, signed) {
+    const el = $('timing-tick'); if (!el) return;
+    if (!timingHint || kind === 'perfect') { el.classList.remove('show'); return; }
+    const late = signed > 0;
+    const ms = Math.round(Math.abs(signed) * 1000);
+    el.textContent = late ? ('LATE ◂ ' + ms + 'ms') : ('▸ EARLY ' + ms + 'ms');
+    el.style.color = late ? '#dad7d2' : '#ff7a4a';   // chrome = late, ember = early (brand)
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  }
+  window.RhythmGame.setTimingHint = (on) => { timingHint = !!on; try { localStorage.setItem('rr_timinghint', on ? '1' : '0'); } catch (e) {} return timingHint; };
+  window.RhythmGame.setTimingFeel = (f) => { if (f === 'tight' || f === 'classic') { timingFeel = f; try { localStorage.setItem('rr_timing', f); } catch (e) {} } return timingFeel; };
+  window.RhythmGame.getTimingFeel = () => timingFeel;
 
   // ---------- HUD ----------
   function updateHUD() {
@@ -1483,9 +1522,11 @@
     $('m-combo').textContent = combo;
     $('m-acc').textContent = acc.toFixed(0) + '%';
     // live multiplier gauge — reflects the actual score multiplier (combo + overdrive)
-    const comboTier = Math.min(3, 1 + Math.floor(combo / 12));
-    const tier = Math.min(MAX_MULT, odActive ? comboTier + 1 : comboTier);
-    const within = odActive ? overdrive : (combo >= 36 ? 1 : (combo % 12) / 12);
+    const _tpH = timingProf();
+    const comboTier = Math.min(_tpH.comboCap, 1 + Math.floor(combo / _tpH.comboStep));
+    const tier = Math.min(odActive ? _tpH.comboCap + 1 : _tpH.comboCap, odActive ? comboTier + 1 : comboTier);
+    const _atCap = combo >= _tpH.comboStep * _tpH.comboCap;
+    const within = odActive ? overdrive : (_atCap ? 1 : (combo % _tpH.comboStep) / _tpH.comboStep);
     const mb = $('mult-badge'); if (mb) mb.textContent = tier + 'x';
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
     // overdrive gauge
@@ -1534,6 +1575,7 @@
     if (state === 'paused') { render(dt, true); return; }
     if (state !== 'playing') return;
 
+    pollGamepad();              // poll at frame-top so a controller/guitar press is judged this frame
     const t = songTime();
     const jt = t - audioOffset;
     const diff = DIFFICULTY[difficulty];
@@ -1624,7 +1666,7 @@
       else scoreDisplay += (score - scoreDisplay) * Math.min(1, dt * 14);
       const el = $('hud-score'); if (el) el.textContent = Math.floor(scoreDisplay).toLocaleString();
     }
-    pollGamepad();
+    // (gamepad now polled at frame-top — see loop start)
     // drain overdrive while active; meter empties over the duration, then ends
     if (odActive) {
       odTimer -= dt;
@@ -2648,6 +2690,8 @@
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
     { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
+    { const tg = $('set-timing'); if (tg) [...tg.children].forEach(b => b.classList.toggle('active', b.dataset.timing === window.RhythmGame.getTimingFeel())); }
+    { const th = $('set-timinghint'); if (th) { const on = (localStorage.getItem('rr_timinghint') !== '0'); [...th.children].forEach(b => b.classList.toggle('active', (b.dataset.thint === 'on') === on)); } }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
     { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.classList.toggle('active', b.dataset.lanemode === laneProfile)); }
     renderKeycaps(); renderPadcaps(); updateInputsStatus(); renderDeviceStatus();
@@ -2694,6 +2738,14 @@
   { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.addEventListener('click', () => {
     [...cf.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ chartMode: b.dataset.chart });
+  })); }
+  { const tg = $('set-timing'); if (tg) [...tg.children].forEach(b => b.addEventListener('click', () => {
+    [...tg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.setTimingFeel(b.dataset.timing);
+  })); }
+  { const th = $('set-timinghint'); if (th) [...th.children].forEach(b => b.addEventListener('click', () => {
+    [...th.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.setTimingHint(b.dataset.thint === 'on');
   })); }
   { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.addEventListener('click', () => {
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');

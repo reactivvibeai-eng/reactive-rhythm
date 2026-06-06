@@ -774,7 +774,12 @@
     }
     // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
     // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.
-    if (API_BASE && currentTrack && currentTrack.id && currentTrack.id !== 'demo'
+    // Tight (GH) timing feel raises the multiplier ceiling above the server's score bound, so
+    // Tight runs are LOCAL PRACTICE ONLY — recorded locally (above) but never submitted to /score.
+    var _tightRun = false; try { _tightRun = !!(window.RhythmGame && window.RhythmGame.getTimingFeel && window.RhythmGame.getTimingFeel() === 'tight'); } catch (e) {}
+    if (_tightRun && API_BASE && currentTrack && currentTrack.id !== 'demo' && results.score > 0 && !hasServerChart(currentTrack)) {
+      onSubmitResult({ error: 'practice' }, results);
+    } else if (API_BASE && currentTrack && currentTrack.id && currentTrack.id !== 'demo'
         && results.score > 0 && !hasServerChart(currentTrack)) {
       (async () => {
         const tk = await getToken();
