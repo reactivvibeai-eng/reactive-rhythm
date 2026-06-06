@@ -35,6 +35,52 @@
     } catch (e) { return null; }
   }
 
+  // ---------- identity + Sparks shell seams (read-only; real /sparks API later) ----------
+  // ONE source of truth for "who is signed in" — reads the SHARED website supabase-js session
+  // (same client `supa` used by getToken). Stays null/guest when supabase-js or config absent.
+  async function getUser() {
+    if (!supa) return null;
+    try {
+      const { data } = await supa.auth.getUser();
+      const u = data && data.user;
+      if (!u) return null;
+      const m = u.user_metadata || {};
+      const name = m.display_name || m.full_name || m.name
+        || (u.email ? u.email.split('@')[0] : null) || 'Player';
+      return { id: u.id, name: name, email: u.email || null, avatar_url: m.avatar_url || null };
+    } catch (e) { return null; }
+  }
+
+  // Subscribe to login/logout so the header chip updates live. Returns an unsubscribe fn (or noop).
+  function onAuthChange(cb) {
+    if (!supa || typeof cb !== 'function') return function () {};
+    try {
+      const { data } = supa.auth.onAuthStateChange(function () { try { cb(); } catch (e) {} });
+      return function () { try { data.subscription.unsubscribe(); } catch (e) {} };
+    } catch (e) { return function () {}; }
+  }
+
+  // SPARKS balance. STUB today: returns a locally-cached number (default 0) so the chip renders.
+  // SEAM: when the backend ships `GET /sparks` (auth'd), flip USE_SPARKS_API = true — the method
+  // already calls api('/sparks', { auth:true }) and caches the result. No UI change needed.
+  const USE_SPARKS_API = false;
+  function loadSparksCache() { try { const v = parseInt(localStorage.getItem('rr_sparks') || '0', 10); return isNaN(v) ? 0 : v; } catch (e) { return 0; } }
+  function saveSparksCache(n) { try { localStorage.setItem('rr_sparks', String(n | 0)); } catch (e) {} }
+  async function getSparks() {
+    if (USE_SPARKS_API && API_BASE) {
+      try {
+        const tk = await getToken();
+        if (tk) {
+          const out = await api('/sparks', { auth: true });           // { balance: <int> }
+          const bal = (out && typeof out.balance === 'number') ? out.balance : loadSparksCache();
+          saveSparksCache(bal);
+          return bal;
+        }
+      } catch (e) { /* fall through to cache */ }
+    }
+    return loadSparksCache();   // stub path (current behavior)
+  }
+
   // ---------- API client ----------
   async function api(path, { method = 'GET', body = null, auth = false } = {}) {
     const headers = { 'content-type': 'application/json' };
@@ -743,6 +789,8 @@
 
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
+    // identity + Sparks shell (UI reads these; real /sparks API later)
+    getUser, onAuthChange, getSparks,
     fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
