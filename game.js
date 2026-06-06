@@ -2276,10 +2276,19 @@
       ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
       // fade the headstock (top of the guitar) into the moon so the neck top doesn't hard-cut
       ctx.save(); ctx.globalCompositeOperation = 'destination-out';
-      const fadeTop = gr.gy, fadeBot = gr.gy + gr.gh * 0.20;
+      // gh cover-fit crops the headstock off-screen → fade the top of the SCREEN into the moon (neck dissolves at the top edge)
+      const coverFit = (ART.fit === 'cover');
+      const fadeTop = coverFit ? -4 : gr.gy, fadeBot = coverFit ? ch * 0.22 : (gr.gy + gr.gh * 0.20);
       const nf = ctx.createLinearGradient(0, fadeTop, 0, fadeBot);
       nf.addColorStop(0, 'rgba(0,0,0,1)'); nf.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = nf; ctx.fillRect(0, fadeTop - 4, cw, (fadeBot - fadeTop) + 8); ctx.restore();
+      // gh: a soft glowing spawn band where notes emerge from the fade (the strings "light up" at the far end)
+      if (coverFit) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const sg2 = ctx.createLinearGradient(0, ch * 0.16, 0, ch * 0.34);
+        sg2.addColorStop(0, 'rgba(255,70,60,0)'); sg2.addColorStop(0.45, 'rgba(255,95,72,0.13)'); sg2.addColorStop(1, 'rgba(255,70,60,0)');
+        ctx.fillStyle = sg2; ctx.fillRect(0, ch * 0.16, cw, ch * 0.18); ctx.restore();
+      }
       // OVERDRIVE / combo SCAN — an additive amber→crimson band sweeps up the guitar (GH Star-Power wash)
       if (scanT > 0) {
         const fg = fretGeom();
