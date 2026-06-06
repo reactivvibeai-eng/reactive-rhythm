@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=72" />
+<link rel="stylesheet" href="jukebox.css?v=73" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -553,6 +553,51 @@
   .lbd-res-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-res-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); }
   @media (max-width: 560px) { .lbd-title { font-size: 36px; } .lbd-board .lb-row { grid-template-columns: 38px 1fr auto auto; gap: 10px; font-size: 12px; } }
+  /* ---- STORE overlay (Sparks shop) — mirrors leaderboard overlay; brand crimson/ember/gold ---- */
+  .store-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
+  .screen.active .store-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .store-card { width: min(720px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 10px; text-align: center; }
+  .store-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
+  .store-balrow { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .store-bal { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 13px; border-radius: 999px; background: linear-gradient(180deg, rgba(255,31,46,0.12), rgba(163,6,15,0.10)); border: 1px solid rgba(255,31,46,0.42); box-shadow: inset 0 0 0 1px rgba(255,122,74,0.10); }
+  .store-bal .spk-glyph { width: 17px; height: 17px; flex: none; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 4px rgba(255,122,74,0.6)); }
+  .store-bal-val { font-family: 'Oxanium', monospace; font-weight: 800; font-size: 18px; color: var(--chrome); line-height: 1; font-variant-numeric: tabular-nums; }
+  .store-bal-label { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
+  .store-bal[data-state="guest"] { opacity: 0.55; border-color: var(--line); background: rgba(255,255,255,0.03); box-shadow: none; }
+  .store-bal[data-state="guest"] .spk-glyph { color: var(--ink-dim); filter: none; }
+  .store-bal[data-state="guest"] .store-bal-val { color: var(--ink-dim); }
+  .store-getmore { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 18px; border-radius: 999px; cursor: pointer; font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #1a0608; background: linear-gradient(180deg, #ffb35a, #e0a93f); border: none; box-shadow: 0 6px 20px rgba(224,169,63,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: box-shadow 0.15s ease, transform 0.1s ease; }
+  .store-getmore:hover, .store-getmore:focus-visible { box-shadow: 0 8px 26px rgba(224,169,63,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
+  .store-getmore:active { transform: translateY(1px); }
+  .store-getmore svg { width: 15px; height: 15px; }
+  .store-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.5; color: #e0a93f; border: 1px solid rgba(224,169,63,0.4); background: rgba(224,169,63,0.06); border-radius: 12px; padding: 10px 14px; }
+  .store-banner b { color: #e0a93f; font-weight: 700; }
+  .store-banner a { color: var(--crimson); font-weight: 700; text-decoration: none; }
+  .store-grid { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; min-height: 60px; }
+  .store-item { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.02); text-align: left; transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
+  .store-item:hover { transform: translateY(-3px); border-color: var(--crimson); box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(255,31,46,0.22); }
+  .store-art { position: relative; aspect-ratio: 16/10; width: 100%; background: linear-gradient(150deg, var(--si-a, #2a0a10), var(--si-b, #120407)); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .store-art img { width: 100%; height: 100%; object-fit: cover; }
+  .store-art .si-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 40px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 14px rgba(0,0,0,0.55); }
+  .store-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 72% 16%, rgba(255,122,74,0.20), transparent 60%); pointer-events: none; }
+  .store-type { position: absolute; top: 8px; left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--chrome); background: rgba(8,5,5,0.6); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; }
+  .store-item.owned .store-art { filter: saturate(0.85); }
+  .store-item.owned .store-art::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px rgba(224,169,63,0.5); pointer-events: none; z-index: 1; }
+  .store-body { display: flex; flex-direction: column; gap: 4px; padding: 12px 13px 13px; flex: 1; }
+  .store-item-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14px; color: var(--ink); line-height: 1.2; }
+  .store-item-d { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); line-height: 1.5; min-height: 15px; }
+  .store-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 10px; }
+  .store-price { display: inline-flex; align-items: center; gap: 5px; font-family: 'Oxanium', monospace; font-weight: 800; font-size: 15px; color: var(--chrome); font-variant-numeric: tabular-nums; }
+  .store-price .spk-glyph { width: 13px; height: 13px; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 3px rgba(255,122,74,0.6)); }
+  .store-buy { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border: none; border-radius: 10px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(255,31,46,0.35); transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease; }
+  .store-buy:hover, .store-buy:focus-visible { box-shadow: 0 6px 20px rgba(255,31,46,0.5); }
+  .store-buy:active { transform: translateY(1px); }
+  .store-buy[disabled] { cursor: default; opacity: 0.6; }
+  .store-buy.is-busy { opacity: 0.7; cursor: progress; }
+  .store-buy.owned { background: transparent; color: #e0a93f; border: 1px solid rgba(224,169,63,0.5); box-shadow: none; cursor: default; }
+  .store-buy.getmore { background: linear-gradient(180deg, #ffb35a, #e0a93f); color: #1a0608; box-shadow: 0 4px 14px rgba(224,169,63,0.35); }
+  .store-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  @media (max-width: 560px) { .store-title { font-size: 36px; } .store-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
   .lv-ring { position: relative; width: 72px; height: 72px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; }
@@ -1885,6 +1930,9 @@
           <button class="icon-btn" id="leaderboard-open" aria-label="Leaderboards">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg>
           </button>
+          <button class="icon-btn" id="store-open" aria-label="Store">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v1a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0V6l-3-4z"></path><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5"></path><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"></path></svg>
+          </button>
         </div>
       </header>
 
@@ -2210,6 +2258,33 @@
       </div>
 
       <button class="ghost-btn primary" id="leaderboard-close" style="margin-top:18px;min-width:200px;">DONE</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       STORE — Sparks shop (GET /store grid · POST /sparks/spend · Get Sparks deep-link)
+       Mirrors the leaderboard overlay. Pack->content gating is backend-pending
+       (Lovable adds meta.linked_pack_id); for now this shows + spends + flips Owned.
+       ============================================================ -->
+  <div class="screen store-screen" id="store-screen">
+    <div class="store-card">
+      <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// SPARKS SHOP</div>
+      <h2 class="store-title">STORE</h2>
+      <div class="store-balrow">
+        <div class="store-bal" id="store-bal" data-state="guest">
+          <svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>
+          <span class="store-bal-val" id="store-bal-val">—</span>
+          <span class="store-bal-label">Sparks</span>
+        </div>
+        <button class="store-getmore" id="store-getmore">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Get Sparks
+        </button>
+      </div>
+      <div class="store-banner" id="store-banner" hidden></div>
+      <div class="store-grid" id="store-grid"></div>
+      <p class="store-empty" id="store-empty" hidden>The shop is restocking — check back soon.</p>
+      <button class="ghost-btn primary" id="store-close" style="margin-top:18px;min-width:200px;">DONE</button>
     </div>
   </div>
 
@@ -2736,9 +2811,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=72"></script>
-<script src="jukebox.js?v=72"></script>
-<script src="catalog.js?v=72"></script>
+<script src="game.js?v=73"></script>
+<script src="jukebox.js?v=73"></script>
+<script src="catalog.js?v=73"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3188,6 +3263,175 @@
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
   }, true);
+})();
+</script>
+
+<!-- STORE — Sparks shop overlay (reads RhythmCatalog.getStore / getEntitlements / spendSparks) -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var screen = $('store-screen'); if (!screen) return;
+  var RC = function () { return window.RhythmCatalog; };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function fmt(n) { return Number(n || 0).toLocaleString(); }
+  function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
+  function toast(m) { try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast(m); } catch (e) {} }
+  var SPARK_SVG = '<svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>';
+  var SITE_SPARKS = 'https://reactivvibeai.com/live?sparks=open';
+
+  var items = [], balance = 0, signedIn = false, owns = {}, busy = false;
+
+  function typeLabel(t) { var m = { pack: 'Pack', level: 'Boss', addon: 'Theme', boss: 'Boss', theme: 'Theme' }; return m[String(t || '').toLowerCase()] || (t ? String(t) : 'Item'); }
+  function blurb(it) {
+    if (it.meta && it.meta.description) return String(it.meta.description);
+    var t = String(it.item_type || '').toLowerCase();
+    if (t === 'pack') return 'Track pack — unlocks on link';
+    if (t === 'level' || t === 'boss') return 'Boss level';
+    if (t === 'addon' || t === 'theme') return 'Visual theme';
+    return '';
+  }
+  function ownKey(it) { return String(it.item_type) + ':' + String(it.item_id); }
+  function isOwned(it) { return !!it.owned || !!owns[ownKey(it)]; }
+
+  function banner(html) {
+    var b = $('store-banner'); if (!b) return;
+    if (html) { b.innerHTML = html; b.hidden = false; } else { b.hidden = true; b.innerHTML = ''; }
+  }
+  function setBalance(n) {
+    balance = n | 0;
+    var v = $('store-bal-val'); if (v) v.textContent = signedIn ? fmt(balance) : '—';
+    var bal = $('store-bal'); if (bal) bal.setAttribute('data-state', signedIn ? 'on' : 'guest');
+    try { if (window.__rrSparksRefresh) window.__rrSparksRefresh(); } catch (e) {}
+  }
+
+  function artHtml(it) {
+    var img = it.meta && (it.meta.art_url || it.meta.image || it.meta.image_url || it.meta.cover_url);
+    if (img) return '<img src="' + esc(img) + '" alt="" onerror="this.parentNode.innerHTML=\'<span class=&quot;si-initial&quot;>' + esc(initial(it.title)) + '</span>\'">';
+    return '<span class="si-initial">' + esc(initial(it.title)) + '</span>';
+  }
+
+  function buyBtnHtml(it) {
+    if (isOwned(it)) return '<button class="store-buy owned" disabled>Owned</button>';
+    if (!signedIn) return '<button class="store-buy" data-act="signin">Sign in</button>';
+    return '<button class="store-buy" data-act="buy" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '">Buy</button>';
+  }
+
+  function itemHtml(it) {
+    var owned = isOwned(it);
+    return '<div class="store-item' + (owned ? ' owned' : '') + '" data-key="' + esc(ownKey(it)) + '">' +
+      '<div class="store-art">' + artHtml(it) + '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span></div>' +
+      '<div class="store-body">' +
+        '<div class="store-item-t">' + esc(it.title || it.item_id || 'Item') + '</div>' +
+        '<div class="store-item-d">' + esc(blurb(it)) + '</div>' +
+        '<div class="store-foot">' +
+          '<span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>' +
+          buyBtnHtml(it) +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function render() {
+    var grid = $('store-grid'), empty = $('store-empty');
+    if (!items.length) { grid.innerHTML = ''; empty.hidden = false; return; }
+    empty.hidden = true;
+    grid.innerHTML = items.map(itemHtml).join('');
+    if (!signedIn) banner('Browsing as a guest. <b>Sign in on ReactivVibe</b> to spend Sparks and keep your unlocks.');
+    else banner(null);
+    wireBuys();
+  }
+
+  function wireBuys() {
+    var btns = $('store-grid').querySelectorAll('.store-buy');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener('click', function () {
+        var act = this.getAttribute('data-act');
+        if (act === 'signin') { openSite('https://reactivvibeai.com'); return; }
+        if (act === 'getmore') { openGetSparks(); return; }
+        if (act === 'buy') buy(this);
+      });
+    }
+  }
+
+  function openSite(url) { try { window.open(url, '_blank', 'noopener'); } catch (e) {} }
+  function openGetSparks() { pendingTopup = true; openSite(SITE_SPARKS); }
+
+  function toGetMore(btn) {
+    btn.className = 'store-buy getmore'; btn.removeAttribute('disabled'); btn.classList.remove('is-busy');
+    btn.textContent = 'Get Sparks'; btn.setAttribute('data-act', 'getmore');
+  }
+
+  async function buy(btn) {
+    if (busy) return; busy = true;
+    var type = btn.getAttribute('data-type'), id = btn.getAttribute('data-id');
+    btn.classList.add('is-busy'); btn.setAttribute('disabled', ''); var label = btn.textContent; btn.textContent = '…';
+    var C = RC();
+    if (!C || !C.spendSparks) { busy = false; btn.classList.remove('is-busy'); btn.removeAttribute('disabled'); btn.textContent = label; toast('Store unavailable'); return; }
+    var res = await C.spendSparks(type, id);
+    busy = false;
+    if (res && res.ok) {
+      if (typeof res.balance === 'number') setBalance(res.balance);
+      owns[type + ':' + id] = true;
+      var card = $('store-grid').querySelector('.store-item[data-key="' + (type + ':' + id) + '"]');
+      if (card) { card.classList.add('owned'); var foot = card.querySelector('.store-foot'); if (foot) { var ob = foot.querySelector('.store-buy'); if (ob) ob.outerHTML = '<button class="store-buy owned" disabled>Owned</button>'; } }
+      toast(res.deduped ? 'Already owned' : 'Unlocked!');
+      refreshEntitlements();
+      return;
+    }
+    btn.classList.remove('is-busy'); btn.removeAttribute('disabled'); btn.textContent = label;
+    var err = res && res.error;
+    if (err === 'insufficient_sparks') { toGetMore(btn); toast('Not enough Sparks — top up to unlock'); }
+    else if (err === 'price_mismatch') { toast('Prices updated — refreshing'); load(); }
+    else if (err === 'not-authed') { toast('Sign in to spend Sparks'); openSite('https://reactivvibeai.com'); }
+    else { toast('Purchase failed — try again'); }
+  }
+
+  async function refreshEntitlements() {
+    var C = RC(); if (!C || !C.getEntitlements) return;
+    try {
+      var e = await C.getEntitlements();
+      owns = {};
+      (e.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; });
+      if (screen.classList.contains('active')) render();
+    } catch (e) {}
+  }
+
+  async function load() {
+    var grid = $('store-grid'), empty = $('store-empty');
+    grid.innerHTML = '<div class="store-empty" style="grid-column:1/-1">Loading shop…</div>'; empty.hidden = true;
+    var C = RC();
+    if (!C || !C.getStore) { items = []; signedIn = false; setBalance(0); render(); return; }
+    try {
+      var out = await C.getStore();
+      items = out.items || [];
+      signedIn = !!out.signed_in;
+      try { var e = C.getEntitlements ? await C.getEntitlements() : { owns: [] }; owns = {}; (e.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; }); } catch (e2) {}
+      setBalance(typeof out.balance === 'number' ? out.balance : 0);
+      render();
+    } catch (e) { items = []; render(); }
+  }
+
+  var pendingTopup = false;
+  function recheckBalance() {
+    if (!pendingTopup) return; pendingTopup = false;
+    var C = RC(); if (!C || !C.getSparks) return;
+    Promise.resolve(C.getSparks()).then(function (b) { if (typeof b === 'number') setBalance(b); }).catch(function () {});
+  }
+  window.addEventListener('focus', recheckBalance);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) recheckBalance(); });
+
+  function open() { load(); screen.classList.add('active'); }
+  function close() { screen.classList.remove('active'); }
+
+  var ob = $('store-open'); if (ob) ob.addEventListener('click', open);
+  var cb = $('store-close'); if (cb) cb.addEventListener('click', close);
+  var gm = $('store-getmore'); if (gm) gm.addEventListener('click', openGetSparks);
+  screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+  }, true);
+
+  try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openStore = open; } catch (e) {}
 })();
 </script>
 

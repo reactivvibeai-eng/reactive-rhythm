@@ -93,6 +93,60 @@
     return loadSparksCache();   // logged-out / backend hiccup → last cached value
   }
 
+  // ---------- STORE / entitlements seams (LIVE: Lovable GET /store, GET /entitlements,
+  // POST /sparks/spend). All graceful when logged-out / backend dormant — never throw. ----------
+  function rrUuid() {
+    try {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+      if (window.crypto && window.crypto.getRandomValues) {
+        const b = new Uint8Array(16); window.crypto.getRandomValues(b);
+        b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+        const h = []; for (let i = 0; i < 16; i++) h.push((b[i] + 0x100).toString(16).slice(1));
+        return h[0]+h[1]+h[2]+h[3]+'-'+h[4]+h[5]+'-'+h[6]+h[7]+'-'+h[8]+h[9]+'-'+h[10]+h[11]+h[12]+h[13]+h[14]+h[15];
+      }
+    } catch (e) {}
+    return 'rr-' + Date.now().toString(16) + '-' + Math.random().toString(16).slice(2, 10);
+  }
+  // GET /store -> { items:[…], balance, signed_in }. Logged-out → prices still visible. Safe empty on error.
+  async function getStore() {
+    if (!API_BASE) return { items: [], balance: loadSparksCache(), signed_in: false };
+    try {
+      const out = await api('/store', { auth: true });
+      if (out && typeof out.balance === 'number') saveSparksCache(out.balance);
+      return {
+        items: Array.isArray(out && out.items) ? out.items : [],
+        balance: (out && typeof out.balance === 'number') ? out.balance : loadSparksCache(),
+        signed_in: !!(out && out.signed_in),
+      };
+    } catch (e) { return { items: [], balance: loadSparksCache(), signed_in: false }; }
+  }
+  // GET /entitlements -> { signed_in, owns:[{item_type,item_id}] }. Safe empty when dormant.
+  async function getEntitlements() {
+    if (!API_BASE) return { signed_in: false, owns: [] };
+    try {
+      const out = await api('/entitlements', { auth: true });
+      return { signed_in: !!(out && out.signed_in), owns: Array.isArray(out && out.owns) ? out.owns : [] };
+    } catch (e) { return { signed_in: false, owns: [] }; }
+  }
+  // POST /sparks/spend { item_type, item_id, idempotency_key } -> {ok,balance,granted,deduped}
+  // 402 insufficient_sparks · 409 price_mismatch. Returns a normalized result the UI branches on.
+  async function spendSparks(item_type, item_id) {
+    if (!API_BASE) return { ok: false, error: 'no-api' };
+    const tk = await getToken();
+    if (!tk) return { ok: false, error: 'not-authed' };
+    const body = { item_type, item_id, idempotency_key: rrUuid() };
+    try {
+      const out = await api('/sparks/spend', { method: 'POST', body, auth: true });
+      if (out && typeof out.balance === 'number') saveSparksCache(out.balance);
+      return { ok: !!(out && out.ok), balance: out && out.balance, granted: out && out.granted, deduped: !!(out && out.deduped) };
+    } catch (e) {
+      const msg = String((e && e.message) || '');
+      if (/\b402\b|insufficient/i.test(msg)) return { ok: false, error: 'insufficient_sparks' };
+      if (/\b409\b|price_mismatch/i.test(msg)) return { ok: false, error: 'price_mismatch' };
+      return { ok: false, error: 'spend_failed', detail: msg };
+    }
+  }
+
   // ---------- API client ----------
   async function api(path, { method = 'GET', body = null, auth = false } = {}) {
     const headers = { 'content-type': 'application/json' };
@@ -811,6 +865,8 @@
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks,
+    // store / entitlements (LIVE: GET /store, GET /entitlements, POST /sparks/spend)
+    getStore, getEntitlements, spendSparks,
     fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
