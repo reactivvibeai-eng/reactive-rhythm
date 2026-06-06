@@ -52,10 +52,12 @@ then CLAUDE.md (constraints) + the WS sections below. Quick orientation:
 - **Verify visuals via OFFLINE PowerShell renders** (System.Drawing → PNG → Read) replicating the game math —
   live-canvas screenshots TIME OUT. DOM (HUD/jukebox) is checkable via preview_inspect/snapshot. `node --check
   game.js` after every JS edit. Bump `?v=NN` in index.html on every JS/CSS edit. Commit small per increment.
-- **THE PENDING DECISION (ask user / they were choosing):** next build is either (1) **WS4 audio-reactive
-  WAVEFORM on the Browse page** (additive, lower-risk), or (2) **more NOTE-TYPE VARIETY in gameplay** (HOPOs /
-  open notes / double-notes / trills — GH-style) which is GAMEPLAY SURGERY on buildNotes+render+hit-detection,
-  MUST be flag-gated + USER PLAYTESTS each (gameplay currently "feels good" — don't destabilize blind).
+- **DECISION MADE (user chose "Both — waveform first"):** WS4 audio-reactive waveform is now **DONE (v66)**.
+  NEXT BUILD = (2) **NOTE-TYPE VARIETY in gameplay** (HOPOs / open notes / double-notes / trills — GH-style).
+  This is GAMEPLAY SURGERY on buildNotes+render+hit-detection: it MUST be **flag-gated** and the **USER MUST
+  PLAYTEST each addition** (gameplay currently "feels good" — don't destabilize blind). Add one note type at a
+  time behind a flag, keep standard 6-string byte-identical by default, and ship nothing to live until the user
+  confirms feel. Research report #2 (overnight `…/tasks/w68ot6ks8.output`) covers HOPO/scoring rules.
 - **Image gen IS connected:** `mcp__357d4c14…__generate_image` (use `get_cost:true` to preflight + show user
   before spending). Approach = procedural-first (CSS+Canvas); generate textures only where they truly help.
 - **Research (4 full reports):** `…/tasks/wpeulou1g.output` — perspective[applied], HUD/UI, song-select, combo-FX.
@@ -89,18 +91,34 @@ the live site / Lovable until user says — what's deployed works well. All over
   pass — see research report #2 (HUD/UI) in the workflow output.
   v63-65 also added: combo number BLACK OUTLINE (readable over guitar), and a faint screen-space SCANLINE on
   `.game-screen` (CRT game feel).
-- **WS4 Browse/Jukebox = barely started (v64):** living shimmer + aura on the FOCUSED coverflow cover
-  (`.jb-cover.is-center .cover-card::after`, reactive feel). REMAINING + user-requested: **audio-reactive
-  WAVEFORM on the browse page** (driven by the song-preview audio — main ask, "keep it reactive"), momentum-
-  scroll feel, the genres/artists tiles + all-songs LIST polish (user says those read "weak/AI"). Coverflow has
-  good bones (3D, motion-blur, center bloom) — enhance, don't rebuild. Research report #3 (song-select).
+- **WS4 Browse/Jukebox:** living shimmer + aura on the FOCUSED coverflow cover (`.jb-cover.is-center
+  .cover-card::after`, v64). **AUDIO-REACTIVE WAVEFORM = DONE (v66):** the old `.jb-eq` faux equalizer (12 spans
+  driven by `Math.random()`) is replaced by a `<canvas id="jb-wave">` rendered by a real-FFT loop in jukebox.js
+  (`waveLoop`). catalog.js now routes the preview `<audio>` through WebAudio (`MediaElementSource → AnalyserNode`
+  full-amplitude tap + `→ GainNode → destination` for audible level; `crossOrigin='anonymous'` so cross-origin
+  FFT works — same Supabase storage already serves CORS for charting). New exports `RhythmCatalog.previewSpectrum/
+  previewBinCount/previewPlaying`. The waveform is a symmetric butterfly (bass center, treble edges, crimson→ember
+  + glow + center seam) that REACTS to the actual preview; gentle procedural idle fallback when no audio is
+  flowing. **Escape hatch `?notap=1` / `localStorage.rr_notap='1'`** disables the tap if a real track's preview
+  ever goes silent (audio then plays via element volume, waveform idles) — USER should playtest that previews
+  still sound on live tracks. Verified: node-valid, zero console errors, v66 served, canvas+exports present, draw
+  correctly gated to the active jukebox view; math + look confirmed via offline PowerShell render. REMAINING (WS4):
+  momentum-scroll feel; genres/artists tiles + all-songs LIST polish (read "weak/AI"). Coverflow has good bones —
+  enhance, don't rebuild. Research report #3 (song-select).
+  ⚠️ **Headless verify note:** the page can't fully boot in the sandbox preview — index.html loads hls.js +
+  supabase-js from jsdelivr CDN as blocking `<script>` (lines ~2519-2520) BEFORE the local scripts; with no
+  internet those hang and the parser stalls at `readyState:loading` (so `window.RhythmGame/RhythmCatalog` never
+  define). Structural/DOM checks + node --check + offline renders are the reliable path; full runtime needs the
+  user's machine. Also: in preview_eval, NEVER `location.replace(...)` from the loaded app (it hangs the eval
+  context) — restart the server and assign `location.href` instead.
 - **WS2 also got (v65):** combo-reactive flowing ENERGY TEXTURE on the guitar (2 warm bands, brighter/faster
   with combo tier — `combo`/`cTier` in render). WS2 still wants: per-tier DISTINCT combo effects + the GH-style
   NOTE-TYPE VARIETY (the user's gameplay ask — see PENDING DECISION up top; flag-gated + playtested).
 - **WS5 Design System = NOT STARTED.**
-- **Tasks tracked** (TaskList #1-5). **?v at 65.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **Tasks tracked** (TaskList #1-5). **?v at 66.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
-  scanline) → 1b...(v65 convergence+combo-outline+combo-texture). All clean, node-checked.
+  scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → v66(WS4 audio-reactive waveform).
+  All clean, node-checked.
 
 ## (pre-overhaul history)
 - **?v at 55.** Version history: 47→48 profile system; 49 = gh transparency key-out + tap-zone trim;

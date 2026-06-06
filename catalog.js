@@ -436,6 +436,54 @@
 
   // ---------- preview player (short clip when a song is focused) ---------------
   let previewEl = null, previewToken = 0, previewTrackId = null, previewStart = 0;
+  // ---------- preview spectrum tap (drives the live browse waveform) -----------
+  // Route the preview <audio> through WebAudio so the song-select waveform reacts to
+  // the ACTUAL audio (real FFT), not a faux animation. The AnalyserNode taps the
+  // FULL-amplitude source (punchy visuals); a GainNode carries the audible signal at
+  // a gentle level (so the fade works even on browsers that ignore element.volume once
+  // an element is routed through WebAudio). Cross-origin FFT needs crossOrigin +
+  // CORS — the same Supabase storage already serves CORS fetch+decode for charting,
+  // and the demo asset is same-origin, so the tap is safe. Escape hatch:
+  // ?notap=1 (or localStorage rr_notap=1) disables the tap → audio plays via element
+  // volume and the waveform falls back to a gentle procedural idle.
+  let previewAC = null, previewAnalyser = null, previewFreq = null, previewSrcNode = null, previewGain = null;
+  const PREVIEW_TAP = (function () {
+    try { if (/[?&]notap=1/.test(location.search)) return false; } catch (e) {}
+    try { if (localStorage.getItem('rr_notap') === '1') return false; } catch (e) {}
+    return true;
+  })();
+  function ensurePreviewTap() {
+    if (!PREVIEW_TAP || previewSrcNode || !previewEl) return;
+    try {
+      previewAC = previewAC || new (window.AudioContext || window.webkitAudioContext)();
+      previewAnalyser = previewAC.createAnalyser();
+      previewAnalyser.fftSize = 256;                 // 128 frequency bins
+      previewAnalyser.smoothingTimeConstant = 0.72;
+      previewFreq = new Uint8Array(previewAnalyser.frequencyBinCount);
+      previewSrcNode = previewAC.createMediaElementSource(previewEl);
+      previewSrcNode.connect(previewAnalyser);       // tap (an analyser needs no output)
+      previewGain = previewAC.createGain();
+      previewGain.gain.value = 0;                     // audible level — faded in by preview()
+      previewSrcNode.connect(previewGain);
+      previewGain.connect(previewAC.destination);
+    } catch (e) { previewAnalyser = null; previewFreq = null; previewSrcNode = null; previewGain = null; }
+  }
+  function previewTapped() { return !!(previewSrcNode && previewGain); }
+  function setPreviewLevel(v) {
+    if (previewTapped()) { try { previewGain.gain.value = v; } catch (e) {} }
+    else if (previewEl) { try { previewEl.volume = v; } catch (e) {} }
+  }
+  // Copy the current frequency spectrum into `out` (Uint8Array). Returns true when
+  // real audio is flowing (non-zero data) so the renderer reacts vs. idles.
+  function previewSpectrum(out) {
+    if (!previewAnalyser || !previewFreq) return false;
+    previewAnalyser.getByteFrequencyData(previewFreq);
+    let sum = 0; const n = out ? Math.min(out.length, previewFreq.length) : previewFreq.length;
+    for (let i = 0; i < n; i++) { if (out) out[i] = previewFreq[i]; sum += previewFreq[i]; }
+    return sum > 4;
+  }
+  function previewBinCount() { return previewAnalyser ? previewAnalyser.frequencyBinCount : 0; }
+  function previewPlaying() { return !!(previewEl && !previewEl.paused && previewTrackId != null); }
   function stopPreview() {
     previewToken++;
     if (previewEl) { try { previewEl.pause(); } catch (e) {} }
@@ -444,7 +492,11 @@
   async function preview(track) {
     if (window.RhythmGame && window.RhythmGame.isMuted && window.RhythmGame.isMuted()) return;
     const tok = ++previewToken;
-    if (!previewEl) { previewEl = new Audio(); previewEl.preload = 'none'; }
+    if (!previewEl) {
+      previewEl = new Audio(); previewEl.preload = 'none';
+      if (PREVIEW_TAP) previewEl.crossOrigin = 'anonymous';   // required for FFT on cross-origin audio
+      ensurePreviewTap();
+    }
     try { previewEl.pause(); } catch (e) {}
     let src = 'assets/lunar-waves.mp3'; // mock/demo fallback
     if (catalogLive && track && track.id && track.id !== 'demo') {
@@ -452,11 +504,14 @@
     }
     if (tok !== previewToken) return;
     try {
-      previewEl.src = src; previewEl.volume = 0; previewEl.currentTime = 0;
+      if (previewAC && previewAC.state === 'suspended') { try { await previewAC.resume(); } catch (e) {} }
+      previewEl.src = src; previewEl.currentTime = 0;
+      previewEl.volume = previewTapped() ? 1 : 0;     // tapped: in-graph gain controls level
+      setPreviewLevel(0);
       await previewEl.play();
       previewTrackId = (track && track.id) || null; previewStart = Date.now();
       // gentle fade-in, auto-stop after ~10s
-      let v = 0; const fade = setInterval(() => { if (tok !== previewToken) { clearInterval(fade); return; } v = Math.min(0.45, v + 0.05); previewEl.volume = v; if (v >= 0.45) clearInterval(fade); }, 40);
+      let v = 0; const fade = setInterval(() => { if (tok !== previewToken) { clearInterval(fade); return; } v = Math.min(0.45, v + 0.05); setPreviewLevel(v); if (v >= 0.45) clearInterval(fade); }, 40);
       setTimeout(() => { if (tok === previewToken) stopPreview(); }, 10000);
     } catch (e) { /* autoplay may be blocked until a gesture — fine */ }
   }
@@ -658,6 +713,8 @@
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     search, sortTracks, sections, getBest,
     preview, stopPreview,
+    // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js
+    previewSpectrum, previewBinCount, previewPlaying,
     fmtDur, cleanGenre, escapeHtml, hashStr,
     // readiness (no dead songs)
     trackReady, trackStatus, statusLabel, readyCount, reloadCatalog,

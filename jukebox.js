@@ -475,17 +475,101 @@
   }
 
   function relayout() { if (stage && jukebox) { computeCv(); layout(); } }
-  // reactive now-playing EQ visualizer under the focused cover
-  (function eqLoop() {
-    const eq = $('jb-eq');
-    if (eq) {
-      const bars = eq.children, active = $('view-jukebox') && $('view-jukebox').classList.contains('active') && $('menu') && $('menu').classList.contains('active');
-      for (let i = 0; i < bars.length; i++) {
-        const h = active ? (18 + Math.abs(Math.sin(Date.now() / 380 + i * 0.6)) * 64 + Math.random() * 14) : 8;
-        bars[i].style.height = Math.min(100, h) + '%';
-      }
+
+  // append a rounded-rect subpath (caller batches a single fill for one glow pass)
+  function rrect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+  }
+
+  // =========================================================================
+  // LIVE WAVEFORM — a canvas spectrum driven by the ACTUAL song-preview audio
+  // (real FFT via RhythmCatalog.previewSpectrum). Symmetric "butterfly" bars:
+  // bass in the center, treble at the edges, extending up + down from a center
+  // seam. Falls back to a gentle procedural idle when no audio is flowing
+  // (autoplay-blocked / CORS-tainted / nothing playing). Replaces the faux EQ.
+  // =========================================================================
+  (function waveLoop() {
+    const cv = $('jb-wave');
+    if (!cv || !cv.getContext) { setTimeout(waveLoop, 400); return; }  // markup not ready yet
+    const ctx = cv.getContext('2d');
+    let W = 0, H = 0, dpr = 1;
+    const freq = new Uint8Array(256);
+    let bars = [];          // eased per-bar amplitudes (0..1)
+    let pulse = 0;          // smoothed bass pulse → global "breathing" scale
+    let phase = 0;          // idle animation phase
+    function resize() {
+      const r = cv.getBoundingClientRect();
+      const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+      const d = Math.min(2, window.devicePixelRatio || 1);
+      if (w === W && h === H && d === dpr) return;
+      W = w; H = h; dpr = d;
+      cv.width = Math.round(w * d); cv.height = Math.round(h * d);
+      ctx.setTransform(d, 0, 0, d, 0, 0);
     }
-    setTimeout(eqLoop, 110);
+    function draw() {
+      requestAnimationFrame(draw);
+      const active = $('view-jukebox') && $('view-jukebox').classList.contains('active') &&
+                     $('menu') && $('menu').classList.contains('active');
+      if (!active) { if (W) ctx.clearRect(0, 0, W, H); return; }
+      resize();
+      ctx.clearRect(0, 0, W, H);
+
+      let N = Math.max(24, Math.min(96, Math.floor(W / 9))); if (N % 2) N--;   // even → symmetric
+      if (bars.length !== N) bars = new Array(N).fill(0);
+      const half = N / 2;
+
+      const C = RC();
+      const playing = !!(C && C.previewPlaying && C.previewPlaying());
+      const got = !!(C && C.previewSpectrum && C.previewSpectrum(freq));
+      const usable = (C && C.previewBinCount && C.previewBinCount()) ? Math.min(96, C.previewBinCount()) : 96;
+
+      let bass = 0;
+      if (got) { for (let i = 1; i < 6; i++) bass += freq[i]; bass = (bass / 5) / 255; }
+      pulse += ((got ? bass : 0) - pulse) * 0.18;
+      phase += 0.045;
+
+      for (let h = 0; h < half; h++) {
+        let amp;
+        if (playing && got) {
+          const f = h / half; const bin = Math.min(usable - 1, Math.floor(f * f * usable));
+          amp = (freq[bin] / 255) * 1.35;                      // boost the gentle preview level
+        } else {
+          const base = playing ? 0.30 : 0.12;                  // livelier when audio is on but untapped
+          amp = base + Math.abs(Math.sin(phase + h * 0.5)) * (playing ? 0.34 : 0.14)
+                     + Math.sin(phase * 1.7 - h * 0.3) * 0.05;
+        }
+        amp = Math.max(0, Math.min(1, amp));
+        const li = half - 1 - h;                                // mirror outward from the center
+        bars[li] += (amp - bars[li]) * 0.35;
+        bars[half + h] = bars[li];
+      }
+
+      const slot = W / N, bw = Math.max(2, slot * 0.62), cy = H / 2;
+      const maxH = (H / 2) * (0.9 + pulse * 0.22);
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0.0, '#ff7a4a');
+      grad.addColorStop(0.5, '#ff1f2e');
+      grad.addColorStop(1.0, '#ff7a4a');
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const bh = Math.max(1.5, bars[i] * maxH);
+        rrect(ctx, i * slot + (slot - bw) / 2, cy - bh, bw, bh * 2, 3);
+      }
+      ctx.fillStyle = grad;
+      ctx.shadowColor = 'rgba(255,42,48,0.55)';
+      ctx.shadowBlur = 8 + pulse * 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // bright center seam for that game-HUD readout feel
+      ctx.fillStyle = 'rgba(255,224,205,0.45)';
+      ctx.fillRect(0, cy - 0.5, W, 1);
+    }
+    requestAnimationFrame(draw);
   })();
   window.RhythmLibrary = { render, showView, relayout };
 })();

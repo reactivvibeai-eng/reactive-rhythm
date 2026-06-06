@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=65" />
+<link rel="stylesheet" href="jukebox.css?v=66" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1730,7 +1730,7 @@
           <button class="jb-nav prev" id="jb-prev" aria-label="Previous song">‹</button>
           <button class="jb-nav next" id="jb-next" aria-label="Next song">›</button>
         </div>
-        <div class="jb-eq" id="jb-eq"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <div class="jb-eq" id="jb-eq"><canvas class="jb-wave" id="jb-wave"></canvas></div>
         <div class="jb-meta">
           <div class="jb-title" id="jb-title">Scanning the radio…</div>
           <div class="jb-artist" id="jb-artist"></div>
@@ -2519,9 +2519,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=65"></script>
-<script src="jukebox.js?v=65"></script>
-<script src="catalog.js?v=65"></script>
+<script src="game.js?v=66"></script>
+<script src="jukebox.js?v=66"></script>
+<script src="catalog.js?v=66"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
