@@ -144,7 +144,19 @@ the live site / Lovable until user says — what's deployed works well. All over
   needs the build DEPLOYED at reactivvibeai.com/play; on localhost it correctly shows guest.** NOT yet
   consumed: `/entitlements` + `/store` + spend + the "Get Sparks" button = the in-game **Store (Phase D3,
   next build)**. store_items seeded: starter_pack 500, boss_neon 200, theme_neon 100.
-- **Tasks tracked** (TaskList #1-5). **?v at 72.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+- **BUILD PASS 2 (multi-agent workflow → serial integrate):** (v73) **In-game STORE** — #store-screen
+  overlay (bag icon), GET /store grid, Buy→POST /sparks/spend (idempotency_key, 402/409 handling), owned
+  flip, "Get Sparks"→reactivvibeai.com/live?sparks=open; catalog seams getStore/getEntitlements/spendSparks;
+  RhythmLibrary.openStore. ⚠️ pack→content unlock is BACKEND-PENDING (Lovable adds meta.linked_pack_id; user
+  to map starter_pack→real pack, boss_neon→real level). (v74) **GAMEPLAY FEEL** — default-ON latency-accurate
+  gamepad/MIDI judging (evTime + frame-top poll; fixes ~1-frame device bias) + cosmetic early/late tick;
+  FLAG-GATED Tight (GH) timing profile (?tune=1 / Settings→Timing Feel, default-off, classic byte-identical)
+  w/ 1→5× combo — Tight runs are LOCAL PRACTICE ONLY (gated out of /score). **ASSET_PROMPTS.md** (19 gen
+  prompts: Store/Levels/Boss/UI) written for the user to generate. STILL QUEUED (packages written, not yet
+  integrated): **_build_leveldesign.md** (level-design system — its verify agent ERRORED, self-verify before
+  integrating; it edits the LEVELS IIFE already changed in v2-picker, watch collisions) + **_build_roadmapsweep.md**
+  (mobile 16px inputs + open-notes/HOPO flag-gated design + remaining checklist). Workflow run: w61222pzx.
+- **Tasks tracked** (TaskList #1-5). **?v at 74.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
