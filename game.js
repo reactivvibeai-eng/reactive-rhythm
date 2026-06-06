@@ -282,6 +282,12 @@
       nearX[i] = r.gx + bx * r.gw;
       farX[i] = r.gx + nx * r.gw;
     }
+    // gh Highway: converge the FAR end toward a vanishing point so the top of the board recedes steeper
+    // (the "angled down at the top" look). The NEAR end (bridge catchers) stays untouched = locked alignment.
+    if (ART.persp > 1) {
+      const vanishX = r.gx + 0.5 * r.gw, cv = 0.34;
+      for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
+    }
     // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform)
     const lw = Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072);
     return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
@@ -2319,6 +2325,26 @@
         owash.addColorStop(1, 'rgba(255,' + cg + ',' + cb + ',0)');
         ctx.fillStyle = owash; ctx.fillRect(gr.gx, gr.gy + gr.gh * 0.3, gr.gw, gr.gh * 0.7);
         ctx.restore();
+      }
+      // COMBO-REACTIVE energy texture — the guitar visibly "charges up" as your streak grows: flowing
+      // warm energy bands that get brighter, faster and warmer with the combo tier (the lively animated layer).
+      {
+        const cTier = Math.min(4, 1 + Math.floor(combo / 12));
+        if (combo >= 8 && !reduceMotion && !fxLite) {
+          const inten = (cTier - 1) / 3;
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          for (let b = 0; b < 2; b++) {
+            const ph2 = (t * (0.12 + cTier * 0.10) + b * 0.5) % 1;
+            const by = gr.gy + gr.gh * (0.18 + ph2 * 0.82), bh = gr.gh * 0.16;
+            const eg = ctx.createLinearGradient(0, by - bh, 0, by + bh);
+            const a3 = (0.03 + 0.06 * inten).toFixed(3);
+            eg.addColorStop(0, 'rgba(255,150,70,0)');
+            eg.addColorStop(0.5, 'rgba(255,' + (120 + cTier * 22) + ',75,' + a3 + ')');
+            eg.addColorStop(1, 'rgba(255,80,60,0)');
+            ctx.fillStyle = eg; ctx.fillRect(gr.gx, by - bh, gr.gw, bh * 2);
+          }
+          ctx.restore();
+        }
       }
     }
     // top mask so the LIVE hud reads cleanly

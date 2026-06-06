@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=64" />
+<link rel="stylesheet" href="jukebox.css?v=65" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -836,7 +836,8 @@
     line-height: 1;
     color: var(--ink);
     letter-spacing: -0.04em;
-    text-shadow: 0 0 30px rgba(255, 31, 46, 0.6);
+    -webkit-text-stroke: 3px rgba(0,0,0,0.88); paint-order: stroke fill;   /* black outline → readable over the busy guitar */
+    text-shadow: 0 0 30px rgba(255, 31, 46, 0.6), 0 2px 8px rgba(0,0,0,0.95);
   }
   .combo-display .lab {
     font-family: 'JetBrains Mono', monospace;
@@ -2518,9 +2519,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=64"></script>
-<script src="jukebox.js?v=64"></script>
-<script src="catalog.js?v=64"></script>
+<script src="game.js?v=65"></script>
+<script src="jukebox.js?v=65"></script>
+<script src="catalog.js?v=65"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
