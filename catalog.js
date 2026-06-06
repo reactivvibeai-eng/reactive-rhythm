@@ -707,8 +707,43 @@
     wrap.style.display = '';
   }
 
+  // ---------- read-only leaderboard fetchers (consumed by the Leaderboard overlay) ----------
+  // Normalize to { rows:[{rank,display_name,score,accuracy}], youName }. Never throws — resolves
+  // to { rows: [] } when the backend leaderboard isn't live yet, so the UI falls back to local.
+  async function _myName() {
+    try {
+      if (!supa) return null;
+      const { data } = await supa.auth.getUser();
+      const u = data && data.user;
+      if (!u) return null;
+      return (u.user_metadata && (u.user_metadata.display_name || u.user_metadata.name)) || u.email || null;
+    } catch (e) { return null; }
+  }
+  async function fetchLeaderboard(trackId, opts) {
+    opts = opts || {};
+    if (!API_BASE || !trackId) return { rows: [] };
+    const qs = '?difficulty=' + encodeURIComponent(opts.difficulty || '') + '&limit=' + (opts.limit || 20);
+    try {
+      const board = await api('/leaderboard/' + trackId + qs);
+      const rows = Array.isArray(board) ? board : (board && board.rows) || [];
+      return { rows, youName: await _myName() };
+    } catch (e) { return { rows: [] }; }   // backend dormant → caller shows local fallback
+  }
+  // Optional global board — only used if/when the backend exposes it. Degrades silently
+  // (returns { rows: [] }) so the UI shows the local "you" card until the route exists.
+  async function fetchGlobalLeaderboard(opts) {
+    opts = opts || {};
+    if (!API_BASE) return { rows: [] };
+    try {
+      const board = await api('/leaderboard/global?limit=' + (opts.limit || 20));
+      const rows = Array.isArray(board) ? board : (board && board.rows) || [];
+      return { rows, youName: await _myName() };
+    } catch (e) { return { rows: [] }; }
+  }
+
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
+    fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     search, sortTracks, sections, getBest,

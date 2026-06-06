@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=69" />
+<link rel="stylesheet" href="jukebox.css?v=70" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -509,6 +509,50 @@
   .lv-card.is-next { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 0 22px rgba(255,31,46,0.3); }
   .lv-card.is-next .lv-art { animation: lvnextpulse 1.8s ease-in-out infinite; }
   @keyframes lvnextpulse { 0%,100% { box-shadow: inset 0 0 0 0 rgba(255,31,46,0); } 50% { box-shadow: inset 0 0 34px 0 rgba(255,31,46,0.28); } }
+
+  /* ============ LEADERBOARD (global + per-song) ============ */
+  .leaderboard-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
+  .screen.active .lbd-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .lbd-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 10px; text-align: center; }
+  .lbd-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
+  .lbd-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,0.02); }
+  .lbd-tab { font-family: 'Chakra Petch', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border: none; border-radius: 999px; padding: 8px 22px; cursor: pointer; transition: all 0.15s ease; }
+  .lbd-tab:hover { color: var(--ink); }
+  .lbd-tab.active { color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); box-shadow: 0 4px 16px rgba(255,31,46,0.4); }
+  .lbd-songbar { width: 100%; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+  .lbd-pick { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); cursor: pointer; text-align: left; transition: border-color 0.15s ease; }
+  .lbd-pick:hover { border-color: var(--crimson); }
+  .lbd-pick-art { width: 42px; height: 42px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 18px; color: rgba(255,255,255,0.7); background: linear-gradient(150deg, #c2182a, #1e0407); overflow: hidden; }
+  .lbd-pick-art img { width: 100%; height: 100%; object-fit: cover; }
+  .lbd-pick-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .lbd-pick-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-pick-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-pick-chev { font-size: 22px; color: var(--ink-dim); flex: none; }
+  .lbd-diff { align-self: center; }
+  .lbd-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.5; color: #e0a93f; border: 1px solid rgba(224,169,63,0.4); background: rgba(224,169,63,0.06); border-radius: 12px; padding: 10px 14px; }
+  .lbd-banner b { color: #e0a93f; font-weight: 700; }
+  .lbd-board { width: 100%; display: flex; flex-direction: column; gap: 2px; min-height: 60px; }
+  .lbd-board .lb-head { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--cyan); margin-bottom: 8px; text-align: left; }
+  .lbd-board .lb-row { display: grid; grid-template-columns: 48px 1fr auto auto; gap: 14px; align-items: baseline; padding: 9px 10px; border-bottom: 1px solid rgba(222,216,212,0.06); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: left; }
+  .lbd-board .lb-rank { color: var(--crimson); font-weight: 700; }
+  .lbd-board .lb-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-board .lb-score { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .lbd-board .lb-acc { color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+  .lbd-board .lb-row.you { background: rgba(255,31,46,0.10); box-shadow: inset 0 0 0 1px rgba(255,31,46,0.35); }
+  .lbd-board .lb-row.you .lb-name { color: #fff; font-weight: 700; }
+  .lbd-board .lb-row.you .lb-name::after { content: ' YOU'; font-size: 9px; letter-spacing: 0.18em; color: var(--crimson); }
+  .lbd-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  .lbd-picker { width: 100%; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .lbd-search { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.03); color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  .lbd-search:focus { outline: none; border-color: var(--crimson); }
+  .lbd-results { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .lbd-res-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: rgba(255,255,255,0.02); cursor: pointer; text-align: left; }
+  .lbd-res-row:hover { border-color: var(--crimson); }
+  .lbd-res-art { width: 32px; height: 32px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14px; color: rgba(255,255,255,0.7); overflow: hidden; }
+  .lbd-res-art img { width: 100%; height: 100%; object-fit: cover; }
+  .lbd-res-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-res-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); }
+  @media (max-width: 560px) { .lbd-title { font-size: 36px; } .lbd-board .lb-row { grid-template-columns: 38px 1fr auto auto; gap: 10px; font-size: 12px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
   .lv-ring { position: relative; width: 72px; height: 72px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center; }
@@ -1776,6 +1820,9 @@
           <button class="icon-btn" id="levels-open" aria-label="Levels">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
           </button>
+          <button class="icon-btn" id="leaderboard-open" aria-label="Leaderboards">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg>
+          </button>
         </div>
       </header>
 
@@ -2059,6 +2106,48 @@
       <div class="lv-hero" id="levels-hero" hidden></div>
       <div class="levels-body" id="levels-body"></div>
       <button class="ghost-btn primary" id="levels-close" style="margin-top:20px;min-width:200px;">DONE</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       LEADERBOARD — global + per-song boards (reads RhythmCatalog.fetchLeaderboard;
+       falls back to local rr_career / rr_scores; "live when accounts connect" state)
+       ============================================================ -->
+  <div class="screen leaderboard-screen" id="leaderboard-screen">
+    <div class="lbd-card">
+      <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// RANKINGS</div>
+      <h2 class="lbd-title">LEADERBOARD</h2>
+      <div class="lbd-tabs" id="lbd-tabs" role="tablist">
+        <button class="lbd-tab active" data-tab="global" role="tab">Global</button>
+        <button class="lbd-tab" data-tab="song" role="tab">By Song</button>
+      </div>
+
+      <!-- per-song header (track name + difficulty filter); hidden on Global tab -->
+      <div class="lbd-songbar" id="lbd-songbar" hidden>
+        <button class="lbd-pick" id="lbd-pick" aria-label="Choose a track">
+          <span class="lbd-pick-art" id="lbd-pick-art">♪</span>
+          <span class="lbd-pick-txt"><span class="lbd-pick-t" id="lbd-pick-t">Choose a track</span><span class="lbd-pick-a" id="lbd-pick-a">tap to pick</span></span>
+          <span class="lbd-pick-chev">›</span>
+        </button>
+        <div class="lbd-diff set-seg" id="lbd-diff">
+          <button data-diff="" class="active">All</button>
+          <button data-diff="easy">Easy</button>
+          <button data-diff="medium">Medium</button>
+          <button data-diff="hard">Hard</button>
+        </div>
+      </div>
+
+      <div class="lbd-banner" id="lbd-banner" hidden></div>
+      <div class="lbd-board" id="lbd-board"></div>
+      <p class="lbd-empty" id="lbd-empty" hidden>No scores yet — finish a run and you'll appear here.</p>
+
+      <!-- inline track picker (compact, searchable) — toggled by #lbd-pick -->
+      <div class="lbd-picker" id="lbd-picker" hidden>
+        <input class="lbd-search" id="lbd-search" type="text" placeholder="Search a track…" autocomplete="off" spellcheck="false" />
+        <div class="lbd-results" id="lbd-results"></div>
+      </div>
+
+      <button class="ghost-btn primary" id="leaderboard-close" style="margin-top:18px;min-width:200px;">DONE</button>
     </div>
   </div>
 
@@ -2585,9 +2674,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=69"></script>
-<script src="jukebox.js?v=69"></script>
-<script src="catalog.js?v=69"></script>
+<script src="game.js?v=70"></script>
+<script src="jukebox.js?v=70"></script>
+<script src="catalog.js?v=70"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -2860,6 +2949,179 @@
       return { stars: s, possible: poss, pct: Math.round(s / poss * 100), nextIdx: nx, live: LIVE };
     };
   } catch (e) {}
+  screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+  }, true);
+})();
+</script>
+
+<!-- LEADERBOARD — global + per-song boards (reads RhythmCatalog.fetchLeaderboard / getCareer / getBest) -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var screen = $('leaderboard-screen'); if (!screen) return;
+  var RC = function () { return window.RhythmCatalog; };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function fmt(n) { return Number(n || 0).toLocaleString(); }
+  function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
+
+  var tab = 'global';      // 'global' | 'song'
+  var diff = '';           // '' = all, else easy|medium|hard
+  var pickTrack = null;    // selected track for the By-Song board
+
+  function banner(html) {
+    var b = $('lbd-banner');
+    if (!b) return;
+    if (html) { b.innerHTML = html; b.hidden = false; } else { b.hidden = true; b.innerHTML = ''; }
+  }
+  function rowsHtml(rows, youName) {
+    return rows.map(function (r) {
+      var mine = youName && (r.display_name || '') === youName;
+      return '<div class="lb-row' + (mine || r.you ? ' you' : '') + '">' +
+        '<span class="lb-rank">#' + (r.rank || '–') + '</span>' +
+        '<span class="lb-name">' + esc(r.display_name || 'anon') + '</span>' +
+        '<span class="lb-score">' + fmt(r.score) + '</span>' +
+        '<span class="lb-acc">' + (r.accuracy != null ? (r.accuracy * 100).toFixed(1) + '%' : '—') + '</span>' +
+      '</div>';
+    }).join('');
+  }
+  var DORMANT = 'Live rankings switch on <b>when accounts connect</b>. For now this shows your local progress.';
+
+  // ---- GLOBAL board: live aggregate if backend offers it, else local career row ----
+  function renderGlobal() {
+    var board = $('lbd-board'), empty = $('lbd-empty');
+    var head = '<div class="lb-head">All-time · Top players</div>';
+    var c = (RC() && RC().getCareer) ? RC().getCareer() : null;
+    var fetchG = RC() && RC().fetchGlobalLeaderboard;
+    if (fetchG) {
+      board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
+      Promise.resolve(fetchG({ limit: 20 })).then(function (res) {
+        if (tab !== 'global') return;
+        if (res && res.rows && res.rows.length) {
+          banner(null);
+          board.innerHTML = head + rowsHtml(res.rows, res.youName);
+          empty.hidden = true;
+        } else { renderGlobalLocal(c); }
+      }).catch(function () { renderGlobalLocal(c); });
+      return;
+    }
+    renderGlobalLocal(c);
+  }
+  function renderGlobalLocal(c) {
+    var board = $('lbd-board'), empty = $('lbd-empty');
+    banner(DORMANT);
+    if (!c || !c.runs) { board.innerHTML = ''; empty.hidden = false; return; }
+    empty.hidden = true;
+    var acc = c.notesTotal > 0 ? c.notesHit / c.notesTotal : null;
+    var rows = [{ rank: 1, display_name: 'You', score: c.score, accuracy: acc, you: true }];
+    board.innerHTML = '<div class="lb-head">Your standing</div>' + rowsHtml(rows, null);
+  }
+
+  // ---- BY-SONG board: live per-track if backend offers it, else local best ----
+  function setPick(t) {
+    pickTrack = t || null;
+    var art = $('lbd-pick-art'), tt = $('lbd-pick-t'), aa = $('lbd-pick-a');
+    if (!t) { art.textContent = '♪'; tt.textContent = 'Choose a track'; aa.textContent = 'tap to pick'; return; }
+    if (t.artwork_url) { art.innerHTML = '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.parentNode.textContent=\'' + esc(initial(t.title)) + '\'">'; }
+    else { art.textContent = initial(t.title); }
+    tt.textContent = t.title || 'Untitled';
+    aa.textContent = t.artist_name || t.artist_credit_name || '';
+  }
+  function renderSong() {
+    var board = $('lbd-board'), empty = $('lbd-empty');
+    if (!pickTrack) {
+      banner(null);
+      board.innerHTML = '';
+      empty.textContent = 'Pick a track to see its leaderboard.'; empty.hidden = false;
+      return;
+    }
+    var head = '<div class="lb-head">' + esc(pickTrack.title || '') + (diff ? ' · ' + diff : '') + '</div>';
+    var fetchL = RC() && RC().fetchLeaderboard;
+    if (fetchL) {
+      board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
+      Promise.resolve(fetchL(pickTrack.id, { difficulty: diff, limit: 20 })).then(function (res) {
+        if (tab !== 'song') return;
+        if (res && res.rows && res.rows.length) {
+          banner(null);
+          board.innerHTML = head + rowsHtml(res.rows, res.youName);
+          empty.hidden = true;
+        } else { renderSongLocal(head); }
+      }).catch(function () { renderSongLocal(head); });
+      return;
+    }
+    renderSongLocal(head);
+  }
+  function renderSongLocal(head) {
+    var board = $('lbd-board'), empty = $('lbd-empty');
+    banner(DORMANT);
+    var best = (RC() && RC().getBest) ? RC().getBest(pickTrack.id) : null;
+    if (!best) { board.innerHTML = head; empty.textContent = 'No score on this track yet — play it to set the pace.'; empty.hidden = false; return; }
+    empty.hidden = true;
+    var rows = [{ rank: 1, display_name: 'You', score: best.score, accuracy: best.accuracy, you: true }];
+    board.innerHTML = head + rowsHtml(rows, null);
+  }
+
+  function render() {
+    $('lbd-songbar').hidden = (tab !== 'song');
+    if (tab === 'global') renderGlobal(); else renderSong();
+  }
+
+  // ---- track picker (compact, searchable; reuses RhythmCatalog catalog data) ----
+  function openPicker() {
+    var p = $('lbd-picker'); if (!p) return;
+    p.hidden = false;
+    var s = $('lbd-search'); if (s) { s.value = ''; s.focus(); }
+    fillResults('');
+  }
+  function closePicker() { var p = $('lbd-picker'); if (p) p.hidden = true; }
+  function fillResults(q) {
+    var host = $('lbd-results'); if (!host) return;
+    var C = RC(); if (!C || !C.allTracks) { host.innerHTML = ''; return; }
+    var list = (C.search ? C.search(q) : C.allTracks()).filter(function (t) { return C.trackReady ? C.trackReady(t) : true; }).slice(0, 60);
+    host.innerHTML = list.map(function (t) {
+      var art = t.artwork_url ? '<span class="lbd-res-art"><img src="' + esc(t.artwork_url) + '" alt="" onerror="this.parentNode.textContent=\'' + esc(initial(t.title)) + '\'"></span>'
+        : '<span class="lbd-res-art" style="background:linear-gradient(150deg,#c2182a,#1e0407)">' + esc(initial(t.title)) + '</span>';
+      return '<button class="lbd-res-row" data-id="' + esc(t.id) + '">' + art +
+        '<span style="min-width:0;display:flex;flex-direction:column"><span class="lbd-res-t">' + esc(t.title || 'Untitled') + '</span><span class="lbd-res-a">' + esc(t.artist_name || '') + '</span></span></button>';
+    }).join('') || '<div class="lbd-empty">No tracks match.</div>';
+    var rows = host.querySelectorAll('.lbd-res-row');
+    for (var i = 0; i < rows.length; i++) rows[i].addEventListener('click', function () {
+      var id = this.getAttribute('data-id');
+      var t = C.allTracks().filter(function (x) { return x.id === id; })[0];
+      if (t) { setPick(t); closePicker(); render(); }
+    });
+  }
+
+  function open() {
+    render();
+    screen.classList.add('active');
+  }
+  function close() { closePicker(); screen.classList.remove('active'); }
+
+  // tabs
+  [].forEach.call($('lbd-tabs').children, function (b) {
+    b.addEventListener('click', function () {
+      tab = b.getAttribute('data-tab');
+      [].forEach.call($('lbd-tabs').children, function (x) { x.classList.toggle('active', x === b); });
+      render();
+    });
+  });
+  // difficulty seg
+  [].forEach.call($('lbd-diff').children, function (b) {
+    b.addEventListener('click', function () {
+      diff = b.getAttribute('data-diff') || '';
+      [].forEach.call($('lbd-diff').children, function (x) { x.classList.toggle('active', x === b); });
+      if (tab === 'song') render();
+    });
+  });
+  // picker
+  var pk = $('lbd-pick'); if (pk) pk.addEventListener('click', openPicker);
+  var sr = $('lbd-search'); var sdt = 0;
+  if (sr) sr.addEventListener('input', function () { clearTimeout(sdt); var v = sr.value; sdt = setTimeout(function () { fillResults(v); }, 140); });
+
+  var ob = $('leaderboard-open'); if (ob) ob.addEventListener('click', open);
+  var cb = $('leaderboard-close'); if (cb) cb.addEventListener('click', close);
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
