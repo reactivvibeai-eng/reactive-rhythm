@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=88" />
+<link rel="stylesheet" href="jukebox.css?v=89" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -664,7 +664,7 @@
   /* build8: cards FLANK THE UPPER-MID PLAYFIELD (necromancer's hands), bigger + clearly in view —
      not the bottom corners. Still fill up like fate meters: DEATH=misses, THE WORLD=hits. */
   .rc-card {
-    position: absolute; top: 30vh;
+    position: absolute; top: 13vh;
     width: min(14vw, 178px); aspect-ratio: 2 / 3; border-radius: 13px; overflow: hidden;
     background-size: cover; background-position: center; background-color: #0a0706;
     opacity: 0.62; filter: grayscale(0.30) brightness(0.66);
@@ -688,7 +688,7 @@
   .rc-world.rc-flash { animation: rcWorld 0.55s cubic-bezier(.2,1,.3,1); }
   @keyframes rcDeath { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(-2.5deg); } }
   @keyframes rcWorld { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(2.5deg); } }
-  @media (max-width: 900px) { .rc-card { width: 84px; top: 24vh; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
+  @media (max-width: 900px) { .rc-card { width: 84px; top: 10vh; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
   html.rr-reduce-motion .rc-card, html.rr-reduce-motion .rc-fill { transition: none; }
   html.rr-reduce-motion .rc-card.rc-flash { animation: none; }
   /* Build/version stamp on the start screen (photo-friendly: shows version + host). */
@@ -901,13 +901,9 @@
     color: var(--rr-acc);
     text-shadow: 0 0 26px var(--rr-acc-glow);
   }
-  /* the faint full-screen scanline texture picks up a hint of the accent (kept very low alpha) */
-  #game.rr-lvl-themed.game-screen::after {
-    background: repeating-linear-gradient(0deg,
-      color-mix(in srgb, var(--rr-acc) 16%, rgba(150,35,35,0.025)) 0,
-      color-mix(in srgb, var(--rr-acc) 16%, rgba(150,35,35,0.025)) 1px,
-      transparent 1px, transparent 4px);
-  }
+  /* build8.1: KILL the themed scanline entirely — it was the "purple static haze" over the board.
+     Themed levels read crisp + clear; the backdrop video is the only color source. */
+  #game.rr-lvl-themed.game-screen::after { background: none !important; opacity: 0 !important; }
   /* footer hint keycaps get an accent edge so the chrome below the board reads themed */
   #game.rr-lvl-themed .footer-hint kbd { border-color: var(--rr-acc-line); }
   #results-next { display: none; }
@@ -3525,10 +3521,10 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=88"></script>
-<script src="jukebox.js?v=88"></script>
-<script src="catalog.js?v=88"></script>
-<script src="multiplayer.js?v=88"></script>
+<script src="game.js?v=89"></script>
+<script src="jukebox.js?v=89"></script>
+<script src="catalog.js?v=89"></script>
+<script src="multiplayer.js?v=89"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop

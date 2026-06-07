@@ -422,13 +422,41 @@
   let equippedSkinSrc = null;       // persisted (rr_skin) — the global equip
   let _levelSkinActive = false;     // true while a per-level override is showing
   function _profileDefaultImg() { const p = LANE_PROFILES[laneProfile]; return (p && p.img) || guitarImg; }
+  // build8.1: PER-SKIN note-lane geometry. AI-made guitars have their OWN string positions, so without
+  // this the catchers ride the lane-profile defaults and miss the painted strings. Endpoints [left,right]
+  // measured by the asset agent (fine-tune with __rrDebug); evenly interpolated across LANE_COUNT. The
+  // skin fractions are full-PNG (contain-fit). Falsy/unknown src → restore the lane-profile default geom.
+  const SKIN_GEOM = {
+    'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795, nut: [0.460, 0.565], bridge: [0.420, 0.605] },
+    'assets/guitars/bone-daddy.png':    { aspect: 904 / 1314, nutFY: 0.105, bridgeFY: 0.775, nut: [0.465, 0.555], bridge: [0.425, 0.595] },
+    'assets/guitars/melody-pink.png':   { aspect: 904 / 1477, nutFY: 0.095, bridgeFY: 0.80,  nut: [0.455, 0.555], bridge: [0.415, 0.595] },
+  };
+  function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
+  function _applySkinGeom(src) {
+    const g = src && SKIN_GEOM[src];
+    if (!g) {   // restore the active lane-profile's default geometry
+      const p = LANE_PROFILES[laneProfile];
+      if (p) {
+        ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
+        ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
+        ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95;
+      }
+      return;
+    }
+    ART.aspect = g.aspect; ART.nutFY = g.nutFY; ART.bridgeFY = g.bridgeFY;
+    ART.fit = null; ART.bottomAnchor = 0.95;   // skin fractions are full-PNG → contain-fit
+    const nut = [], brg = [];
+    for (let i = 0; i < LANE_COUNT; i++) { nut.push(_lerpLane(g.nut[0], g.nut[1], LANE_COUNT, i)); brg.push(_lerpLane(g.bridge[0], g.bridge[1], LANE_COUNT, i)); }
+    ART.nutXF = nut; ART.bridgeXF = brg;
+  }
   function _applySkinImg(src) {
-    if (!src) { activeGuitarImg = _profileDefaultImg(); return; }
+    if (!src) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); return; }
     const im = new Image(); im._ready = false;
     im.onload = () => { im._ready = true; };
-    im.onerror = () => { if (activeGuitarImg === im) activeGuitarImg = _profileDefaultImg(); };  // self-heal: missing skin → profile default
+    im.onerror = () => { if (activeGuitarImg === im) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); } };  // self-heal: missing skin → profile default img + geom
     im.src = src;
     activeGuitarImg = im;            // draw site guards on _ready, so a not-yet-loaded image just skips a frame
+    _applySkinGeom(src);            // build8.1: align catchers/notes to THIS skin's painted strings
   }
   // Per-level override (temporary). Pass falsy to drop the override → back to equipped/default.
   function setGuitarSkin(src) {
