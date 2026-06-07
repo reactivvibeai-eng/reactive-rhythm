@@ -184,8 +184,10 @@
     countdown: $('countdown-screen'), results: $('results'),
   };
   function showScreen(name) {
-    // clear any per-level visual theme when we leave the game (menu/results); harmless otherwise
-    if (name !== 'game' && name !== 'countdown') { try { window.RhythmLibrary && window.RhythmLibrary.clearLevelTheme && window.RhythmLibrary.clearLevelTheme(); } catch (e) {} }
+    // clear any per-level visual theme ONLY when truly leaving gameplay (back to library or results).
+    // NOT on 'loading' — loading happens AFTER launchLevel() applies the theme/backdrop/reactive cards,
+    // so clearing here wiped the level's whole identity mid-launch (it played plain). Bug fixed.
+    if (name === 'menu' || name === 'results') { try { window.RhythmLibrary && window.RhythmLibrary.clearLevelTheme && window.RhythmLibrary.clearLevelTheme(); } catch (e) {} }
     Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
     // EXCLUSIVITY: the target must be the ONLY active .screen. showScreen() only manages its 5-screen
     // map, so a lingering OVERLAY (how-to / levels / leaderboard / store / profile / settings / start)
