@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=87" />
+<link rel="stylesheet" href="jukebox.css?v=88" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -661,17 +661,19 @@
   #rr-reactive.show { display: block; }
   /* Cards sit LOW, flanking the guitar bridge (closer in, clearly in view), and FILL UP like fate
      meters: DEATH charges with misses, THE WORLD charges with hits. */
+  /* build8: cards FLANK THE UPPER-MID PLAYFIELD (necromancer's hands), bigger + clearly in view —
+     not the bottom corners. Still fill up like fate meters: DEATH=misses, THE WORLD=hits. */
   .rc-card {
-    position: absolute; bottom: 9vh;
-    width: min(11vw, 138px); aspect-ratio: 2 / 3; border-radius: 13px; overflow: hidden;
+    position: absolute; top: 30vh;
+    width: min(14vw, 178px); aspect-ratio: 2 / 3; border-radius: 13px; overflow: hidden;
     background-size: cover; background-position: center; background-color: #0a0706;
-    opacity: 0.6; filter: grayscale(0.32) brightness(0.62);
+    opacity: 0.62; filter: grayscale(0.30) brightness(0.66);
     border: 1px solid rgba(255,255,255,0.14);
     box-shadow: 0 10px 34px rgba(0,0,0,0.5);
     transition: opacity 0.4s ease, filter 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
   }
-  .rc-death { left: 16vw; }
-  .rc-world { right: 16vw; }
+  .rc-death { left: 19vw; }
+  .rc-world { right: 19vw; }
   /* the rising fill meter (height driven by --fill 0..1) */
   .rc-fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fill, 0) * 100%);
     pointer-events: none; transition: height 0.35s cubic-bezier(.3,1,.4,1); mix-blend-mode: screen; }
@@ -686,7 +688,7 @@
   .rc-world.rc-flash { animation: rcWorld 0.55s cubic-bezier(.2,1,.3,1); }
   @keyframes rcDeath { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(-2.5deg); } }
   @keyframes rcWorld { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(2.5deg); } }
-  @media (max-width: 900px) { .rc-card { width: 76px; bottom: 6vh; } .rc-death { left: 8px; } .rc-world { right: 8px; } }
+  @media (max-width: 900px) { .rc-card { width: 84px; top: 24vh; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
   html.rr-reduce-motion .rc-card, html.rr-reduce-motion .rc-fill { transition: none; }
   html.rr-reduce-motion .rc-card.rc-flash { animation: none; }
   /* Build/version stamp on the start screen (photo-friendly: shows version + host). */
@@ -902,9 +904,9 @@
   /* the faint full-screen scanline texture picks up a hint of the accent (kept very low alpha) */
   #game.rr-lvl-themed.game-screen::after {
     background: repeating-linear-gradient(0deg,
-      color-mix(in srgb, var(--rr-acc) 30%, rgba(150,35,35,0.045)) 0,
-      color-mix(in srgb, var(--rr-acc) 30%, rgba(150,35,35,0.045)) 1px,
-      transparent 1px, transparent 3px);
+      color-mix(in srgb, var(--rr-acc) 16%, rgba(150,35,35,0.025)) 0,
+      color-mix(in srgb, var(--rr-acc) 16%, rgba(150,35,35,0.025)) 1px,
+      transparent 1px, transparent 4px);
   }
   /* footer hint keycaps get an accent edge so the chrome below the board reads themed */
   #game.rr-lvl-themed .footer-hint kbd { border-color: var(--rr-acc-line); }
@@ -3523,10 +3525,10 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=87"></script>
-<script src="jukebox.js?v=87"></script>
-<script src="catalog.js?v=87"></script>
-<script src="multiplayer.js?v=87"></script>
+<script src="game.js?v=88"></script>
+<script src="jukebox.js?v=88"></script>
+<script src="catalog.js?v=88"></script>
+<script src="multiplayer.js?v=88"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3689,6 +3691,7 @@
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
+      intenseVideo:'assets/levels/skully-intense.mp4',   // build8: combo-spike backdrop (404 → self-heals to skully-loop.mp4)
       reactiveCards:{ hit:'assets/levels/card-world.jpg', miss:'assets/levels/card-death.jpg' },
       guitarSkin:'assets/guitars/violet-gothic.png',   // PREMIUM Skullyrae in-game guitar skin (geometry-matched recolor of assets/guitar.png; 404 → default)
       mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },   // SKULLY showcase level (Lil' Clay Skullyrae)
@@ -3851,7 +3854,8 @@
       try {
         var _acc = ({ crimson:'255,31,46', ember:'255,122,74', gold:'224,169,63', chrome:'218,215,210', violet:'166,77,255' })[L.theme];
         // violet/gothic (Skully) gets a richer ambient; chrome/gold are subtler (light hues read as haze)
-        var _amb = (L.theme === 'violet') ? 0.8 : (L.theme === 'chrome' ? 0.35 : 0.55);
+        // build8: violet ambient cut HARD (the Skully video already carries the violet mood; the fog was muddying the board)
+        var _amb = (L.theme === 'violet') ? 0.30 : (L.theme === 'chrome' ? 0.30 : 0.45);
         if (window.RhythmGame && window.RhythmGame.setLevelAccent) window.RhythmGame.setLevelAccent(_acc || null, _amb);
       } catch (e) {}
     } else {
@@ -3860,6 +3864,13 @@
     }
     // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin → equipped/default.
     try { if (window.RhythmGame && window.RhythmGame.setGuitarSkin) window.RhythmGame.setGuitarSkin(L && L.guitarSkin ? L.guitarSkin : null); } catch (e) {}
+    // build8: per-level GEM TINT — recolor the note marbles to the level accent (e.g. Skully violet).
+    try {
+      if (window.RhythmGame && window.RhythmGame.setLevelGemTint) {
+        var _gemHex = (L && L.theme && LV_THEMES[L.theme]) ? ({ crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' })[L.theme] : null;
+        window.RhythmGame.setLevelGemTint((_gemHex && _gemHex !== '#ff1f2e') ? _gemHex : null);
+      }
+    } catch (e) {}
     var v = $('bg-video'), bi = $('bg-image');
     function showStatic() {
       if (!bi) return;
@@ -3912,11 +3923,38 @@
     el.classList.add('show');
     var deathFill = 0, worldFill = 0;   // fate meters — closures persist across the run
     setFill(d, 0); setFill(w, 0);
+    var _intenseSrc = L.intenseVideo || null;   // build8: a more-intense backdrop for combo spikes (Skully). null → no swap.
+    var _intenseOn = false, _intenseT = null;
+    function _intenseRevert() {
+      if (!_intenseOn) return; _intenseOn = false;
+      var v = $('bg-video'); if (!v) return;
+      try { v.onerror = function () { try { v.onerror = null; } catch (e) {} };
+        var back = (L.bgVideo || (_bgSaved && _bgSaved.src) || QUICKPLAY_BG);
+        if (v.getAttribute('src') !== back) { v.setAttribute('src', back); v.load(); }
+        v.play().catch(function(){});
+      } catch (e) {}
+    }
+    function _intenseKick() {
+      if (!_intenseSrc) return;
+      var v = $('bg-video'); if (!v) return;
+      if (!_intenseOn) {
+        _intenseOn = true;
+        try {
+          v.onerror = function () { try { v.onerror = null; } catch (e) {} _intenseOn = false; _intenseRevert(); };
+          if (v.getAttribute('src') !== _intenseSrc) { v.setAttribute('src', _intenseSrc); v.load(); }
+          v.play().catch(function(){});
+        } catch (e) { _intenseOn = false; }
+      }
+      if (_intenseT) clearTimeout(_intenseT);
+      _intenseT = setTimeout(_intenseRevert, 5200);   // hold the spike, then ease back to the loop
+    }
     window.RhythmLevelFx = {
       // THE WORLD charges with clean hits (and slightly cools DEATH); flash on each.
       onHit: function (kind, lane) { worldFill = Math.min(1, worldFill + 0.035); deathFill = Math.max(0, deathFill - 0.015); setFill($('rc-world'), worldFill); setFill($('rc-death'), deathFill); flashCard($('rc-world')); },
       // DEATH charges with misses (and slightly cools THE WORLD); flash on each.
-      onMiss: function (lane) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); }
+      onMiss: function (lane) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); },
+      // build8: combo milestone / overdrive → kick the intense backdrop (dopamine spike), then ease back.
+      onCombo: function (combo, big) { _intenseKick(); }
     };
   }
   function hideReactive() {
@@ -3930,6 +3968,8 @@
     // build7: clear the level accent (additive glow + ambient off) and restore the equipped/default guitar
     try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.applyEquippedSkin) window.RhythmGame.applyEquippedSkin(); } catch (e) {}
+    // build8: clear the per-level gem tint (back to the crimson default marble)
+    try { window.RhythmGame && window.RhythmGame.setLevelGemTint && window.RhythmGame.setLevelGemTint(null); } catch (e) {}
     hideReactive();
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
@@ -4161,6 +4201,8 @@
         id: L.id, name: L.title, tier: L.tier, theme: L.theme || 'crimson',
         accent: ENV_ACCENT_HEX[L.theme] || '#ff1f2e',
         cover: L.cover || '', bgArt: L.bgArt || '', bgVideo: L.bgVideo || '',
+        guitarSkin: L.guitarSkin || '',                 // build8: carry per-level guitar onto the env path (was dropped → skin never fired)
+        intenseVideo: L.intenseVideo || '',             // build8: carry the combo-spike backdrop onto the env path
         reactiveCards: L.reactiveCards || null, boss: !!L.boss,
         paid: !!(L.unlock && L.unlock.entitlement)
       };
@@ -4175,7 +4217,7 @@
       var e = envById(id);
       if (!e || e.isDefault) { clearEnvironment(); return; }
       var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
-        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, reactiveCards: e.reactiveCards, boss: false, _isEnv: true };
+        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', reactiveCards: e.reactiveCards, boss: false, _isEnv: true };
       _activeLevel = synthetic;
       try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(synthetic); } catch (e2) {}
       applyLevelTheme(synthetic);

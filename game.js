@@ -998,6 +998,38 @@
       ? accent.replace(/\s+/g, '') : null;
     levelAmbient = levelAccentRGB ? (typeof amb === 'number' ? Math.max(0, Math.min(1, amb)) : 0.6) : 0;
   };
+  // build8: per-level GEM TINT — recolor the note marbles to the level identity (e.g. Skully violet).
+  // Crisp cached recolor (NOT an additive wash). Built once per hex, swapped in drawNote. Falsy clears.
+  let levelGemHex = null;
+  const _gemTintCache = {};
+  function _buildTintedGem(srcImg, hex) {
+    if (!srcImg || !srcImg._ready || !srcImg.width) return null;
+    const c = document.createElement('canvas'); c.width = srcImg.width; c.height = srcImg.height;
+    const x = c.getContext('2d');
+    x.drawImage(srcImg, 0, 0);
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.42; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    return c;
+  }
+  function _gemTintFor(kind) {
+    if (!levelGemHex) return null;
+    let entry = _gemTintCache[levelGemHex];
+    if (!entry) entry = _gemTintCache[levelGemHex] = { normal: undefined, star: undefined };
+    const slot = (kind === 'star') ? 'star' : 'normal';
+    if (entry[slot] === undefined) entry[slot] = _buildTintedGem(kind === 'star' ? noteStarImg : noteImg, levelGemHex);
+    return entry[slot] || null;
+  }
+  window.RhythmGame.setLevelGemTint = (hex) => {
+    let h = null;
+    if (typeof hex === 'string') {
+      const s = hex.trim();
+      if (/^#?[0-9a-fA-F]{6}$/.test(s)) h = s[0] === '#' ? s : '#' + s;
+      else { const m = s.match(/^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/);
+        if (m) h = '#' + [m[1], m[2], m[3]].map(n => Math.max(0, Math.min(255, +n)).toString(16).padStart(2, '0')).join(''); }
+    }
+    levelGemHex = h;
+  };
   window.RhythmGame.lastResults = () => _lastResults;
   window.RhythmGame.__demoProvider = () => demoProvider;
   window.RhythmGame.applySettings = (s) => {
@@ -1402,6 +1434,8 @@
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
+    // build8: tell a level its big moment landed (Skully kicks the intense backdrop). No-op when unset.
+    try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, true); } catch (e) {}
     playOverdriveSfx();
     if (navigator.vibrate) { try { navigator.vibrate([20, 30, 40]); } catch (e) {} }
     updateHUD();
@@ -1575,6 +1609,8 @@
       const big = combo % 100 === 0;                            // every 100 is a bigger moment
       flashJudgment(combo + (big ? ' STREAK!!' : ' STREAK'), big ? '#fff2cd' : '#ffe08a');
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
+      // build8: level-fx combo milestone hook (Skully swaps to the intense backdrop). No-op when unset.
+      try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, big); } catch (e) {}
     }
     const _tpM = timingProf();
     const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _tpM.comboStep));
@@ -2538,7 +2574,9 @@
     const img = note.type === 'star' ? noteStarImg : noteImg;
     let S = w * 1.3;
     if (note.type === 'accent') S *= 1.12;
-    if (img && img._ready) ctx.drawImage(img, cx - S / 2, y - S / 2, S, S);
+    const tinted = _gemTintFor(note.type);   // build8: violet (etc.) gem when a level sets a gem tint; null otherwise
+    if (tinted) ctx.drawImage(tinted, cx - S / 2, y - S / 2, S, S);
+    else if (img && img._ready) ctx.drawImage(img, cx - S / 2, y - S / 2, S, S);
     else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
     // HOPO "flow" cue — a thin ember ring (openNotes flag only; .hopo is never set unless the flag built it).
     if (note.hopo && !note.judged) {
@@ -2896,24 +2934,25 @@
     const A = levelAccentRGB;
     const inten = Math.max(bgPulse, energy * 0.85) * levelAmbient;
     // 1) low accent fog rising off the bottom third (cheap, big-read color)
+    //    build8: greatly reduced — was washing the board purple. Floor lowered, ceiling halved.
     {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const fg = ctx.createLinearGradient(0, ch, 0, ch * 0.55);
-      fg.addColorStop(0, 'rgba(' + A + ',' + (0.05 + inten * 0.10).toFixed(3) + ')');
+      const fg = ctx.createLinearGradient(0, ch, 0, ch * 0.62);
+      fg.addColorStop(0, 'rgba(' + A + ',' + (0.018 + inten * 0.045).toFixed(3) + ')');
       fg.addColorStop(1, 'rgba(' + A + ',0)');
-      ctx.fillStyle = fg; ctx.fillRect(0, ch * 0.55, cw, ch * 0.45);
+      ctx.fillStyle = fg; ctx.fillRect(0, ch * 0.62, cw, ch * 0.38);
       ctx.restore();
     }
-    // 2) drifting accent embers — count + glow scale with intensity (mirrors the crimson ember pass)
+    // 2) drifting accent embers — build8: ~half the count and dimmer so they sparkle instead of fogging.
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const n = 8 + Math.floor(energy * 14 * levelAmbient);
+    const n = 4 + Math.floor(energy * 7 * levelAmbient);
     for (let i = 0; i < n; i++) {
       const seed = i * 91.7;
       const x = (Math.sin(seed * 1.3) * 0.5 + 0.5) * cw;
       const prog = ((t * (0.03 + (i % 4) * 0.01) + (seed % 1)) % 1);
       const y = ch * (0.96 - prog * 0.78);
-      const sz = (0.7 + (i % 3) * 0.8) * (1 + energy * 0.8);
-      const a = (0.10 + inten * 0.30) * (1 - prog);
+      const sz = (0.6 + (i % 3) * 0.7) * (1 + energy * 0.8);
+      const a = (0.05 + inten * 0.16) * (1 - prog);
       ctx.fillStyle = 'rgba(' + A + ',' + a.toFixed(3) + ')';
       ctx.beginPath(); ctx.arc(x + Math.sin(t * 0.9 + i) * 7, y, sz, 0, Math.PI * 2); ctx.fill();
     }
