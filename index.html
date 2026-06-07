@@ -841,9 +841,10 @@
   #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
   #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
   /* per-level accent glow across the FULL backdrop (only when a level theme is active) */
-  #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.5; }
-  /* violet/gothic (Skully) reads stronger behind the guitar than the lighter accents */
-  #game.rr-lvl-themed[data-rrtheme="violet"] #game-bg .bg-accent { opacity: 0.62; }
+  #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.14; }
+  /* violet/gothic (Skully): the backdrop video is ALREADY violet, so the accent wash is kept very low
+     to stay CRISP (not a muddy purple film over the whole screen). */
+  #game.rr-lvl-themed[data-rrtheme="violet"] #game-bg .bg-accent { opacity: 0.10; }
   /* ====================================================================
      PER-LEVEL IDENTITY — restyle the WHOLE gameplay screen to the level
      accent (--rr-lvl-accent, set by the [data-rrtheme=...] rules above).
