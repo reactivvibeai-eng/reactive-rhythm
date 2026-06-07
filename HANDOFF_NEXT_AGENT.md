@@ -72,8 +72,11 @@ after JS edits; validate inline scripts via `new Function()`. See memory `rhythm
 The user runs a SEPARATE asset-gen agent (brief: `ASSET_AGENT_BRIEF.md`; detailed prompts: `ASSET_PROMPTS.md`). It ONLY
 touches `assets/` + ASSET_PROMPTS.md (no game code) → commits on the SAME branch, no collisions. **Your Higgsfield MCP
 may be disconnected** — if you need art, hand prompts to the asset agent (put exact prompts + paths in the build package).
-Pending art it's producing: `assets/levels/browse-loop.mp4` (job 16aa24b8 may have NSFW-flagged → re-roll), guitar skins
-(`assets/guitars/`), store covers. Your code must self-heal when an asset is missing.
+ALREADY DELIVERED by the asset agent (committed on visual-overhaul — check git log + the folders): **`assets/levels/browse-loop.mp4`**
+(browse-section blood-moon loop), **`assets/guitars/`** (4 geometry-matched guitar skins via gradient-map recolor of the
+base guitar — so string geometry stays aligned), **`assets/store/skin-*.jpg`** (4 store skin covers). So guitarstore (#1)
+and polish (#2 browse video) can wire to REAL assets now, not just self-heal — read the build packages for the exact
+filenames and confirm they match what's in assets/. Still code-self-heal if any specific file is absent.
 
 ## HARD CONSTRAINTS
 Brand: black · crimson #ff1f2e · ember #ff7a4a · gold #e0a93f · chrome #dad7d2; warm darks (R≥G≥B); **NO blue/purple in
