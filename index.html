@@ -647,7 +647,7 @@
     margin: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
   }
   /* ---- STORE overlay (Sparks shop) — mirrors leaderboard overlay; brand crimson/ember/gold ---- */
-  .store-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
+  .store-screen { z-index: 261; background: linear-gradient(rgba(10,7,9,0.50), rgba(10,7,9,0.80)), url('assets/store/store-bg.jpg') center/cover no-repeat fixed, radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.45), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
   .screen.active .store-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
   .store-card { width: min(720px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 10px; text-align: center; }
   .store-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
