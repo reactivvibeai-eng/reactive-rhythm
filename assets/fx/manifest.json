@@ -75,5 +75,38 @@
     "fps": 14,
     "blend": "lighter",
     "loop": true
+  },
+  "bomb-fuse": {
+    "src": "assets/fx/bomb-fuse.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true
+  },
+  "bomb-explode": {
+    "src": "assets/fx/bomb-explode.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 7,
+    "rows": 4,
+    "count": 28,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false
+  },
+  "bomb-warn": {
+    "src": "assets/fx/bomb-warn.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 16,
+    "blend": "lighter",
+    "loop": true
   }
 }
