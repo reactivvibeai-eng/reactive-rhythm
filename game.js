@@ -101,6 +101,11 @@
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
   let bgPulse = 0;
+  // ---- PER-LEVEL VISUAL IDENTITY (build7) ----
+  // Set by RhythmGame.setLevelAccent('r,g,b') from the level-theme code; null = Quick Play (no tint).
+  // Used ONLY for ADDITIVE glow + ambient FX — LANE_COLORS / scoring / timing are untouched.
+  let levelAccentRGB = null;     // e.g. '166,77,255' for violet, or null
+  let levelAmbient = 0;          // 0..1 strength of the ambient FX layer (0 = off)
   // audio-reactive: an AnalyserNode tap on the music gain drives a beat pulse into bgPulse
   let musicAnalyser = null, musicFreq = null, beatLevel = 0;
   let energy = 0;            // smoothed musical intensity (0..1) from chart density
@@ -400,8 +405,55 @@
     try { if (typeof renderKeycaps === 'function') renderKeycaps(); } catch (e) {}
     try { if (typeof renderPadcaps === 'function') renderPadcaps(); } catch (e) {}
     try { if (typeof layoutTapZones === 'function') layoutTapZones(); } catch (e) {}
+    // keep the active skin after a profile swap: per-level override wins, else equipped, else this profile's default (already set above)
+    try { if (typeof _applySkinImg === 'function') { if (_levelSkinActive) {} else if (equippedSkinSrc) _applySkinImg(equippedSkinSrc); } } catch (e) {}
   }
   try { window.__rrLaneMode = applyLaneProfile; window.__rrGetLaneMode = () => laneProfile; } catch (e) {}
+
+  // ---- GUITAR SKIN LAYER (image-only swap) -------------------------------------
+  // Swaps activeGuitarImg to a re-skinned guitar PNG WITHOUT touching geometry
+  // (LANE_COUNT / ART.nutXF / ART.bridgeXF / aspect / fit all stay from the lane
+  // profile), so notes & strings stay aligned. The skin art MUST share the active
+  // profile's silhouette + string positions (skins target the standard 6-string;
+  // assets/guitars/* are recolors of assets/guitar.png). A 404 self-heals back to
+  // the lane-profile default image. Equipped skin persists in rr_skin; a per-level
+  // guitarSkin is a temporary override that does NOT touch rr_skin.
+  const SKIN_STORE = 'rr_skin';
+  let equippedSkinSrc = null;       // persisted (rr_skin) — the global equip
+  let _levelSkinActive = false;     // true while a per-level override is showing
+  function _profileDefaultImg() { const p = LANE_PROFILES[laneProfile]; return (p && p.img) || guitarImg; }
+  function _applySkinImg(src) {
+    if (!src) { activeGuitarImg = _profileDefaultImg(); return; }
+    const im = new Image(); im._ready = false;
+    im.onload = () => { im._ready = true; };
+    im.onerror = () => { if (activeGuitarImg === im) activeGuitarImg = _profileDefaultImg(); };  // self-heal: missing skin → profile default
+    im.src = src;
+    activeGuitarImg = im;            // draw site guards on _ready, so a not-yet-loaded image just skips a frame
+  }
+  // Per-level override (temporary). Pass falsy to drop the override → back to equipped/default.
+  function setGuitarSkin(src) {
+    if (src) { _levelSkinActive = true; _applySkinImg(src); }
+    else { _levelSkinActive = false; _applySkinImg(equippedSkinSrc); }
+  }
+  // Equip a skin globally (persisted). Pass falsy to clear the equip (back to default).
+  function equipGuitarSkin(src) {
+    equippedSkinSrc = src || null;
+    try { if (equippedSkinSrc) localStorage.setItem(SKIN_STORE, equippedSkinSrc); else localStorage.removeItem(SKIN_STORE); } catch (e) {}
+    if (!_levelSkinActive) _applySkinImg(equippedSkinSrc);   // don't stomp an active per-level skin
+  }
+  // Re-assert the equipped skin (used on game start + after a level clears its override).
+  function applyEquippedSkin() {
+    _levelSkinActive = false;
+    try { equippedSkinSrc = localStorage.getItem(SKIN_STORE) || null; } catch (e) { equippedSkinSrc = null; }
+    _applySkinImg(equippedSkinSrc);
+  }
+  // boot the equipped skin (bootLaneProfile runs applyLaneProfile later, so reading storage now is safe)
+  try { equippedSkinSrc = localStorage.getItem(SKIN_STORE) || null; } catch (e) { equippedSkinSrc = null; }
+  window.RhythmGame = window.RhythmGame || {};
+  window.RhythmGame.setGuitarSkin = setGuitarSkin;       // per-level temporary override
+  window.RhythmGame.equipGuitarSkin = equipGuitarSkin;   // global persisted equip
+  window.RhythmGame.applyEquippedSkin = applyEquippedSkin;
+  window.RhythmGame.getEquippedSkin = () => equippedSkinSrc;
 
   // ---------- SHARED, UNLOCKABLE AUDIO CONTEXT (mobile autoplay) ----------
   let sharedAC = null;
@@ -905,6 +957,8 @@
   async function play(prov, opts) {
     provider = prov;
     bossMode = !!(opts && opts.boss) || bossFlag;   // Boss Stage: Levels boss card → playBoss(), or ?boss=1 to test
+    // re-assert the equipped skin at start UNLESS a per-level override is active (launchLevel sets it via applyLevelTheme before play())
+    try { if (!_levelSkinActive && typeof applyEquippedSkin === 'function') applyEquippedSkin(); } catch (e) {}
     $('play-btn').disabled = true;
     try {
       await beginPlay();
@@ -937,6 +991,13 @@
   let _levelCtx = null, _levelMods = null, _lastResults = null;
   window.RhythmGame.setLevelContext = (L) => { _levelCtx = L || null; };
   window.RhythmGame.setLevelMods = (m) => { _levelMods = (m && typeof m === 'object') ? m : null; };
+  // build7: per-level visual identity hook. accent = 'r,g,b' string (or null to clear);
+  // amb = 0..1 ambient FX strength (default 0.6 when an accent is given). Presentation only.
+  window.RhythmGame.setLevelAccent = (accent, amb) => {
+    levelAccentRGB = (typeof accent === 'string' && /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/.test(accent))
+      ? accent.replace(/\s+/g, '') : null;
+    levelAmbient = levelAccentRGB ? (typeof amb === 'number' ? Math.max(0, Math.min(1, amb)) : 0.6) : 0;
+  };
   window.RhythmGame.lastResults = () => _lastResults;
   window.RhythmGame.__demoProvider = () => demoProvider;
   window.RhythmGame.applySettings = (s) => {
@@ -2022,6 +2083,19 @@
       const cY = nearY + rk * (lw * 0.10);                       // small downward kick (away from notes)
       const cCol = rk > 0.25 ? { c: '#7a6f6a', rgb: '150, 140, 134' } : LANE_COLORS[i];
       drawCatcher(nearX[i], cY, lw * 0.28, cCol, pulse, 0.4 + Math.max(bgPulse, energy) * 0.6, lanePulse[i]);
+      // build7: additive level-accent halo under the catcher (presentation only; skipped in Quick Play / fxLite)
+      if (levelAccentRGB && !fxLite) {
+        const ag = (0.10 + Math.max(pulse, Math.max(bgPulse, energy)) * 0.22);
+        if (ag > 0.02) {
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          const r2 = lw * 0.5;
+          const grd = ctx.createRadialGradient(nearX[i], cY, 0, nearX[i], cY, r2);
+          grd.addColorStop(0, 'rgba(' + levelAccentRGB + ',' + ag.toFixed(3) + ')');
+          grd.addColorStop(1, 'rgba(' + levelAccentRGB + ',0)');
+          ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(nearX[i], cY, r2, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      }
     }
 
     // notes — glossy spheres sliding down the strings toward the catchers
@@ -2125,6 +2199,20 @@
         // hot white core thread (cool & faint when dropped)
         beam(Math.max(1.1, wB * 0.2), 'rgba(255,242,236,' + (resolving ? 0.26 : (lit ? 0.95 : 0.62)) + ')', 4);
         ctx.restore();
+      }
+      // build7: soft accent aura behind a note as it nears the catcher (additive; Quick Play / fxLite skip).
+      // Radius uses the SAME note size as drawNote (lw*0.46*sc), so the halo tracks the sphere exactly.
+      if (!resolving && levelAccentRGB && !fxLite && d < 0.55) {
+        const aa = (0.55 - d) / 0.55 * 0.16;
+        if (aa > 0.01) {
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          const rr = lw * 0.46 * sc * 2.0;
+          const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, rr);
+          ng.addColorStop(0, 'rgba(' + levelAccentRGB + ',' + aa.toFixed(3) + ')');
+          ng.addColorStop(1, 'rgba(' + levelAccentRGB + ',0)');
+          ctx.fillStyle = ng; ctx.beginPath(); ctx.arc(nx, ny, rr, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
       }
       if (!resolving) drawNote(nx, ny, lw * 0.46 * sc, n);
     }
@@ -2796,6 +2884,40 @@
       ctx.fillStyle = gl; ctx.fillRect(0, 0, cw, ch * 0.6);
       ctx.restore();
     }
+    drawLevelAmbient(t);   // build7: per-level accent ambient (gated, no-op in Quick Play)
+  }
+
+  // ---- PER-LEVEL AMBIENT (build7) ----
+  // Drifting accent-colored embers + a soft accent fog band, painted on the transparent canvas so it
+  // reads ACROSS the whole highway (not just the DOM backdrop hidden behind the guitar). Intensity is
+  // tied to energy/bgPulse. Fully gated: no accent / no ambient / reduceMotion / fxLite → returns at once.
+  function drawLevelAmbient(t) {
+    if (!levelAccentRGB || !levelAmbient || reduceMotion || fxLite) return;
+    const A = levelAccentRGB;
+    const inten = Math.max(bgPulse, energy * 0.85) * levelAmbient;
+    // 1) low accent fog rising off the bottom third (cheap, big-read color)
+    {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const fg = ctx.createLinearGradient(0, ch, 0, ch * 0.55);
+      fg.addColorStop(0, 'rgba(' + A + ',' + (0.05 + inten * 0.10).toFixed(3) + ')');
+      fg.addColorStop(1, 'rgba(' + A + ',0)');
+      ctx.fillStyle = fg; ctx.fillRect(0, ch * 0.55, cw, ch * 0.45);
+      ctx.restore();
+    }
+    // 2) drifting accent embers — count + glow scale with intensity (mirrors the crimson ember pass)
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const n = 8 + Math.floor(energy * 14 * levelAmbient);
+    for (let i = 0; i < n; i++) {
+      const seed = i * 91.7;
+      const x = (Math.sin(seed * 1.3) * 0.5 + 0.5) * cw;
+      const prog = ((t * (0.03 + (i % 4) * 0.01) + (seed % 1)) % 1);
+      const y = ch * (0.96 - prog * 0.78);
+      const sz = (0.7 + (i % 3) * 0.8) * (1 + energy * 0.8);
+      const a = (0.10 + inten * 0.30) * (1 - prog);
+      ctx.fillStyle = 'rgba(' + A + ',' + a.toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(x + Math.sin(t * 0.9 + i) * 7, y, sz, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
   // EQ bars on menu

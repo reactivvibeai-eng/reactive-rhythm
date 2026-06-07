@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=86" />
+<link rel="stylesheet" href="jukebox.css?v=87" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -400,9 +400,11 @@
 
   /* ============ LOADING ============ */
   .loading-wrap {
-    display: flex; flex-direction: column; align-items: center; gap: 32px;
+    display: flex; flex-direction: column; align-items: center; gap: 30px;
     font-family: 'JetBrains Mono', monospace;
+    position: relative; z-index: 1;
   }
+  /* legacy glyph (kept verbatim — current markup doesn't use it, but referenced defensively) */
   .loading-glyph {
     width: 120px; height: 120px;
     position: relative;
@@ -421,38 +423,96 @@
     animation: pulse 1s ease-in-out infinite;
   }
   .loading-text {
+    font-family: 'Chakra Petch', monospace;
     font-size: 14px;
     letter-spacing: 0.3em;
     text-transform: uppercase;
     color: var(--ink-dim);
+    display: flex; align-items: baseline; gap: 0;
   }
-  .loading-text .pct { color: var(--cyan); margin-left: 12px; }
+  .loading-text .pct { color: var(--crimson); font-family: 'Oxanium', sans-serif; font-weight: 700; margin-left: 12px; }
   .loading-stage {
     font-family: 'Oxanium', sans-serif;
     font-size: 30px;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--ink);
-    text-shadow: 0 0 26px rgba(255,42,48,0.5);
+    text-shadow: 0 0 26px rgba(255,31,46,0.55);
   }
-  /* ---- reactive-atom loader ---- */
+
+  /* ---- premium reactive-atom loader (crimson/ember energy core) ---- */
   .atom-loader {
-    width: 210px; height: 210px; position: relative;
-    filter: drop-shadow(0 0 34px rgba(255,42,48,0.28));
+    width: 220px; height: 220px; position: relative;
+    filter: drop-shadow(0 0 38px rgba(255,31,46,0.30));
   }
-  .atom-svg { width: 100%; height: 100%; overflow: visible; }
-  .atom-spin { transform-origin: 110px 110px; animation: atom-rot 16s linear infinite; }
+  /* conic ember energy sweep behind the atom (GPU-cheap rotation of a masked ring) */
+  .atom-loader::before {
+    content: ''; position: absolute; inset: 4%; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(from 0deg,
+      transparent 0deg, rgba(255,31,46,0.0) 40deg, rgba(255,122,74,0.55) 130deg,
+      rgba(255,31,46,0.9) 168deg, rgba(255,122,74,0.55) 206deg, transparent 300deg, transparent 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 60%, #000 62%, #000 78%, transparent 82%);
+            mask: radial-gradient(circle, transparent 60%, #000 62%, #000 78%, transparent 82%);
+    animation: atom-sweep 2.6s linear infinite;
+    opacity: 0.85;
+  }
+  @keyframes atom-sweep { to { transform: rotate(360deg); } }
+  /* counter-rotating chrome outer hairline ring (warm-tinted, no blue/purple) */
+  .atom-loader::after {
+    content: ''; position: absolute; inset: -2%; border-radius: 50%; pointer-events: none;
+    border: 1px solid rgba(218,215,210,0.18);
+    border-top-color: rgba(218,215,210,0.55); border-right-color: rgba(255,122,74,0.40);
+    animation: atom-chrome 5.5s linear infinite reverse;
+  }
+  @keyframes atom-chrome { to { transform: rotate(360deg); } }
+
+  .atom-svg { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; }
+  .atom-spin { transform-origin: 110px 110px; animation: atom-rot 14s linear infinite; }
   @keyframes atom-rot { to { transform: rotate(360deg); } }
   .atom-core { transform-origin: 110px 110px; animation: atom-core 1.05s ease-in-out infinite; }
   @keyframes atom-core {
-    0%,100% { transform: scale(1);    filter: drop-shadow(0 0 6px rgba(255,42,48,0.7)); }
-    50%     { transform: scale(1.18); filter: drop-shadow(0 0 18px rgba(255,42,48,1)); }
+    0%,100% { transform: scale(1);    filter: drop-shadow(0 0 7px rgba(255,31,46,0.75)); }
+    50%     { transform: scale(1.2);  filter: drop-shadow(0 0 20px rgba(255,31,46,1)); }
   }
-  #loading-ring { transition: stroke-dashoffset 0.25s ease; filter: drop-shadow(0 0 6px rgba(255,42,48,0.8)); }
-  .loading-text { font-family: 'Chakra Petch', monospace; }
-  .loading-text .pct { color: var(--crimson); font-family: 'Oxanium', sans-serif; font-weight: 700; }
-  html.rr-reduce-motion .atom-spin, html.rr-reduce-motion .atom-core { animation: none; }
+  #loading-ring {
+    transition: stroke-dashoffset 0.25s ease;
+    filter: drop-shadow(0 0 7px rgba(255,31,46,0.85)) drop-shadow(0 0 14px rgba(255,122,74,0.4));
+  }
+
+  /* equalizer pulse — 5 ember/gold bars beneath the loader, "music is decoding" energy cue */
+  .loading-eq { display: flex; align-items: flex-end; gap: 6px; height: 26px; margin-top: -8px; }
+  .loading-eq i {
+    width: 5px; height: 100%; border-radius: 3px;
+    background: linear-gradient(180deg, var(--crimson), var(--gold));
+    box-shadow: 0 0 10px rgba(255,31,46,0.55);
+    transform-origin: bottom; animation: eqPulse 0.9s ease-in-out infinite;
+  }
+  .loading-eq i:nth-child(1) { animation-delay: 0s;     height: 60%; }
+  .loading-eq i:nth-child(2) { animation-delay: 0.12s;  height: 100%; }
+  .loading-eq i:nth-child(3) { animation-delay: 0.24s;  height: 75%; }
+  .loading-eq i:nth-child(4) { animation-delay: 0.36s;  height: 92%; }
+  .loading-eq i:nth-child(5) { animation-delay: 0.48s;  height: 55%; }
+  @keyframes eqPulse { 0%,100% { transform: scaleY(0.35); opacity: 0.7; } 50% { transform: scaleY(1); opacity: 1; } }
+
+  /* reduced-motion (Settings toggle): freeze to a clean static frame, no spin/sweep/pulse/eq */
+  html.rr-reduce-motion .atom-spin,
+  html.rr-reduce-motion .atom-core,
+  html.rr-reduce-motion .atom-loader::before,
+  html.rr-reduce-motion .atom-loader::after,
+  html.rr-reduce-motion .loading-eq i { animation: none; }
+  html.rr-reduce-motion .atom-loader::before { opacity: 0.45; }
+  html.rr-reduce-motion .loading-eq i { transform: scaleY(0.7); opacity: 0.85; }
+
+  /* reduced-motion (OS-level): same static frame for users who never opened Settings */
+  @media (prefers-reduced-motion: reduce) {
+    .atom-spin, .atom-core,
+    .atom-loader::before, .atom-loader::after,
+    .loading-eq i,
+    .atom-loader .atom-halo { animation: none !important; }
+    .atom-loader::before { opacity: 0.45; }
+    .loading-eq i { transform: scaleY(0.7); opacity: 0.85; }
+  }
 
   /* ============ HOW TO PLAY ============ */
   .howto-screen { z-index: 260; background: radial-gradient(ellipse at 50% 32%, rgba(120,12,20,0.55), transparent 62%), #0a0706; backdrop-filter: blur(18px); }
@@ -736,6 +796,10 @@
   .store-buy.owned { background: transparent; color: #e0a93f; border: 1px solid rgba(224,169,63,0.5); box-shadow: none; cursor: default; }
   .store-buy.getmore { background: linear-gradient(180deg, #ffb35a, #e0a93f); color: #1a0608; box-shadow: 0 4px 14px rgba(224,169,63,0.35); }
   .store-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  .store-buy.equip { background: linear-gradient(180deg, #ff2a38, #b3121f); color: #fff; border: none; box-shadow: 0 4px 14px rgba(255,31,46,0.35), inset 0 1px 0 rgba(255,255,255,0.22); }
+  .store-buy.equip:hover, .store-buy.equip:focus-visible { box-shadow: 0 6px 20px rgba(255,31,46,0.5), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .store-buy.equipped { background: linear-gradient(180deg, rgba(224,169,63,0.18), rgba(224,169,63,0.10)); color: #e0a93f; border: 1px solid rgba(224,169,63,0.55); box-shadow: none; cursor: pointer; }
+  .store-buy.equipped::before { content: '\2713\00a0'; }   /* gold check ✓ */
   @media (max-width: 560px) { .store-title { font-size: 36px; } .store-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
@@ -778,6 +842,71 @@
   #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
   /* per-level accent glow across the FULL backdrop (only when a level theme is active) */
   #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.5; }
+  /* violet/gothic (Skully) reads stronger behind the guitar than the lighter accents */
+  #game.rr-lvl-themed[data-rrtheme="violet"] #game-bg .bg-accent { opacity: 0.62; }
+  /* ====================================================================
+     PER-LEVEL IDENTITY — restyle the WHOLE gameplay screen to the level
+     accent (--rr-lvl-accent, set by the [data-rrtheme=...] rules above).
+     Scoped under #game.rr-lvl-themed so Quick Play (no theme) is
+     byte-identical. UI chrome OUTSIDE #game is never touched. (build7)
+     ==================================================================== */
+  #game.rr-lvl-themed {
+    --rr-acc:        var(--rr-lvl-accent, #ff1f2e);
+    --rr-acc-line:   color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 36%, transparent);
+    --rr-acc-glow:   color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 55%, transparent);
+  }
+  /* side HUD panels: warm-dark base tinted toward the level accent + accent hairline */
+  #game.rr-lvl-themed .hud-panel {
+    background: linear-gradient(180deg,
+      color-mix(in srgb, var(--rr-acc) 10%, rgba(14,7,8,0.9)),
+      color-mix(in srgb, var(--rr-acc) 6%,  rgba(20,10,11,0.5)));
+  }
+  #game.rr-lvl-themed .hud-panel.left  { border-right: 1px solid var(--rr-acc-line); }
+  #game.rr-lvl-themed .hud-panel.right { border-left:  1px solid var(--rr-acc-line); }
+  /* angular corner brackets adopt the level accent */
+  #game.rr-lvl-themed .hud-panel::before,
+  #game.rr-lvl-themed .hud-panel::after {
+    border-color: color-mix(in srgb, var(--rr-acc) 70%, transparent);
+  }
+  /* label signal-diamonds + their glow */
+  #game.rr-lvl-themed .hud-block .label::before {
+    background: var(--rr-acc);
+    box-shadow: 0 0 8px var(--rr-acc-glow);
+  }
+  /* brand dot in the panel header */
+  #game.rr-lvl-themed .hud-panel .brand-dot {
+    background: var(--rr-acc); box-shadow: 0 0 12px var(--rr-acc-glow);
+  }
+  /* meters: song-progress fill leans crimson→accent */
+  #game.rr-lvl-themed .song-progress > i {
+    background: linear-gradient(90deg,
+      color-mix(in srgb, var(--rr-acc) 55%, #b3121f),
+      var(--rr-acc));
+    box-shadow: 0 0 12px var(--rr-acc-glow), inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+  /* overdrive bar stays gold/ember (universal reward signal) — only its segmented track border tints */
+  #game.rr-lvl-themed .od-bar { border-color: var(--rr-acc-line); }
+  /* reality-stability fill carries an INLINE gradient (index.html ~line 2988) → override to accent→gold */
+  #game.rr-lvl-themed #hud-stability {
+    background: linear-gradient(90deg, var(--rr-acc), #e0a93f) !important;
+  }
+  /* judgment composition bar: perfect/miss segments lean to the themed cluster (great/good keep semantic gold/coral) */
+  #game.rr-lvl-themed .judge-bar .perfect { background: color-mix(in srgb, var(--rr-acc) 30%, #dad7d2); }
+  #game.rr-lvl-themed .judge-bar .miss    { background: var(--rr-acc); }
+  /* the crimson hero readouts retint to the level accent */
+  #game.rr-lvl-themed .hud-block .val.crimson {
+    color: var(--rr-acc);
+    text-shadow: 0 0 26px var(--rr-acc-glow);
+  }
+  /* the faint full-screen scanline texture picks up a hint of the accent (kept very low alpha) */
+  #game.rr-lvl-themed.game-screen::after {
+    background: repeating-linear-gradient(0deg,
+      color-mix(in srgb, var(--rr-acc) 30%, rgba(150,35,35,0.045)) 0,
+      color-mix(in srgb, var(--rr-acc) 30%, rgba(150,35,35,0.045)) 1px,
+      transparent 1px, transparent 3px);
+  }
+  /* footer hint keycaps get an accent edge so the chrome below the board reads themed */
+  #game.rr-lvl-themed .footer-hint kbd { border-color: var(--rr-acc-line); }
   #results-next { display: none; }
   #results-next.show { display: inline-flex; }
   #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
@@ -3006,6 +3135,7 @@
           <circle class="atom-core" cx="110" cy="110" r="19" fill="url(#rr-wood)" stroke="#ff2a30" stroke-width="2.5"/>
         </svg>
       </div>
+      <div class="loading-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
       <div class="loading-stage display" id="loading-stage">DECODING SIGNAL</div>
       <div class="loading-text">
         <span id="loading-msg">Awakening ECH0</span>
@@ -3392,10 +3522,10 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=86"></script>
-<script src="jukebox.js?v=86"></script>
-<script src="catalog.js?v=86"></script>
-<script src="multiplayer.js?v=86"></script>
+<script src="game.js?v=87"></script>
+<script src="jukebox.js?v=87"></script>
+<script src="catalog.js?v=87"></script>
+<script src="multiplayer.js?v=87"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3536,6 +3666,7 @@
     //  theme (opt) crimson|ember|gold|chrome|violet         per-level accent + splash palette (violet=gothic)
     //  cover (opt) 'assets/levels/x.jpg' key art on card + splash (missing → title initial)
     //  bgArt (opt) backdrop poster · bgVideo (opt) backdrop loop (404 → moon)
+    //  guitarSkin (opt) 'assets/guitars/x.png' per-level guitar art (MUST match the active profile's silhouette+strings; 404→default)
     //  mods  (opt) {speed,mirror,failOn} applied only if LEVELDESIGN_MODS=true (off)
     //  boss  (opt) true · unlock (opt) {stars:N, entitlement:{item_type,item_id}}
     // ====================================================================
@@ -3558,6 +3689,7 @@
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
       reactiveCards:{ hit:'assets/levels/card-world.jpg', miss:'assets/levels/card-death.jpg' },
+      guitarSkin:'assets/guitars/violet-gothic.png',   // PREMIUM Skullyrae in-game guitar skin (geometry-matched recolor of assets/guitar.png; 404 → default)
       mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },   // SKULLY showcase level (Lil' Clay Skullyrae)
     { id:'frac-02', tier:'hard', title:'Hollow Choir', song:{ stride:14 }, theme:'violet',
       cover:'assets/levels/hollowchoir-cover.jpg', bgArt:'assets/levels/fracture-bg.jpg',
@@ -3694,6 +3826,9 @@
     applyLevelTheme(L);
     showSplash(L, track);   // themed intro card over the loading screen (skippable, reduceMotion/fxLite-safe)
     showReactive(L);        // per-level reactive overlay (e.g. Skully's DEATH / THE WORLD tarot cards)
+    // build7: re-assert theme + reactive a beat after the screen settles, so a stray screen-change
+    // teardown during loading can't strip the active level's identity before the countdown.
+    try { setTimeout(function () { if (_activeLevel === L) { applyLevelTheme(L); showReactive(L); } }, 650); } catch (e) {}
     if (LEVELDESIGN_MODS && L.mods) { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(L.mods); } catch (e) {} }
     else { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {} }
     close();
@@ -3709,8 +3844,21 @@
   var _bgSaved = null;
   function applyLevelTheme(L) {
     var g = $('game'); if (!g) return;
-    if (L && L.theme && LV_THEMES[L.theme]) { g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme); }
-    else { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    if (L && L.theme && LV_THEMES[L.theme]) {
+      g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme);
+      // build7: push the accent into the engine for additive note/catcher glow + ambient FX.
+      try {
+        var _acc = ({ crimson:'255,31,46', ember:'255,122,74', gold:'224,169,63', chrome:'218,215,210', violet:'166,77,255' })[L.theme];
+        // violet/gothic (Skully) gets a richer ambient; chrome/gold are subtler (light hues read as haze)
+        var _amb = (L.theme === 'violet') ? 0.8 : (L.theme === 'chrome' ? 0.35 : 0.55);
+        if (window.RhythmGame && window.RhythmGame.setLevelAccent) window.RhythmGame.setLevelAccent(_acc || null, _amb);
+      } catch (e) {}
+    } else {
+      g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme');
+      try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
+    }
+    // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin → equipped/default.
+    try { if (window.RhythmGame && window.RhythmGame.setGuitarSkin) window.RhythmGame.setGuitarSkin(L && L.guitarSkin ? L.guitarSkin : null); } catch (e) {}
     var v = $('bg-video'), bi = $('bg-image');
     function showStatic() {
       if (!bi) return;
@@ -3778,6 +3926,9 @@
   var QUICKPLAY_BG = 'assets/moon-loop.mp4';
   function clearLevelTheme() {
     var g = $('game'); if (g) { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    // build7: clear the level accent (additive glow + ambient off) and restore the equipped/default guitar
+    try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
+    try { if (window.RhythmGame && window.RhythmGame.applyEquippedSkin) window.RhythmGame.applyEquippedSkin(); } catch (e) {}
     hideReactive();
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
@@ -4265,10 +4416,40 @@
   // ---- Client-side item-art fallback: used ONLY when the backend sends no meta.art_url. Drop a 1:1
   // jpg at assets/store/<id>.jpg and it appears (missing → initial-letter tile via the <img onerror>). ----
   var STORE_ART = {
-    starter_pack: 'assets/store/starter_pack.jpg',
-    boss_neon:    'assets/store/boss_neon.jpg',
-    theme_neon:   'assets/store/theme_neon.jpg'
+    // skins (covers on disk: assets/store/skin-*.jpg)
+    violet_gothic: 'assets/store/skin-violet-gothic.jpg',
+    crimson_chrome:'assets/store/skin-crimson-chrome.jpg',
+    ember_bone:    'assets/store/skin-ember-bone.jpg',
+    gold_relic:    'assets/store/skin-gold-relic.jpg',
+    // premium level + theme (reuse existing covers)
+    boss_neon:     'assets/store/boss_neon.jpg',
+    theme_neon:    'assets/store/theme_neon.jpg',
+    // legacy (back-compat if backend still sends it)
+    starter_pack:  'assets/store/starter_pack.jpg'
   };
+  // SKIN item_id → the in-game guitar PNG to equip (on disk: assets/guitars/*.png). Backend may also send meta.skin_url.
+  var SKIN_GUITAR = {
+    violet_gothic: 'assets/guitars/violet-gothic.png',
+    crimson_chrome:'assets/guitars/crimson-chrome.png',
+    ember_bone:    'assets/guitars/ember-bone.png',
+    gold_relic:    'assets/guitars/gold-relic.png'
+  };
+  function skinSrcFor(it) {
+    var m = it && it.meta;
+    if (m && m.skin_url) return m.skin_url;
+    return SKIN_GUITAR[String(it && it.item_id)] || '';
+  }
+  function isSkin(it) { return String(it && it.item_type).toLowerCase() === 'skin'; }
+  // ---- CLIENT STORE FALLBACK CATALOG: used ONLY when backend /store returns no items (dormant / pre-update).
+  // Mirrors the Lovable brief below. Prices in Sparks. Equip works fully client-side; level/theme ownership needs backend.
+  var STORE_FALLBACK = [
+    { item_type:'skin',  item_id:'violet_gothic',  title:'Violet Gothic',  price_sparks:1200, meta:{ description:'Necro-violet relic finish', art_url:STORE_ART.violet_gothic, skin_url:SKIN_GUITAR.violet_gothic } },
+    { item_type:'skin',  item_id:'crimson_chrome', title:'Crimson Chrome', price_sparks:1000, meta:{ description:'Mirror-chrome with crimson burst', art_url:STORE_ART.crimson_chrome, skin_url:SKIN_GUITAR.crimson_chrome } },
+    { item_type:'skin',  item_id:'ember_bone',     title:'Ember Bone',     price_sparks:1500, meta:{ description:'Charred bone + ember inlays', art_url:STORE_ART.ember_bone, skin_url:SKIN_GUITAR.ember_bone } },
+    { item_type:'skin',  item_id:'gold_relic',     title:'Gold Relic',     price_sparks:2000, meta:{ description:'Hammered gold, chrome hardware', art_url:STORE_ART.gold_relic, skin_url:SKIN_GUITAR.gold_relic } },
+    { item_type:'level', item_id:'boss_neon',      title:'THE BREAKER (Boss)', price_sparks:2500, meta:{ description:'Unlock the Fracture boss stage', art_url:STORE_ART.boss_neon } },
+    { item_type:'theme', item_id:'theme_neon',     title:'Neon Theme',     price_sparks:800,  meta:{ description:'Neon HUD accent theme', art_url:STORE_ART.theme_neon } }
+  ];
   function artUrl(it) {
     var m = it && it.meta;
     var img = m && (m.art_url || m.image || m.image_url || m.cover_url);
@@ -4278,14 +4459,29 @@
   }
 
   var items = [], balance = 0, signedIn = false, owns = {}, busy = false;
+  // equipped skin tracked by item_id (so the right card shows "Equipped"); the guitar PNG is applied via RhythmGame.equipGuitarSkin.
+  function equippedSkinId() { try { return localStorage.getItem('rr_skin_id') || ''; } catch (e) { return ''; } }
+  function equipSkin(it) {
+    var src = skinSrcFor(it); if (!src) { toast('Skin art missing'); return; }
+    try { localStorage.setItem('rr_skin_id', String(it.item_id)); } catch (e) {}
+    try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(src); } catch (e) {}
+    toast('Equipped ' + (it.title || 'guitar'));
+    render();   // refresh Equip/Equipped states across the grid
+  }
+  function unequipSkin() {
+    try { localStorage.removeItem('rr_skin_id'); } catch (e) {}
+    try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(null); } catch (e) {}
+    toast('Default guitar restored'); render();
+  }
 
-  function typeLabel(t) { var m = { pack: 'Pack', level: 'Boss', addon: 'Theme', boss: 'Boss', theme: 'Theme' }; return m[String(t || '').toLowerCase()] || (t ? String(t) : 'Item'); }
+  function typeLabel(t) { var m = { skin: 'Guitar', level: 'Level', theme: 'Theme', pack: 'Pack', addon: 'Theme', boss: 'Level' }; return m[String(t || '').toLowerCase()] || (t ? String(t) : 'Item'); }
   function blurb(it) {
     if (it.meta && it.meta.description) return String(it.meta.description);
     var t = String(it.item_type || '').toLowerCase();
+    if (t === 'skin') return 'Guitar skin — equip to play';
+    if (t === 'level' || t === 'boss') return 'Premium level — unlocks in Levels';
+    if (t === 'theme' || t === 'addon') return 'Visual theme';
     if (t === 'pack') return 'Track pack — unlocks on link';
-    if (t === 'level' || t === 'boss') return 'Boss level';
-    if (t === 'addon' || t === 'theme') return 'Visual theme';
     return '';
   }
   function ownKey(it) { return String(it.item_type) + ':' + String(it.item_id); }
@@ -4309,7 +4505,15 @@
   }
 
   function buyBtnHtml(it) {
-    if (isOwned(it)) return '<button class="store-buy owned" disabled>Owned</button>';
+    if (isOwned(it)) {
+      if (isSkin(it)) {
+        var on = equippedSkinId() === String(it.item_id);
+        return on
+          ? '<button class="store-buy equipped" data-act="unequip" data-id="' + esc(it.item_id) + '">Equipped</button>'
+          : '<button class="store-buy equip" data-act="equip" data-id="' + esc(it.item_id) + '">Equip</button>';
+      }
+      return '<button class="store-buy owned" disabled>Owned</button>';
+    }
     if (!signedIn) return '<button class="store-buy" data-act="signin">Sign in</button>';
     return '<button class="store-buy" data-act="buy" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '">Buy</button>';
   }
@@ -4339,6 +4543,7 @@
     wireBuys();
   }
 
+  function itemById(id) { for (var i = 0; i < items.length; i++) if (String(items[i].item_id) === String(id)) return items[i]; return null; }
   function wireBuys() {
     var btns = $('store-grid').querySelectorAll('.store-buy');
     for (var i = 0; i < btns.length; i++) {
@@ -4346,6 +4551,8 @@
         var act = this.getAttribute('data-act');
         if (act === 'signin') { openSite('https://reactivvibeai.com'); return; }
         if (act === 'getmore') { openGetSparks(); return; }
+        if (act === 'equip') { var it = itemById(this.getAttribute('data-id')); if (it) equipSkin(it); return; }
+        if (act === 'unequip') { unequipSkin(); return; }
         if (act === 'buy') buy(this);
       });
     }
@@ -4372,7 +4579,9 @@
       owns[type + ':' + id] = true;
       var card = $('store-grid').querySelector('.store-item[data-key="' + (type + ':' + id) + '"]');
       if (card) { card.classList.add('owned'); var foot = card.querySelector('.store-foot'); if (foot) { var ob = foot.querySelector('.store-buy'); if (ob) ob.outerHTML = '<button class="store-buy owned" disabled>Owned</button>'; } }
-      toast(res.deduped ? 'Already owned' : 'Unlocked!');
+      var bought = itemById(id);
+      if (bought && isSkin(bought)) { equipSkin(bought); toast(res.deduped ? 'Already owned' : 'Unlocked & equipped!'); }
+      else toast(res.deduped ? 'Already owned' : 'Unlocked!');
       refreshEntitlements();
       return;
     }
@@ -4401,7 +4610,15 @@
     if (!C || !C.getStore) { items = []; signedIn = false; setBalance(0); render(); return; }
     try {
       var out = await C.getStore();
-      items = out.items || [];
+      // REFRAME: all 916 songs are FREE, so the backend's stale song/pack bundles are wrong. The client
+      // catalog (guitar SKINS + custom LEVELS + themes) is authoritative until the Lovable /store update
+      // lands; we drop song/pack/track/bundle items and merge in only NEW backend skins/levels.
+      var _backend = (out && out.items && out.items.length) ? out.items : [];
+      var _keep = function (it) { var t = String(it.item_type || it.type || '').toLowerCase(); return t === 'skin' || t === 'guitar' || t === 'level'; };
+      var _merged = STORE_FALLBACK.slice(), _have = {};
+      _merged.forEach(function (i) { _have[String(i.item_type || i.type) + ':' + String(i.item_id || i.id)] = 1; });
+      _backend.forEach(function (it) { var k = String(it.item_type || it.type) + ':' + String(it.item_id || it.id); if (_keep(it) && !_have[k]) { _merged.push(it); _have[k] = 1; } });
+      items = _merged;   // client catalog (skins + levels) always shows; no song bundles
       signedIn = !!out.signed_in;
       try { var e = C.getEntitlements ? await C.getEntitlements() : { owns: [] }; owns = {}; (e.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; }); } catch (e2) {}
       setBalance(typeof out.balance === 'number' ? out.balance : 0);

@@ -121,12 +121,25 @@
     } catch (e) { return { items: [], balance: loadSparksCache(), signed_in: false }; }
   }
   // GET /entitlements -> { signed_in, owns:[{item_type,item_id}] }. Safe empty when dormant.
+  // entitlements cache so synchronous callers (Levels picker gating, Store equip state) can read ownership without awaiting.
+  const _entitlements = { signed_in: false, owns: [] };
+  function _setEntCache(list, signed) {
+    _entitlements.owns = Array.isArray(list) ? list.map(function (o) { return { item_type: String(o.item_type), item_id: String(o.item_id) }; }) : [];
+    _entitlements.signed_in = !!signed;
+  }
+  // synchronous ownership check (reads the last-fetched cache). Returns false until getEntitlements()/getStore() has run.
+  function ownsItem(item_type, item_id) {
+    var t = String(item_type), i = String(item_id);
+    return _entitlements.owns.some(function (o) { return o.item_type === t && o.item_id === i; });
+  }
   async function getEntitlements() {
-    if (!API_BASE) return { signed_in: false, owns: [] };
+    if (!API_BASE) { _setEntCache([], false); return { signed_in: false, owns: [] }; }
     try {
       const out = await api('/entitlements', { auth: true });
-      return { signed_in: !!(out && out.signed_in), owns: Array.isArray(out && out.owns) ? out.owns : [] };
-    } catch (e) { return { signed_in: false, owns: [] }; }
+      const owns = Array.isArray(out && out.owns) ? out.owns : [];
+      _setEntCache(owns, !!(out && out.signed_in));
+      return { signed_in: !!(out && out.signed_in), owns: owns };
+    } catch (e) { return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() }; }
   }
   // POST /sparks/spend { item_type, item_id, idempotency_key } -> {ok,balance,granted,deduped}
   // 402 insufficient_sparks · 409 price_mismatch. Returns a normalized result the UI branches on.
@@ -871,7 +884,7 @@
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks,
     // store / entitlements (LIVE: GET /store, GET /entitlements, POST /sparks/spend)
-    getStore, getEntitlements, spendSparks,
+    getStore, getEntitlements, spendSparks, ownsItem, _entitlements,
     fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
