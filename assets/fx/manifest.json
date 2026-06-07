@@ -53,5 +53,16 @@
     "fps": 24,
     "blend": "lighter",
     "loop": true
+  },
+  "miss-shatter": {
+    "src": "assets/fx/miss-shatter.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": false
   }
 }
