@@ -42,5 +42,16 @@
     "fps": 30,
     "blend": "lighter",
     "loop": false
+  },
+  "fire-loop": {
+    "src": "assets/fx/fire-loop.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true
   }
 }
