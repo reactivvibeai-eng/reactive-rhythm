@@ -187,6 +187,10 @@
     // clear any per-level visual theme when we leave the game (menu/results); harmless otherwise
     if (name !== 'game' && name !== 'countdown') { try { window.RhythmLibrary && window.RhythmLibrary.clearLevelTheme && window.RhythmLibrary.clearLevelTheme(); } catch (e) {} }
     Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
+    // EXCLUSIVITY: the target must be the ONLY active .screen. showScreen() only manages its 5-screen
+    // map, so a lingering OVERLAY (how-to / levels / leaderboard / store / profile / settings / start)
+    // would otherwise stay active ON TOP of the game — the "playing kicks me back" bug. Close them all.
+    try { var tgt = screens[name]; document.querySelectorAll('.screen.active').forEach(function (el) { if (el !== tgt) el.classList.remove('active'); }); } catch (e) {}
     state = name === 'game' ? 'playing' : name;
   }
 
