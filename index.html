@@ -637,15 +637,14 @@
   .lbd-res-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-res-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); }
   @media (max-width: 560px) { .lbd-title { font-size: 36px; } .lbd-board .lb-row { grid-template-columns: 38px 1fr auto auto; gap: 10px; font-size: 12px; } }
-  /* MOBILE OVERLAY FIT — levels/leaderboard/profile/store cards can exceed a phone viewport; the base
-     .screen centers them so the TOP clips. On phones: anchor top, allow scroll, auto-margin the card. */
-  @media (max-width: 900px) {
-    #levels-screen.screen, #leaderboard-screen.screen, #profile-screen.screen, #store-screen.screen {
-      align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    }
-    #levels-screen .levels-card, #leaderboard-screen .lbd-card, #profile-screen .profile-card, #store-screen .store-card {
-      margin: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
-    }
+  /* OVERLAY FIT (ALL widths) — levels/leaderboard/profile/store cards can exceed the viewport (esp. the
+     multi-tier level picker on desktop). The base .screen centers them so the TOP clips and can't scroll.
+     Anchor to top + allow vertical scroll; margin:auto keeps short content centered. */
+  #levels-screen.screen, #leaderboard-screen.screen, #profile-screen.screen, #store-screen.screen {
+    align-items: flex-start; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  #levels-screen .levels-card, #leaderboard-screen .lbd-card, #profile-screen .profile-card, #store-screen .store-card {
+    margin: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
   }
   /* ---- STORE overlay (Sparks shop) — mirrors leaderboard overlay; brand crimson/ember/gold ---- */
   .store-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
@@ -3379,7 +3378,7 @@
     DEV = localStorage.getItem('rr_dev') === '1';
   } catch (e) {}
   var LIVE = DEV || CAMPAIGN_PUBLIC;
-  var DEV_UNLOCK_ALL = false;
+  var DEV_UNLOCK_ALL = DEV;   // in dev (?dev=1) every level is unlocked so we can jump straight to any one to test
   var TIERS = [
     { n: 'TIER I · WARM-UP',    d: 'easy'   },
     { n: 'TIER II · PULSE',     d: 'medium' },
