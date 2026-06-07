@@ -9,5 +9,16 @@
     "fps": 30,
     "blend": "lighter",
     "loop": false
+  },
+  "perfect-flare": {
+    "src": "assets/fx/perfect-flare.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 5,
+    "rows": 4,
+    "count": 20,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false
   }
 }
