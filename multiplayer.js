@@ -83,17 +83,28 @@
   var pendingOut = null;          // {toId,mid} a challenge I sent, awaiting answer
   var incoming = {};              // id -> {mid} (challenges TO me)
   var activeNow = false;          // is #multiplayer-screen currently .active
+  // ---- build8: rooms + quick-match state ----
+  var room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null,
+               members: {}, p1: null, p2: null };   // current room (host or joined/spectating)
+  var roomsDir = {};              // rid -> {rid,name,priv,hostId,hostName,count,max,at} (browser directory)
+  var QM = { looking: false, t: 0 };   // quick-match: am I in the queue?
+  var spectating = false;         // joined a match purely as a watcher
+  var _fromRoom = null;           // build8: one-shot carry across room→match handoff
 
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function newMatchId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function safeUrl(u) { return String(u == null ? '' : u).replace(/["\\]/g, ''); }
-  function myPresence(inMatch) { return { id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch }; }
+  function myPresence(inMatch) {
+    return { id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch,
+      lf: !!QM.looking, room: (room.id || null), hostRoom: (room.id && room.isHost ? room.id : null) };
+  }
+  function reannounce() { try { if (lobbyCh) lobbyCh.track(myPresence(matchLive || !!matchCh)); } catch (e) {} }
 
   // ---- step switching (only one .mpx-step shows at a time) ----
   function step(name) {
     var card = screen.querySelector('.mp-card'); if (card) card.setAttribute('data-mp-step', name);
-    ['lobby', 'setup', 'go', 'winner'].forEach(function (s) {
+    ['lobby', 'rooms', 'setup', 'go', 'winner'].forEach(function (s) {
       var el = screen.querySelector('.mpx-step-' + s); if (el) el.hidden = (s !== name);
     });
   }
@@ -110,9 +121,12 @@
     paintYou();
     if (!matchLive && (!matchCh)) step('lobby');   // don't reset a returning winner overlay
     banner('mpx-lobby-msg', '');
+    paintQuickBtn(); updateBrowseCount();           // build8
     joinLobby();
   }
   function leaveAll() {
+    try { closeRoom(true); } catch (e) {}    // build8: host closes / guest leaves room cleanly
+    QM.looking = false;                       // build8: drop quick-match queue
     teardownMatch();
     try { if (lobbyCh) { lobbyCh.untrack(); supa.removeChannel(lobbyCh); } } catch (e) {}
     lobbyCh = null; lobby = {};
@@ -142,6 +156,12 @@
     // challenge handshake rides the lobby channel (targeted by toId)
     lobbyCh.on('broadcast', { event: 'challenge' }, function (m) { onChallenge(m.payload); });
     lobbyCh.on('broadcast', { event: 'challenge-ans' }, function (m) { onChallengeAns(m.payload); });
+    // build8: open-room directory advertisements (host → everyone) + close notices
+    lobbyCh.on('broadcast', { event: 'room-meta' }, function (m) { onRoomMeta(m.payload); });
+    lobbyCh.on('broadcast', { event: 'room-gone' }, function (m) { var p = m.payload; if (p && p.rid) { delete roomsDir[p.rid]; renderRooms(); updateBrowseCount(); } });
+    lobbyCh.on('broadcast', { event: 'room-ping' }, function () { if (room.id && room.isHost) advertiseRoom(); });   // late-joiner asks; hosts re-announce
+    // build8: quick-match pairing broadcast (deterministic proposer avoids double-pair)
+    lobbyCh.on('broadcast', { event: 'qm-pair' }, function (m) { onQuickPair(m.payload); });
     lobbyCh.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         lobbyCh.track(myPresence(false));
@@ -167,6 +187,9 @@
     amHost = (hostId === ME.id);
     var hb = $('mpx-you-host'); if (hb) hb.hidden = !amHost;
     renderRoster(hostId);
+    reconcileRoomsFromPresence();   // build8: drop rooms whose host vanished; learn new hosts
+    updateBrowseCount();
+    if (QM.looking) tryQuickPair();  // build8: someone new might be queued
   }
 
   function roEmpty(show, txt) {
@@ -270,6 +293,7 @@
   }
   function enterSetup() {
     step('setup');
+    var _rcx = $('mpx-roomctx'); if (_rcx) _rcx.hidden = true;   // build8: hide room strip by default; enterRoomWaiting re-shows it
     var dot = $('mpx-dot-opp'); if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = oppMeta ? (oppMeta.name || 'OPPONENT').slice(0, 12) : 'WAITING…'; }
     var isHost = matchRole === 'host';
     var pick = $('mpx-pick'); if (pick) pick.disabled = !isHost;
@@ -277,6 +301,21 @@
     var diff = $('mpx-diff'); if (diff) [].forEach.call(diff.children, function (b) { b.disabled = !isHost; });
     var rs = $('mpx-readystate'); if (rs) rs.textContent = isHost ? 'Pick a track, then hit READY.' : 'Waiting for host to pick a track…';
     banner('mpx-setup-msg', '');
+    // build8: room→match handoff — restore the host's locked track + auto-arm READY so play starts
+    // without a second ready-tap (both already readied in the room).
+    if (_fromRoom) {
+      if (_fromRoom.sel) { sel = _fromRoom.sel; paintSelection(); }
+      var fr = _fromRoom; _fromRoom = null;
+      setTimeout(function () {
+        try {
+          if (matchRole === 'host' && sel.trackId) broadcastSong();
+          if (sel.trackId && oppPresent) { meReady = true; setReadyBtn();
+            if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } });
+            maybeStart();
+          }
+        } catch (e) {}
+      }, 350);   // let opponent presence land on the new channel
+    }
     paintSelection(); refreshReadyEnabled();
   }
   function onMatchSync() {
@@ -340,7 +379,12 @@
   }
   function onReady(p) { oppReady = !!(p && p.ready); maybeStart(); }
   function maybeStart() {
-    if (meReady && oppReady && sel.trackId && matchRole === 'host') {
+    // build8: in the ROOM WAITING AREA (no match channel yet), the host's start rides the ROOM
+    // channel via room-start; both seated players then open the same rr-match-<mid>. Once that
+    // match channel exists (matchCh set) — including quick-match, challenge, and the room handoff —
+    // we take the original synchronized-start path below.
+    if (room.id && room.isHost && !matchCh && meReady && oppReady && sel.trackId) { startRoomMatch(); return; }
+    if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
       var atMs = Date.now() + 1300;          // lead-in so both schedule together
       matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel } });
       beginMatch(atMs, sel);
@@ -512,7 +556,231 @@
     matchCh = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     setLobbyInMatch(false);
   }
-  function backToLobby() { teardownMatch(); step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
+  function backToLobby() {
+    teardownMatch();
+    QM.looking = false; paintQuickBtn();   // build8
+    step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync();
+  }
+
+  // ===================== BUILD8: QUICK-MATCH =====================
+  function toggleQuickMatch() {
+    if (!supa || !lobbyCh) { banner('mpx-lobby-msg', 'Sign in to play online — quick-match needs a connection.'); return; }
+    QM.looking = !QM.looking; QM.t = Date.now();
+    paintQuickBtn(); reannounce();
+    banner('mpx-lobby-msg', QM.looking ? 'Looking for a match — pairing you with the next available rival…' : '');
+    if (QM.looking) tryQuickPair();
+  }
+  function paintQuickBtn() {
+    var b = $('mpx-act-quick'); if (!b) return;
+    b.setAttribute('aria-busy', QM.looking ? 'true' : 'false');
+    var t = b.querySelector('.a-t'), d = b.querySelector('.a-d');
+    if (t) t.textContent = QM.looking ? '⚡ Searching…' : '⚡ Quick Match';
+    if (d) d.textContent = QM.looking ? 'Tap to cancel' : 'Auto-pair a random rival';
+  }
+  // Deterministic proposer: of the two queued ids, the lexicographically-smaller one emits the pair.
+  // Both sides receive qm-pair and route into the SAME match channel — no race, no double match.
+  function tryQuickPair() {
+    if (!QM.looking || matchCh || matchLive) return;
+    var cands = Object.keys(lobby).filter(function (id) {
+      var p = lobby[id]; return id !== ME.id && p && p.lf && !p.inMatch && !p.room;
+    });
+    if (!cands.length) return;
+    cands.sort();
+    var opp = cands[0];
+    if (ME.id < opp) {   // I propose
+      var mid = newMatchId();
+      lobbyCh.send({ type: 'broadcast', event: 'qm-pair', payload: { aId: ME.id, bId: opp, mid: mid } });
+      QM.looking = false; paintQuickBtn(); reannounce();
+      startMatchChannel(mid, 'host', lobby[opp]);   // proposer = host
+    }
+    // else: wait — the smaller id will propose and I'll catch it in onQuickPair
+  }
+  function onQuickPair(p) {
+    if (!p || p.bId !== ME.id || !QM.looking) return;
+    QM.looking = false; paintQuickBtn(); reannounce();
+    startMatchChannel(p.mid, 'guest', lobby[p.aId]);  // I'm the callee = guest
+  }
+
+  // ===================== BUILD8: ROOMS =====================
+  function newRoomId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function gotoRooms(mode) {   // mode: 'browse' | 'create'
+    step('rooms');
+    var br = $('mpx-rooms-browse'), cr = $('mpx-rooms-create');
+    if (br) br.hidden = (mode === 'create');
+    if (cr) cr.hidden = (mode !== 'create');
+    banner('mpx-rooms-msg', '');
+    if (mode === 'create') { var nm = $('mpx-room-name'); if (nm) { nm.value = ''; setTimeout(function () { nm.focus(); }, 30); } }
+    else { try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} renderRooms(); }
+  }
+
+  // ---- host: open / advertise / close ----
+  function openRoom() {
+    if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
+    var nm = ($('mpx-room-name') && $('mpx-room-name').value || '').trim().slice(0, 28) || (ME.name + "'s Room");
+    var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
+    room = { id: newRoomId(), name: nm, priv: priv, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
+    joinRoomChannel(room.id, 'p1');
+    reannounce();
+    enterRoomWaiting();
+    advertiseRoom();
+  }
+  function advertiseRoom() {
+    if (!lobbyCh || !room.id || !room.isHost) return;
+    var count = 1 + (room.p2 ? 1 : 0);
+    lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
+      rid: room.id, name: room.name, priv: room.priv, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now() } });
+  }
+  function closeRoom(silent) {
+    if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
+    leaveRoomChannel();
+    room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
+    spectating = false; reannounce();
+    if (!silent) { step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
+  }
+
+  // ---- room presence channel (the waiting area; 2 seats + spectators) ----
+  function joinRoomChannel(rid, seat) {
+    leaveRoomChannel();
+    room.id = rid; room.seat = seat;
+    var ch = supa.channel('rr-room-' + rid, { config: { presence: { key: ME.id }, broadcast: { self: false } } });
+    room.ch = ch;
+    ch.on('presence', { event: 'sync' }, onRoomSync);
+    ch.on('presence', { event: 'leave' }, onRoomSync);
+    ch.on('broadcast', { event: 'room-start' }, function (m) { onRoomStart(m.payload); });
+    ch.subscribe(function (status) {
+      if (status === 'SUBSCRIBED') { ch.track({ id: ME.id, name: ME.name, avatar: ME.avatar, seat: seat, at: Date.now() }); }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { banner('mpx-rooms-msg', 'Could not reach that room. Back out and retry.'); }
+    });
+  }
+  function leaveRoomChannel() { try { if (room.ch) { room.ch.untrack(); supa.removeChannel(room.ch); } } catch (e) {} room.ch = null; }
+  function onRoomSync() {
+    if (!room.ch) return;
+    var st = room.ch.presenceState();
+    room.members = {};
+    Object.keys(st).forEach(function (k) { var m = st[k] && st[k][0]; if (m && m.id) room.members[m.id] = m; });
+    // seat assignment is host-authoritative: host = p1; first non-spec joiner = p2.
+    if (room.isHost) {
+      var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
+      var p2 = others[0] || null;
+      if (p2 !== room.p2) { room.p2 = p2; advertiseRoom(); }
+    }
+    paintRoomWaiting();
+  }
+  // host launches: tells both seats to spin up the SAME match channel; spectators get the mid too.
+  function startRoomMatch() {
+    if (!room.isHost || !room.p2) return;
+    var mid = 'm' + room.id.slice(1) + Date.now().toString(36).slice(-3);
+    room.ch.send({ type: 'broadcast', event: 'room-start', payload: { mid: mid, p1Id: room.p1, p2Id: room.p2 } });
+    onRoomStart({ mid: mid, p1Id: room.p1, p2Id: room.p2 });
+  }
+  function onRoomStart(p) {
+    if (!p || !p.mid) return;
+    var oppId = (ME.id === p.p1Id) ? p.p2Id : p.p1Id;
+    var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
+    if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) { spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); return; }
+    var role = (ME.id === p.p1Id) ? 'host' : 'guest';
+    _fromRoom = { sel: (sel.trackId ? Object.assign({}, sel) : null) };   // carry host's locked track
+    startMatchChannel(p.mid, role, oppMetaLocal);
+  }
+
+  // ---- guest: join a listed room (as duelist or spectator) ----
+  function joinRoom(rid, asSpec) {
+    if (!supa || !lobbyCh) return;
+    var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
+    if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
+    room = { id: rid, name: meta.name, priv: meta.priv, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id };
+    spectating = !!asSpec;
+    joinRoomChannel(rid, room.seat);
+    reannounce();
+    enterRoomWaiting();
+  }
+
+  // ---- waiting-room view (reuses the setup step shell) ----
+  function enterRoomWaiting() {
+    enterSetup();   // reuse the existing setup UI (track pick disabled for non-host as usual)
+    var ctx = $('mpx-roomctx'); if (ctx) ctx.hidden = false;
+    var nmEl = $('mpx-roomctx-name'); if (nmEl) nmEl.textContent = room.name || 'Room';
+    var pv = $('mpx-roomctx-priv'); if (pv) pv.textContent = room.priv ? '· PRIVATE' : '· PUBLIC';
+    var closeBtn = $('mpx-room-close');
+    if (closeBtn) closeBtn.textContent = room.isHost ? 'CLOSE ROOM' : 'LEAVE ROOM';
+    paintRoomWaiting();
+  }
+  function paintRoomWaiting() {
+    var specCount = Object.keys(room.members).filter(function (id) { return room.members[id].seat === 'spec'; }).length;
+    var sc = $('mpx-roomctx-spec'); if (sc) sc.textContent = specCount ? (specCount + ' watching') : '';
+    var opp = room.isHost ? (room.p2 && room.members[room.p2]) : (room.members[room.p1]);
+    var dot = $('mpx-dot-opp');
+    if (dot) {
+      if (opp) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp.name || 'OPPONENT').slice(0, 12); }
+      else { dot.setAttribute('data-state', 'waiting'); dot.textContent = spectating ? 'WATCHING' : 'WAITING…'; }
+    }
+  }
+
+  // ---- room directory (browser) ----
+  function onRoomMeta(p) {
+    if (!p || !p.rid || p.priv) return;   // private rooms are not listed (invite/qm only)
+    if (p.hostId === ME.id) return;
+    roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
+    renderRooms(); updateBrowseCount();
+  }
+  function reconcileRoomsFromPresence() {
+    // a room is only real if its host is still present in the lobby; prune stale cards.
+    Object.keys(roomsDir).forEach(function (rid) {
+      var hid = roomsDir[rid].hostId;
+      if (!lobby[hid] || lobby[hid].hostRoom !== rid) {
+        if (Date.now() - (roomsDir[rid].at || 0) > 4000) delete roomsDir[rid];   // grace for meta lag
+      }
+    });
+  }
+  function openRoomCount() { return Object.keys(roomsDir).length; }
+  function updateBrowseCount() {
+    var n = openRoomCount();
+    var el = $('mpx-act-browse-n'); if (el) el.textContent = n ? ('(' + n + ')') : '';
+  }
+  function renderRooms() {
+    var host = $('mpx-roomlist'); if (!host) return;
+    var ids = Object.keys(roomsDir);
+    var empty = $('mpx-rooms-empty'); if (empty) empty.hidden = ids.length !== 0;
+    host.innerHTML = ids.map(function (rid) {
+      var r = roomsDir[rid], full = (r.count || 1) >= (r.max || 2);
+      return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
+        '<span class="mpx-rc-spark">🎸</span>' +
+        '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
+        '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span> host ' + esc((r.hostName || 'host')) + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 2) + '</span></span></span>' +
+        '<span class="mpx-rc-act">' +
+          '<button class="mpx-rc-join" data-join="' + esc(rid) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button>' +
+          '<button class="mpx-rc-spec" data-spec="' + esc(rid) + '">WATCH</button>' +
+        '</span></div>';
+    }).join('');
+    [].forEach.call(host.querySelectorAll('[data-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-join'), false); }); });
+    [].forEach.call(host.querySelectorAll('[data-spec]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-spec'), true); }); });
+  }
+
+  // ===================== BUILD8: SPECTATE =====================
+  function spectateMatch(mid, p1meta, p2meta) {
+    spectating = true; matchLive = true; finishedLocal = true;   // finishedLocal=true → never wait on "my" result
+    oppMeta = p1meta || p2meta || null;
+    step('go'); var gn = $('mpx-go-num'); if (gn) gn.textContent = 'SPECTATING';
+    var watchCh = supa.channel('rr-match-' + mid, { config: { presence: { key: ME.id }, broadcast: { self: false } } });
+    matchCh = watchCh;
+    watchCh.on('broadcast', { event: 'tick' }, function (m) { lastOppTick = m.payload; });
+    watchCh.on('broadcast', { event: 'final' }, function (m) { oppFinal = m.payload; myFinal = myFinal || { score: 0 }; showWinner(); });
+    watchCh.subscribe(function (status) {
+      if (status === 'SUBSCRIBED') {
+        // mount a read-only panel over whatever screen is up; spectators don't run the engine.
+        screen.classList.add('active'); activeNow = true;
+        mountOppPanel();
+        var panel = $('mp-opp'); if (panel) panel.classList.add('spectate');
+        var sp = panel && panel.querySelector('.mo-spec'); if (!sp && panel) { var s = document.createElement('div'); s.className = 'mo-spec'; s.textContent = 'SPECTATING'; panel.insertBefore(s, panel.firstChild); }
+        startSpectatorTick();
+      }
+    });
+  }
+  function startSpectatorTick() {
+    stopTick();
+    function frame() { oppRaf = requestAnimationFrame(frame); if (oppPanel && oppPanel.parentNode) renderOpp(null); }
+    oppRaf = requestAnimationFrame(frame);
+  }
 
   // ===================== TRACK PICKER (host) =====================
   function renderPicker(q) {
@@ -543,6 +811,18 @@
   // ===================== WIRING =====================
   function wire(id, ev, fn) { var el = $(id); if (el) el.addEventListener(ev, fn); }
   wire('mpx-leave-setup', 'click', backToLobby);
+  // build8: lobby action bar
+  wire('mpx-act-quick', 'click', toggleQuickMatch);
+  wire('mpx-act-open', 'click', function () { gotoRooms('create'); });
+  wire('mpx-act-browse', 'click', function () { gotoRooms('browse'); });
+  // build8: rooms step
+  wire('mpx-rooms-refresh', 'click', function () { try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} renderRooms(); });
+  wire('mpx-rooms-back', 'click', function () { step('lobby'); onLobbySync(); });
+  wire('mpx-room-create-go', 'click', openRoom);
+  wire('mpx-room-create-cancel', 'click', function () { step('lobby'); onLobbySync(); });
+  wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
+  // build8: room context (inside setup) — host closes / guest leaves
+  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { leaveRoomChannel(); room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; reannounce(); backToLobby(); } });
   wire('mpx-leave-win', 'click', leaveAll);
   wire('mpx-backlobby', 'click', backToLobby);
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
@@ -566,7 +846,10 @@
   wire('mp-back', 'click', function () { try { teardownMatch(); if (lobbyCh) { lobbyCh.untrack(); supa.removeChannel(lobbyCh); } } catch (e) {} lobbyCh = null; lobby = {}; });
 
   // clean up presence if the tab closes
-  window.addEventListener('beforeunload', function () { try { if (matchCh) matchCh.untrack(); if (lobbyCh) lobbyCh.untrack(); } catch (e) {} });
+  window.addEventListener('beforeunload', function () { try {
+    if (room.id && room.isHost && lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } });
+    if (room.ch) room.ch.untrack(); if (matchCh) matchCh.untrack(); if (lobbyCh) lobbyCh.untrack();
+  } catch (e) {} });
 
   // Detect activation of #multiplayer-screen (hub adds/removes .active). On show → join
   // the lobby; on hide (and not mid-match) → drop the lobby presence.
