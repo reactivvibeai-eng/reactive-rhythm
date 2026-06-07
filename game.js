@@ -122,6 +122,12 @@
   let noteVariety = false;
   try { noteVariety = /[?&]notes=1/.test(location.search) || localStorage.getItem('rr_notes') === '1'; } catch (e) {}
   try { window.__rrNoteVariety = function (on) { if (on === undefined) return noteVariety; noteVariety = !!on; try { localStorage.setItem('rr_notes', on ? '1' : '0'); } catch (e) {} return noteVariety; }; } catch (e) {}
+  // OPEN NOTES + HOPOs (flag-gated, OFF by default → charts byte-identical until enabled). Separate from
+  // noteVariety so they A/B independently. OPEN = "strum the whole neck" (any lane clears it). HOPO =
+  // a fast-run note that auto-chains off a clean hit (no fresh strum). Enable: ?open=1 / rr_open / __rrOpenNotes(true).
+  let openNotes = false;
+  try { openNotes = /[?&]open=1/.test(location.search) || localStorage.getItem('rr_open') === '1'; } catch (e) {}
+  try { window.__rrOpenNotes = function (on) { if (on === undefined) return openNotes; openNotes = !!on; try { localStorage.setItem('rr_open', on ? '1' : '0'); } catch (e) {} return openNotes; }; } catch (e) {}
   let chartMode = 'classic'; // Settings → Chart Feel: 'classic' (every Nth onset) | 'musical' (snap each note to the strongest onset in its window)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
@@ -704,6 +710,31 @@
         } else { i++; }
       }
     }
+    // ---- OPEN NOTES + HOPOs (openNotes flag only; default OFF → skipped → byte-identical). Mutates
+    // flags in place (no inserts/removals → density-neutral, counts unchanged). OPEN = an isolated
+    // strong single becomes a full-neck "strum" (any lane clears). HOPO = trailing members of a fast
+    // run tagged so they chain off a clean hit. Both reuse tap scoring; notes stay time-sorted. ----
+    if (openNotes && difficulty !== 'easy') {
+      const openMinGap = difficulty === 'hard' ? 0.55 : 0.8;
+      const openCentre = laneBase + Math.floor(span / 2);
+      let lastOpenT = -999, lastHopoT = -999;
+      for (let i = 0; i < notes.length; i++) {
+        const n = notes[i];
+        const prev = notes[i - 1], next = notes[i + 1];
+        const gapBefore = prev ? (n.time - prev.time) : 99;
+        const gapAfter  = next ? (next.time - n.time) : 99;
+        const isStrong  = (n.type === 'accent' || (n.type === 'tap' && n.strength >= 1.6)) && !n.chord && !n._trill;
+        if (isStrong && gapBefore >= openMinGap && gapAfter >= openMinGap && (n.time - lastOpenT) >= 7) {
+          n.open = true; n.lane = openCentre; n._openLanes = [];
+          for (let l = laneBase; l < laneBase + span; l++) n._openLanes.push(l);
+          lastOpenT = n.time;
+          continue;
+        }
+        const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord && !x.open;
+        const fastFromPrev = single(prev) && single(n) && (n.time - prev.time) <= (difficulty === 'hard' ? 0.18 : 0.30);
+        if (fastFromPrev && (n.time - lastHopoT) >= 0.05) { n.hopo = true; lastHopoT = n.time; }
+      }
+    }
     // ---- GAP FILL: no dead air. Insert spaced filler taps into long EMPTY stretches so a
     // section never feels empty (esp. Pulse/medium). A hold's tail already fills its own gap,
     // so we measure from the hold's END; bombs are skipped (left a clean lead-in). ----
@@ -733,6 +764,9 @@
         chords: notes.filter(n => n.chord).length,
         bombs: notes.filter(n => n.type === 'bomb').length,
         trills: notes.filter(n => n._trill).length,
+        opens: notes.filter(n => n.open).length,
+        hopos: notes.filter(n => n.hopo).length,
+        openNotes: openNotes,
         bombRows: notes.filter(n => n._bombRow).length,
         patNotes: notes.filter(n => typeof n._pat === 'number').length,
         fillers: fillers.length,
@@ -1425,7 +1459,10 @@
     const diff = DIFFICULTY[difficulty];
     let target = null, targetDiff = Infinity;
     for (const n of notes) {
-      if (n.lane !== lane || n.judged) continue;
+      // OPEN note (openNotes flag) matches a press in ANY lane; all others stay lane-locked
+      // (n.open is false unless the flag built it → default behavior byte-identical).
+      if (!n.open && n.lane !== lane) continue;
+      if (n.judged) continue;
       if (n.time < t - diff.hitWindow) continue;
       if (n.time > t + diff.hitWindow) break;
       const d = Math.abs(n.time - t);
@@ -1491,7 +1528,29 @@
     if (target.type === 'hold' && target.hold > 0) {
       holdNote[lane] = target; holdScored[lane] = 0; holdSparkT[lane] = 0;
     }
+    // HOPO CHAIN (openNotes flag): a clean hit while in combo auto-resolves the next `hopo` note
+    // already inside its window in ANY lane — no fresh strum ("flow"). No-op when the flag is off.
+    if (openNotes && combo >= 8 && kind !== 'good') chainHopos(t);
     updateHUD();
+  }
+
+  // resolve consecutive HOPO ("flow") notes off a clean hit without a re-strum.
+  function chainHopos(t) {
+    const diff = DIFFICULTY[difficulty];
+    let resolved = 0;
+    for (const n of notes) {
+      if (n.judged || !n.hopo) continue;
+      if (n.time < t - diff.hitWindow * 0.5) continue;
+      if (n.time > t + diff.hitWindow) break;
+      n.judged = true; n.hit = 'great';
+      counts.great++; combo++; if (combo > maxCombo) maxCombo = combo;
+      score += JUDGE.great.score * curMult();
+      laneHitPulse[n.lane] = 1.0; lanePluckT[n.lane] = 0;
+      spawnHitParticles(n.lane, 'great');
+      resolved++;
+      if (resolved >= 3) break;
+    }
+    if (resolved) { flashJudgment('FLOW x' + resolved, '#ff7a4a'); }
   }
 
   // per-judgment tactile feedback: world reaction + guitar chug + haptics
@@ -1979,6 +2038,21 @@
         }
         drawBomb(nx, ny, lw * 0.48 * sc); continue;
       }
+      // OPEN note (openNotes flag) — a full-neck STRUM BAR spanning every lane ("hit anything").
+      // Crimson→ember rail with a hot chrome core, depth-scaled, riding the warp like the strings.
+      if (n.open) {
+        const x0 = noteX(0, d), x1 = noteX(LANE_COUNT - 1, d);
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+        ctx.strokeStyle = 'rgba(255,42,48,' + (0.30 * sc) + ')'; ctx.lineWidth = lw * 0.62 * sc;
+        ctx.shadowColor = '#ff2a30'; ctx.shadowBlur = 16 * sc;
+        ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,122,74,' + (0.55 * sc) + ')'; ctx.lineWidth = lw * 0.30 * sc; ctx.shadowBlur = 9 * sc;
+        ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,238,224,' + (0.85 * sc) + ')'; ctx.lineWidth = Math.max(1.4, lw * 0.09 * sc); ctx.shadowBlur = 5 * sc;
+        ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
+        ctx.restore();
+        continue;
+      }
       // CHORD BAR — a glowing rail connecting the simultaneous notes ("hit the bar together")
       if (n.chordLead && n.chordLanes && n.chordLanes.length > 1 && !n.judged) {
         let x0 = Infinity, x1 = -Infinity;
@@ -2367,6 +2441,14 @@
     if (note.type === 'accent') S *= 1.12;
     if (img && img._ready) ctx.drawImage(img, cx - S / 2, y - S / 2, S, S);
     else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
+    // HOPO "flow" cue — a thin ember ring (openNotes flag only; .hopo is never set unless the flag built it).
+    if (note.hopo && !note.judged) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,122,74,0.85)'; ctx.lineWidth = Math.max(1.2, w * 0.12);
+      ctx.shadowColor = '#ff7a4a'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(cx, y, w * 0.62, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
   // hazard "bomb": a dark orb with a pulsing red warning halo + a bright ✕ — clearly DON'T hit
   function drawBomb(cx, y, r) {
