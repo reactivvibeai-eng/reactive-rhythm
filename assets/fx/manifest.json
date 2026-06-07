@@ -31,5 +31,16 @@
     "fps": 30,
     "blend": "lighter",
     "loop": false
+  },
+  "shockwave": {
+    "src": "assets/fx/shockwave.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false
   }
 }
