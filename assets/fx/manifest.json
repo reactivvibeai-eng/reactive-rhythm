@@ -8,7 +8,8 @@
     "count": 16,
     "fps": 30,
     "blend": "lighter",
-    "loop": false
+    "loop": false,
+    "scale": 0.9
   },
   "perfect-flare": {
     "src": "assets/fx/perfect-flare.png",
@@ -19,7 +20,8 @@
     "count": 20,
     "fps": 30,
     "blend": "lighter",
-    "loop": false
+    "loop": false,
+    "scale": 1.2
   },
   "explosion": {
     "src": "assets/fx/explosion.png",
@@ -30,7 +32,8 @@
     "count": 28,
     "fps": 30,
     "blend": "lighter",
-    "loop": false
+    "loop": false,
+    "scale": 1.6
   },
   "shockwave": {
     "src": "assets/fx/shockwave.png",
@@ -41,7 +44,8 @@
     "count": 16,
     "fps": 30,
     "blend": "lighter",
-    "loop": false
+    "loop": false,
+    "scale": 1.4
   },
   "fire-loop": {
     "src": "assets/fx/fire-loop.png",
@@ -52,7 +56,8 @@
     "count": 24,
     "fps": 24,
     "blend": "lighter",
-    "loop": true
+    "loop": true,
+    "scale": 1.5
   },
   "miss-shatter": {
     "src": "assets/fx/miss-shatter.png",
@@ -63,7 +68,8 @@
     "count": 16,
     "fps": 24,
     "blend": "lighter",
-    "loop": false
+    "loop": false,
+    "scale": 1.0
   },
   "soulwisp-violet": {
     "src": "assets/fx/soulwisp-violet.png",
@@ -74,6 +80,271 @@
     "count": 24,
     "fps": 14,
     "blend": "lighter",
-    "loop": true
+    "loop": true,
+    "scale": 1.2
+  },
+  "combo-burst": {
+    "src": "assets/fx/combo-burst.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 5,
+    "rows": 4,
+    "count": 20,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.3
+  },
+  "multiplier-up": {
+    "src": "assets/fx/multiplier-up.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "note-comet": {
+    "src": "assets/fx/note-comet.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 0.9
+  },
+  "star-pickup": {
+    "src": "assets/fx/star-pickup.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 3,
+    "count": 18,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "gradeup-flare": {
+    "src": "assets/fx/gradeup-flare.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.6
+  },
+  "bomb-explode": {
+    "src": "assets/fx/bomb-explode.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.5
+  },
+  "overdrive-aura": {
+    "src": "assets/fx/overdrive-aura.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.6
+  },
+  "charge-loop": {
+    "src": "assets/fx/charge-loop.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.2
+  },
+  "ember-rise": {
+    "src": "assets/fx/ember-rise.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 20,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.6
+  },
+  "chrome-pulse-ring": {
+    "src": "assets/fx/chrome-pulse-ring.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.0
+  },
+  "lane-pulse": {
+    "src": "assets/fx/lane-pulse.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "string-ripple": {
+    "src": "assets/fx/string-ripple.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "shard-burst": {
+    "src": "assets/fx/shard-burst.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 5,
+    "rows": 4,
+    "count": 20,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.3
+  },
+  "skull-flame-violet": {
+    "src": "assets/fx/skull-flame-violet.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.4
+  },
+  "soul-burst-violet": {
+    "src": "assets/fx/soul-burst-violet.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 5,
+    "rows": 4,
+    "count": 20,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.3
+  },
+  "bone-shatter": {
+    "src": "assets/fx/bone-shatter.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 5,
+    "rows": 4,
+    "count": 20,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.3
+  },
+  "ember-skull-loop": {
+    "src": "assets/fx/ember-skull-loop.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": true,
+    "scale": 1.4
+  },
+  "note-sparkle-pink": {
+    "src": "assets/fx/note-sparkle-pink.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 3,
+    "count": 18,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "heart-pop-pink": {
+    "src": "assets/fx/heart-pop-pink.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "paw-poof": {
+    "src": "assets/fx/paw-poof.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 4,
+    "rows": 4,
+    "count": 16,
+    "fps": 24,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.0
+  },
+  "confetti-pop": {
+    "src": "assets/fx/confetti-pop.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.6
+  },
+  "firework-gold": {
+    "src": "assets/fx/firework-gold.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false,
+    "scale": 1.6
   }
 }

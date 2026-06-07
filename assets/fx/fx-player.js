@@ -79,7 +79,7 @@
     var inst = {
       meta: meta, img: this.images[name],
       x: x, y: y,
-      scale: opts.scale != null ? opts.scale : 1,
+      scale: opts.scale != null ? opts.scale : (meta.scale != null ? meta.scale : 1),
       rot: opts.rot || 0,
       alpha: opts.alpha != null ? opts.alpha : 1,
       loop: opts.loop != null ? opts.loop : !!meta.loop,
