@@ -731,6 +731,13 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; z-index: 0; pointer-events: none;
   }
+  /* Per-level static backdrop (level bgArt). Sits above the moon video, below the canvas (z<1).
+     Shown by applyLevelTheme when a level has bgArt; cheap (no video compositing cost). */
+  #bg-image {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+    z-index: 0; pointer-events: none; display: none;
+  }
   /* Performance background: hide the moon videos so their compositing can't cap the FPS.
      The canvas atmosphere (god-rays/embers) + warm-black bg still render behind the guitar. */
   html.rr-perf-bg #bg-video, html.rr-perf-bg #start-video { display: none !important; }
@@ -2597,6 +2604,7 @@
     <!-- CENTER: highway canvas -->
     <div class="game-center">
       <video id="bg-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
+      <div id="bg-image" aria-hidden="true"></div>
       <canvas id="hwy"></canvas>
 
       <!-- mobile compact HUD (overlay) -->
@@ -3245,21 +3253,29 @@
     var g = $('game'); if (!g) return;
     if (L && L.theme && LV_THEMES[L.theme]) { g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme); }
     else { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
-    var v = $('bg-video');
-    if (v && (L && (L.bgVideo || L.bgArt))) {
-      if (_bgSaved == null) _bgSaved = { src: v.getAttribute('src'), poster: v.getAttribute('poster') };
-      if (L.bgVideo) {
-        // if the per-level video asset isn't generated yet (404), self-heal back to the moon backdrop
-        v.onerror = function () { try { v.onerror = null; if (_bgSaved && _bgSaved.src) { v.setAttribute('src', _bgSaved.src); v.load(); v.play().catch(function(){}); } } catch (e) {} };
-        v.setAttribute('src', L.bgVideo); try { v.load(); v.play().catch(function(){}); } catch (e) {}
-      }
-      if (L.bgArt) v.setAttribute('poster', L.bgArt);
+    var v = $('bg-video'), bi = $('bg-image');
+    if (L && L.bgArt && bi) {
+      // STATIC per-level backdrop wins (loop videos optional/absent). Probe-load first; if it 404s,
+      // keep the moon video so there's never a broken/black backdrop.
+      var pi = new Image();
+      pi.onload = function () { bi.style.backgroundImage = 'url("' + String(L.bgArt).replace(/["\\]/g, '') + '")'; bi.style.display = 'block'; if (v) v.style.visibility = 'hidden'; };
+      pi.onerror = function () { bi.style.display = 'none'; if (v) v.style.visibility = ''; };
+      pi.src = L.bgArt;
+    } else if (L && L.bgVideo && v) {
+      if (_bgSaved == null) _bgSaved = { src: v.getAttribute('src') };
+      v.onerror = function () { try { v.onerror = null; if (_bgSaved && _bgSaved.src) { v.setAttribute('src', _bgSaved.src); v.load(); v.play().catch(function(){}); } } catch (e) {} };
+      v.setAttribute('src', L.bgVideo); try { v.load(); v.play().catch(function(){}); } catch (e) {}
+      if (bi) bi.style.display = 'none';
+    } else {
+      if (bi) bi.style.display = 'none';
+      if (v) v.style.visibility = '';
     }
   }
   function clearLevelTheme() {
     var g = $('game'); if (g) { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
-    if (v && _bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); if (_bgSaved.poster != null) v.setAttribute('poster', _bgSaved.poster); else v.removeAttribute('poster'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; }
+    if (v) { v.style.visibility = ''; if (_bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; } }
   }
   // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
   // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
