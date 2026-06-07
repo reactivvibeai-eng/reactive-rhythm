@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=93" />
+<link rel="stylesheet" href="jukebox.css?v=94" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -842,6 +842,8 @@
   #game.rr-lvl-themed[data-rrtheme="chrome"] { --rr-lvl-accent: #dad7d2; }
   #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
   #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
+  #game.rr-lvl-themed[data-rrtheme="bone"]   { --rr-lvl-accent: #ffac5e; }   /* Bone Daddy — charred bone + ember */
+  #game.rr-lvl-themed[data-rrtheme="pink"]   { --rr-lvl-accent: #ff5fa2; }   /* Melody — cat-pink (level palette; UI stays crimson) */
   /* per-level accent glow across the FULL backdrop (only when a level theme is active) */
   #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.14; }
   /* violet/gothic (Skully): the backdrop video is ALREADY violet, so the accent wash is kept very low
@@ -909,6 +911,32 @@
   #results-next { display: none; }
   #results-next.show { display: inline-flex; }
   #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
+
+  /* ---- PER-LEVEL MECHANIC overlays (Bone Daddy booty-shake · Melody cat-paw). Pure visual, over the
+        playfield, driven by RhythmLevelFx; reduceMotion disables the motion. ---- */
+  .rr-mech { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
+  .rrm-booty { position: absolute; top: 1.5%; left: 50%; width: 124px; height: 124px; margin-left: -62px;
+    background-size: contain; background-position: center; background-repeat: no-repeat;
+    border-radius: 16px; opacity: 0.95; transform-origin: 50% 100%;
+    filter: drop-shadow(0 8px 22px rgba(255,140,70,0.55)); }
+  .rrm-booty.hit { animation: rrm-booty 0.26s ease; }
+  .rrm-booty.big { animation: rrm-booty 0.5s ease; }
+  @keyframes rrm-booty {
+    0%   { transform: scaleY(1) translateX(0) rotate(0); }
+    25%  { transform: scaleY(0.82) translateX(-7px) rotate(-3deg); }
+    50%  { transform: scaleY(1.14) translateX(7px) rotate(3deg); }
+    75%  { transform: scaleY(0.92) translateX(-4px) rotate(-1.5deg); }
+    100% { transform: scaleY(1) translateX(0) rotate(0); } }
+  .rrm-paw { position: absolute; bottom: 17%; right: -150px; width: 162px; height: 162px;
+    background-size: contain; background-position: center; background-repeat: no-repeat;
+    filter: drop-shadow(0 6px 16px rgba(255,95,162,0.6)); opacity: 0; }
+  .rrm-paw.swipe { animation: rrm-paw 0.42s cubic-bezier(0.2,0.7,0.3,1); }
+  @keyframes rrm-paw {
+    0%   { transform: translateX(0) rotate(10deg); opacity: 0; }
+    30%  { transform: translateX(-280px) rotate(-8deg); opacity: 1; }
+    60%  { transform: translateX(-235px) rotate(-3deg); opacity: 1; }
+    100% { transform: translateX(0) rotate(10deg); opacity: 0; } }
+  html.rr-reduce-motion .rr-mech * { animation: none !important; }
 
   /* ============ COUNTDOWN ============ */
   .countdown {
@@ -3521,11 +3549,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=93"></script>
-<script src="game.js?v=93"></script>
-<script src="jukebox.js?v=93"></script>
-<script src="catalog.js?v=93"></script>
-<script src="multiplayer.js?v=93"></script>
+<script src="assets/fx/fx-player.js?v=94"></script>
+<script src="game.js?v=94"></script>
+<script src="jukebox.js?v=94"></script>
+<script src="catalog.js?v=94"></script>
+<script src="multiplayer.js?v=94"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3654,7 +3682,7 @@
   //  Modifiers (speed/mirror/failOn) are OFF unless LEVELDESIGN_MODS is true.
   // ============================================================
   var LEVELDESIGN_MODS = false;   // FLAG (default OFF): apply per-level mods to gameplay.
-  var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1 };   // violet = per-level gothic palette (UI stays crimson)
+  var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1, bone:1, pink:1 };   // violet=gothic, bone=Bone Daddy, pink=Melody (per-level palettes; UI stays crimson)
   var AUTHORED = [
     // ====================================================================
     //  LEVEL SCHEMA — edit / add entries to co-design the campaign. Each obj
@@ -3685,6 +3713,12 @@
       mods:{ speed:1.1 }, unlock:{ stars:1 } },
     { id:'pulse-03', tier:'medium', title:'Chrome Veins', song:{ stride:8 }, theme:'chrome',
       cover:'assets/levels/chromeveins-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.1 }, unlock:{ stars:1 } },
+    // BONE DADDY showcase — booty-shake party (creator character). theme 'bone' (ember/bone); bone-daddy guitar + bone-shatter FX.
+    { id:'bone-daddy', tier:'medium', title:'Get Busy', song:{ trackId:'30acfdb4-8c85-4e1a-b43d-c91587dcba16' }, theme:'bone',
+      cover:'assets/levels/bonedaddy-cover.jpg', bgArt:'assets/levels/bonedaddy-bg.jpg',
+      guitarSkin:'assets/guitars/bone-daddy.png',
+      mechanic:{ type:'booty', art:'assets/levels/bonedaddy-cover.jpg' },   // Bone Daddy bounces at the top; notes drop from him
+      mods:{ speed:1.08 }, unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
@@ -3699,6 +3733,13 @@
       cover:'assets/levels/necromancer.jpg', bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
       mods:{ speed:1.2, failOn:true },
       unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'boss_neon' } } },
+    // MELODY — purchasable BOSS (creator character). theme 'pink'; melody-pink guitar + cat-paw mechanic + pink FX.
+    { id:'melody-boss', tier:'hard', title:'Highway Lover', song:{ trackId:'7424b4a5-27e5-4b78-aad2-ac5ded73c20b' }, theme:'pink', boss:true,
+      cover:'assets/levels/melody-cover.jpg', bgArt:'assets/levels/melody-bg.jpg',
+      guitarSkin:'assets/guitars/melody-pink.png',
+      mechanic:{ type:'paw', art:'assets/levels/melody-paw.png' },   // a cat paw bats each note on hit
+      mods:{ speed:1.18, failOn:true },
+      unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'melody_boss' } } },
   ];
   function authoredByTier(d) { return AUTHORED.filter(function (L) { return L.tier === d; }); }
   function hasAuthored() { return AUTHORED.length > 0; }
@@ -3738,7 +3779,7 @@
   // ---- PER-LEVEL INTRO SPLASH: a themed key-art card layered OVER the loading screen the instant an
   // authored level launches. Self-owned overlay (NOT a .screen). reduceMotion/fxLite-safe + skippable.
   // Non-blocking: if anything throws, the level still launches.
-  var SPLASH_THEME = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' };
+  var SPLASH_THEME = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff', bone:'#ffac5e', pink:'#ff5fa2' };
   var _splashEl = null, _splashTimer = 0;
   function splashReduce() {
     try {
@@ -3849,7 +3890,7 @@
       g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme);
       // build7: push the accent into the engine for additive note/catcher glow + ambient FX.
       try {
-        var _acc = ({ crimson:'255,31,46', ember:'255,122,74', gold:'224,169,63', chrome:'218,215,210', violet:'166,77,255' })[L.theme];
+        var _acc = ({ crimson:'255,31,46', ember:'255,122,74', gold:'224,169,63', chrome:'218,215,210', violet:'166,77,255', bone:'255,172,94', pink:'255,95,162' })[L.theme];
         // violet/gothic (Skully) gets a richer ambient; chrome/gold are subtler (light hues read as haze)
         // build8: violet ambient cut HARD (the Skully video already carries the violet mood; the fog was muddying the board)
         var _amb = (L.theme === 'violet') ? 0.30 : (L.theme === 'chrome' ? 0.30 : 0.45);
@@ -3864,7 +3905,7 @@
     // build8: per-level GEM TINT — recolor the note marbles to the level accent (e.g. Skully violet).
     try {
       if (window.RhythmGame && window.RhythmGame.setLevelGemTint) {
-        var _gemHex = (L && L.theme && LV_THEMES[L.theme]) ? ({ crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' })[L.theme] : null;
+        var _gemHex = (L && L.theme && LV_THEMES[L.theme]) ? ({ crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff', bone:'#ffac5e', pink:'#ff5fa2' })[L.theme] : null;
         window.RhythmGame.setLevelGemTint((_gemHex && _gemHex !== '#ff1f2e') ? _gemHex : null);
       }
     } catch (e) {}
@@ -3911,15 +3952,44 @@
     card.style.setProperty('--fill', v.toFixed(3));
     card.classList.toggle('charged', v >= 0.55);
   }
+  // ---- PER-LEVEL MECHANIC overlay (Bone Daddy booty-shake · Melody cat-paw). Self-owned DOM over the
+  // playfield, driven by the RhythmLevelFx hit/combo signals. Pure visual; reduceMotion kills the motion. ----
+  var _mechEl = null;
+  function hideMechanic() { if (_mechEl) { try { _mechEl.remove(); } catch (e) {} _mechEl = null; } }
+  function buildMechanic(m) {
+    hideMechanic();
+    if (!m || !m.type) return null;
+    var host = $('game') || document.body;
+    var el = document.createElement('div');
+    el.id = 'rr-mech'; el.setAttribute('aria-hidden', 'true');
+    el.className = 'rr-mech rr-mech-' + m.type;
+    var artCss = m.art ? (" style=\"background-image:url('" + String(m.art).replace(/['\\]/g, '') + "')\"") : '';
+    if (m.type === 'booty') el.innerHTML = '<div class="rrm-booty"' + artCss + '></div>';
+    else if (m.type === 'paw') el.innerHTML = '<div class="rrm-paw"' + artCss + '></div>';
+    else return null;
+    host.appendChild(el); _mechEl = el;
+    var node = el.firstChild;
+    function bump(cls) { if (!node) return; node.classList.remove('hit', 'big', 'swipe'); void node.offsetWidth; node.classList.add(cls); }
+    if (m.type === 'booty') {
+      return { onHit: function () { bump('hit'); }, onMiss: function () {}, onCombo: function (combo, big) { bump(big ? 'big' : 'hit'); } };
+    }
+    // paw: bat across the catcher on each hit (lane stored for optional per-lane styling)
+    return { onHit: function (kind, lane) { if (node) node.style.setProperty('--paw-lane', (typeof lane === 'number' ? lane : 2)); bump('swipe'); }, onMiss: function () {}, onCombo: function () {} };
+  }
   function showReactive(L) {
-    if (!L || !L.reactiveCards) { hideReactive(); return; }
-    var el = ensureReactive();
-    var d = $('rc-death'), w = $('rc-world');
-    if (d && L.reactiveCards.miss) d.style.backgroundImage = 'url("' + String(L.reactiveCards.miss).replace(/["\\]/g, '') + '")';
-    if (w && L.reactiveCards.hit) w.style.backgroundImage = 'url("' + String(L.reactiveCards.hit).replace(/["\\]/g, '') + '")';
-    el.classList.add('show');
+    hideMechanic();
+    var hasCards = !!(L && L.reactiveCards);
+    var mech = (L && L.mechanic) ? buildMechanic(L.mechanic) : null;
+    if (!hasCards && !mech) { hideReactive(); return; }
     var deathFill = 0, worldFill = 0;   // fate meters — closures persist across the run
-    setFill(d, 0); setFill(w, 0);
+    if (hasCards) {
+      var el = ensureReactive();
+      var d = $('rc-death'), w = $('rc-world');
+      if (d && L.reactiveCards.miss) d.style.backgroundImage = 'url("' + String(L.reactiveCards.miss).replace(/["\\]/g, '') + '")';
+      if (w && L.reactiveCards.hit) w.style.backgroundImage = 'url("' + String(L.reactiveCards.hit).replace(/["\\]/g, '') + '")';
+      el.classList.add('show');
+      setFill(d, 0); setFill(w, 0);
+    } else if (_rcEl) { _rcEl.classList.remove('show'); }
     var _intenseSrc = L.intenseVideo || null;   // build8: a more-intense backdrop for combo spikes (Skully). null → no swap.
     var _intenseOn = false, _intenseT = null;
     function _intenseRevert() {
@@ -3946,16 +4016,23 @@
       _intenseT = setTimeout(_intenseRevert, 5200);   // hold the spike, then ease back to the loop
     }
     window.RhythmLevelFx = {
-      // THE WORLD charges with clean hits (and slightly cools DEATH); flash on each.
-      onHit: function (kind, lane) { worldFill = Math.min(1, worldFill + 0.035); deathFill = Math.max(0, deathFill - 0.015); setFill($('rc-world'), worldFill); setFill($('rc-death'), deathFill); flashCard($('rc-world')); },
-      // DEATH charges with misses (and slightly cools THE WORLD); flash on each.
-      onMiss: function (lane) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); },
-      // build8: combo milestone / overdrive → kick the intense backdrop (dopamine spike), then ease back.
-      onCombo: function (combo, big) { _intenseKick(); }
+      // THE WORLD charges with clean hits (cards) + drives the level mechanic (booty bounce / paw bat).
+      onHit: function (kind, lane) {
+        if (hasCards) { worldFill = Math.min(1, worldFill + 0.035); deathFill = Math.max(0, deathFill - 0.015); setFill($('rc-world'), worldFill); setFill($('rc-death'), deathFill); flashCard($('rc-world')); }
+        if (mech && mech.onHit) { try { mech.onHit(kind, lane); } catch (e) {} }
+      },
+      // DEATH charges with misses (cards) + mechanic miss reaction.
+      onMiss: function (lane) {
+        if (hasCards) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); }
+        if (mech && mech.onMiss) { try { mech.onMiss(lane); } catch (e) {} }
+      },
+      // combo milestone / overdrive → kick the intense backdrop (Skully) + a big mechanic beat.
+      onCombo: function (combo, big) { _intenseKick(); if (mech && mech.onCombo) { try { mech.onCombo(combo, big); } catch (e) {} } }
     };
   }
   function hideReactive() {
     if (_rcEl) _rcEl.classList.remove('show');
+    hideMechanic();
     try { window.RhythmLevelFx = null; } catch (e) {}
   }
   // QUICK PLAY default full-bleed backdrop: the moon loop (already #bg-video's default src).
@@ -4192,7 +4269,7 @@
     };
     window.RhythmLibrary.clearLevelTheme = clearLevelTheme;
     // ---- build6: reusable, SONG-DECOUPLED environment list + apply/clear (one source of truth) ----
-    var ENV_ACCENT_HEX = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' };
+    var ENV_ACCENT_HEX = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff', bone:'#ffac5e', pink:'#ff5fa2' };
     function envFromAuthored(L) {
       return {
         id: L.id, name: L.title, tier: L.tier, theme: L.theme || 'crimson',
@@ -4200,21 +4277,32 @@
         cover: L.cover || '', bgArt: L.bgArt || '', bgVideo: L.bgVideo || '',
         guitarSkin: L.guitarSkin || '',                 // build8: carry per-level guitar onto the env path (was dropped → skin never fired)
         intenseVideo: L.intenseVideo || '',             // build8: carry the combo-spike backdrop onto the env path
-        reactiveCards: L.reactiveCards || null, boss: !!L.boss,
+        reactiveCards: L.reactiveCards || null, mechanic: L.mechanic || null, boss: !!L.boss,
         paid: !!(L.unlock && L.unlock.entitlement)
       };
     }
     function environments() {
-      var list = [{ id:'__default', name:'Default', tier:'', theme:'', accent:'#ff1f2e', cover:'', bgArt:'', bgVideo:'', reactiveCards:null, boss:false, paid:false, isDefault:true }];
+      var list = [
+        // Default play = RANDOM stage (design directive): the first chip rolls a random environment each play.
+        { id:'__random', name:'Random', tier:'', theme:'', accent:'#ff7a4a', cover:'assets/ui/random-stage.png', bgArt:'', bgVideo:'', reactiveCards:null, mechanic:null, boss:false, paid:false, isRandom:true },
+        { id:'__default', name:'Arena', tier:'', theme:'', accent:'#ff1f2e', cover:'', bgArt:'', bgVideo:'', reactiveCards:null, mechanic:null, boss:false, paid:false, isDefault:true }
+      ];
       try { for (var i = 0; i < AUTHORED.length; i++) list.push(envFromAuthored(AUTHORED[i])); } catch (e) {}
       return list;
     }
+    // pick a random non-default / non-boss / non-paid authored environment id (drives the Random chip)
+    function pickRandomEnvId() {
+      var pool = environments().filter(function (e) { return !e.isDefault && !e.isRandom && !e.boss && !e.paid; });
+      if (!pool.length) return null;
+      return pool[Math.floor(Math.random() * pool.length)].id;
+    }
     function envById(id) { var es = environments(); for (var i = 0; i < es.length; i++) if (es[i].id === id) return es[i]; return null; }
     function applyEnvironment(id) {
+      if (id === '__random') { var rid = pickRandomEnvId(); if (rid) { applyEnvironment(rid); return; } clearEnvironment(); return; }
       var e = envById(id);
-      if (!e || e.isDefault) { clearEnvironment(); return; }
+      if (!e || e.isDefault || e.isRandom) { clearEnvironment(); return; }
       var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
-        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', reactiveCards: e.reactiveCards, boss: false, _isEnv: true };
+        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', reactiveCards: e.reactiveCards, mechanic: e.mechanic || null, boss: false, _isEnv: true };
       _activeLevel = synthetic;
       try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(synthetic); } catch (e2) {}
       applyLevelTheme(synthetic);
@@ -4226,7 +4314,7 @@
       clearLevelTheme();
     }
     window.RhythmLevels = {
-      environments: environments, envById: envById,
+      environments: environments, envById: envById, pickRandomEnvId: pickRandomEnvId,
       applyEnvironment: applyEnvironment, clearEnvironment: clearEnvironment
     };
   } catch (e) {}
@@ -4465,6 +4553,7 @@
     melody_pink:   'assets/store/skin-melody-pink.jpg',
     // premium level + theme (reuse existing covers)
     boss_neon:     'assets/store/boss_neon.jpg',
+    melody_boss:   'assets/levels/melody-cover.jpg',
     theme_neon:    'assets/store/theme_neon.jpg',
     // legacy (back-compat if backend still sends it)
     starter_pack:  'assets/store/starter_pack.jpg'
@@ -4494,6 +4583,7 @@
     { item_type:'skin',  item_id:'bone_daddy',     title:'Bone Daddy',     price_sparks:1600, meta:{ description:'Charred bone-carved axe (Bone Daddy)', art_url:STORE_ART.bone_daddy, skin_url:SKIN_GUITAR.bone_daddy } },
     { item_type:'skin',  item_id:'melody_pink',    title:'Melody',         price_sparks:1800, meta:{ description:'Cat-pink showpiece (Melody boss)', art_url:STORE_ART.melody_pink, skin_url:SKIN_GUITAR.melody_pink } },
     { item_type:'level', item_id:'boss_neon',      title:'THE BREAKER (Boss)', price_sparks:2500, meta:{ description:'Unlock the Fracture boss stage', art_url:STORE_ART.boss_neon } },
+    { item_type:'level', item_id:'melody_boss',    title:'Melody (Boss)',  price_sparks:2200, meta:{ description:'Unlock the Melody cat-paw boss', art_url:STORE_ART.melody_boss } },
     { item_type:'theme', item_id:'theme_neon',     title:'Neon Theme',     price_sparks:800,  meta:{ description:'Neon HUD accent theme', art_url:STORE_ART.theme_neon } }
   ];
   function artUrl(it) {
@@ -5066,8 +5156,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var row = $('env-row'), hint = $('env-hint');
   if (!row) return;
-  var selectedEnvId = '__default';
-  // (1) wrap setMenuPlayHandler so EVERY sheet play applies the staged environment first (Default = byte-identical).
+  var selectedEnvId = '__random';   // design directive: default play = RANDOM stage
+  // (1) wrap setMenuPlayHandler so EVERY sheet play applies the staged environment first (Arena = byte-identical, Random = rolls each play).
   try {
     var RG = window.RhythmGame;
     if (RG && typeof RG.setMenuPlayHandler === 'function' && !RG.__envWrapped) {
@@ -5100,7 +5190,7 @@
     if (e.accent) b.style.setProperty('--ec', e.accent);
     var artBg = e.cover ? ("background-image:url('" + e.cover.replace(/'/g, '') + "');") : '';
     var ini = (e.name || '?').trim().charAt(0).toUpperCase();
-    var tag = e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
+    var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
     b.innerHTML =
       '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + ini + '</span>') +
         (e.locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
@@ -5131,7 +5221,8 @@
     var L = window.RhythmLevels, e = (L && L.envById) ? L.envById(id) : null;
     var sheet = $('song-sheet');
     if (sheet) sheet.style.setProperty('--sheet-accent', (e && e.accent) || '#ff1f2e');
-    if (e && !e.isDefault) setHint('Play this song in the “' + e.name + '” environment' + (e.reactiveCards ? ' (reactive cards).' : '.'));
+    if (e && e.isRandom) setHint('Surprise me — a random stage every play.');
+    else if (e && !e.isDefault) setHint('Play this song in the “' + e.name + '” environment' + (e.reactiveCards ? ' (reactive cards).' : (e.mechanic ? ' (live mechanic).' : '.')));
     else setHint('Standard arena — no level theme.');
     if (chosen && chosen.scrollIntoView) { try { chosen.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {} }
   }
