@@ -64,5 +64,16 @@
     "fps": 24,
     "blend": "lighter",
     "loop": false
+  },
+  "soulwisp-violet": {
+    "src": "assets/fx/soulwisp-violet.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 6,
+    "rows": 4,
+    "count": 24,
+    "fps": 14,
+    "blend": "lighter",
+    "loop": true
   }
 }
