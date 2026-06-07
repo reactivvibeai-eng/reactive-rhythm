@@ -315,11 +315,22 @@ acceptable as a store asset. Production pipeline that worked for `violet-gothic`
 fanned perspective). So premium skins need **PER-SKIN note-lane geometry** (code-side feature) — measure
 each skin's string fractions and hand them to the engine.
 
-### Per-skin geometry — `violet-gothic.png` (904×1664 PNG), measured fractions of that frame
-- `nutYF ≈ 0.105`,  `nutXF ≈ [0.460, 0.565]`  (top of strings, narrow cluster)
-- `bridgeYF ≈ 0.795`, `bridgeXF ≈ [0.420, 0.605]`  (strings at the bridge saddles)
-- Strings are **near-parallel** (flat front view) — only a slight fan, unlike `guitar.png`'s wide fan.
-- Values are eyeball-measured from a fraction-grid overlay; the code agent should fine-tune live with
-  `__rrDebug` until the 6 lanes sit exactly on the painted strings.
+### Per-skin geometry — ALL 6 premium skins (fractions of each PNG)
+Eyeball-measured from grid/lane overlays — the code agent should fine-tune live with `__rrDebug`
+until the 6 lanes sit exactly on the painted strings. All are flat front views → strings
+**near-parallel** (slight fan), unlike `guitar.png`'s wide fanned perspective.
+
+| skin id | in-game PNG (assets/guitars/) | size | nutYF | nutXF | bridgeYF | bridgeXF | store cover (assets/store/) |
+|---|---|---|---|---|---|---|---|
+| violet_gothic  | violet-gothic.png  | 904×1664 | 0.105 | [0.460,0.565] | 0.795 | [0.420,0.605] | skin-violet-gothic.jpg |
+| bone_daddy     | bone-daddy.png     | 904×1314 | 0.105 | [0.465,0.555] | 0.775 | [0.425,0.595] | skin-bone-daddy.jpg |
+| melody_pink    | melody-pink.png    | 904×1477 | 0.095 | [0.455,0.555] | 0.800 | [0.415,0.595] | skin-melody-pink.jpg |
+| crimson_chrome | crimson-chrome.png | 904×2194 | 0.085 | [0.450,0.560] | 0.800 | [0.400,0.605] | skin-crimson-chrome.jpg |
+| ember_bone     | ember-bone.png     | 904×1759 | 0.100 | [0.450,0.560] | 0.810 | [0.410,0.600] | skin-ember-bone.jpg |
+| gold_relic     | gold-relic.png     | 904×2160 | 0.085 | [0.450,0.560] | 0.800 | [0.400,0.605] | skin-gold-relic.jpg |
+
+All 6 in-game skins are transparent PNGs (chroma-keyed); all 6 store covers are 900² JPG on brand
+dark backdrops. `bone_daddy` + `melody_pink` are creator-character skins (Bone Daddy level / Melody
+level); the other four are the standard store skins.
 
 If a file won't save with the exact name, paste me its path and I'll rename/copy it into place.
