@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=95" />
+<link rel="stylesheet" href="jukebox.css?v=96" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -342,6 +342,12 @@
     background-color: var(--ec-bg, #160c0b); display: grid; place-items: center; }
   .env-chip .ec-art .ec-ini { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 22px;
     color: color-mix(in srgb, var(--ec, #ff1f2e) 80%, #fff); text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+  /* build8: RANDOM STAGE chip — show the icon whole (contain) + a hover roll, not cover-cropped */
+  .env-chip[data-env="__random"] .ec-art { background-size: contain; background-repeat: no-repeat; background-position: center;
+    filter: drop-shadow(0 0 9px rgba(255,31,46,0.55)); }
+  .env-chip[data-env="__random"]:hover .ec-art { animation: randRoll 0.6s cubic-bezier(.3,1.4,.4,1); }
+  @keyframes randRoll { 0% { transform: rotate(0); } 100% { transform: rotate(180deg); } }
+  html.rr-reduce-motion .env-chip[data-env="__random"]:hover .ec-art { animation: none; }
   .env-chip .ec-art::after { content: ''; position: absolute; inset: 0;
     background: linear-gradient(180deg, transparent 35%, rgba(8,5,6,0.85)); }
   .env-chip.sel .ec-art::before { content: '\2713'; position: absolute; top: 5px; right: 6px; z-index: 2;
@@ -468,6 +474,21 @@
   @keyframes atom-chrome { to { transform: rotate(360deg); } }
 
   .atom-svg { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; }
+  /* build8: optional raster atom core (assets/atom-loading.png) — sits centered over the SVG,
+     spins slowly + pulses (the "energy core"). Self-heals: img is removed onerror, leaving the SVG. */
+  .atom-img { position: absolute; left: 50%; top: 50%; z-index: 2; pointer-events: none;
+    width: 46%; height: 46%; object-fit: contain;
+    transform: translate(-50%, -50%);
+    filter: drop-shadow(0 0 18px rgba(255,31,46,0.7)) drop-shadow(0 0 36px rgba(255,122,74,0.35));
+    animation: atomImgSpin 9s linear infinite, atomImgPulse 1.05s ease-in-out infinite; }
+  @keyframes atomImgSpin  { to { transform: translate(-50%, -50%) rotate(360deg); } }
+  @keyframes atomImgPulse {
+    0%,100% { opacity: 0.92; filter: drop-shadow(0 0 14px rgba(255,31,46,0.65)) drop-shadow(0 0 28px rgba(255,122,74,0.30)); }
+    50%     { opacity: 1;    filter: drop-shadow(0 0 26px rgba(255,31,46,1))    drop-shadow(0 0 48px rgba(255,122,74,0.55)); }
+  }
+  /* spin + pulse compose on one element via two @keyframes; reduce-motion freezes both to a clean frame */
+  html.rr-reduce-motion .atom-img { animation: none; transform: translate(-50%, -50%); opacity: 0.95; }
+  @media (prefers-reduced-motion: reduce) { .atom-img { animation: none; transform: translate(-50%, -50%); opacity: 0.95; } }
   .atom-spin { transform-origin: 110px 110px; animation: atom-rot 14s linear infinite; }
   @keyframes atom-rot { to { transform: rotate(360deg); } }
   .atom-core { transform-origin: 110px 110px; animation: atom-core 1.05s ease-in-out infinite; }
@@ -1013,6 +1034,31 @@
       linear-gradient(180deg, rgba(10,7,6,0.42), rgba(10,7,6,0.80)); }
   #menu .lib { position: relative; z-index: 1; }
   html.rr-perf-bg #lib-bg-video { display: none !important; }
+  /* build8: cinematic MAIN-MENU hub backdrop — full-bleed warm loop behind the console
+     (mirrors #lib-bg-video; perf/novideo-gated; self-heals if the mp4 is absent). Absolute within
+     #menu-hub (NOT fixed — inactive screens are opacity:0, which would hide a fixed descendant). */
+  #menu-hub-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    z-index: 0; opacity: 0.42; pointer-events: none; filter: saturate(1.05) contrast(1.04); }
+  html.rr-perf-bg #menu-hub-video { display: none !important; }
+  #menu-hub .mh-card { position: relative; z-index: 2; }
+  /* RYO hero presence — a tall character anchored lower-right on the hub, behind the console card.
+     drop-shadow gives the crimson rim-light identity; self-heals (img hidden) if the art is absent. */
+  .ryo-hero { position: absolute; right: clamp(-40px, -2vw, 0px); bottom: 0; z-index: 1; pointer-events: none;
+    height: min(78vh, 720px); width: auto; max-width: 46vw; object-fit: contain; object-position: bottom right;
+    filter: drop-shadow(0 0 38px rgba(255,31,46,0.42)) drop-shadow(0 10px 30px rgba(0,0,0,0.6));
+    opacity: 0; animation: ryoHeroIn 1.1s cubic-bezier(.2,.8,.2,1) 0.25s both; }
+  @keyframes ryoHeroIn { 0% { opacity: 0; transform: translateX(6%) scale(1.03); }
+    100% { opacity: 0.92; transform: translateX(0) scale(1); } }
+  /* a soft crimson uplight pooled under RYO so he reads as standing in the scene, not pasted on */
+  .ryo-glow { position: absolute; right: 2vw; bottom: -8%; z-index: 0; pointer-events: none;
+    width: min(60vw, 760px); height: 52vh;
+    background: radial-gradient(ellipse at 70% 90%, rgba(255,31,46,0.30), rgba(163,6,15,0.10) 46%, transparent 72%);
+    filter: blur(10px); animation: glowPulse 3.2s ease-in-out infinite; }
+  @media (max-width: 880px) { .ryo-hero { opacity: 0.5; max-width: 40vw; height: min(62vh, 560px); }
+    .ryo-glow { opacity: 0.6; } }
+  @media (max-width: 620px), (max-height: 560px) { .ryo-hero, .ryo-glow { display: none; } }
+  html.rr-reduce-motion .ryo-hero { animation: none; opacity: 0.9; }
+  html.rr-reduce-motion .ryo-glow { animation: none; }
   .game-center { position: relative; }
   /* chrome hairlines framing the center highway strip — kept, above #game-bg */
   .game-center::before, .game-center::after {
@@ -2114,12 +2160,27 @@
   }
   /* hide floating mute whenever the library menu is the active screen */
   body:has(.menu-screen.active) .mute-btn, body:has(.menu-hub.active) .mute-btn { display: none; }
+  /* ============ build8: FIRST-RUN RYO INTRO ============ */
+  .ryo-intro-screen { z-index: 300; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
+  .ryo-intro-screen.active { opacity: 1; pointer-events: auto; }
+  #ryo-intro-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; background: #000; }
+  .ryo-intro-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0,0,0,0.55) 100%); }
+  .ryo-intro-skip { position: absolute; right: max(calc(env(safe-area-inset-right,0px) + 18px), 22px);
+    bottom: max(calc(env(safe-area-inset-bottom,0px) + 18px), 22px); z-index: 2;
+    padding: 10px 18px; border-radius: 999px; cursor: pointer;
+    background: rgba(12,6,8,0.6); border: 1px solid rgba(218,215,210,0.3); color: var(--ink);
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+    backdrop-filter: blur(8px); transition: border-color .15s ease, box-shadow .15s ease, color .15s ease; }
+  .ryo-intro-skip:hover, .ryo-intro-skip:focus-visible { border-color: var(--crimson); color: var(--chrome);
+    box-shadow: 0 0 16px rgba(255,31,46,0.35); outline: none; }
+
   /* ============ MAIN MENU HUB (guided console) ============ */
   .menu-hub { z-index: 240; padding: 24px; overflow-y: auto;
     background:
-      radial-gradient(ellipse at 50% 22%, rgba(163,6,15,0.30), transparent 60%),
-      radial-gradient(ellipse at 50% 100%, rgba(255,31,46,0.10), transparent 55%),
-      linear-gradient(180deg, #0a0706 0%, #160c0b 100%); }
+      radial-gradient(ellipse at 50% 22%, rgba(163,6,15,0.34), transparent 58%),
+      radial-gradient(ellipse at 18% 92%, rgba(255,31,46,0.12), transparent 52%),
+      linear-gradient(180deg, rgba(10,7,6,0.82) 0%, rgba(22,12,11,0.92) 100%); }
   .mh-card { width: min(920px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: 6px; padding: 8px; text-align: center; }
   .menu-hub.active .mh-card { animation: cardIn 0.46s cubic-bezier(.2,1,.3,1) both; }
@@ -2136,28 +2197,60 @@
   .mh-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim);
     letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 18px; max-width: 540px; }
   .mh-grid { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  /* build8: living tiles — per-tile accent (--ta), a soft radial bloom that wakes on hover,
+     a glass top-sheen, and an animated accent hairline along the top edge. Default --ta=crimson;
+     each tile overrides it below so the grid reads as six distinct "instruments", not one flat slab. */
   .mh-tile { position: relative; display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 10px; min-height: 150px; padding: 22px 16px;
+    justify-content: center; gap: 10px; min-height: 150px; padding: 22px 16px; overflow: hidden;
+    --ta: var(--crimson);
     border: 1px solid var(--line); border-radius: 16px; cursor: pointer;
-    background: linear-gradient(180deg, rgba(28,12,14,0.6), rgba(12,6,8,0.85));
+    background:
+      radial-gradient(120% 80% at 50% -10%, color-mix(in srgb, var(--ta) 18%, transparent), transparent 60%),
+      linear-gradient(180deg, rgba(28,12,14,0.62), rgba(12,6,8,0.88));
     color: var(--ink); font-family: 'Oxanium', sans-serif;
-    transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease; }
-  .mh-tile:hover, .mh-tile:focus-visible { transform: translateY(-4px); border-color: var(--crimson);
-    box-shadow: 0 14px 38px rgba(0,0,0,0.5), 0 0 26px rgba(255,31,46,0.3);
-    background: linear-gradient(180deg, rgba(40,14,18,0.7), rgba(16,7,9,0.9)); outline: none; }
-  .mh-tile:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
-  .mh-tile.primary { border-color: rgba(255,42,48,0.55);
-    box-shadow: 0 0 0 1px rgba(255,42,48,0.14) inset, 0 8px 26px rgba(255,31,46,0.18); }
-  .mh-tile .mh-ico { width: 38px; height: 38px; color: var(--crimson);
-    filter: drop-shadow(0 0 8px rgba(255,31,46,0.45)); }
+    transition: transform .16s cubic-bezier(.2,.8,.2,1), border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+  /* glass sheen sweep + bottom accent pool (the "living" layer; pointer-events:none so clicks pass) */
+  .mh-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.07), transparent 26%),
+      radial-gradient(90% 60% at 50% 118%, color-mix(in srgb, var(--ta) 32%, transparent), transparent 70%);
+    opacity: 0.5; transition: opacity .18s ease; }
+  /* animated accent hairline across the top edge — subtle drift, brightens on hover */
+  .mh-tile::after { content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 2px; pointer-events: none;
+    background: linear-gradient(90deg, transparent, var(--ta), transparent);
+    opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta));
+    background-size: 200% 100%; animation: mhEdge 5.5s linear infinite; }
+  @keyframes mhEdge { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+  .mh-tile:hover, .mh-tile:focus-visible { transform: translateY(-5px) scale(1.012); border-color: var(--ta);
+    box-shadow: 0 16px 42px rgba(0,0,0,0.55), 0 0 30px color-mix(in srgb, var(--ta) 42%, transparent);
+    background:
+      radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--ta) 30%, transparent), transparent 62%),
+      linear-gradient(180deg, rgba(40,16,20,0.72), rgba(16,7,9,0.92)); outline: none; }
+  .mh-tile:hover::before, .mh-tile:focus-visible::before { opacity: 1; }
+  .mh-tile:hover::after, .mh-tile:focus-visible::after { opacity: 0.9; }
+  .mh-tile:focus-visible { outline: 2px solid var(--ta); outline-offset: 2px; }
+  .mh-tile.primary { border-color: color-mix(in srgb, var(--ta) 60%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ta) 16%, transparent) inset, 0 10px 30px color-mix(in srgb, var(--ta) 22%, transparent); }
+  /* icon sits ABOVE the ::before sheen (z-index) and glows in the tile's own accent */
+  .mh-tile .mh-ico { position: relative; z-index: 1; width: 40px; height: 40px; color: var(--ta);
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--ta) 55%, transparent));
+    transition: transform .16s cubic-bezier(.2,.8,.2,1); }
+  .mh-tile:hover .mh-ico, .mh-tile:focus-visible .mh-ico { transform: translateY(-2px) scale(1.08); }
   .mh-tile .mh-ico svg { width: 100%; height: 100%; }
-  .mh-tile .mh-t { font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; }
-  .mh-tile .mh-d { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 10.5px;
+  .mh-tile .mh-t { position: relative; z-index: 1; font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 10.5px;
     letter-spacing: 0.06em; color: var(--ink-dim); text-transform: uppercase; }
-  .mh-tile.primary::before, .mh-tile.primary::after { content: ''; position: absolute; width: 16px;
-    height: 16px; border: 1px solid var(--crimson); opacity: 0.7; }
-  .mh-tile.primary::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
-  .mh-tile.primary::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  /* per-tile accent identity (the six instruments). IDs match the markup. */
+  #mh-campaign    { --ta: var(--crimson); }   /* hero path — crimson */
+  #mh-quickplay   { --ta: #ff7a4a; }          /* ember — fast/play */
+  #mh-multiplayer { --ta: #e0a93f; }          /* gold — versus */
+  #mh-store       { --ta: #e0a93f; }          /* gold — currency */
+  #mh-leaderboard { --ta: #dad7d2; }          /* chrome — ranks */
+  #mh-profile     { --ta: var(--crimson); }   /* crimson — your career */
+  .mh-tile.primary::before { opacity: 0.7; }
+  /* reduced-motion / fxLite: freeze the drifting edge + sheen to a calm static state */
+  html.rr-reduce-motion .mh-tile::after { animation: none; opacity: 0.45; }
+  body.rr-fx-lite .mh-tile::after { animation: none; }
   .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold);
     border: 1px solid rgba(224,169,63,0.45); border-radius: 999px; padding: 3px 8px; }
@@ -2480,6 +2573,14 @@
       <div class="rr-version" id="rr-version" aria-label="build version">v…</div>
     </div>
   </div>
+
+  <!-- build8: first-run RYO intro (assets/ryo/ryo-intro.mp4) — skippable, shows once via localStorage.
+       Self-heals: absent/erroring/slow video → dismisses straight to the hub. -->
+  <div class="screen ryo-intro-screen" id="ryo-intro" aria-hidden="true">
+    <video id="ryo-intro-video" muted playsinline preload="auto" src="assets/ryo/ryo-intro.mp4"></video>
+    <div class="ryo-intro-scrim"></div>
+    <button class="ryo-intro-skip" id="ryo-intro-skip" type="button">SKIP ›</button>
+  </div>
   <script>
     /* Stamp the start screen with the live build version (from game.js?v=NN) + host, so a screenshot
        instantly shows which version/site is loaded (localhost dev vs the live deploy). */
@@ -2501,6 +2602,9 @@
        MAIN MENU HUB — guided console (START → here → a path → PLAY)
        ============================================================ -->
   <div class="screen menu-hub" id="menu-hub" data-screen-label="main-menu">
+    <video id="menu-hub-video" autoplay loop muted playsinline preload="auto" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'"></video>
+    <img class="ryo-hero" src="assets/ryo/ryo-hero.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
+    <div class="ryo-glow" aria-hidden="true"></div>
     <div class="mh-card">
       <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
       <div class="mh-pre">MAIN MENU</div>
@@ -3240,6 +3344,7 @@
     <div class="loading-wrap">
       <div class="atom-loader">
         <span class="atom-halo" aria-hidden="true"></span>
+        <img class="atom-img" src="assets/atom-loading.png" alt="" aria-hidden="true" onerror="this.remove()" />
         <svg class="atom-svg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true">
           <defs>
             <linearGradient id="rr-wood" x1="0" y1="0" x2="1" y2="1">
@@ -3659,11 +3764,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=95"></script>
-<script src="game.js?v=95"></script>
-<script src="jukebox.js?v=95"></script>
-<script src="catalog.js?v=95"></script>
-<script src="multiplayer.js?v=95"></script>
+<script src="assets/fx/fx-player.js?v=96"></script>
+<script src="game.js?v=96"></script>
+<script src="jukebox.js?v=96"></script>
+<script src="catalog.js?v=96"></script>
+<script src="multiplayer.js?v=96"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3675,7 +3780,7 @@
 (function () {
   try {
     if (/[?&]novideo=1/.test(location.search)) {
-      document.querySelectorAll('#bg-video, #start-video, #lib-bg-video').forEach(function (v) {
+      document.querySelectorAll('#bg-video, #start-video, #lib-bg-video, #menu-hub-video').forEach(function (v) {
         try { v.pause(); } catch (e) {}
         v.removeAttribute('autoplay');
         v.style.setProperty('display', 'none', 'important');
@@ -5388,6 +5493,48 @@
     if (overlayOpen) return;
     if (menu.classList.contains('active') || (mp && mp.classList.contains('active'))) { showHub(); }
   });
+  // build8: first-run RYO intro — wrap showHub so the FIRST time we'd show the hub, we play
+  // ryo-intro.mp4 first (skippable, once). Self-heals to going straight to the hub.
+  (function () {
+    var SEEN = 'rr_ryo_intro_seen';
+    var introEl = $('ryo-intro'), vid = $('ryo-intro-video'), skipBtn = $('ryo-intro-skip');
+    var reduce = false;
+    try { reduce = document.documentElement.classList.contains('rr-reduce-motion') ||
+      (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    var alreadySeen = true;
+    try { alreadySeen = localStorage.getItem(SEEN) === '1'; } catch (e) {}
+    // dev flag to force-replay: ?ryo=replay  (test-only; strip with other ?flags before launch)
+    try { if (/[?&]ryo=replay/.test(location.search)) alreadySeen = false; } catch (e) {}
+    if (!introEl || !vid || alreadySeen || reduce) return;   // no overlay / already seen / reduced-motion → normal hub
+
+    var _origShow = showHub, done = false, watchdog = 0;
+    function finish() {
+      if (done) return; done = true;
+      try { localStorage.setItem(SEEN, '1'); } catch (e) {}
+      if (watchdog) { clearTimeout(watchdog); watchdog = 0; }
+      try { vid.pause(); } catch (e) {}
+      introEl.classList.remove('active'); introEl.setAttribute('aria-hidden', 'true');
+      _origShow();   // now reveal the hub
+    }
+    showHub = function () {
+      if (done) { _origShow(); return; }
+      // hide any current screen, show the intro overlay
+      try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
+      introEl.classList.add('active'); introEl.setAttribute('aria-hidden', 'false');
+      var p; try { p = vid.play(); } catch (e) { p = null; }
+      if (p && p.catch) p.catch(function () { finish(); });   // autoplay blocked → skip
+      // if the video can't start within 1.2s (missing/slow), bail to the hub
+      watchdog = setTimeout(function () { if (vid.readyState < 2) finish(); }, 1200);
+    };
+    vid.addEventListener('ended', finish);
+    vid.addEventListener('error', finish);
+    if (skipBtn) skipBtn.addEventListener('click', finish);
+    introEl.addEventListener('pointerdown', function (e) { if (e.target === skipBtn) return; finish(); });
+    window.addEventListener('keydown', function (e) {
+      if (!introEl.classList.contains('active')) return;
+      if (e.key === 'Escape' || e.key === 'Enter' || e.code === 'Space' || e.key === ' ') { e.preventDefault(); e.stopImmediatePropagation(); finish(); }
+    }, true);
+  })();
   try { window.RhythmHub = { show: showHub, toLibrary: toLibrary, toMultiplayer: toMultiplayer }; } catch (e) {}
 })();
 </script>
