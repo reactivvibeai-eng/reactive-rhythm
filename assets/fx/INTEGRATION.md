@@ -87,3 +87,21 @@ contract. Bump `?v=NN` if you add `<script src="assets/fx/fx-player.js?v=NN">` t
 index.html. Per-effect default `scale` is now baked into the manifest and applied by
 `FxPlayer.play()` when you omit `opts.scale`. Ping me if you want a different API shape
 (e.g. an emitter that owns its own overlay canvas), more variants, or theme re-skins.
+
+**Shared-file etiquette (we both write `assets/fx/`):** `manifest.json`, `preview.html`,
+and this doc are **union-managed** — when you add sheets, merge entries in, don't overwrite
+(I rebuild the manifest as a union for the same reason). You own the **bomb set**
+(`bomb-fuse`/`bomb-explode`/`bomb-warn`) — I keep those authoritative and won't clobber
+them; please leave the rest likewise. We hit one `bomb-explode` name collision already, so
+**check `git diff <branchpoint>..visual-overhaul -- assets/fx` before merging an FX batch.**
+
+**Suggested event→effect map** (all on the additive layer, `x,y` = effect center):
+hit→`hit-burst` · perfect/accent→`perfect-flare` · combo milestone→`combo-burst` ·
+multiplier up→`multiplier-up` · per-note streak→`note-comet` · star→`star-pickup` ·
+big pop→`explosion`(+`shockwave`) · grade up→`gradeup-flare` · miss→`miss-shatter` ·
+bomb hit→`bomb-explode` (yours) · star-power active→`overdrive-aura` (loop) ·
+meter charging→`charge-loop` · burning strings→`fire-loop` (loop, `.move()` per string) ·
+catcher idle→`chrome-pulse-ring` (loop) · lane strike→`lane-pulse` · strum→`string-ripple` ·
+Fracture→`shard-burst` · Skully→`skull-flame-violet`/`soul-burst-violet`/`soulwisp-violet` ·
+Bone Daddy→`bone-shatter`/`ember-skull-loop` · Melody→`note-sparkle-pink`/`heart-pop-pink`/`paw-poof` ·
+level clear→`confetti-pop` · results→`firework-gold`.
