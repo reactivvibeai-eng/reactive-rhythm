@@ -1948,7 +1948,84 @@
     .menu-screen.active ~ .mute-btn, .menu-screen.active .mute-btn { display: none; }
   }
   /* hide floating mute whenever the library menu is the active screen */
-  body:has(.menu-screen.active) .mute-btn { display: none; }
+  body:has(.menu-screen.active) .mute-btn, body:has(.menu-hub.active) .mute-btn { display: none; }
+  /* ============ MAIN MENU HUB (guided console) ============ */
+  .menu-hub { z-index: 240; padding: 24px; overflow-y: auto;
+    background:
+      radial-gradient(ellipse at 50% 22%, rgba(163,6,15,0.30), transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(255,31,46,0.10), transparent 55%),
+      linear-gradient(180deg, #0a0706 0%, #160c0b 100%); }
+  .mh-card { width: min(920px, 94vw); display: flex; flex-direction: column; align-items: center;
+    gap: 6px; padding: 8px; text-align: center; }
+  .menu-hub.active .mh-card { animation: cardIn 0.46s cubic-bezier(.2,1,.3,1) both; }
+  .mh-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+  .mh-brand img { width: 26px; height: 26px; filter: drop-shadow(0 0 10px rgba(255,31,46,0.55)); }
+  .mh-brand span { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.32em;
+    color: var(--ink-dim); }
+  .mh-pre { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.4em;
+    color: var(--crimson); }
+  .mh-pre::before { content: '// '; color: var(--ink-dim); }
+  .mh-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(40px, 7vw, 68px);
+    letter-spacing: 0.03em; line-height: 0.96; color: var(--ink);
+    text-shadow: 0 0 34px rgba(255,42,48,0.5); margin: 4px 0 2px; }
+  .mh-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim);
+    letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 18px; max-width: 540px; }
+  .mh-grid { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .mh-tile { position: relative; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; min-height: 150px; padding: 22px 16px;
+    border: 1px solid var(--line); border-radius: 16px; cursor: pointer;
+    background: linear-gradient(180deg, rgba(28,12,14,0.6), rgba(12,6,8,0.85));
+    color: var(--ink); font-family: 'Oxanium', sans-serif;
+    transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease; }
+  .mh-tile:hover, .mh-tile:focus-visible { transform: translateY(-4px); border-color: var(--crimson);
+    box-shadow: 0 14px 38px rgba(0,0,0,0.5), 0 0 26px rgba(255,31,46,0.3);
+    background: linear-gradient(180deg, rgba(40,14,18,0.7), rgba(16,7,9,0.9)); outline: none; }
+  .mh-tile:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+  .mh-tile.primary { border-color: rgba(255,42,48,0.55);
+    box-shadow: 0 0 0 1px rgba(255,42,48,0.14) inset, 0 8px 26px rgba(255,31,46,0.18); }
+  .mh-tile .mh-ico { width: 38px; height: 38px; color: var(--crimson);
+    filter: drop-shadow(0 0 8px rgba(255,31,46,0.45)); }
+  .mh-tile .mh-ico svg { width: 100%; height: 100%; }
+  .mh-tile .mh-t { font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .mh-tile .mh-d { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 10.5px;
+    letter-spacing: 0.06em; color: var(--ink-dim); text-transform: uppercase; }
+  .mh-tile.primary::before, .mh-tile.primary::after { content: ''; position: absolute; width: 16px;
+    height: 16px; border: 1px solid var(--crimson); opacity: 0.7; }
+  .mh-tile.primary::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+  .mh-tile.primary::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+  .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', monospace;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold);
+    border: 1px solid rgba(224,169,63,0.45); border-radius: 999px; padding: 3px 8px; }
+  .mh-skip { margin-top: 18px; background: none; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink-dim); transition: color .15s ease; }
+  .mh-skip:hover, .mh-skip:focus-visible { color: var(--chrome); outline: none; }
+  .hub-back { position: absolute; top: max(calc(env(safe-area-inset-top, 0px) + 12px), 16px); left: 16px;
+    z-index: 70; display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px 9px 11px;
+    border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+    background: rgba(12,6,8,0.78); color: var(--ink); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; backdrop-filter: blur(8px);
+    transition: border-color .15s ease, box-shadow .15s ease, color .15s ease; }
+  .hub-back:hover, .hub-back:focus-visible { border-color: var(--crimson); color: var(--chrome);
+    box-shadow: 0 0 16px rgba(255,31,46,0.32); outline: none; }
+  .hub-back svg { width: 15px; height: 15px; }
+  #menu-back { position: absolute; }
+  .multiplayer-screen { z-index: 240; overflow-y: auto;
+    background: radial-gradient(ellipse at 50% 26%, rgba(120,12,20,0.55), transparent 64%), #0a0706;
+    backdrop-filter: blur(14px); }
+  .mp-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center;
+    gap: 12px; padding: 16px; text-align: center; }
+  .multiplayer-screen.active .mp-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .mp-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.03em;
+    color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 4px 0 0; line-height: 1; }
+  .mp-sub { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim);
+    line-height: 1.6; max-width: 460px; }
+  @media (max-width: 760px) {
+    .mh-grid { grid-template-columns: repeat(2, 1fr); }
+    .mh-tile { min-height: 124px; padding: 18px 12px; }
+    .mh-title { font-size: clamp(34px, 10vw, 48px); }
+  }
+  @media (max-width: 420px) { .mh-grid { grid-template-columns: 1fr; } }
 
   /* very short landscape phones: nudge combo up */
   @media (max-width: 900px) and (orientation: landscape) {
@@ -2103,10 +2180,75 @@
   </script>
 
   <!-- ============================================================
+       MAIN MENU HUB — guided console (START → here → a path → PLAY)
+       ============================================================ -->
+  <div class="screen menu-hub" id="menu-hub" data-screen-label="main-menu">
+    <div class="mh-card">
+      <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
+      <div class="mh-pre">MAIN MENU</div>
+      <h1 class="mh-title">REACTIVE RHYTHM</h1>
+      <p class="mh-sub">Choose your path. Every mode runs the same neck — pick how you want to play.</p>
+      <div class="mh-grid" id="mh-grid">
+        <button class="mh-tile primary" id="mh-campaign" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg></span>
+          <span class="mh-t">Campaign</span>
+          <span class="mh-d">Climb the tiers</span>
+        </button>
+        <button class="mh-tile" id="mh-quickplay" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"></polygon></svg></span>
+          <span class="mh-t">Quick Play</span>
+          <span class="mh-d">Pick any track</span>
+        </button>
+        <button class="mh-tile" id="mh-multiplayer" type="button">
+          <span class="mh-soon">SOON</span>
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.2 20a5 5 0 0 1 6.3-4.5"></path></svg></span>
+          <span class="mh-t">Multiplayer</span>
+          <span class="mh-d">Head to head</span>
+        </button>
+        <button class="mh-tile" id="mh-store" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v1a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0V6l-3-4z"></path><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5"></path><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"></path></svg></span>
+          <span class="mh-t">Store</span>
+          <span class="mh-d">Spend Sparks</span>
+        </button>
+        <button class="mh-tile" id="mh-leaderboard" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
+          <span class="mh-t">Leaderboards</span>
+          <span class="mh-d">Top runs</span>
+        </button>
+        <button class="mh-tile" id="mh-profile" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M5.5 21a6.5 6.5 0 0 1 13 0"></path></svg></span>
+          <span class="mh-t">Profile</span>
+          <span class="mh-d">Your career</span>
+        </button>
+      </div>
+      <button class="mh-skip" id="mh-skip" type="button">Skip to library →</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MULTIPLAYER — placeholder entry screen (the multiplayer package fills this)
+       ============================================================ -->
+  <div class="screen multiplayer-screen" id="multiplayer-screen" data-screen-label="multiplayer">
+    <button class="hub-back" id="mp-back" type="button" aria-label="Back to main menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+      Back
+    </button>
+    <div class="mp-card">
+      <div class="mh-pre">VERSUS</div>
+      <h2 class="mp-title">MULTIPLAYER</h2>
+      <p class="mp-sub">Head-to-head battles are coming online. Hang tight — this room is being wired up.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================
        MENU SCREEN
        ============================================================ -->
   <div class="screen menu-screen" id="menu">
     <div class="lib">
+      <button class="hub-back" id="menu-back" type="button" aria-label="Back to main menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+        Menu
+      </button>
       <header class="lib-bar">
         <div class="brand-row">
           <img class="home-atom" src="assets/atom.png" alt="" />
@@ -4434,12 +4576,15 @@
     start.classList.add('leaving');
     setTimeout(function () {
       start.classList.remove('active', 'leaving');
-      menu.classList.add('active');
-      // the library was hidden behind the start screen (zero size) — relayout the
-      // carousel the instant it's visible so there's no black flash.
-      var relay = function () { try { window.RhythmLibrary && window.RhythmLibrary.relayout(); } catch (e) {} window.dispatchEvent(new Event('resize')); };
-      relay(); requestAnimationFrame(relay);
-      setTimeout(relay, 60); setTimeout(relay, 200); setTimeout(relay, 450);
+      // Route the first tap to the guided MAIN MENU hub (not straight into the library).
+      if (window.RhythmHub && window.RhythmHub.show) {
+        window.RhythmHub.show();
+      } else {
+        menu.classList.add('active');
+        var relay = function () { try { window.RhythmLibrary && window.RhythmLibrary.relayout(); } catch (e) {} window.dispatchEvent(new Event('resize')); };
+        relay(); requestAnimationFrame(relay);
+        setTimeout(relay, 60); setTimeout(relay, 200); setTimeout(relay, 450);
+      }
     }, 600);
   }
   // tap / click anywhere on the start screen (lets game.js audio-unlock fire too)
@@ -4556,6 +4701,52 @@
   }
   rebuild();
   try { window.RhythmEnvPicker = { rebuild: rebuild, select: select, selected: function () { return selectedEnvId; } }; } catch (e) {}
+})();
+</script>
+<!-- MAIN MENU HUB router — fronts the existing screens with a guided centered console + back-nav -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var hub = $('menu-hub'), menu = $('menu'), mp = $('multiplayer-screen');
+  if (!hub) return;
+  function showHub() {
+    try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
+    hub.classList.add('active');
+    try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
+  }
+  function toLibrary() {
+    hub.classList.remove('active');
+    menu.classList.add('active');
+    var relay = function () {
+      try { window.RhythmLibrary && window.RhythmLibrary.showView && window.RhythmLibrary.showView('jukebox'); } catch (e) {}
+      try { window.RhythmLibrary && window.RhythmLibrary.relayout && window.RhythmLibrary.relayout(); } catch (e) {}
+      window.dispatchEvent(new Event('resize'));
+    };
+    relay(); requestAnimationFrame(relay);
+    setTimeout(relay, 60); setTimeout(relay, 200);
+  }
+  function toMultiplayer() { if (!mp) return; hub.classList.remove('active'); mp.classList.add('active'); }
+  function via(openId) { return function () { var b = $(openId); if (b) b.click(); }; }
+  var W = [
+    ['mh-campaign',    via('levels-open')],
+    ['mh-quickplay',   toLibrary],
+    ['mh-multiplayer', toMultiplayer],
+    ['mh-store',       via('store-open')],
+    ['mh-leaderboard', via('leaderboard-open')],
+    ['mh-profile',     via('profile-open')],
+    ['mh-skip',        toLibrary]
+  ];
+  W.forEach(function (p) { var el = $(p[0]); if (el) el.addEventListener('click', p[1]); });
+  var mb = $('menu-back'); if (mb) mb.addEventListener('click', showHub);
+  var pb = $('mp-back');   if (pb) pb.addEventListener('click', showHub);
+  window.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var overlayOpen = ['levels-screen', 'store-screen', 'leaderboard-screen', 'profile-screen', 'howto-screen', 'settings-screen']
+      .some(function (id) { var el = $(id); return el && el.classList.contains('active'); });
+    if (overlayOpen) return;
+    if (menu.classList.contains('active') || (mp && mp.classList.contains('active'))) { showHub(); }
+  });
+  try { window.RhythmHub = { show: showHub, toLibrary: toLibrary, toMultiplayer: toMultiplayer }; } catch (e) {}
 })();
 </script>
 </body>
