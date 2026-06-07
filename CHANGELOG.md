@@ -1046,3 +1046,63 @@ connection / backend notes). The repo is clean with full history; the only step 
 is GitHub auth — create a private repo, `git remote add`, `git push`, then connect Lovable so its
 agent pulls the latest. After that, every change here is one push from a gated beta on
 `reactivvibe.com/play`. No game code changed (no `?v` bump).
+
+---
+
+> _(Increments 36–v91 — the `visual-overhaul` branch: photoreal asset set, Skully level, env
+> picker, menu hub, store, open-lobby MP, library rails — are captured in the git history +
+> `_HANDOFF_v91.md`, not transcribed here.)_
+
+---
+
+# v92–v96 — `visual-overhaul` continuation (the `_HANDOFF_v91.md` queue)
+
+Five queued build-8 packages, integrated one at a time and headless-tested before each commit.
+Gameplay/scoring/timing **byte-identical** throughout (all additive, guarded side-channels).
+
+### v92 — Flipbook FX hooked into the engine  ✅
+Wired the asset agent's `assets/fx/fx-player.js` into `game.js` (per the handoff — used fx-player.js,
+not the duplicate `flipbook.js` the build doc proposed). Load FxPlayer once (31 sheets), composite
+`fx.draw(ctx)` at the end of `render()` inside the camera-shake transform. `emitFx()` maps
+hit/perfect/miss/combo/overdrive → additive bursts scaled to lane width, at the real hit/HOPO/miss/
+bomb/milestone/overdrive sites. `THEME_FX` (read from `#game[data-rrtheme]`) gives Skully violet
+soul-burst variants (bone/pink slots ready). Bombs are now animated hazards: a **bomb-fuse** loop
+rides each bomb, **bomb-explode** on strike. `__rrDebug.fx/fxEmit/fxDraw` dev hooks. Verified: 31/31
+sheets load, emit→draw paints (maxLum 765) + culls, no errors.
+
+### v93 — 6 premium guitars: geometry + store  ✅
+Added `crimson_chrome` / `ember_bone` / `gold_relic` to `SKIN_GEOM` (per-skin nut/bridge fractions
+from ASSET_PROMPTS.md) so their catchers ride the painted strings; added `bone_daddy` + `melody_pink`
+to the store so all 6 premium guitars are purchasable + equippable. `__rrDebug.geom()` hook. Verified:
+each skin applies its measured geometry, store lists 6 skins + boss + theme.
+
+### v94 — Bone Daddy + Melody levels, mechanics, Random stage  ✅
+Two showcase levels in `AUTHORED[]`: **Bone Daddy** ("Get Busy", medium, theme `bone`, booty-shake)
+and **Melody** ("Highway Lover", hard BOSS, theme `pink`, cat-paw, purchasable via new `melody_boss`
+store item). Registered `bone`/`pink` themes across all 6 theme maps. New per-level `mechanic` field +
+`buildMechanic()` overlay driven by `RhythmLevelFx` (booty bounces on hit/combo; paw bats across the
+catcher). First env chip is now **Random** (`assets/ui/random-stage.png`, default-selected) — rolls a
+random non-boss/non-paid environment each play; "Arena" keeps plain Quick Play. Verified: trackIds
+resolve, themes + geometry apply, mechanics fire, Bone Daddy launches to `playing` with identity intact.
+
+### v95 — Multiplayer ROOM SYSTEM  ✅ (structural)
+Applied `_build8_multiplayer.md`: lobby action bar (⚡ Quick Match, ＋ Open a Room, 🜨 Browse Rooms),
+a rooms step (browser + open-a-room form + waiting room), per-room `rr-room-<id>` presence, room→match
+handoff into the existing `startMatchChannel` lifecycle, quick-match deterministic pairing, and
+spectate. `multiplayer.js` + `#multiplayer-screen` only; match engine not forked. Verified single-
+browser: step switching, openRoom→waiting area, close, quick-match toggle, offline guards, no errors.
+**2-peer matching/join/spectate need the user's two-device test** (one browser can't host two presences).
+
+### v96 — RYO menu visuals  ✅
+Applied `_build8_menuvisuals.md` (index.html only). Hub gets the `menu-loop.mp4` cinematic backdrop +
+a lower-right **RYO hero** (placed inside `#menu-hub`, not a fixed child of `#start` — inactive
+screens are `opacity:0`, which hides fixed descendants). Six **living tiles** (per-accent `--ta`,
+hover bloom, glass sheen, drifting hairline). Loader gains an optional `atom-loading.png` spin/pulse
+core (self-heals to the SVG — PNG still absent). **First-run RYO intro** (`ryo-intro.mp4`) plays once
+before the hub (skippable, `localStorage rr_ryo_intro_seen`, `?ryo=replay`). Skipped the doc's
+Default→Random patch (already shipped in v94). Verified: video + hero load, tiles distinct, intro
+activates/skips/persists, `?novideo` kills it, no errors.
+
+**State after v96:** all five `_HANDOFF_v91.md` items done. Open: 2-device MP test; per-skin lane
+fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
+Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo=replay`, FPS meter) still present — strip at content-freeze.
