@@ -280,4 +280,46 @@ No center subject, no blue, no text, no logos, no UI.
 
 **assets\store\** (1024² jpg): `starter_pack.jpg`, `boss_neon.jpg`, `theme_neon.jpg`.
 
+---
+
+## HOUSE PRINCIPLE — match the CREATOR'S brand for creator-song levels
+
+When a level is built around a specific creator's song, **look at that creator's own art first** —
+album cover, creator dashboard, logo, thumbnails — and let their IP and visual brand drive the level's
+look so the level *reads* as that artist. Pull the song's cover via the catalog API (`GET /track/:id`
+on `game-catalog`) and/or any logo the user provides, and feed it to Higgsfield as a style/structure
+reference (upload via `media_upload` → use the returned UUID as a `medias[]` reference). Example: the
+**Skully "The World"** level + the violet-gothic guitar are built off the creator's **SKULLYRAE** crest
+(skull + red roses + gothic filigree) and character art, not a generic gothic look.
+
+---
+
+## PREMIUM GUITAR SKINS — real re-themed instruments (NOT recolors)
+
+A sellable skin must be a genuinely different, detailed instrument — new finish, material, carvings,
+inlays, hardware, headstock, FX — themed to the creator. A flat hue/recolor of `guitar.png` is NOT
+acceptable as a store asset. Production pipeline that worked for `violet-gothic` (Skullyrae):
+
+1. `media_upload` the base `assets/guitar.png` → get UUID (gives the model the structure to restyle).
+2. `generate_image` **gpt_image_2** (role `image` = edit), `quality:high`, `resolution:2k`, `aspect_ratio:3:4`,
+   prompt = "restyle THIS exact guitar, keep silhouette/neck/strings, change only finish/material/
+   carvings/inlays/hardware/ornamentation" + creator theme. = the premium STORE hero (no alignment needed).
+3. For the IN-GAME skin: re-generate that result (reference its job id) on a **flat chroma-GREEN
+   background with EVEN bright lighting** (no parts fading to black, full body visible) → chroma-key +
+   despill + auto-crop to a clean transparent PNG (`assets/guitars/<id>.png`). Even lighting + green
+   key avoids the "dark guitar blends with black bg" cutout failure.
+4. Store cover = the keyed transparent guitar composited on a brand **crimson** vignette (no purple in
+   store/UI — violet only on level art). Save `assets/store/skin-<id>.jpg`, 900², q90.
+
+**gpt_image_2's edit re-proportions the neck** (flatter front view, near-parallel strings vs the base's
+fanned perspective). So premium skins need **PER-SKIN note-lane geometry** (code-side feature) — measure
+each skin's string fractions and hand them to the engine.
+
+### Per-skin geometry — `violet-gothic.png` (904×1664 PNG), measured fractions of that frame
+- `nutYF ≈ 0.105`,  `nutXF ≈ [0.460, 0.565]`  (top of strings, narrow cluster)
+- `bridgeYF ≈ 0.795`, `bridgeXF ≈ [0.420, 0.605]`  (strings at the bridge saddles)
+- Strings are **near-parallel** (flat front view) — only a slight fan, unlike `guitar.png`'s wide fan.
+- Values are eyeball-measured from a fraction-grid overlay; the code agent should fine-tune live with
+  `__rrDebug` until the 6 lanes sit exactly on the painted strings.
+
 If a file won't save with the exact name, paste me its path and I'll rename/copy it into place.
