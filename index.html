@@ -322,6 +322,47 @@
   .diff-btn:hover { background: rgba(255,255,255,0.05); color: var(--ink); }
   .diff-btn.active { border-color: var(--crimson); color: var(--ink); background: rgba(255, 31, 46, 0.08); box-shadow: inset 0 0 0 1px rgba(255,31,46,0.4); }
   .diff-btn.active .lvl { color: var(--crimson); }
+  /* ============ ENVIRONMENT PICKER (build6) — choose a LEVEL/ENVIRONMENT for the picked song ============ */
+  .env-row { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px;
+    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .env-row::-webkit-scrollbar { height: 5px; }
+  .env-row::-webkit-scrollbar-thumb { background: rgba(255,31,46,0.35); border-radius: 999px; }
+  .env-chip { scroll-snap-align: start; flex: 0 0 auto; width: 116px; cursor: pointer; position: relative;
+    display: flex; flex-direction: column; gap: 0; padding: 0; border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden; background: linear-gradient(180deg, rgba(28,12,14,0.6), rgba(12,6,8,0.85));
+    color: var(--ink); font-family: 'Oxanium', sans-serif; text-align: left;
+    transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
+  .env-chip:hover, .env-chip:focus-visible { transform: translateY(-2px); border-color: var(--ec, var(--crimson));
+    box-shadow: 0 8px 22px rgba(0,0,0,0.5), 0 0 18px color-mix(in srgb, var(--ec, #ff1f2e) 36%, transparent);
+    outline: none; }
+  .env-chip:focus-visible { outline: 2px solid var(--ec, var(--crimson)); outline-offset: 2px; }
+  .env-chip.sel { border-color: var(--ec, var(--crimson));
+    box-shadow: 0 0 0 1px var(--ec, var(--crimson)) inset, 0 0 20px color-mix(in srgb, var(--ec, #ff1f2e) 45%, transparent); }
+  .env-chip .ec-art { position: relative; width: 100%; height: 60px; background-size: cover; background-position: center;
+    background-color: var(--ec-bg, #160c0b); display: grid; place-items: center; }
+  .env-chip .ec-art .ec-ini { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 22px;
+    color: color-mix(in srgb, var(--ec, #ff1f2e) 80%, #fff); text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
+  .env-chip .ec-art::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 35%, rgba(8,5,6,0.85)); }
+  .env-chip.sel .ec-art::before { content: '\2713'; position: absolute; top: 5px; right: 6px; z-index: 2;
+    font-size: 11px; font-weight: 800; color: #0a0706; background: var(--ec, var(--crimson));
+    width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; }
+  .env-chip .ec-body { position: relative; padding: 7px 9px 9px; }
+  .env-chip .ec-name { font-weight: 800; font-size: 12px; letter-spacing: 0.04em; line-height: 1.15;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+  .env-chip .ec-tag { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 8.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ec, var(--ink-dim)); margin-top: 2px; }
+  .env-chip .ec-lock { position: absolute; top: 5px; left: 6px; z-index: 2; font-size: 11px; opacity: 0.9; }
+  .env-chip.locked { opacity: 0.55; }
+  .env-chip.locked:hover { transform: none; }
+  .env-hint { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.04em;
+    color: var(--ink-dim); margin-top: 2px; min-height: 13px; }
+  html.rr-reduce-motion .env-chip { transition: none; }
+  @media (max-width: 480px) { .env-chip { width: 104px; } .env-chip .ec-art { height: 52px; } }
+  /* the play button picks up the chosen environment's accent as a subtle edge */
+  .song-sheet[style*="--sheet-accent"] .play-btn {
+    box-shadow: 0 0 0 1px var(--sheet-accent, var(--crimson)), 0 14px 44px color-mix(in srgb, var(--sheet-accent, #ff1f2e) 36%, transparent);
+  }
 
   /* CONTROLS */
   .keys-row { display: flex; gap: 8px; }
@@ -2239,6 +2280,12 @@
         </div>
       </div>
 
+      <div class="sheet-section" id="env-section">
+        <h3 class="sheet-h">Environment</h3>
+        <div class="env-row" id="env-row" role="radiogroup" aria-label="Play environment"></div>
+        <div class="env-hint" id="env-hint"></div>
+      </div>
+
       <div class="sheet-foot">
         <button class="play-btn" id="play-btn">
           <span>Initiate the Signal</span>
@@ -3629,6 +3676,7 @@
     };
     window.RhythmLibrary.recordLevelClear = function (results) {
       if (!_activeLevel || !results) return;
+      if (_activeLevel._isEnv) return;   // build6: free-play-in-environment runs don't write campaign stars
       var g = results.grade || 'C';
       var stars = (g === 'S' || g === 'A') ? 3 : (g === 'B') ? 2 : 1;
       var p = lvProg(); var prev = (p[_activeLevel.id] && p[_activeLevel.id].stars) || 0;
@@ -3636,6 +3684,42 @@
       saveLvProg(p);
     };
     window.RhythmLibrary.clearLevelTheme = clearLevelTheme;
+    // ---- build6: reusable, SONG-DECOUPLED environment list + apply/clear (one source of truth) ----
+    var ENV_ACCENT_HEX = { crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff' };
+    function envFromAuthored(L) {
+      return {
+        id: L.id, name: L.title, tier: L.tier, theme: L.theme || 'crimson',
+        accent: ENV_ACCENT_HEX[L.theme] || '#ff1f2e',
+        cover: L.cover || '', bgArt: L.bgArt || '', bgVideo: L.bgVideo || '',
+        reactiveCards: L.reactiveCards || null, boss: !!L.boss,
+        paid: !!(L.unlock && L.unlock.entitlement)
+      };
+    }
+    function environments() {
+      var list = [{ id:'__default', name:'Default', tier:'', theme:'', accent:'#ff1f2e', cover:'', bgArt:'', bgVideo:'', reactiveCards:null, boss:false, paid:false, isDefault:true }];
+      try { for (var i = 0; i < AUTHORED.length; i++) list.push(envFromAuthored(AUTHORED[i])); } catch (e) {}
+      return list;
+    }
+    function envById(id) { var es = environments(); for (var i = 0; i < es.length; i++) if (es[i].id === id) return es[i]; return null; }
+    function applyEnvironment(id) {
+      var e = envById(id);
+      if (!e || e.isDefault) { clearEnvironment(); return; }
+      var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
+        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, reactiveCards: e.reactiveCards, boss: false, _isEnv: true };
+      _activeLevel = synthetic;
+      try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(synthetic); } catch (e2) {}
+      applyLevelTheme(synthetic);
+      showReactive(synthetic);
+    }
+    function clearEnvironment() {
+      _activeLevel = null;
+      try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(null); } catch (e) {}
+      clearLevelTheme();
+    }
+    window.RhythmLevels = {
+      environments: environments, envById: envById,
+      applyEnvironment: applyEnvironment, clearEnvironment: clearEnvironment
+    };
   } catch (e) {}
   // ---- results-screen level loop wiring (defers to free-play when no level active) ----
   (function wireResultsLoop() {
@@ -4388,6 +4472,90 @@
       enter();
     }
   }, true);
+})();
+</script>
+<!-- ENVIRONMENT PICKER controller (build6) — choose a LEVEL/ENVIRONMENT for the picked song -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var row = $('env-row'), hint = $('env-hint');
+  if (!row) return;
+  var selectedEnvId = '__default';
+  // (1) wrap setMenuPlayHandler so EVERY sheet play applies the staged environment first (Default = byte-identical).
+  try {
+    var RG = window.RhythmGame;
+    if (RG && typeof RG.setMenuPlayHandler === 'function' && !RG.__envWrapped) {
+      var _origSet = RG.setMenuPlayHandler.bind(RG);
+      RG.setMenuPlayHandler = function (fn) {
+        var wrapped = function () {
+          try {
+            var L = window.RhythmLevels;
+            if (L) {
+              if (selectedEnvId && selectedEnvId !== '__default') L.applyEnvironment(selectedEnvId);
+              else L.clearEnvironment();
+            }
+          } catch (e) {}
+          if (typeof fn === 'function') fn();
+        };
+        _origSet(wrapped);
+      };
+      RG.__envWrapped = true;
+    }
+  } catch (e) {}
+  function escAttr(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function setHint(t) { if (hint) hint.textContent = t || ''; }
+  function chip(e) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'env-chip' + (e.id === selectedEnvId ? ' sel' : '') + (e.locked ? ' locked' : '');
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', e.id === selectedEnvId ? 'true' : 'false');
+    b.dataset.env = e.id;
+    if (e.accent) b.style.setProperty('--ec', e.accent);
+    var artBg = e.cover ? ("background-image:url('" + e.cover.replace(/'/g, '') + "');") : '';
+    var ini = (e.name || '?').trim().charAt(0).toUpperCase();
+    var tag = e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
+    b.innerHTML =
+      '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + ini + '</span>') +
+        (e.locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
+      '<div class="ec-body"><div class="ec-name">' + escAttr(e.name) + '</div><div class="ec-tag">' + escAttr(tag) + '</div></div>';
+    b.addEventListener('click', function () {
+      if (e.locked) { setHint('Unlock “' + e.name + '” in the Store, or play it in the Campaign.'); return; }
+      select(e.id);
+    });
+    return b;
+  }
+  function rebuild() {
+    var L = window.RhythmLevels;
+    var list = (L && L.environments) ? L.environments() : [{ id:'__default', name:'Default', isDefault:true, accent:'#ff1f2e' }];
+    var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
+    list.forEach(function (e) { e.locked = !!(e.paid && !dev); });
+    row.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    list.forEach(function (e) { frag.appendChild(chip(e)); });
+    row.appendChild(frag);
+    var stillOk = list.some(function (e) { return e.id === selectedEnvId && !e.locked; });
+    if (!stillOk) selectedEnvId = '__default';
+    select(selectedEnvId, true);
+  }
+  function select(id, silent) {
+    selectedEnvId = id;
+    var chips = row.querySelectorAll('.env-chip'), chosen = null;
+    chips.forEach(function (c) { var on = c.dataset.env === id; c.classList.toggle('sel', on); c.setAttribute('aria-checked', on ? 'true' : 'false'); if (on) chosen = c; });
+    var L = window.RhythmLevels, e = (L && L.envById) ? L.envById(id) : null;
+    var sheet = $('song-sheet');
+    if (sheet) sheet.style.setProperty('--sheet-accent', (e && e.accent) || '#ff1f2e');
+    if (e && !e.isDefault) setHint('Play this song in the “' + e.name + '” environment' + (e.reactiveCards ? ' (reactive cards).' : '.'));
+    else setHint('Standard arena — no level theme.');
+    if (chosen && chosen.scrollIntoView) { try { chosen.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {} }
+  }
+  var sheet = $('song-sheet');
+  if (sheet && window.MutationObserver) {
+    var mo = new MutationObserver(function () { if (sheet.classList.contains('open')) rebuild(); });
+    mo.observe(sheet, { attributes: true, attributeFilter: ['class'] });
+  }
+  rebuild();
+  try { window.RhythmEnvPicker = { rebuild: rebuild, select: select, selected: function () { return selectedEnvId; } }; } catch (e) {}
 })();
 </script>
 </body>
