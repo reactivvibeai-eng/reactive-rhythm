@@ -1101,6 +1101,7 @@
       boss: bossMode,
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
+    try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
 
     renderResults(results, accPct, grade);
     showScreen('results');
@@ -1215,7 +1216,7 @@
   try { const d = localStorage.getItem('rr_diff'); if (d && DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); } } catch (e) {}
   $('resume-btn').addEventListener('click', resumeGame);
   $('restart-btn').addEventListener('click', () => { hidePause(); restartGame(); });
-  $('exit-btn').addEventListener('click', () => { hidePause(); stopGame(); showScreen('menu'); });
+  $('exit-btn').addEventListener('click', () => { hidePause(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
   let lastResults = null;
   $('results-replay').addEventListener('click', () => { restartGame(); });
   $('results-menu').addEventListener('click', () => { stopGame(); showScreen('menu'); });
@@ -3125,7 +3126,41 @@
     setKeyBinding: (lane, key) => bindLaneKey(lane, String(key).toLowerCase()),
     resetKeys: () => resetKeys(),
     getInputStatus: () => ({ midi: midiInputs.slice(), gamepads: gamepadList(), midiSupported: !!navigator.requestMIDIAccess }),
+    __buffered: (url, meta) => bufferedProvider(url, meta),   // MP tight-sync seam (deferred provider)
   });
+
+  // ===========================================================================
+  // MULTIPLAYER ENGINE SEAMS (additive; default-inert if multiplayer.js absent).
+  // ===========================================================================
+  window.RhythmGame.getLiveStats = function () {
+    var hit = counts.perfect + counts.great + counts.good;
+    var done = hit + counts.miss;
+    var accFrac = done > 0
+      ? (counts.perfect * 1.0 + counts.great * 0.85 + counts.good * 0.5) / done : 1;
+    var prog = (songDuration > 0 && player) ? Math.max(0, Math.min(1, songTime() / songDuration)) : 0;
+    return {
+      score: Math.round(score), combo: combo, maxCombo: maxCombo,
+      acc: Math.round(accFrac * 1000) / 10,
+      progress: Math.round(prog * 1000) / 1000,
+      playing: state === 'playing',
+      grade: (function (p) { return p >= 95 ? 'S' : p >= 88 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D'; })(accFrac * 100)
+    };
+  };
+  var _songEndCbs = [];
+  window.RhythmGame.onSongEnd = function (cb) { if (typeof cb === 'function') _songEndCbs.push(cb); };
+  function _fireSongEnd(reason) {
+    var cbs = _songEndCbs.slice(); _songEndCbs.length = 0;
+    for (var i = 0; i < cbs.length; i++) {
+      try { cbs[i](reason, (window.RhythmGame.lastResults && window.RhythmGame.lastResults()) || null); } catch (e) {}
+    }
+  }
+  window.RhythmGame.startAt = function (prov, opts) {
+    opts = opts || {};
+    if (opts.difficulty) { try { window.RhythmGame.setDifficulty(opts.difficulty); } catch (e) {} }
+    var delay = Math.max(0, (opts.atMs || Date.now()) - Date.now());
+    setTimeout(function () { try { getAC().resume(); } catch (e) {} try { play(prov); } catch (e) {} }, delay);
+  };
+  if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
 
   // play button → defers to catalog handler if set, else demo
   let _menuPlayHandler = null;

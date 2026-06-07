@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=85" />
+<link rel="stylesheet" href="jukebox.css?v=86" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2025,6 +2025,95 @@
   .mp-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: 12px; padding: 16px; text-align: center; }
   .multiplayer-screen.active .mp-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  /* ===== MULTIPLAYER (versus) — open-lobby steps (namespaced .mpx-*; in-game #mp-opp) ===== */
+  .mp-card .mpx-step { display: block; width: 100%; }
+  .mp-card .mpx-step[hidden] { display: none; }
+  .mpx-youbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; text-align: left;
+    background: linear-gradient(180deg, rgba(255,31,46,0.14), rgba(255,31,46,0.05)); border: 1px solid rgba(255,31,46,0.34); margin: 6px 0 14px; }
+  .mpx-you-av, .mpx-r-av { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 16px; color: #0a0706; background: var(--chrome, #dad7d2); background-size: cover; background-position: center; overflow: hidden; }
+  .mpx-you-name, .mpx-r-name { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 16px; color: var(--ink, #f3eceb); }
+  .mpx-you-tag { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #9c918e; }
+  .mpx-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; padding: 3px 8px; border-radius: 999px; }
+  .mpx-badge.host { color: #0a0706; background: linear-gradient(180deg, #f0c25a, #d39a2c); border: 1px solid rgba(224,169,63,0.6); box-shadow: 0 0 14px rgba(224,169,63,0.4); }
+  .mpx-rosterhead { display: flex; justify-content: space-between; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.16em; color: #9c918e; margin: 4px 2px 8px; }
+  .mpx-live-dot { color: #ff7a4a; }
+  .mpx-roster { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; text-align: left; }
+  .mpx-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 12px;
+    background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.14)); }
+  .mpx-row .mpx-r-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .mpx-row .mpx-r-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: #9c918e; }
+  .mpx-challenge { margin-left: auto; flex: 0 0 auto; padding: 7px 14px; border-radius: 10px; cursor: pointer;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.06em; color: #fff;
+    background: linear-gradient(180deg, #ff2a38, #b3121f); border: 1px solid rgba(255,31,46,0.5); transition: transform .12s ease, box-shadow .12s ease; }
+  .mpx-challenge:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(255,31,46,0.4); }
+  .mpx-challenge[disabled] { opacity: 0.5; cursor: default; background: rgba(218,215,210,0.08); color: #9c918e; border-color: var(--line, rgba(218,215,210,0.14)); }
+  .mpx-row.incoming { border-color: rgba(224,169,63,0.5); background: rgba(224,169,63,0.08); }
+  .mpx-acc { padding: 6px 12px; border-radius: 9px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; cursor: pointer; color: #0a0706; background: var(--gold, #e0a93f); border: none; margin-left: auto; }
+  .mpx-dec { padding: 6px 10px; border-radius: 9px; font-family: 'Oxanium', sans-serif; font-size: 12px; cursor: pointer; color: #b9aeac; background: transparent; border: 1px solid var(--line, rgba(218,215,210,0.18)); margin-left: 6px; }
+  .mpx-roster-empty { font-family: 'Chakra Petch', sans-serif; color: #8d8380; font-size: 13px; padding: 18px 8px; }
+  .mpx-vsbar { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 6px 0 16px; font-family: 'Oxanium', sans-serif; font-weight: 700; }
+  .mpx-dot { padding: 7px 14px; border-radius: 999px; font-size: 13px; letter-spacing: 0.06em; border: 1px solid var(--line, rgba(218,215,210,0.18)); }
+  .mpx-dot.you { color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-color: rgba(255,31,46,0.5); }
+  .mpx-dot.opp[data-state="waiting"] { color: #8d8380; }
+  .mpx-dot.opp[data-state="here"] { color: #0a0706; background: var(--chrome, #dad7d2); border-color: var(--chrome, #dad7d2); }
+  .mpx-dot.opp[data-state="left"] { color: #ff7a4a; border-color: rgba(255,122,74,0.5); }
+  .mpx-vs { color: #6f6663; font-size: 12px; }
+  .mpx-songpick { text-align: left; margin: 4px 0 16px; }
+  .mpx-pick-head { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.3em; color: var(--crimson, #ff1f2e); margin-bottom: 7px; }
+  .mpx-pick { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border-radius: 12px;
+    background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.16)); cursor: pointer; color: var(--ink, #f3eceb); }
+  .mpx-pick[disabled] { opacity: 0.6; cursor: default; }
+  .mpx-pick-art { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 8px; display: grid; place-items: center;
+    background: linear-gradient(135deg, rgba(255,31,46,0.25), rgba(255,122,74,0.12)); font-size: 18px; background-size: cover; background-position: center; overflow: hidden; }
+  .mpx-pick-txt { display: flex; flex-direction: column; align-items: flex-start; flex: 1; min-width: 0; }
+  .mpx-pick-t { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .mpx-pick-a { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; }
+  .mpx-pick-chev { color: #6f6663; font-size: 22px; }
+  .mpx-diff { margin-top: 10px; }
+  .mpx-picker { margin-top: 10px; border-radius: 12px; border: 1px solid var(--line, rgba(218,215,210,0.16)); overflow: hidden; background: rgba(10,7,6,0.7); }
+  .mpx-search { width: 100%; box-sizing: border-box; padding: 11px 14px; border: none; border-bottom: 1px solid var(--line, rgba(218,215,210,0.14));
+    background: transparent; color: var(--ink, #f3eceb); font-family: 'Chakra Petch', sans-serif; font-size: 14px; }
+  .mpx-results { max-height: 230px; overflow-y: auto; }
+  .mpx-result { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; border-bottom: 1px solid rgba(218,215,210,0.06); }
+  .mpx-result:hover { background: rgba(255,31,46,0.08); }
+  .mpx-result .r-t { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 14px; color: var(--ink, #f3eceb); }
+  .mpx-result .r-a { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; }
+  .mpx-readyrow { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .mpx-ready { min-width: 220px; }
+  .mpx-ready.armed { background: linear-gradient(180deg, #2fd27a, #11955a); border-color: rgba(47,210,122,0.5); }
+  .mpx-readystate { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em; color: #9c918e; }
+  .mpx-go-num { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(40px, 12vw, 88px); color: var(--crimson, #ff1f2e); letter-spacing: 0.04em; }
+  .mpx-verdict { font-family: 'Unbounded', sans-serif; font-size: clamp(34px, 8vw, 60px); margin: 6px 0 18px; letter-spacing: 0.02em; }
+  .mpx-verdict.win { color: var(--gold, #e0a93f); text-shadow: 0 0 28px rgba(224,169,63,0.5); }
+  .mpx-verdict.lose { color: #8d8380; }
+  .mpx-verdict.draw { color: var(--chrome, #dad7d2); }
+  .mpx-scorecard { display: flex; align-items: stretch; justify-content: center; gap: 12px; }
+  .mpx-sc { flex: 1; max-width: 200px; padding: 16px 12px; border-radius: 14px; background: rgba(218,215,210,0.04); border: 1px solid var(--line, rgba(218,215,210,0.14)); }
+  .mpx-sc.you { border-color: rgba(255,31,46,0.4); }
+  .mpx-sc-who { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: #9c918e; }
+  .mpx-sc-score { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 32px; color: var(--ink, #f3eceb); margin: 4px 0; }
+  .mpx-sc-meta { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; }
+  .mpx-sc-vs { align-self: center; font-family: 'Oxanium', sans-serif; font-weight: 800; color: #6f6663; font-size: 14px; }
+  .mpx-banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; font-family: 'Chakra Petch', sans-serif; font-size: 13px;
+    background: rgba(255,122,74,0.1); border: 1px solid rgba(255,122,74,0.3); color: #ffb695; }
+  #mp-opp { position: absolute; top: 14px; right: 14px; z-index: 40; width: 196px; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(180deg, rgba(20,10,10,0.86), rgba(10,7,6,0.9)); border: 1px solid rgba(218,215,210,0.18);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: none; font-family: 'Oxanium', sans-serif; }
+  #mp-opp .mo-who { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.22em; color: #c9a25a; display: flex; justify-content: space-between; }
+  #mp-opp .mo-live { color: #2fd27a; }
+  #mp-opp .mo-live.gone { color: #ff7a4a; }
+  #mp-opp .mo-score { font-weight: 800; font-size: 26px; color: var(--chrome, #dad7d2); margin: 2px 0; letter-spacing: 0.02em; }
+  #mp-opp .mo-row { display: flex; justify-content: space-between; font-size: 12px; color: #9c918e; font-family: 'Chakra Petch', sans-serif; }
+  #mp-opp .mo-bar { margin-top: 8px; height: 6px; border-radius: 3px; background: rgba(218,215,210,0.12); overflow: hidden; }
+  #mp-opp .mo-bar > span { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, var(--ember, #ff7a4a), var(--chrome, #dad7d2)); transition: width .18s linear; }
+  #mp-opp.lead { border-color: rgba(255,31,46,0.55); }
+  #mp-opp .mo-delta { font-weight: 800; font-size: 13px; }
+  #mp-opp .mo-delta.ahead { color: #2fd27a; }
+  #mp-opp .mo-delta.behind { color: var(--crimson, #ff1f2e); }
+  @media (max-width: 760px) { #mp-opp { width: 140px; top: 8px; right: 8px; padding: 9px 10px; } #mp-opp .mo-score { font-size: 20px; } }
+  html.rr-reduce-motion #mp-opp .mo-bar > span { transition: none; }
+  html.rr-reduce-motion .mpx-challenge:hover { transform: none; }
   .mp-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.03em;
     color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 4px 0 0; line-height: 1; }
   .mp-sub { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim);
@@ -2243,9 +2332,84 @@
       Back
     </button>
     <div class="mp-card">
-      <div class="mh-pre">VERSUS</div>
+      <div class="mh-pre">// VERSUS · LIVE LOBBY</div>
       <h2 class="mp-title">MULTIPLAYER</h2>
-      <p class="mp-sub">Head-to-head battles are coming online. Hang tight — this room is being wired up.</p>
+
+      <!-- STEP: LOBBY (everyone currently online) -->
+      <div class="mpx-step mpx-step-lobby">
+        <p class="mp-sub">Everyone online is below. Challenge anyone to a live head-to-head on the same track.</p>
+        <div class="mpx-youbar">
+          <span class="mpx-you-av" id="mpx-you-av">?</span>
+          <span class="mpx-you-name" id="mpx-you-name">You</span>
+          <span class="mpx-badge host" id="mpx-you-host" hidden>HOST</span>
+          <span class="mpx-you-tag">that's you</span>
+        </div>
+        <div class="mpx-rosterhead"><span id="mpx-roster-count">0 online</span><span class="mpx-live-dot">● LIVE</span></div>
+        <div class="mpx-roster" id="mpx-roster"></div>
+        <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one else is online right now. Keep this open — challengers appear here live.</p>
+        <div class="mpx-banner" id="mpx-lobby-msg" hidden></div>
+      </div>
+
+      <!-- STEP: MATCH-SETUP (lock song, ready check) -->
+      <div class="mpx-step mpx-step-setup" hidden>
+        <div class="mpx-vsbar">
+          <span class="mpx-dot you" id="mpx-dot-you">YOU</span>
+          <span class="mpx-vs">VS</span>
+          <span class="mpx-dot opp" id="mpx-dot-opp" data-state="waiting">WAITING…</span>
+        </div>
+        <div class="mpx-songpick">
+          <div class="mpx-pick-head">TRACK</div>
+          <button class="mpx-pick" id="mpx-pick" aria-label="Choose a track">
+            <span class="mpx-pick-art" id="mpx-pick-art">♪</span>
+            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-pick-t">Host picks a track</span><span class="mpx-pick-a" id="mpx-pick-a">—</span></span>
+            <span class="mpx-pick-chev" id="mpx-pick-chev">›</span>
+          </button>
+          <div class="mpx-diff set-seg" id="mpx-diff">
+            <button data-diff="easy">Drift</button>
+            <button data-diff="medium" class="active">Pulse</button>
+            <button data-diff="hard">Fracture</button>
+          </div>
+          <div class="mpx-picker" id="mpx-picker" hidden>
+            <input class="mpx-search" id="mpx-search" type="text" placeholder="Search a track…" autocomplete="off" spellcheck="false" />
+            <div class="mpx-results" id="mpx-results"></div>
+          </div>
+        </div>
+        <div class="mpx-readyrow">
+          <button class="ghost-btn primary mpx-ready" id="mpx-ready" disabled>READY</button>
+          <div class="mpx-readystate" id="mpx-readystate">Host: pick a track to begin.</div>
+        </div>
+        <button class="ghost-btn" id="mpx-leave-setup" style="margin-top:14px;">BACK TO LOBBY</button>
+        <div class="mpx-banner" id="mpx-setup-msg" hidden></div>
+      </div>
+
+      <!-- STEP: GO (both ready → syncing) -->
+      <div class="mpx-step mpx-step-go" hidden>
+        <div class="mpx-go-num" id="mpx-go-num">GET READY</div>
+        <p class="mp-sub">Syncing both decks…</p>
+      </div>
+
+      <!-- STEP: WINNER -->
+      <div class="mpx-step mpx-step-winner" hidden>
+        <div class="mpx-verdict" id="mpx-verdict">YOU WIN</div>
+        <div class="mpx-scorecard">
+          <div class="mpx-sc you">
+            <div class="mpx-sc-who">YOU</div>
+            <div class="mpx-sc-score" id="mpx-sc-you">0</div>
+            <div class="mpx-sc-meta" id="mpx-sc-you-meta">—</div>
+          </div>
+          <div class="mpx-sc-vs">VS</div>
+          <div class="mpx-sc opp">
+            <div class="mpx-sc-who" id="mpx-sc-opp-who">OPPONENT</div>
+            <div class="mpx-sc-score" id="mpx-sc-opp">0</div>
+            <div class="mpx-sc-meta" id="mpx-sc-opp-meta">—</div>
+          </div>
+        </div>
+        <div class="pause-actions" style="margin-top:18px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <button class="ghost-btn" id="mpx-rematch">REMATCH</button>
+          <button class="ghost-btn" id="mpx-backlobby">BACK TO LOBBY</button>
+          <button class="ghost-btn primary" id="mpx-leave-win">LEAVE</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3228,9 +3392,10 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=85"></script>
-<script src="jukebox.js?v=85"></script>
-<script src="catalog.js?v=85"></script>
+<script src="game.js?v=86"></script>
+<script src="jukebox.js?v=86"></script>
+<script src="catalog.js?v=86"></script>
+<script src="multiplayer.js?v=86"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -4075,6 +4240,8 @@
 
   var ob = $('leaderboard-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('leaderboard-close'); if (cb) cb.addEventListener('click', close);
+  // build7: live-flip the board when auth changes (sign-in/out) if it's open.
+  try { if (RC() && RC().onAuthChange) RC().onAuthChange(function () { if (screen.classList.contains('active')) render(); }); } catch (e) {}
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
