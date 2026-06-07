@@ -55,15 +55,21 @@ size. No blue, no purple, no daylight sky, no text, no logos, no UI, no frame.
 
 ### `steadyhands-cover.jpg`  — "Steady Hands"
 ```
-Premium music-game key art, 1:1 square, 1024x1024. A close, low-angle hero shot of two stylized
-silhouetted hands poised on the glowing strings of an electric-guitar neck, mid-chord, frozen with
-calm precision; warm amber light trails arc off the fingertips suggesting controlled motion. Cinematic
-stylized 3D render, painterly, dramatic studio rim lighting. Color palette: gold and amber (#e0a93f)
-string glow, ember-orange (#ff7a4a) light trails, brushed-chrome (#dad7d2) fret wire and tuning
-highlights, deep warm near-black background (#0a0706) with a soft golden core glow and dark edges.
-Fine sparks, faint haze, shallow depth of field, soft bokeh. Composed, confident, premium, high
-dynamic range, fine grain, 8k micro-detail. Centered, strong silhouette, dark edges, legible small.
-No realistic faces, no blue, no purple, no text, no logos, no UI, no frame.
+Premium AAA music-game key art, 1:1 square, 1024x1024, cinematic STYLIZED 3D render (NOT a
+photograph, not photoreal skin), painterly highlights, Octane/Redshift quality lighting, Guitar Hero
+/ Hi-Fi Rush poster style. A single bold hero hand rendered as a sleek dark sculptural SILHOUETTE
+rim-lit in warm gold, poised mid-chord on the glowing strings of an electric-guitar neck; brilliant
+amber string-light streams between the fingers and warm ember light-trails arc off the fingertips,
+suggesting controlled, confident precision. Generous dark negative space toward the edges, a slightly
+brighter golden focal core, strong figure-ground separation. Color palette: gold and amber (#e0a93f,
+#f3c970) string glow, ember-orange (#ff7a4a) light trails, brushed-chrome (#dad7d2) fret-wire glints,
+deep warm near-black background (#0a0706), soft golden radial bloom center, dark vignette edges. Fine
+sparks, faint volumetric haze, shallow depth of field, soft bokeh, fine film grain, 8k micro-detail,
+high dynamic range. Composed, precise, premium, clean bold silhouette that reads clearly at small
+size. No photoreal skin, no realistic face, no blue, no navy, no purple, no teal, no cyan, no magenta,
+no pink, no pastel, no cool color cast, no daylight, no low contrast, no text, no letters, no numbers,
+no logo, no signature, no watermark, no UI, no frame, no border, no deformed hands, no extra fingers,
+no jpeg artifacts.
 ```
 
 ### `emberdrift-cover.jpg`  — "Ember Drift"  (bridges into PULSE)
@@ -125,15 +131,22 @@ no logos, no UI, no frame.
 
 ### `tarot.jpg`  — "The World"   ⚠️ YOU ALREADY HAVE A CONCEPT — save it here. (Regen prompt below if you want it to match the set.)
 ```
-Premium music-game key art, 1:1 square, 1024x1024, gothic dark-fantasy. An ornate occult tarot card
-"THE WORLD" rendered as a glowing relic: a robed figure inside a laurel wreath of glowing guitar
-strings, surrounded by floating alchemical sigils, lit by candle-light and violet flame. Cinematic
-stylized 3D render with aged-parchment and gilt detail, dramatic chiaroscuro rim lighting. Color
-palette: deep gothic violet (#2a0a3a base, #7b2ff7 and #b06bff glow) WITH crimson (#ff1f2e) accents
-and gold (#e0a93f) filigree, on a warm near-black background (#0a0706), violet bloom center, dark
-edges. Drifting candle smoke, embers, faint volumetric haze, shallow depth of field, soft bokeh.
-Mysterious, ornate, premium, high dynamic range, fine grain, 8k detail. Centered hero, strong
-silhouette, dark edges, reads small. No modern text, no logos, no UI, no frame, no blue.
+Premium AAA music-game key art, 1:1 square, 1024x1024, gothic dark-fantasy, cinematic STYLIZED 3D
+render with painterly highlights and gilt detail, dramatic chiaroscuro rim lighting, Octane/Redshift
+quality. A single glowing occult relic fills the entire frame: a radiant gold-and-violet eight-pointed
+star sigil burning at the center, encircled by an ornate laurel wreath woven from luminous
+electric-guitar strings, with floating alchemical sigils and gold filigree orbiting it, lit by violet
+flame and warm candle glow. The relic IS the whole hero subject, bold and centered and large in frame.
+It is NOT a small tarot card on a table, NO card-within-a-card, no tabletop, no surrounding props or
+clutter. Generous dark negative space toward the edges, a brighter violet-gold focal core, strong
+figure-ground separation. Color palette: deep gothic violet (#2a0a3a base, #7b2ff7 and #b06bff glow)
+WITH crimson (#ff1f2e) accents and rich warm gold (#e0a93f) filigree, on a warm near-black background
+(#0a0706), violet-gold radial bloom center, dark vignette edges. Drifting candle smoke, embers, faint
+volumetric haze, shallow depth of field, soft bokeh, fine film grain, 8k micro-detail, high dynamic
+range. Mysterious, ornate, premium, reads clearly at small size. No magenta, no pink, no blue, no navy,
+no teal, no cyan, no pastel, no cool color cast, no daylight, no low contrast, no modern text, no
+letters, no numbers, no logo, no signature, no watermark, no UI, no frame, no border, no deformed
+hands, no jpeg artifacts.
 ```
 
 ### `hollowchoir-cover.jpg`  — "Hollow Choir"
