@@ -583,6 +583,14 @@
   @media (max-width: 680px) { .rc-card { width: 80px; top: 30%; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
   html.rr-reduce-motion .rc-card { transition: opacity 0.2s; }
   html.rr-reduce-motion .rc-card.rc-flash { animation: none; }
+  /* Build/version stamp on the start screen (photo-friendly: shows version + host). */
+  .start-screen .rr-version {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em;
+    color: var(--ink-dim, #b8afa9); background: rgba(10,7,9,0.55);
+    border: 1px solid rgba(218,215,210,0.20); padding: 4px 13px; border-radius: 999px;
+    backdrop-filter: blur(4px); z-index: 6; pointer-events: none; white-space: nowrap;
+  }
 
   /* ============ LEADERBOARD (global + per-song) ============ */
   .leaderboard-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
@@ -2002,8 +2010,25 @@
         <span class="tap-ring"></span>
         <span class="tap-label">TAP TO BEGIN</span>
       </div>
+      <div class="rr-version" id="rr-version" aria-label="build version">v…</div>
     </div>
   </div>
+  <script>
+    /* Stamp the start screen with the live build version (from game.js?v=NN) + host, so a screenshot
+       instantly shows which version/site is loaded (localhost dev vs the live deploy). */
+    (function () {
+      function stamp() {
+        try {
+          var s = document.querySelector('script[src*="game.js"]');
+          var m = s && (s.getAttribute('src') || '').match(/[?&]v=(\d+)/);
+          var host = location.hostname || (location.protocol === 'file:' ? 'file' : 'local');
+          var el = document.getElementById('rr-version');
+          if (el) el.textContent = (m ? ('v' + m[1]) : 'v?') + ' · ' + host;
+        } catch (e) {}
+      }
+      if (document.readyState !== 'loading') stamp(); else document.addEventListener('DOMContentLoaded', stamp);
+    })();
+  </script>
 
   <!-- ============================================================
        MENU SCREEN
