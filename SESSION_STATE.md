@@ -180,12 +180,15 @@ the live site / Lovable until user says — what's deployed works well. All over
   uses cover art + per-level palette incl. violet; skippable; reduceMotion/fxLite-safe; self-heals missing art)
   + level SCHEMA doc + campaign grown to 9 authored levels (warm-03/pulse-03/frac-02 stubs) + hover-zoom on
   authored cards (index.html-only). MOBILE POLISH (v78): 16px search inputs (no iOS zoom) + levels/leaderboard/
-  profile/store overlays scroll-fit on phones. **ONLY REMAINING from all workflow packages:**
-  `_build_roadmapsweep.md` PART (b) **OPEN NOTES + HOPOs** — flag-gated `?open=1` (separate from ?notes),
-  buildNotes tag + handleHit any-lane/chain + render bar/ring. ⚠️ its b6 anchor (single-line bomb render branch)
-  CHANGED in the charting pass (now the _bombRow warning-ring block) → RE-ANCHOR (insert the open-note bar AFTER
-  the expanded bomb branch). Gameplay surgery → flag-gated default-off + USER PLAYTEST. Then strip dev hooks LAST.
-- **Tasks tracked** (TaskList #1-5). **?v at 78.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
+  profile/store overlays scroll-fit on phones. **OPEN NOTES + HOPOs DONE (v79)** — flag-gated `?open=1`
+  (separate from ?notes, default-off byte-identical): OPEN = full-neck strum bar (handleHit matches any lane
+  when n.open) + HOPO chain off a clean in-combo hit (chainHopos, GREAT, cap 3/strum); render bar + flow ring;
+  __rrChartStats +opens/hopos. node-checked, gated. **USER PLAYTEST `?open=1` on medium/hard.**
+  ✅ **ALL workflow packages (build-pass 1/2/3) are now integrated.** Remaining = USER actions (playtest the
+  flag-gated stuff: ?notes/?open/?tune/?warp; drop necromancer.jpg+tarot.jpg + store/level art; song bindings
+  per level; deploy decision) + eventually **strip dev hooks LAST** (?dev ?boss ?fps ?notes ?open ?gh ?warp
+  ?intro ?tune, window.__rr*, FPS meter) before any live push.
+- **Tasks tracked** (TaskList #1-5). **?v at 79.** Branch commits: 96a2949(v59 base) → c60572a(persp) →
   79c1e4a(Highway done) → 1f127e5(boost wash) → 2dee27b(handoff) → 77c6bc9(v63 meters) → 1b7c58c(v64 shimmer+
   scanline) → 27b5676(v65 convergence+combo-outline+combo-texture) → f82614e(v66 WS4 audio-reactive waveform) →
   v67(note-type variety: trills + expanded chords behind ?notes=1). All clean, node-checked.
