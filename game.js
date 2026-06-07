@@ -1531,6 +1531,8 @@
     // HOPO CHAIN (openNotes flag): a clean hit while in combo auto-resolves the next `hopo` note
     // already inside its window in ANY lane — no fresh strum ("flow"). No-op when the flag is off.
     if (openNotes && combo >= 8 && kind !== 'good') chainHopos(t);
+    // LEVEL FX hook (optional; set by a level overlay e.g. the Skully reactive tarot cards). No-op otherwise.
+    try { if (window.RhythmLevelFx && window.RhythmLevelFx.onHit) window.RhythmLevelFx.onHit(kind, lane); } catch (e) {}
     updateHUD();
   }
 
@@ -1589,6 +1591,8 @@
   // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
   // Does NOT touch combo/score/stability — call it ALONGSIDE the existing miss logic.
   function registerMissFx(lane) {
+    // LEVEL FX hook (optional; e.g. the Skully Death card). Fires regardless of motion settings. No-op otherwise.
+    try { if (window.RhythmLevelFx && window.RhythmLevelFx.onMiss) window.RhythmLevelFx.onMiss(lane); } catch (e) {}
     if (reduceMotion && fxLite) return;                 // both off → no juice at all
     missFlash = Math.min(1, missFlash + 0.85);
     if (typeof lane === 'number' && lane >= 0 && lane < laneDesat.length) {

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=79" />
+<link rel="stylesheet" href="jukebox.css?v=80" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -555,6 +555,34 @@
   html.rr-reduce-motion #rr-lvl-splash { backdrop-filter: none; }
   html.rr-reduce-motion #rr-lvl-splash.show .rs-card { animation: none; }
   html.rr-reduce-motion .rs-bar { display: none; }
+  /* ============ PER-LEVEL REACTIVE OVERLAY — flanking tarot cards (Skully: DEATH / THE WORLD) ============ */
+  #rr-reactive { position: fixed; inset: 0; z-index: 55; pointer-events: none; display: none; }
+  #rr-reactive.show { display: block; }
+  .rc-card {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: min(14vw, 150px); aspect-ratio: 2 / 3; border-radius: 12px; overflow: hidden;
+    background-size: cover; background-position: center; background-color: #0a0706;
+    opacity: 0.30; filter: grayscale(0.55) brightness(0.45);
+    border: 1px solid rgba(255,255,255,0.12);
+    transition: opacity 0.55s ease, filter 0.55s ease, box-shadow 0.45s ease, border-color 0.45s ease;
+  }
+  .rc-death { left: 2.2vw; }
+  .rc-world { right: 2.2vw; }
+  .rc-death.rc-flash {
+    opacity: 1; filter: none; border-color: var(--crimson);
+    box-shadow: 0 0 46px 8px rgba(255,31,46,0.85), inset 0 0 34px rgba(255,31,46,0.55);
+    animation: rcDeath 0.6s cubic-bezier(.2,1,.3,1);
+  }
+  .rc-world.rc-flash {
+    opacity: 1; filter: none; border-color: #e0a93f;
+    box-shadow: 0 0 46px 8px rgba(224,169,63,0.85), inset 0 0 34px rgba(166,77,255,0.4);
+    animation: rcWorld 0.6s cubic-bezier(.2,1,.3,1);
+  }
+  @keyframes rcDeath { 0%,100% { transform: translateY(-50%) scale(1) rotate(0); } 30% { transform: translateY(-50%) scale(1.13) rotate(-2.5deg); } }
+  @keyframes rcWorld { 0%,100% { transform: translateY(-50%) scale(1) rotate(0); } 30% { transform: translateY(-50%) scale(1.13) rotate(2.5deg); } }
+  @media (max-width: 680px) { .rc-card { width: 80px; top: 30%; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
+  html.rr-reduce-motion .rc-card { transition: opacity 0.2s; }
+  html.rr-reduce-motion .rc-card.rc-flash { animation: none; }
 
   /* ============ LEADERBOARD (global + per-song) ============ */
   .leaderboard-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
@@ -2937,9 +2965,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=79"></script>
-<script src="jukebox.js?v=79"></script>
-<script src="catalog.js?v=79"></script>
+<script src="game.js?v=80"></script>
+<script src="jukebox.js?v=80"></script>
+<script src="catalog.js?v=80"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3099,9 +3127,10 @@
     { id:'pulse-03', tier:'medium', title:'Chrome Veins', song:{ stride:8 }, theme:'chrome',
       cover:'assets/levels/chromeveins-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.1 }, unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
-    { id:'frac-01', tier:'hard', title:'The World', song:{ stride:12 }, theme:'violet',
-      cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/fracture-bg.jpg',
-      mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },
+    { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
+      cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
+      reactiveCards:{ hit:'assets/levels/card-world.jpg', miss:'assets/levels/card-death.jpg' },
+      mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },   // SKULLY showcase level (Lil' Clay Skullyrae)
     { id:'frac-02', tier:'hard', title:'Hollow Choir', song:{ stride:14 }, theme:'violet',
       cover:'assets/levels/hollowchoir-cover.jpg', bgArt:'assets/levels/fracture-bg.jpg',
       mods:{ speed:1.15 }, unlock:{ stars:1 } },
@@ -3236,6 +3265,7 @@
     try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
     applyLevelTheme(L);
     showSplash(L, track);   // themed intro card over the loading screen (skippable, reduceMotion/fxLite-safe)
+    showReactive(L);        // per-level reactive overlay (e.g. Skully's DEATH / THE WORLD tarot cards)
     if (LEVELDESIGN_MODS && L.mods) { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(L.mods); } catch (e) {} }
     else { try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {} }
     close();
@@ -3254,28 +3284,65 @@
     if (L && L.theme && LV_THEMES[L.theme]) { g.classList.add('rr-lvl-themed'); g.setAttribute('data-rrtheme', L.theme); }
     else { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
     var v = $('bg-video'), bi = $('bg-image');
-    if (L && L.bgArt && bi) {
-      // STATIC per-level backdrop wins (loop videos optional/absent). Probe-load first; if it 404s,
-      // keep the moon video so there's never a broken/black backdrop.
-      var pi = new Image();
-      pi.onload = function () { bi.style.backgroundImage = 'url("' + String(L.bgArt).replace(/["\\]/g, '') + '")'; bi.style.display = 'block'; if (v) v.style.visibility = 'hidden'; };
-      pi.onerror = function () { bi.style.display = 'none'; if (v) v.style.visibility = ''; };
-      pi.src = L.bgArt;
-    } else if (L && L.bgVideo && v) {
-      if (_bgSaved == null) _bgSaved = { src: v.getAttribute('src') };
-      v.onerror = function () { try { v.onerror = null; if (_bgSaved && _bgSaved.src) { v.setAttribute('src', _bgSaved.src); v.load(); v.play().catch(function(){}); } } catch (e) {} };
-      v.setAttribute('src', L.bgVideo); try { v.load(); v.play().catch(function(){}); } catch (e) {}
-      if (bi) bi.style.display = 'none';
-    } else {
-      if (bi) bi.style.display = 'none';
-      if (v) v.style.visibility = '';
+    function showStatic() {
+      if (!bi) return;
+      if (L && L.bgArt) {
+        var pi = new Image();
+        pi.onload = function () { bi.style.backgroundImage = 'url("' + String(L.bgArt).replace(/["\\]/g, '') + '")'; bi.style.display = 'block'; if (v) v.style.visibility = 'hidden'; };
+        pi.onerror = function () { bi.style.display = 'none'; if (v) v.style.visibility = ''; };
+        pi.src = L.bgArt;
+      } else { bi.style.display = 'none'; if (v) v.style.visibility = ''; }
     }
+    if (L && L.bgVideo && v) {
+      // ANIMATED per-level backdrop (Seedance loop). bgArt is the instant poster while it buffers;
+      // a 404 self-heals to the static bgArt image, else the moon video.
+      if (_bgSaved == null) _bgSaved = { src: v.getAttribute('src'), poster: v.getAttribute('poster') };
+      if (bi) bi.style.display = 'none';
+      v.style.visibility = '';
+      if (L.bgArt) v.setAttribute('poster', L.bgArt);
+      v.onerror = function () { try { v.onerror = null; showStatic(); } catch (e) {} };
+      v.setAttribute('src', L.bgVideo); try { v.load(); v.play().catch(function(){}); } catch (e) {}
+    } else {
+      showStatic();
+    }
+  }
+  // ---- PER-LEVEL REACTIVE OVERLAY (the Skully tarot mechanic): flanking cards that react to the
+  // engine's hit/miss signals (window.RhythmLevelFx). DEATH (left) flares on a miss; THE WORLD
+  // (right) pulses on a hit. Self-owned overlay, pure visual, reduceMotion-safe. ----
+  var _rcEl = null;
+  function ensureReactive() {
+    if (_rcEl) return _rcEl;
+    var el = document.createElement('div'); el.id = 'rr-reactive'; el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = '<div class="rc-card rc-death" id="rc-death"></div><div class="rc-card rc-world" id="rc-world"></div>';
+    document.body.appendChild(el); _rcEl = el; return el;
+  }
+  function flashCard(c) {
+    if (!c) return;
+    c.classList.remove('rc-flash'); void c.offsetWidth; c.classList.add('rc-flash');
+    if (c.__t) clearTimeout(c.__t); c.__t = setTimeout(function () { c.classList.remove('rc-flash'); }, 650);
+  }
+  function showReactive(L) {
+    if (!L || !L.reactiveCards) { hideReactive(); return; }
+    var el = ensureReactive();
+    var d = $('rc-death'), w = $('rc-world');
+    if (d && L.reactiveCards.miss) d.style.backgroundImage = 'url("' + String(L.reactiveCards.miss).replace(/["\\]/g, '') + '")';
+    if (w && L.reactiveCards.hit) w.style.backgroundImage = 'url("' + String(L.reactiveCards.hit).replace(/["\\]/g, '') + '")';
+    el.classList.add('show');
+    window.RhythmLevelFx = {
+      onHit: function (kind, lane) { flashCard($('rc-world')); },
+      onMiss: function (lane) { flashCard($('rc-death')); }
+    };
+  }
+  function hideReactive() {
+    if (_rcEl) _rcEl.classList.remove('show');
+    try { window.RhythmLevelFx = null; } catch (e) {}
   }
   function clearLevelTheme() {
     var g = $('game'); if (g) { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
+    hideReactive();
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
-    if (v) { v.style.visibility = ''; if (_bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; } }
+    if (v) { v.onerror = null; v.style.visibility = ''; if (_bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); if (_bgSaved.poster != null) v.setAttribute('poster', _bgSaved.poster); else v.removeAttribute('poster'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; } }
   }
   // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
   // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
