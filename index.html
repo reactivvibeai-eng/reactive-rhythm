@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=96" />
+<link rel="stylesheet" href="jukebox.css?v=97" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3764,11 +3764,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=96"></script>
-<script src="game.js?v=96"></script>
-<script src="jukebox.js?v=96"></script>
-<script src="catalog.js?v=96"></script>
-<script src="multiplayer.js?v=96"></script>
+<script src="assets/fx/fx-player.js?v=97"></script>
+<script src="game.js?v=97"></script>
+<script src="jukebox.js?v=97"></script>
+<script src="catalog.js?v=97"></script>
+<script src="multiplayer.js?v=97"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -5501,11 +5501,12 @@
     var reduce = false;
     try { reduce = document.documentElement.classList.contains('rr-reduce-motion') ||
       (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
-    var alreadySeen = true;
-    try { alreadySeen = localStorage.getItem(SEEN) === '1'; } catch (e) {}
-    // dev flag to force-replay: ?ryo=replay  (test-only; strip with other ?flags before launch)
-    try { if (/[?&]ryo=replay/.test(location.search)) alreadySeen = false; } catch (e) {}
-    if (!introEl || !vid || alreadySeen || reduce) return;   // no overlay / already seen / reduced-motion → normal hub
+    // build8b: RYO is THE startup intro — plays on EVERY app load (user directive), skippable. The
+    // in-session `done` flag (below) still prevents a re-play on later in-session hub navigations, so it
+    // fires once per page load, not on every back-to-menu. ?ryo=off disables it (dev convenience).
+    var alreadySeen = false;
+    try { if (/[?&]ryo=off/.test(location.search)) alreadySeen = true; } catch (e) {}
+    if (!introEl || !vid || alreadySeen || reduce) return;   // missing overlay / disabled / reduced-motion → straight to hub
 
     var _origShow = showHub, done = false, watchdog = 0;
     function finish() {

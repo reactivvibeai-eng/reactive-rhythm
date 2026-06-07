@@ -1131,6 +1131,7 @@
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
+    _auraFx = null; _odAura = null;   // build8b: handles cleared with fx.clear() → drop refs so they respawn
     bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
@@ -1444,7 +1445,7 @@
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3) }),
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
-      fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme() } : { loaded: false },
+      fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }) } : { loaded: false },
       fxEmit: (type, lane) => { emitFx(type || 'overdrive', 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
       fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
@@ -1483,6 +1484,9 @@
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
     scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
     try { const _g = fretGeom(); for (let _i = 0; _i < LANE_COUNT; _i++) emitFx('overdrive', 'od', _i, _g.nearX[_i], _g.nearY); } catch (e) {}
+    // build8b: sustained star-power AURA over the board for the whole overdrive (stopped when it expires)
+    try { if (_odAura) { _odAura.stop(); _odAura = null; } const _g2 = fretGeom();
+      _odAura = _fxRide('overdrive-aura', (_g2.nearX[0] + _g2.nearX[LANE_COUNT - 1]) / 2, _g2.nearY - _g2.lw * 1.2, (_g2.lw * 6 / 128), 0.6); } catch (e) {}
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
@@ -1680,6 +1684,7 @@
     stability = Math.min(1.0, stability + 0.01);
     spawnHitParticles(lane, kind);
     emitFx(kind === 'perfect' ? 'perfect' : 'hit', kind, lane);
+    if (target.type === 'star') emitFx('star', kind, lane);   // build8b: star-pickup pop on a surge note
     flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane);
@@ -1755,8 +1760,11 @@
   const THEME_FX = {
     violet: { hit: 'soul-burst-violet', perfect: 'soul-burst-violet' },   // Skully "The World"
     bone:   { hit: 'bone-shatter',      perfect: 'bone-shatter' },        // Bone Daddy
-    pink:   { hit: 'note-sparkle-pink', perfect: 'heart-pop-pink' },      // Melody
+    pink:   { hit: 'paw-poof',          perfect: 'heart-pop-pink' },      // Melody (cat-paw poof + heart)
   };
+  // build8b: per-level ambient AURA loop — drifts behind the upper neck while a themed level plays
+  // (the "living world" cue). Subtle + localized (NOT a full-screen wash). null/absent → no aura.
+  const THEME_AURA = { violet: 'skull-flame-violet', bone: 'ember-skull-loop' };
   function _fxTheme() {
     try { const g = document.getElementById('game'); return (g && g.dataset && g.dataset.rrtheme) || ''; } catch (e) { return ''; }
   }
@@ -1767,6 +1775,7 @@
       case 'hit':       return [{ name: (th && th.hit) || 'hit-burst', mult: 1 }];
       case 'perfect':   return [{ name: (th && th.perfect) || 'perfect-flare', mult: 1.05 }];
       case 'miss':      return [{ name: 'miss-shatter', mult: 1 }];
+      case 'star':      return [{ name: 'star-pickup', mult: 1.1 }];
       case 'combo':     return [{ name: 'combo-burst', mult: 1.05 }, { name: 'shockwave', mult: 0.9 }];
       case 'overdrive': return [{ name: 'shockwave', mult: 1.2 }, { name: 'explosion', mult: 1 }];
       case 'bomb':      return [{ name: 'bomb-explode', mult: 1 }, { name: 'shockwave', mult: 0.8 }];
@@ -1796,13 +1805,17 @@
       }
     } catch (e) {}
   }
-  // spawn a LOOP handle at an explicit final `scale` (e.g. a fuse riding a bomb). Caller manages/stops it.
-  function _fxRide(name, x, y, scale) {
+  // spawn a LOOP handle at an explicit final `scale` (+ optional alpha) — fuse, theme aura, overdrive
+  // glow. Caller manages/stops it.
+  function _fxRide(name, x, y, scale, alpha) {
     try {
       if (!fx || reduceMotion || fxLite || !_fxHas(name)) return null;
-      return fx.play(name, x, y, { loop: true, scale: scale });
+      return fx.play(name, x, y, { loop: true, scale: scale, alpha: (alpha != null ? alpha : 1) });
     } catch (e) { return null; }
   }
+  // build8b: managed ambient loop handles (theme aura + overdrive aura) — spawned/repositioned in
+  // render(), stopped on clear / resetScoring. Pure visual; never affect gameplay.
+  let _auraFx = null, _odAura = null;
 
   // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
   // Does NOT touch combo/score/stability — call it ALONGSIDE the existing miss logic.
@@ -2106,7 +2119,7 @@
       odTimer -= dt;
       overdrive = Math.max(0, odTimer / OD_DURATION);
       bgPulse = Math.max(bgPulse, 0.35);
-      if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); }
+      if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } }
     }
     applyGate(); // expire miss-dropouts so the music returns
     for (const n of notes) { if (!n._pulsed && Math.abs(n.time - t) < dt) { n._pulsed = true; bgPulse = Math.min(1, bgPulse + 0.5); } }
@@ -2141,6 +2154,16 @@
     const fg = fretGeom();
     const nearX = fg.nearX, farX = fg.farX, nearY = fg.nearY, farY = fg.farY;
     const lw = fg.lw;
+    // build8b: themed ambient AURA — one subtle drifting loop behind the upper neck while a themed level
+    // plays (Skully skull-flame / Bone Daddy ember-skull). Localized + low-alpha (not a full-screen wash).
+    if (!isPaused && fx && !reduceMotion && !fxLite && state === 'playing') {
+      const _an = THEME_AURA[_fxTheme()];
+      if (_an && _fxHas(_an)) {
+        const _ax = (nearX[0] + nearX[LANE_COUNT - 1]) / 2, _ay = farY + (nearY - farY) * 0.22, _as = (lw * 4.2 / 128);
+        if (!_auraFx || !_auraFx.alive()) { _auraFx = _fxRide(_an, _ax, _ay, _as, 0.4); }
+        else { _auraFx.move(_ax, _ay); _auraFx.setScale(_as); }
+      } else if (_auraFx) { _auraFx.stop(); _auraFx = null; }
+    } else if (_auraFx) { _auraFx.stop(); _auraFx = null; }
     // PERSPECTIVE depth warp (gh Highway): map the linear timeline d (0=catcher, 1=nut) through a 1/z
     // camera so far notes bunch up + crawl and near notes spread + ACCELERATE — the depth/vertigo cue.
     // Hit timing is unaffected (it uses note TIME, not screen position); only the visual gains depth.
