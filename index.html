@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=80" />
+<link rel="stylesheet" href="jukebox.css?v=81" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -730,9 +730,8 @@
   #game.rr-lvl-themed[data-rrtheme="chrome"] { --rr-lvl-accent: #dad7d2; }
   #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
   #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
-  #game.rr-lvl-themed .game-center::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-    background: radial-gradient(ellipse at 50% 8%, color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 16%, transparent), transparent 60%);
-    mix-blend-mode: screen; opacity: 0.55; transition: opacity 0.4s ease; }
+  /* per-level accent glow across the FULL backdrop (only when a level theme is active) */
+  #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.5; }
   #results-next { display: none; }
   #results-next.show { display: inline-flex; }
   #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
@@ -762,21 +761,49 @@
     display: block;
     position: relative; z-index: 1; background: transparent;
   }
+  /* ===== FULL-BLEED LEVEL BACKDROP — #game-bg fills the ENTIRE game screen behind the 3-column HUD
+     grid (z:0). The per-level video/image cover edge-to-edge; the canvas (#hwy, z:1 in .game-center)
+     composites its god-rays/embers ON TOP. Scrim/vignette + darker side bands keep HUD + neck readable. */
+  #game-bg {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    background: #0a0706;
+  }
   #bg-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; z-index: 0; pointer-events: none;
   }
-  /* Per-level static backdrop (level bgArt). Sits above the moon video, below the canvas (z<1).
-     Shown by applyLevelTheme when a level has bgArt; cheap (no video compositing cost). */
+  /* Per-level static backdrop (level bgArt). Above the moon video, below the scrim. */
   #bg-image {
     position: absolute; inset: 0; width: 100%; height: 100%;
     background-size: cover; background-position: center; background-repeat: no-repeat;
-    z-index: 0; pointer-events: none; display: none;
+    z-index: 1; pointer-events: none; display: none;
   }
-  /* Performance background: hide the moon videos so their compositing can't cap the FPS.
-     The canvas atmosphere (god-rays/embers) + warm-black bg still render behind the guitar. */
+  /* Per-level accent glow — reads across the FULL screen; toggled by #game.rr-lvl-themed below. */
+  #game-bg .bg-accent {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at 50% 6%,
+      color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 16%, transparent), transparent 60%);
+    mix-blend-mode: screen; transition: opacity 0.4s ease;
+  }
+  /* SCRIM + VIGNETTE — darkens the art globally + stronger at the edges; warm-dark only. */
+  #game-bg::after {
+    content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 42%, transparent 0%, transparent 38%, rgba(10,7,6,0.55) 100%),
+      linear-gradient(180deg, rgba(10,7,6,0.42) 0%, rgba(10,7,6,0.18) 30%, rgba(10,7,6,0.30) 72%, rgba(10,7,6,0.62) 100%);
+  }
+  /* DARKER BANDS behind the side HUD columns so panels read as solid instruments over the art. */
+  #game-bg::before {
+    content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(10,7,6,0.86) 0px, rgba(10,7,6,0.74) 220px, rgba(10,7,6,0.0) 360px),
+      linear-gradient(270deg, rgba(10,7,6,0.86) 0px, rgba(10,7,6,0.74) 220px, rgba(10,7,6,0.0) 360px);
+  }
+  /* Performance background: hide the moon VIDEO so its compositing can't cap the FPS. */
   html.rr-perf-bg #bg-video, html.rr-perf-bg #start-video { display: none !important; }
+  html.rr-perf-bg #game-bg { background: radial-gradient(ellipse at 50% 0%, #160c0b, #0a0706 70%); }
   .game-center { position: relative; }
+  /* chrome hairlines framing the center highway strip — kept, above #game-bg */
   .game-center::before, .game-center::after {
     content: '';
     position: absolute;
@@ -2622,6 +2649,15 @@
        GAME SCREEN
        ============================================================ -->
   <div class="screen game-screen" id="game">
+    <!-- FULL-BLEED LEVEL BACKDROP — first child of #game so it paints BEHIND both HUD panels + the
+         center. #bg-video/#bg-image are driven by id from applyLevelTheme (404 self-heal + poster intact);
+         the transparent canvas (#hwy) composites its god-rays/embers ON TOP of this. -->
+    <div id="game-bg" aria-hidden="true">
+      <video id="bg-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
+      <div id="bg-image"></div>
+      <div class="bg-accent"></div>
+    </div>
+
     <!-- LEFT HUD -->
     <div class="hud-panel left">
       <div class="brand-row">
@@ -2653,10 +2689,8 @@
       </div>
     </div>
 
-    <!-- CENTER: highway canvas -->
+    <!-- CENTER: highway canvas (backdrop moved to #game-bg above) -->
     <div class="game-center">
-      <video id="bg-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
-      <div id="bg-image" aria-hidden="true"></div>
       <canvas id="hwy"></canvas>
 
       <!-- mobile compact HUD (overlay) -->
@@ -2989,9 +3023,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=80"></script>
-<script src="jukebox.js?v=80"></script>
-<script src="catalog.js?v=80"></script>
+<script src="game.js?v=81"></script>
+<script src="jukebox.js?v=81"></script>
+<script src="catalog.js?v=81"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3361,12 +3395,21 @@
     if (_rcEl) _rcEl.classList.remove('show');
     try { window.RhythmLevelFx = null; } catch (e) {}
   }
+  // QUICK PLAY default full-bleed backdrop: the moon loop (already #bg-video's default src).
+  var QUICKPLAY_BG = 'assets/moon-loop.mp4';
   function clearLevelTheme() {
     var g = $('game'); if (g) { g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme'); }
     hideReactive();
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
-    if (v) { v.onerror = null; v.style.visibility = ''; if (_bgSaved) { v.setAttribute('src', _bgSaved.src || 'assets/moon-loop.mp4'); if (_bgSaved.poster != null) v.setAttribute('poster', _bgSaved.poster); else v.removeAttribute('poster'); try { v.load(); v.play().catch(function(){}); } catch (e) {} _bgSaved = null; } }
+    if (v) {
+      v.onerror = null; v.style.visibility = '';
+      var target = (_bgSaved && _bgSaved.src) ? _bgSaved.src : QUICKPLAY_BG;
+      if (v.getAttribute('src') !== target) { v.setAttribute('src', target); try { v.load(); v.play().catch(function(){}); } catch (e) {} }
+      else { try { v.play().catch(function(){}); } catch (e) {} }
+      if (_bgSaved && _bgSaved.poster != null) v.setAttribute('poster', _bgSaved.poster); else v.removeAttribute('poster');
+      _bgSaved = null;
+    }
   }
   // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
   // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
