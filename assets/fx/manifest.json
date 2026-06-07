@@ -20,5 +20,16 @@
     "fps": 30,
     "blend": "lighter",
     "loop": false
+  },
+  "explosion": {
+    "src": "assets/fx/explosion.png",
+    "frameW": 128,
+    "frameH": 128,
+    "cols": 7,
+    "rows": 4,
+    "count": 28,
+    "fps": 30,
+    "blend": "lighter",
+    "loop": false
   }
 }
