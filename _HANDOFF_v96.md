@@ -1,8 +1,8 @@
-# CONTINUATION HANDOFF — Reactive Rhythm @ v96 (read with CLAUDE.md + memories)
+# CONTINUATION HANDOFF — Reactive Rhythm @ v97 (read with CLAUDE.md + memories)
 
-Branch `visual-overhaul`, **currently v96**, tree committed (commits `f621fbc`→`5c56158`), serve.py
+Branch `visual-overhaul`, **currently v97**, tree committed (commits `f621fbc`→`433e639`), serve.py
 running (http 200, no-cache). **DO NOT deploy.** This supersedes `_HANDOFF_v91.md` — its 5-item queue
-is **DONE**.
+is **DONE**, plus a v97 FX-deepening pass on the asset agent's 31-effect union.
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`
@@ -30,7 +30,12 @@ restart serve.py. `node --check game.js multiplayer.js` after JS edits; bump `?v
 - **v95 Multiplayer ROOM SYSTEM** (`multiplayer.js`+`index.html`): rooms (open/browse/join/close),
   quick-match, spectate, room→match handoff. Match engine NOT forked.
 - **v96 RYO menu visuals** (`index.html`): hub `menu-loop.mp4` + RYO hero; 6 living tiles; atom-core
-  loader (self-heals to SVG); first-run `ryo-intro.mp4` (once, skippable, `?ryo=replay`).
+  loader (self-heals to SVG); RYO `ryo-intro.mp4` intro.
+- **v97 FX deepening + startup intro** (`game.js`+`index.html`): themed ambient AURA loops behind the
+  neck (Skully `skull-flame-violet`, Bone Daddy `ember-skull-loop`, low-alpha, NOT a wash); Melody hit
+  FX = `paw-poof`; sustained `overdrive-aura` loop during star power; `star-pickup` on surge notes. RYO
+  intro is now the **every-startup** intro (was first-run-once), skippable + reduce-motion-safe,
+  `?ryo=off` disables. `__rrDebug.fx().names` lists live sheets.
 
 ## OPEN / NEXT
 1. **MULTIPLAYER needs a real 2-device (or 2-tab) test** — a single headless browser can't host two
@@ -57,4 +62,4 @@ restart serve.py. `node --check game.js multiplayer.js` after JS edits; bump `?v
 Brand black·crimson·ember·gold·chrome, warm darks, NO blue/purple in core UI (a LEVEL may use its
 own palette — violet Skully, bone, pink). Bump `?v` (6 spots: jukebox.css + 5 script tags incl.
 fx-player.js) on any JS/CSS change. Keep muted when driving. Don't strip dev hooks
-(`__rr*`/`?dev/?novideo/?ryo=replay`/FPS meter) until content-freeze. Don't deploy until the user says.
+(`__rr*`/`?dev/?novideo/?ryo=off`/FPS meter) until content-freeze. Don't deploy until the user says.

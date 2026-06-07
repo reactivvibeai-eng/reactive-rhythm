@@ -1105,4 +1105,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 
 **State after v96:** all five `_HANDOFF_v91.md` items done. Open: 2-device MP test; per-skin lane
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
-Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo=replay`, FPS meter) still present — strip at content-freeze.
+Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
+
+### v97 — FX deepening + RYO startup intro  ✅
+Wire more of the asset agent's 31-effect union + make RYO the startup intro. All additive/guarded.
+- **Theme aura loops:** a subtle low-alpha ambient loop drifts behind the upper neck while a themed
+  level plays — Skully `skull-flame-violet`, Bone Daddy `ember-skull-loop` (localized, NOT a wash —
+  respects the "no muddy violet wash" note). `THEME_AURA`, managed in render; stops on clear/reset.
+- **Melody `paw-poof`** as the pink hit FX (cat-paw bat lands with a poof); perfect stays heart-pop-pink.
+- **`overdrive-aura`** sustained loop over the board for the whole star-power window (+ the existing
+  per-lane shockwave/explosion ripple); stopped on expire/reset.
+- **`star-pickup`** pop on hitting a surge (star) note. `_fxRide` gains an alpha arg; `__rrDebug.fx().names`.
+- **RYO intro → every startup** (was first-run-once): plays each app load, skippable + reduce-motion-safe,
+  in-session `done` guards back-to-menu replay, `?ryo=off` disables. Bump ?v 96→97.
+Verified headless: themed hits → paw-poof/soul-burst-violet/bone-shatter; overdrive → shockwave+explosion;
+ember-skull-loop aura live in Bone Daddy play; overdrive-aura on activate; intro fires every load; no errors.
