@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=83" />
+<link rel="stylesheet" href="jukebox.css?v=84" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -558,30 +558,35 @@
   /* ============ PER-LEVEL REACTIVE OVERLAY — flanking tarot cards (Skully: DEATH / THE WORLD) ============ */
   #rr-reactive { position: fixed; inset: 0; z-index: 55; pointer-events: none; display: none; }
   #rr-reactive.show { display: block; }
+  /* Cards sit LOW, flanking the guitar bridge (closer in, clearly in view), and FILL UP like fate
+     meters: DEATH charges with misses, THE WORLD charges with hits. */
   .rc-card {
-    position: absolute; top: 50%; transform: translateY(-50%);
-    width: min(14vw, 150px); aspect-ratio: 2 / 3; border-radius: 12px; overflow: hidden;
+    position: absolute; bottom: 9vh;
+    width: min(11vw, 138px); aspect-ratio: 2 / 3; border-radius: 13px; overflow: hidden;
     background-size: cover; background-position: center; background-color: #0a0706;
-    opacity: 0.30; filter: grayscale(0.55) brightness(0.45);
-    border: 1px solid rgba(255,255,255,0.12);
-    transition: opacity 0.55s ease, filter 0.55s ease, box-shadow 0.45s ease, border-color 0.45s ease;
+    opacity: 0.6; filter: grayscale(0.32) brightness(0.62);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 10px 34px rgba(0,0,0,0.5);
+    transition: opacity 0.4s ease, filter 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
   }
-  .rc-death { left: 2.2vw; }
-  .rc-world { right: 2.2vw; }
-  .rc-death.rc-flash {
-    opacity: 1; filter: none; border-color: var(--crimson);
-    box-shadow: 0 0 46px 8px rgba(255,31,46,0.85), inset 0 0 34px rgba(255,31,46,0.55);
-    animation: rcDeath 0.6s cubic-bezier(.2,1,.3,1);
-  }
-  .rc-world.rc-flash {
-    opacity: 1; filter: none; border-color: #e0a93f;
-    box-shadow: 0 0 46px 8px rgba(224,169,63,0.85), inset 0 0 34px rgba(166,77,255,0.4);
-    animation: rcWorld 0.6s cubic-bezier(.2,1,.3,1);
-  }
-  @keyframes rcDeath { 0%,100% { transform: translateY(-50%) scale(1) rotate(0); } 30% { transform: translateY(-50%) scale(1.13) rotate(-2.5deg); } }
-  @keyframes rcWorld { 0%,100% { transform: translateY(-50%) scale(1) rotate(0); } 30% { transform: translateY(-50%) scale(1.13) rotate(2.5deg); } }
-  @media (max-width: 680px) { .rc-card { width: 80px; top: 30%; } .rc-death { left: 6px; } .rc-world { right: 6px; } }
-  html.rr-reduce-motion .rc-card { transition: opacity 0.2s; }
+  .rc-death { left: 16vw; }
+  .rc-world { right: 16vw; }
+  /* the rising fill meter (height driven by --fill 0..1) */
+  .rc-fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fill, 0) * 100%);
+    pointer-events: none; transition: height 0.35s cubic-bezier(.3,1,.4,1); mix-blend-mode: screen; }
+  .rc-death .rc-fill { background: linear-gradient(0deg, rgba(255,31,46,0.9), rgba(255,31,46,0.12)); }
+  .rc-world .rc-fill { background: linear-gradient(0deg, rgba(224,169,63,0.92), rgba(166,77,255,0.16)); }
+  /* brighten + outline as the card charges past half */
+  .rc-card.charged { opacity: 1; filter: none; }
+  .rc-death.charged { border-color: var(--crimson); box-shadow: 0 0 40px 5px rgba(255,31,46,0.7), 0 10px 34px rgba(0,0,0,0.5); }
+  .rc-world.charged { border-color: #e0a93f; box-shadow: 0 0 40px 5px rgba(224,169,63,0.7), 0 10px 34px rgba(0,0,0,0.5); }
+  /* a quick pop on each hit/miss event */
+  .rc-death.rc-flash { animation: rcDeath 0.55s cubic-bezier(.2,1,.3,1); }
+  .rc-world.rc-flash { animation: rcWorld 0.55s cubic-bezier(.2,1,.3,1); }
+  @keyframes rcDeath { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(-2.5deg); } }
+  @keyframes rcWorld { 0%,100% { transform: scale(1) rotate(0); } 30% { transform: scale(1.12) rotate(2.5deg); } }
+  @media (max-width: 900px) { .rc-card { width: 76px; bottom: 6vh; } .rc-death { left: 8px; } .rc-world { right: 8px; } }
+  html.rr-reduce-motion .rc-card, html.rr-reduce-motion .rc-fill { transition: none; }
   html.rr-reduce-motion .rc-card.rc-flash { animation: none; }
   /* Build/version stamp on the start screen (photo-friendly: shows version + host). */
   .start-screen .rr-version {
@@ -3023,9 +3028,9 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="game.js?v=83"></script>
-<script src="jukebox.js?v=83"></script>
-<script src="catalog.js?v=83"></script>
+<script src="game.js?v=84"></script>
+<script src="jukebox.js?v=84"></script>
+<script src="catalog.js?v=84"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3371,13 +3376,18 @@
   function ensureReactive() {
     if (_rcEl) return _rcEl;
     var el = document.createElement('div'); el.id = 'rr-reactive'; el.setAttribute('aria-hidden', 'true');
-    el.innerHTML = '<div class="rc-card rc-death" id="rc-death"></div><div class="rc-card rc-world" id="rc-world"></div>';
+    el.innerHTML = '<div class="rc-card rc-death" id="rc-death"><div class="rc-fill"></div></div><div class="rc-card rc-world" id="rc-world"><div class="rc-fill"></div></div>';
     document.body.appendChild(el); _rcEl = el; return el;
   }
   function flashCard(c) {
     if (!c) return;
     c.classList.remove('rc-flash'); void c.offsetWidth; c.classList.add('rc-flash');
     if (c.__t) clearTimeout(c.__t); c.__t = setTimeout(function () { c.classList.remove('rc-flash'); }, 650);
+  }
+  function setFill(card, v) {
+    if (!card) return; v = Math.max(0, Math.min(1, v));
+    card.style.setProperty('--fill', v.toFixed(3));
+    card.classList.toggle('charged', v >= 0.55);
   }
   function showReactive(L) {
     if (!L || !L.reactiveCards) { hideReactive(); return; }
@@ -3386,9 +3396,13 @@
     if (d && L.reactiveCards.miss) d.style.backgroundImage = 'url("' + String(L.reactiveCards.miss).replace(/["\\]/g, '') + '")';
     if (w && L.reactiveCards.hit) w.style.backgroundImage = 'url("' + String(L.reactiveCards.hit).replace(/["\\]/g, '') + '")';
     el.classList.add('show');
+    var deathFill = 0, worldFill = 0;   // fate meters — closures persist across the run
+    setFill(d, 0); setFill(w, 0);
     window.RhythmLevelFx = {
-      onHit: function (kind, lane) { flashCard($('rc-world')); },
-      onMiss: function (lane) { flashCard($('rc-death')); }
+      // THE WORLD charges with clean hits (and slightly cools DEATH); flash on each.
+      onHit: function (kind, lane) { worldFill = Math.min(1, worldFill + 0.035); deathFill = Math.max(0, deathFill - 0.015); setFill($('rc-world'), worldFill); setFill($('rc-death'), deathFill); flashCard($('rc-world')); },
+      // DEATH charges with misses (and slightly cools THE WORLD); flash on each.
+      onMiss: function (lane) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); }
     };
   }
   function hideReactive() {
