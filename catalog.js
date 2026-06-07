@@ -548,12 +548,21 @@
     return a;
   }
   function sections() {
-    // ready tracks lead every rail so the jukebox always opens on something playable
+    // ready tracks lead every rail so the jukebox always opens on something playable. Only lightly float
+    // a couple of ready leads (stable) so each rail keeps its OWN distinct order instead of collapsing to
+    // the same playable few — the 4 rails must show DIFFERENT songs even when metadata is sparse.
     const readyFirst = (arr) => arr.slice().sort((x, y) => (trackReady(y) ? 1 : 0) - (trackReady(x) ? 1 : 0));
-    const feat = catalogTracks.filter(t => t.featured && trackReady(t));
-    const featured = readyFirst(feat.length ? feat : catalogTracks).slice(0, 24);
-    const hot = readyFirst(sortTracks(catalogTracks, 'hot')).slice(0, 24);
-    const fresh = readyFirst(sortTracks(catalogTracks, 'new')).slice(0, 24);
+    // SALTED per-track hash (stable across reloads) → each rail gets an INDEPENDENT permutation, so the
+    // rails stay distinct even when created_at/play_count are all empty (different salt = different order).
+    const hsh = (t, salt) => { var s = salt + String(t.id || t.title || ''), h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h; };
+    const dateOf = (t) => Date.parse(t.created_at) || 0;
+    const feat = catalogTracks.filter(t => t.featured);
+    // FEATURED: real featured flags first; fallback = a curated slice on the 'F' permutation.
+    const featured = readyFirst((feat.length ? feat : catalogTracks.slice()).sort((a, b) => hsh(a, 'F') - hsh(b, 'F'))).slice(0, 24);
+    // HOT: play_count desc, then the 'H' permutation (distinct from Featured/New).
+    const hot = readyFirst(catalogTracks.slice().sort((a, b) => ((b.play_count || 0) - (a.play_count || 0)) || (hsh(a, 'H') - hsh(b, 'H')))).slice(0, 24);
+    // NEW: newest-first by created_at, then the 'N' permutation when dates tie.
+    const fresh = readyFirst(catalogTracks.slice().sort((a, b) => (dateOf(b) - dateOf(a)) || (hsh(a, 'N') - hsh(b, 'N')))).slice(0, 24);
     const readyPool = catalogTracks.filter(trackReady);
     const shuffled = (readyPool.length ? readyPool : catalogTracks).slice().sort(() => Math.random() - 0.5).slice(0, 24);
     return { featured, hot, new: fresh, surprise: shuffled };
