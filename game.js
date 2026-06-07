@@ -442,6 +442,9 @@
     'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795, nut: [0.460, 0.565], bridge: [0.420, 0.605] },
     'assets/guitars/bone-daddy.png':    { aspect: 904 / 1314, nutFY: 0.105, bridgeFY: 0.775, nut: [0.465, 0.555], bridge: [0.425, 0.595] },
     'assets/guitars/melody-pink.png':   { aspect: 904 / 1477, nutFY: 0.095, bridgeFY: 0.80,  nut: [0.455, 0.555], bridge: [0.415, 0.595] },
+    'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800, nut: [0.450, 0.560], bridge: [0.400, 0.605] },
+    'assets/guitars/ember-bone.png':    { aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810, nut: [0.450, 0.560], bridge: [0.410, 0.600] },
+    'assets/guitars/gold-relic.png':    { aspect: 904 / 2160, nutFY: 0.085, bridgeFY: 0.800, nut: [0.450, 0.560], bridge: [0.400, 0.605] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
   function _applySkinGeom(src) {
@@ -1443,7 +1446,10 @@
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
       fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme() } : { loaded: false },
       fxEmit: (type, lane) => { emitFx(type || 'overdrive', 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
-      fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; }
+      fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
+      // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
+      // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
+      geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } }
     };
   } catch (e) {}
   // while the test panel is open, poll gamepads (gameplay polls in its own loop)
