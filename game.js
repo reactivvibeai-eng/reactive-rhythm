@@ -205,6 +205,18 @@
   const canvas = $('hwy');
   const ctx = canvas.getContext('2d');
   let cw = 0, ch = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  // ---------- FLIPBOOK FX (additive sprite-sheet particle layer; assets/fx via fx-player.js) ----------
+  // Fully optional: every call site guards on `fx`, so a missing player / manifest / sheet means no
+  // flipbook FX and BYTE-IDENTICAL gameplay. Loaded once here; composited over the scene in render().
+  let fx = null;
+  function _bootFx() {
+    try {
+      if (fx || !window.FxPlayer) return;
+      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { fx = p; }).catch(function () {});
+    } catch (e) {}
+  }
+  _bootFx();
+  if (!window.FxPlayer) { try { window.addEventListener('load', _bootFx); } catch (e) {} }
   // layered art assets (transparent PNGs keyed from the generated sheets)
   function loadImg(src){ const im=new Image(); im._ready=false; im.onload=()=>{im._ready=true;}; im.src=src; return im; }
   const neckImg = loadImg('assets/neck-cut.png');
@@ -1115,6 +1127,7 @@
     score = 0; combo = 0; maxCombo = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
+    if (fx) { try { fx.clear(); } catch (e) {} }
     bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
@@ -1426,7 +1439,11 @@
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive }),
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3) }),
-      lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) })
+      lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
+      // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
+      fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme() } : { loaded: false },
+      fxEmit: (type, lane) => { emitFx(type || 'overdrive', 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
+      fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; }
     };
   } catch (e) {}
   // while the test panel is open, poll gamepads (gameplay polls in its own loop)
@@ -1459,6 +1476,7 @@
     if (state !== 'playing' || overdrive < 1 || odActive) return;
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
     scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
+    try { const _g = fretGeom(); for (let _i = 0; _i < LANE_COUNT; _i++) emitFx('overdrive', 'od', _i, _g.nearX[_i], _g.nearY); } catch (e) {}
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
@@ -1609,6 +1627,8 @@
       cameraShake = Math.max(cameraShake, 9);
       registerMissFx(lane);
       playMissSfx();   // squelch (music level stays full — no ducking)
+      emitFx('bomb', 'bomb', lane);
+      if (target._fuseFx) { try { target._fuseFx.stop(); } catch (e) {} target._fuseFx = null; }
       flashJudgment('✕ BOMB', '#ff1f2e');
       spawnHitParticles(lane, 'good');
       if (navigator.vibrate) { try { navigator.vibrate([16, 28, 16]); } catch (e) {} }
@@ -1630,6 +1650,7 @@
     // combo milestone → LIGHTNING STRIKE (Guitar-Hero-style streak reward)
     if (combo > 0 && combo % 25 === 0) {
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
+      emitFx('combo', 'milestone', lane);
       lightningT = Math.min(0.55, 0.3 + tier * 0.05);
       scanT = scanDur = 0.42; scanTier = tier;   // combo-milestone scan sweep, brighter with the streak
       cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
@@ -1652,6 +1673,7 @@
     if (muteUntil > 0) { muteUntil = -1; applyGate(); }  // a clean hit recovers the music
     stability = Math.min(1.0, stability + 0.01);
     spawnHitParticles(lane, kind);
+    emitFx(kind === 'perfect' ? 'perfect' : 'hit', kind, lane);
     flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane);
@@ -1681,6 +1703,7 @@
       score += JUDGE.great.score * curMult();
       laneHitPulse[n.lane] = 1.0; lanePluckT[n.lane] = 0;
       spawnHitParticles(n.lane, 'great');
+      emitFx('hit', 'great', n.lane);
       resolved++;
       if (resolved >= 3) break;
     }
@@ -1718,6 +1741,61 @@
       } catch (e) {}
     }
     if (navigator.vibrate) { try { navigator.vibrate(kind === 'perfect' ? 16 : kind === 'great' ? 9 : 4); } catch (e) {} }
+  }
+
+  // ---------- FLIPBOOK FX dispatch (VISUAL-ONLY; never touches gameplay/scoring/timing) ----------
+  const FX_GLOBAL = 1.3;            // overall flipbook size (× lane width / 128 native frame)
+  // per-level themed hit/perfect variants, keyed by #game[data-rrtheme]; else the brand-default set
+  const THEME_FX = {
+    violet: { hit: 'soul-burst-violet', perfect: 'soul-burst-violet' },   // Skully "The World"
+    bone:   { hit: 'bone-shatter',      perfect: 'bone-shatter' },        // Bone Daddy
+    pink:   { hit: 'note-sparkle-pink', perfect: 'heart-pop-pink' },      // Melody
+  };
+  function _fxTheme() {
+    try { const g = document.getElementById('game'); return (g && g.dataset && g.dataset.rrtheme) || ''; } catch (e) { return ''; }
+  }
+  // gameplay event 'type' -> additive layers [{name, mult}]; mult scales the manifest's per-effect scale
+  function _fxLayers(type) {
+    const th = THEME_FX[_fxTheme()] || null;
+    switch (type) {
+      case 'hit':       return [{ name: (th && th.hit) || 'hit-burst', mult: 1 }];
+      case 'perfect':   return [{ name: (th && th.perfect) || 'perfect-flare', mult: 1.05 }];
+      case 'miss':      return [{ name: 'miss-shatter', mult: 1 }];
+      case 'combo':     return [{ name: 'combo-burst', mult: 1.05 }, { name: 'shockwave', mult: 0.9 }];
+      case 'overdrive': return [{ name: 'shockwave', mult: 1.2 }, { name: 'explosion', mult: 1 }];
+      case 'bomb':      return [{ name: 'bomb-explode', mult: 1 }, { name: 'shockwave', mult: 0.8 }];
+      default: return [];
+    }
+  }
+  function _fxHas(name) { return !!(fx && fx.manifest && fx.manifest[name] && fx.images && fx.images[name]); }
+  // one-shot FX at the catcher for `lane` (or explicit x,y). No-op without fx / under reduce-motion.
+  function emitFx(type, kind, lane, x, y) {
+    try {
+      if (!fx || reduceMotion) return;
+      if (fx.active && fx.active.length > (fxLite ? 14 : 96)) return;     // soft concurrency guard
+      let layers = _fxLayers(type);
+      if (!layers.length) return;
+      if (fxLite) layers = layers.slice(0, 1);                           // lite: primary layer only
+      const _g = fretGeom();
+      if (x == null || y == null) {
+        if (typeof lane === 'number' && lane >= 0 && lane < _g.nearX.length) { x = _g.nearX[lane]; y = _g.nearY; }
+        else { x = _g.nearX[(_g.nearX.length / 2) | 0]; y = _g.nearY; }
+      }
+      const k = (_g.lw / 128) * FX_GLOBAL;
+      for (let i = 0; i < layers.length; i++) {
+        const L = layers[i];
+        if (!_fxHas(L.name)) continue;                                   // sheet absent/failed → skip (no warn spam)
+        const meta = fx.manifest[L.name];
+        fx.play(L.name, x, y, { scale: (meta.scale != null ? meta.scale : 1) * (L.mult || 1) * k });
+      }
+    } catch (e) {}
+  }
+  // spawn a LOOP handle at an explicit final `scale` (e.g. a fuse riding a bomb). Caller manages/stops it.
+  function _fxRide(name, x, y, scale) {
+    try {
+      if (!fx || reduceMotion || fxLite || !_fxHas(name)) return null;
+      return fx.play(name, x, y, { loop: true, scale: scale });
+    } catch (e) { return null; }
   }
 
   // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
@@ -1767,6 +1845,7 @@
     registerMissFx(note.lane);
     playMissSfx();
     spawnMissDud(note.lane);
+    emitFx('miss', 'miss', note.lane);
     flashJudgment('MISS', '#ff1f2e');
     updateHUD();
   }
@@ -1922,7 +2001,7 @@
     const diff = DIFFICULTY[difficulty];
     for (const n of notes) {
       if (n.judged || jt <= n.time + diff.hitWindow) continue;
-      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; }   // dodged the hazard — safe, no penalty
+      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } }   // dodged the hazard — safe, no penalty
       else missNote(n);
     }
 
@@ -2177,6 +2256,13 @@
       // BOMB hazard — a dark "✕, do not hit" orb; skips the normal marble + trail.
       // A wall bomb (_bombRow) gets a faint ember warning ring as it approaches (visual only; gated).
       if (n.type === 'bomb') {
+        // ride a lit-fuse flipbook on the bomb (animated hazard). Self-heals to the ember ring below
+        // if no sheet / reduced motion; the handle is stopped when the bomb is struck or dodged.
+        if (fx && !reduceMotion && !fxLite) {
+          const _fs = (lw * sc) / 128 * 1.15;
+          if (!n._fuseFx || !n._fuseFx.alive()) { n._fuseFx = _fxRide('bomb-fuse', nx, ny, _fs); }
+          else { n._fuseFx.move(nx, ny); n._fuseFx.setScale(_fs); }
+        }
         if (n._bombRow && d > 0.12 && !reduceMotion && !fxLite) {
           const warn = 0.25 + 0.25 * Math.sin(performance.now() / 90);
           ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -2392,6 +2478,9 @@
         ctx.fillStyle = 'rgba(224, 218, 214, ' + (glitchAmount * 0.10) + ')'; ctx.fillRect(dx, ty + th * 0.5, cw, 1);
       }
     }
+    // FLIPBOOK FX — additive sprite layer composited over the scene, inside the camera-shake
+    // transform so bursts ride the shake. No-op until fx-player.js settles its sheets.
+    if (fx) { try { fx.draw(ctx, performance.now()); } catch (e) {} }
     ctx.restore();
     if (isPaused) { ctx.fillStyle = 'rgba(7,6,10,0.6)'; ctx.fillRect(0, 0, cw, ch); }
   }
