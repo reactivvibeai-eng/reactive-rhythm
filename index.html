@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=99" />
+<link rel="stylesheet" href="jukebox.css?v=100" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -682,15 +682,16 @@
   #rr-reactive.show { display: block; }
   /* Cards sit LOW, flanking the guitar bridge (closer in, clearly in view), and FILL UP like fate
      meters: DEATH charges with misses, THE WORLD charges with hits. */
-  /* build8: cards FLANK THE UPPER-MID PLAYFIELD (necromancer's hands), bigger + clearly in view —
-     not the bottom corners. Still fill up like fate meters: DEATH=misses, THE WORLD=hits. */
+  /* build9: cards HUG THE GUITAR NECK (user spec) — left/top/size are JS-driven off the live lane
+     frame (RhythmGame.getLaneFrame), so they flank the neck itself on any screen/skin, not the screen
+     edges. The vw values below are only the no-JS fallback. Fate meters: DEATH=misses, WORLD=hits. */
   .rc-card {
     position: absolute; top: 13vh;
     width: min(14vw, 178px); aspect-ratio: 2 / 3; border-radius: 13px; overflow: hidden;
     background-size: cover; background-position: center; background-color: #0a0706;
-    opacity: 0.62; filter: grayscale(0.30) brightness(0.66);
-    border: 1px solid rgba(255,255,255,0.14);
-    box-shadow: 0 10px 34px rgba(0,0,0,0.5);
+    opacity: 0.84; filter: grayscale(0.16) brightness(0.84);
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: 0 10px 34px rgba(0,0,0,0.55);
     transition: opacity 0.4s ease, filter 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
   }
   .rc-death { left: 19vw; }
@@ -1041,24 +1042,8 @@
     z-index: 0; opacity: 0.42; pointer-events: none; filter: saturate(1.05) contrast(1.04); }
   html.rr-perf-bg #menu-hub-video { display: none !important; }
   #menu-hub .mh-card { position: relative; z-index: 2; }
-  /* RYO hero presence — a tall character anchored lower-right on the hub, behind the console card.
-     drop-shadow gives the crimson rim-light identity; self-heals (img hidden) if the art is absent. */
-  .ryo-hero { position: absolute; right: clamp(-40px, -2vw, 0px); bottom: 0; z-index: 1; pointer-events: none;
-    height: min(78vh, 720px); width: auto; max-width: 46vw; object-fit: contain; object-position: bottom right;
-    filter: drop-shadow(0 0 38px rgba(255,31,46,0.42)) drop-shadow(0 10px 30px rgba(0,0,0,0.6));
-    opacity: 0; animation: ryoHeroIn 1.1s cubic-bezier(.2,.8,.2,1) 0.25s both; }
-  @keyframes ryoHeroIn { 0% { opacity: 0; transform: translateX(6%) scale(1.03); }
-    100% { opacity: 0.92; transform: translateX(0) scale(1); } }
-  /* a soft crimson uplight pooled under RYO so he reads as standing in the scene, not pasted on */
-  .ryo-glow { position: absolute; right: 2vw; bottom: -8%; z-index: 0; pointer-events: none;
-    width: min(60vw, 760px); height: 52vh;
-    background: radial-gradient(ellipse at 70% 90%, rgba(255,31,46,0.30), rgba(163,6,15,0.10) 46%, transparent 72%);
-    filter: blur(10px); animation: glowPulse 3.2s ease-in-out infinite; }
-  @media (max-width: 880px) { .ryo-hero { opacity: 0.5; max-width: 40vw; height: min(62vh, 560px); }
-    .ryo-glow { opacity: 0.6; } }
-  @media (max-width: 620px), (max-height: 560px) { .ryo-hero, .ryo-glow { display: none; } }
-  html.rr-reduce-motion .ryo-hero { animation: none; opacity: 0.9; }
-  html.rr-reduce-motion .ryo-glow { animation: none; }
+  /* build9: RYO lives on the TITLE SCREEN as full-bleed key art (see .start-keyart) — the old hub
+     cutout treatment (drop-shadowed opaque rect) read as pasted-on and was removed. */
   .game-center { position: relative; }
   /* chrome hairlines framing the center highway strip — kept, above #game-bg */
   .game-center::before, .game-center::after {
@@ -2013,22 +1998,31 @@
     0%,100% { opacity: 0.7; transform: translate(-50%,-50%) scale(1); }
     50% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); }
   }
-  .start-mascot {
-    position: absolute; left: 50%; bottom: 0; z-index: 2;
-    height: 74%; width: auto; max-width: 132%;
-    z-index: 2;
-    transform: translateX(-50%);
-    filter: drop-shadow(0 0 34px rgba(255,31,46,0.55));
-    animation: mascotIn 1.3s cubic-bezier(.2,.8,.2,1) both;
+  /* build9: RYO key art — the full-bleed cinematic hero layer. Slow Ken-Burns drift (entrance settle
+     → endless breathe), warm-graded. When it loads, the moon video below it is parked (battery). */
+  .start-keyart {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: 50% 26%;
+    z-index: 0;
+    transform-origin: 50% 32%;
+    filter: saturate(1.05) contrast(1.04) brightness(0.98);
+    animation: keyartIn 2.4s cubic-bezier(.2,.7,.2,1) both, keyartDrift 38s ease-in-out 2.4s infinite alternate;
   }
-  @keyframes mascotIn {
-    0% { opacity: 0; transform: translate(-50%, 9%) scale(1.05); }
-    100% { opacity: 1; transform: translateX(-50%) scale(1); }
+  @keyframes keyartIn    { 0% { opacity: 0; transform: scale(1.085); } 100% { opacity: 1; transform: scale(1.015); } }
+  @keyframes keyartDrift { 0% { transform: scale(1.015) translateY(0); } 100% { transform: scale(1.055) translateY(-0.6%); } }
+  .start-bg.has-keyart #start-video { display: none; }   /* art owns the frame; video stays as the self-heal */
+  html.rr-reduce-motion .start-keyart { animation: none; opacity: 1; transform: scale(1.02); }
+  /* warm color grade over the art (the render leans cool — brand darks are warm R≥G≥B) */
+  .start-grade {
+    position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(64,14,12,0.20), rgba(28,8,7,0.06) 38%, rgba(96,20,14,0.16) 100%);
+    mix-blend-mode: soft-light;
   }
   .start-scrim {
     position: absolute; inset: 0;
     z-index: 3;
-    background: linear-gradient(180deg, rgba(7,6,10,0.62) 0%, rgba(7,6,10,0.1) 26%, transparent 50%, rgba(7,6,10,0.72) 84%, rgba(7,6,10,0.95) 100%);
+    background: linear-gradient(180deg, rgba(7,6,10,0.66) 0%, rgba(7,6,10,0.16) 20%, transparent 44%, rgba(7,6,10,0.58) 72%, rgba(7,6,10,0.94) 100%);
   }
   .icon-btn.muted { border-color: var(--crimson); color: var(--crimson); }
   .start-embers { position: absolute; inset: 0; z-index: 4; }
@@ -2057,16 +2051,30 @@
   .start-atom { width: 22px; height: 22px; filter: drop-shadow(0 0 6px rgba(255,31,46,0.6)); animation: atomSpin 14s linear infinite; }
   @keyframes atomSpin { to { transform: rotate(360deg); } }
 
-  .start-wordmark { margin-top: 7vh; text-align: center; }
+  /* build9: the lockup sits in the LOWER THIRD (cinematic key-art layout) — the art breathes above,
+     the bottom scrim guarantees legibility. */
+  .start-wordmark { margin-top: auto; text-align: center; }
   .rr-logo {
     font-family: 'Nosifer', cursive;
-    font-size: clamp(38px, 12.5vw, 64px);
+    font-size: clamp(38px, 12.5vw, 72px);
     line-height: 1.08;
     color: #f6eef0;
     -webkit-text-stroke: 1.5px #1c0204;
     text-shadow: 0 0 30px rgba(255,31,46,0.85), 0 0 14px rgba(255,31,46,0.7), 0 3px 0 #2a0206, 0 4px 10px rgba(0,0,0,0.7);
-    animation: slam 0.7s cubic-bezier(.2,1.2,.3,1) 0.85s both;
+    animation: slam 0.7s cubic-bezier(.2,1.2,.3,1) 0.85s both, logoBreathe 4.6s ease-in-out 2.4s infinite;
   }
+  /* gold hairline under the title — the brand's "stage edge" */
+  .rr-logo::after {
+    content: ''; display: block; width: min(320px, 46vw); height: 1px;
+    margin: 18px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(224,169,63,0.85), transparent);
+    box-shadow: 0 0 14px rgba(224,169,63,0.45);
+  }
+  @keyframes logoBreathe {
+    0%, 100% { text-shadow: 0 0 30px rgba(255,31,46,0.85), 0 0 14px rgba(255,31,46,0.7), 0 3px 0 #2a0206, 0 4px 10px rgba(0,0,0,0.7); }
+    50%      { text-shadow: 0 0 44px rgba(255,31,46,1), 0 0 20px rgba(255,122,74,0.8), 0 3px 0 #2a0206, 0 4px 10px rgba(0,0,0,0.7); }
+  }
+  html.rr-reduce-motion .rr-logo { animation: slam 0.7s cubic-bezier(.2,1.2,.3,1) 0.85s both; }
   @keyframes slam {
     0% { opacity: 0; transform: scale(1.45); filter: blur(7px); }
     55% { opacity: 1; filter: blur(0); }
@@ -2081,7 +2089,7 @@
   }
 
   .start-tap {
-    margin-top: auto; display: flex; flex-direction: column; align-items: center; gap: 14px;
+    margin-top: 30px; display: flex; flex-direction: column; align-items: center; gap: 14px;
     animation: fadeUp 0.8s ease 1.95s both;
   }
   .tap-ring { width: 52px; height: 52px; border: 2px solid var(--crimson); border-radius: 50%; position: relative; }
@@ -2091,6 +2099,21 @@
   @keyframes blink { 0%,60% { opacity: 1; } 80%,100% { opacity: 0.3; } }
 
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* build9: bottom META BAR — version (left) · copyright (right), a clean console-style strip */
+  .start-meta {
+    margin-top: 26px; width: min(1100px, 100%);
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 12px; border-top: 1px solid rgba(218,215,210,0.13);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em;
+    color: var(--ink-dim);
+    animation: fadeUp 0.8s ease 2.15s both;
+  }
+  .start-meta .rr-version {
+    position: static; transform: none; background: none; border: none;
+    padding: 0; backdrop-filter: none; font-size: 10px; letter-spacing: 0.2em;
+  }
+  .start-copy { opacity: 0.85; }
 
   .start-screen.leaving { opacity: 0 !important; transform: scale(1.06); transition: opacity 0.6s ease, transform 0.6s ease; }
 
@@ -2547,13 +2570,17 @@
        START SCREEN — cinematic intro (first thing players see)
        ============================================================ -->
   <div class="screen start-screen active" id="start" data-screen-label="start">
-    <div class="start-bg">
+    <div class="start-bg" id="start-bg">
       <video id="start-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
+      <!-- build9: RYO key art IS the title screen — full-bleed cinematic hero (Ken Burns drift, warm
+           grade, fire FX dancing over it). Self-heals: missing art → the moon-video composition. -->
+      <img class="start-keyart" id="start-keyart" src="assets/ryo/ryo-hero.png" alt="" aria-hidden="true"
+           onload="this.parentNode.classList.add('has-keyart')" onerror="this.remove()" />
       <div class="start-glow"></div>
       <canvas class="start-flames" id="start-flames"></canvas>
       <canvas class="start-ignite" id="start-ignite" aria-hidden="true"></canvas>
       <div class="start-ignite-flash" id="start-ignite-flash" aria-hidden="true"></div>
-      <img class="start-mascot" src="assets/mascot.png" alt="" />
+      <div class="start-grade" aria-hidden="true"></div>
       <div class="start-embers" id="start-embers"></div>
       <div class="start-scrim"></div>
     </div>
@@ -2568,9 +2595,12 @@
       </div>
       <div class="start-tap" id="start-tap">
         <span class="tap-ring"></span>
-        <span class="tap-label">TAP TO BEGIN</span>
+        <span class="tap-label">PRESS ENTER · TAP TO BEGIN</span>
       </div>
-      <div class="rr-version" id="rr-version" aria-label="build version">v…</div>
+      <div class="start-meta">
+        <div class="rr-version" id="rr-version" aria-label="build version">v…</div>
+        <span class="start-copy">© REACTIVVIBE · CLOSED BETA</span>
+      </div>
     </div>
   </div>
 
@@ -2603,8 +2633,6 @@
        ============================================================ -->
   <div class="screen menu-hub" id="menu-hub" data-screen-label="main-menu">
     <video id="menu-hub-video" autoplay loop muted playsinline preload="auto" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'"></video>
-    <img class="ryo-hero" src="assets/ryo/ryo-hero.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
-    <div class="ryo-glow" aria-hidden="true"></div>
     <div class="mh-card">
       <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
       <div class="mh-pre">MAIN MENU</div>
@@ -3764,11 +3792,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=99"></script>
-<script src="game.js?v=99"></script>
-<script src="jukebox.js?v=99"></script>
-<script src="catalog.js?v=99"></script>
-<script src="multiplayer.js?v=99"></script>
+<script src="assets/fx/fx-player.js?v=100"></script>
+<script src="game.js?v=100"></script>
+<script src="jukebox.js?v=100"></script>
+<script src="catalog.js?v=100"></script>
+<script src="multiplayer.js?v=100"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -4167,6 +4195,38 @@
     card.style.setProperty('--fill', v.toFixed(3));
     card.classList.toggle('charged', v >= 0.55);
   }
+  // build9: cards HUG THE GUITAR NECK — anchored off the live lane frame (page coords), re-asserted on
+  // resize + a slow tick (the canvas resizes between loading→game; lanes are otherwise invariant).
+  var _rcPosT = 0;
+  function placeReactiveCards() {
+    try {
+      if (!_rcEl || !_rcEl.classList.contains('show')) return;
+      var f = (window.RhythmGame && window.RhythmGame.getLaneFrame) ? window.RhythmGame.getLaneFrame() : null;
+      if (!f) return;
+      var d = $('rc-death'), w = $('rc-world');
+      // the VISIBLE arm: in gh cover-fit the nut row sits above the screen — clamp the band to the
+      // canvas top so the cards flank what the player actually sees of the neck.
+      var neckTopPage = Math.max(8, f.y + Math.max(0, f.farY));
+      var neckBotPage = f.y + f.nearY;
+      var visLen = neckBotPage - neckTopPage;
+      if (!(visLen > 80)) return;
+      var cardH = Math.max(110, Math.min(250, visLen * 0.40));
+      var cardW = Math.round(cardH * (2 / 3));
+      var top = neckTopPage + visLen * 0.18;
+      var leftEdge = f.x + Math.min(f.nearX[0], f.farX[0]);
+      var rightEdge = f.x + Math.max(f.nearX[f.nearX.length - 1], f.farX[f.farX.length - 1]);
+      var gap = Math.max(16, f.lw * 0.34);
+      function put(c, left) {
+        if (!c) return;
+        c.style.width = cardW + 'px'; c.style.height = Math.round(cardH) + 'px';
+        c.style.left = Math.round(left) + 'px'; c.style.right = 'auto';
+        c.style.top = Math.round(top) + 'px';
+      }
+      put(d, Math.max(6, leftEdge - gap - cardW));
+      put(w, Math.min(window.innerWidth - cardW - 6, rightEdge + gap));
+    } catch (e) {}
+  }
+  try { window.addEventListener('resize', placeReactiveCards); } catch (e) {}
   // ---- PER-LEVEL MECHANIC overlay (Bone Daddy booty-shake · Melody cat-paw). Self-owned DOM over the
   // playfield, driven by the RhythmLevelFx hit/combo signals. Pure visual; reduceMotion kills the motion. ----
   var _mechEl = null;
@@ -4204,6 +4264,11 @@
       if (w && L.reactiveCards.hit) w.style.backgroundImage = 'url("' + String(L.reactiveCards.hit).replace(/["\\]/g, '') + '")';
       el.classList.add('show');
       setFill(d, 0); setFill(w, 0);
+      // build9: pin the cards beside the guitar neck now + keep them pinned (canvas resizes on
+      // loading→game; a slow tick is cheap and bullet-proof vs missed layout events)
+      placeReactiveCards();
+      if (_rcPosT) clearInterval(_rcPosT);
+      _rcPosT = setInterval(placeReactiveCards, 600);
     } else if (_rcEl) { _rcEl.classList.remove('show'); }
     var _intenseSrc = L.intenseVideo || null;   // build8: a more-intense backdrop for combo spikes (Skully). null → no swap.
     var _intenseOn = false, _intenseT = null;
@@ -4247,6 +4312,7 @@
   }
   function hideReactive() {
     if (_rcEl) _rcEl.classList.remove('show');
+    if (_rcPosT) { clearInterval(_rcPosT); _rcPosT = 0; }
     hideMechanic();
     try { window.RhythmLevelFx = null; } catch (e) {}
   }
@@ -5335,6 +5401,16 @@
   }
   // tap / click anywhere on the start screen (lets game.js audio-unlock fire too)
   start.addEventListener('pointerdown', enter);
+  // build9: console-style key start — ENTER / SPACE begin. CAPTURE phase + stopImmediatePropagation so
+  // the engine's menu-state Enter shortcut (play-btn) can't also fire while the title screen is up
+  // (including during the 600ms leave transition — keys are swallowed, not re-entered).
+  window.addEventListener('keydown', function (e) {
+    if (!start.classList.contains('active')) return;
+    if (e.key === 'Enter' || e.code === 'Space' || e.key === ' ') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (!dismissed) enter();
+    }
+  }, true);
 
   // ---- top-bar mute (menu): mirrors the gameplay mute + silences song previews ----
   (function () {
