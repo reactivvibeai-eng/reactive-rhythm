@@ -1761,6 +1761,7 @@
       playMissSfx();   // squelch (music level stays full — no ducking)
       emitFx('bomb', 'bomb', lane);
       if (target._fuseFx) { try { target._fuseFx.stop(); } catch (e) {} target._fuseFx = null; }
+      if (target._warnFx) { try { target._warnFx.stop(); } catch (e) {} target._warnFx = null; }
       flashJudgment('✕ BOMB', '#ff1f2e');
       spawnHitParticles(lane, 'good');
       if (navigator.vibrate) { try { navigator.vibrate([16, 28, 16]); } catch (e) {} }
@@ -2226,7 +2227,7 @@
     const diff = DIFFICULTY[difficulty];
     for (const n of notes) {
       if (n.judged || jt <= n.time + diff.hitWindow) continue;
-      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } }   // dodged the hazard — safe, no penalty
+      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } }   // dodged the hazard — safe, no penalty
       else missNote(n);
     }
 
@@ -2524,6 +2525,13 @@
           const _fs = (lw * sc) / 128 * 1.15;
           if (!n._fuseFx || !n._fuseFx.alive()) { n._fuseFx = _fxRide('bomb-fuse', nx, ny, _fs); }
           else { n._fuseFx.move(nx, ny); n._fuseFx.setScale(_fs); }
+          // build10: WALL-BOMB telegraph — the bomb-warn pulse loop rides ahead of a bomb row
+          // (the "do NOT strum" warning), on top of the hand-drawn ember ring below.
+          if (n._bombRow && d > 0.12) {
+            const _ws = (lw * sc) / 128 * 1.9;
+            if (!n._warnFx || !n._warnFx.alive()) { n._warnFx = _fxRide('bomb-warn', nx, ny, _ws, 0.65); }
+            else { n._warnFx.move(nx, ny); n._warnFx.setScale(_ws); }
+          } else if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; }
         }
         if (n._bombRow && d > 0.12 && !reduceMotion && !fxLite) {
           const warn = 0.25 + 0.25 * Math.sin(performance.now() / 90);
@@ -3232,7 +3240,55 @@
     if (activeGuitarImg._ready) {
       const gr = guitarRect();
       const gwarp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
-      if (gwarp > 0) {
+      const zFp = (ART.persp > 1) ? (perspOverride || ART.persp) : 0;
+      if (_skinFit && zFp > 1) {
+        // build10: SKIN HIGHWAY PROJECTION — texture-map the flat custom-guitar art onto the SAME
+        // 1/z highway plane the notes ride. Slices are uniform in SCREEN y; each slice samples the
+        // art row at d = P⁻¹(u) and is x-fitted so the art's outer strings land exactly on the outer
+        // LANES at that depth. Result: the painted neck TILTS DOWN toward the backdrop with the
+        // marbles riding it, sized to the highway — the level video stays visible around it.
+        // (Fixes "guitar too big / not tilted / can't see the video / marbles too fast".)
+        // NOTE: this block runs inside drawCathedralBg → it builds its own lane projection from
+        // module state, with the EXACT formulas render() uses (P / warpX / noteX), so art and
+        // marbles share one geometry.
+        const fgp = fretGeom();
+        const nearYp = fgp.nearY, farYp = fgp.farY;
+        const Pp = (d) => { const z = 1 + d * (zFp - 1); return (1 - 1 / z) / (1 - 1 / zFp); };
+        const wp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
+        const cxw2 = fgp.gx + 0.5 * fgp.gw;
+        const warpX2 = (wp > 0) ? ((x, u) => cxw2 + (x - cxw2) * (1 - wp * Math.max(0, u))) : ((x) => x);
+        const noteX2 = (i, d) => { const u = Pp(d); return warpX2(fgp.nearX[i] + (fgp.farX[i] - fgp.nearX[i]) * u, u); };
+        const iw = activeGuitarImg.width, ih = activeGuitarImg.height;
+        const aInv = 1 - 1 / zFp;
+        const Pinv = (u) => { const iz = Math.max(0.05, 1 - u * aInv); return ((1 / iz) - 1) / (zFp - 1); };
+        const f0b = ART.bridgeXF[0], fLb = ART.bridgeXF[LANE_COUNT - 1];
+        const f0n = ART.nutXF[0],    fLn = ART.nutXF[LANE_COUNT - 1];
+        const NSL = 56;
+        for (let s = 0; s < NSL; s++) {
+          const u0 = s / NSL, u1 = (s + 1) / NSL;
+          const y0 = nearYp + (farYp - nearYp) * u0;              // nearer edge of the slice
+          const y1 = nearYp + (farYp - nearYp) * u1;              // farther edge (higher on screen)
+          if (Math.max(y0, y1) < -8) break;                       // rest of the neck is past the top
+          const d0 = Pinv(u0), d1 = Pinv(u1);
+          const v0 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d0;
+          const v1 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d1;
+          const fA = f0b + (f0n - f0b) * d0, fB = fLb + (fLn - fLb) * d0;
+          const xa = noteX2(0, d0), xb = noteX2(LANE_COUNT - 1, d0);
+          const sc = (xb - xa) / Math.max(0.004, fB - fA);
+          ctx.drawImage(activeGuitarImg,
+            0, Math.min(v0, v1) * ih, iw, Math.abs(v1 - v0) * ih + 1,
+            xa - fA * sc, y1, sc * iw, (y0 - y1) + 0.8);
+        }
+        // BODY below the bridge — drops straight down at the near-plane scale, anchored at the
+        // catchers and clipped by the canvas bottom (same posture as the default guitar's body).
+        {
+          const xa = noteX2(0, 0), xb = noteX2(LANE_COUNT - 1, 0);
+          const sc = (xb - xa) / Math.max(0.004, fLb - f0b);
+          const rows = (1 - ART.bridgeFY) * ih;
+          ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
+            xa - f0b * sc, nearYp, sc * iw, rows * sc);
+        }
+      } else if (gwarp > 0) {
         // NECK-RECEDE WARP: slice the guitar into horizontal bands and narrow each toward the centerline
         // by the SAME (1 - warp*u) factor the lanes use, so the painted strings recede WITH the note lanes
         // (they stay aligned). u: 0 at the bridge row → 1 at the nut row (matches warpX). Body below the
