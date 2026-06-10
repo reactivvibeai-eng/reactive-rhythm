@@ -29,6 +29,15 @@ horizon→bridge behind an accent frontier; `_skinBuildT`, `__rrDebug.buildT()`)
 ⚠️ **TESTING LESSON (binding):** single-pixel ALPHA probes cannot verify art (scrim/strings mimic
 it) — verify canvas art with **REGION RGB-DISTANCE probes across a state toggle** (skin on/off,
 build 0→1): v103's numbers were 74/px print-sweep, 66–120/px skin-vs-default, 3/px re-applied.
+**v104 (`21f1407`):** SQUARE-MARBLES fix — gem tint's `multiply` made the sprite canvas fully opaque
+(squares on every tinted level since build8); fixed with `destination-in` alpha restore +
+`__rrDebug.gemTint` corner/center probe (sprite-canvas alpha checks are now part of the test kit).
+**ASSET TRUTH (the user's "100 effect videos"):** the repo holds **36 mp4s** (31 FX — all wired — +
+3 level loops + moon + ryo-intro); no asset-agent commits in 3 days. A bigger clip batch is NOT in
+the repo. Drop path when it lands: clips → `assets/fx/_src/` → `python build_sheet.py <name> --count
+N --cols C --rows R [--loop]` → UNION-merge `manifest.json` (never overwrite; bomb-* names are
+engine-owned) → the engine auto-loads any manifest entry; wire new names into THEME_FX/_fxLayers/the
+UI MAP as fits. The engine agent (me) can tile + wire the moment files exist.
 **NEXT:** user PLAYS SKULLY (the verdict gates the template lock-in). Dial knobs ready: zoom amount
 (rrCineZoom 1.16), print speed (dt/2.0), frontier colors, NSL slices, scrim alpha, boom volumes, the
 click-FX MAP. Open beta-feedback items (user's call): intro-every-launch fatigue (consider instant-

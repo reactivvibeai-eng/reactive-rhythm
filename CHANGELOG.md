@@ -1107,6 +1107,15 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v104 — square-marbles fix (gem tint preserves sprite alpha)  ✅
+Canvas `multiply` composites source-over → the opaque tint fill made the whole sprite canvas opaque =
+colored SQUARES on every gem-tinted level (since build8). Fixed with a `destination-in` alpha restore;
+`__rrDebug.gemTint` regression probe (corners transparent / center opaque — Skully verified live).
+**Asset inventory (the "100 videos" question): the repo holds 36 mp4s total** — 31 FX clips (ALL 31
+tiled + wired), 3 level loops, moon loop, ryo-intro. No new asset-agent commits in 3 days; any larger
+clip batch hasn't been delivered into the repo yet (drop path: `assets/fx/_src/` → tile via
+`build_sheet.py` → union `manifest.json`). Bump ?v 103→104.
+
 ### v103 — projection UNIT FIX (the guitar exists) + one-time lane migration  ✅
 The user's screenshots caught what headless probes missed: (1) the projection's destination width was
 `sc*iw` (≈676,000px) — Chrome silently refused the draw → **Skully had no guitar at all**; fixed in
