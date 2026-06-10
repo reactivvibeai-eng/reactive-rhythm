@@ -209,10 +209,43 @@
   // Fully optional: every call site guards on `fx`, so a missing player / manifest / sheet means no
   // flipbook FX and BYTE-IDENTICAL gameplay. Loaded once here; composited over the scene in render().
   let fx = null;
+  // build12 BLACK-BOX FIX (the user's "black box with a small video"): the sheets are RGB-on-black
+  // for ADDITIVE drawing — additive is invisible ONLY over an opaque backdrop. The game canvas is
+  // TRANSPARENT wherever a level video shows through (and the UI canvases always are), so every
+  // black texel rendered as solid black = a literal black rectangle. Bake a LUMINANCE KEY into each
+  // sheet once at load (alpha = boosted max(r,g,b)) → black is genuinely transparent everywhere,
+  // while 'lighter' still glows over opaque art. Shared with the UI/results layers.
+  // Keyed canvases are CACHED + SHARED across the three FxPlayer instances (game / UI / results) —
+  // the pixel pass runs once per sheet ever, not 3× (review find: boot jank + 3× canvas memory).
+  const _keyedCache = {};
+  function alphaKeySheets(player) {
+    try {
+      for (const nm in player.images) {
+        const img = player.images[nm]; if (!img || img.__keyed) continue;
+        const ck = (player.manifest && player.manifest[nm] && player.manifest[nm].src) || nm;
+        if (_keyedCache[ck]) { player.images[nm] = _keyedCache[ck]; continue; }
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const g2 = c.getContext('2d', { willReadFrequently: true });
+        g2.drawImage(img, 0, 0);
+        const id = g2.getImageData(0, 0, c.width, c.height); const d2 = id.data;
+        for (let i = 0; i < d2.length; i += 4) {
+          const m = Math.max(d2[i], d2[i + 1], d2[i + 2]);
+          d2[i + 3] = m >= 170 ? 255 : ((m * 3) >> 1);   // boosted luminance key (×1.5, capped)
+        }
+        g2.putImageData(id, 0, 0);
+        c.__keyed = true;
+        _keyedCache[ck] = c;
+        player.images[nm] = c;
+      }
+    } catch (e) {}
+  }
+  // PRODUCTION export (NOT a __rr dev hook — the strip pass must never remove it; review find):
+  // the UI/results layers key their independently-loaded sheets through this.
+  try { window.RhythmFxKey = alphaKeySheets; } catch (e) {}
   function _bootFx() {
     try {
       if (fx || !window.FxPlayer) return;
-      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { fx = p; }).catch(function () {});
+      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { alphaKeySheets(p); fx = p; }).catch(function () {});
     } catch (e) {}
   }
   _bootFx();
@@ -309,33 +342,9 @@
   function guitarRect() {
     const aspect = (activeGuitarImg && activeGuitarImg.width && activeGuitarImg.height) ? activeGuitarImg.width / activeGuitarImg.height : ART.aspect;
     let gw, gh, gx, gy;
-    // ---- INVARIANT-LANE SKIN FIT (5-lane decree) ----------------------------------------------
-    // When a custom guitar is active, the LANES never move: catcher row Y, lane span and center all
-    // come from the ACTIVE PROFILE's calibrated frame (computed below exactly as if no skin were on).
-    // The skin ART is then sized/placed so its measured bridge strings land ON those invariant lanes
-    // — same muscle memory, same lane width, on every guitar; tall art just crops off-screen.
-    if (_skinFit) {
-      const P = _skinFit.P;
-      let pgw, pgh, pgx, pgy;
-      if (P.fit === 'cover') {
-        if (cw / ch > P.aspect) { pgw = cw; pgh = pgw / P.aspect; } else { pgh = ch; pgw = pgh * P.aspect; }
-        pgx = (cw - pgw) / 2; pgy = ch - (P.bottomAnchor || 0.95) * pgh;
-      } else {
-        pgh = ch * ART.fillFY; pgw = pgh * P.aspect;
-        if (pgw > cw * ART.fillFX) { pgw = cw * ART.fillFX; pgh = pgw / P.aspect; }
-        pgx = (cw - pgw) / 2; pgy = ch * ART.bridgeScreenY - P.bridgeFY * pgh;
-      }
-      const pb = P.bridgeXF && P.bridgeXF.length ? P.bridgeXF : [0.33, 0.66];
-      const tNearY = pgy + P.bridgeFY * pgh;                          // invariant catcher row (px)
-      const tX0 = pgx + pb[0] * pgw, tX1 = pgx + pb[pb.length - 1] * pgw;   // invariant outer lanes (px)
-      const sB = ART.bridgeXF;                                        // skin's measured bridge fractions
-      const span = Math.max(0.02, sB[sB.length - 1] - sB[0]);
-      gw = (tX1 - tX0) / span;
-      gx = tX0 - sB[0] * gw;
-      gh = gw / aspect;
-      gy = tNearY - ART.bridgeFY * gh;
-      return { gx: gx, gy: gy, gw: gw, gh: gh };
-    }
+    // (build12: the v99 "invariant-lane skin fit" branch is GONE — the user's playtest verdict: a
+    // custom guitar must look like THE GUITAR at the default's framing, lanes on its own strings.
+    // Skins set ART.fit='cover' + their measured fractions and take the same paths as the default.)
     if (ART.fit === 'cover') {
       // COVER-FIT (5-string gh): FILL the playfield so there's no dead space left/right/under the
       // guitar. The playfield is portrait, so this fills the WIDTH (body reaches the side edges) and
@@ -380,10 +389,9 @@
       for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
     }
     // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform).
-    // With a skin active, use the OUTER-span average instead — the outer lanes are pinned to the
-    // profile, so note/catcher sizes stay identical on every guitar even when the skin's painted
-    // interior fan is irregular. (Default path untouched → byte-identical.)
-    const lw = _skinFit
+    // With a skin active, use the OUTER-span average — note/catcher sizes stay uniform even when the
+    // skin's painted interior fan is irregular. (Default path untouched → byte-identical.)
+    const lw = _skinArtOn
       ? Math.abs(nearX[LANE_COUNT - 1] - nearX[0]) / Math.max(1, LANE_COUNT - 1)
       : (Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072));
     return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
@@ -519,37 +527,35 @@
     const out = []; for (let i = 0; i < L; i++) out.push(_lerpLane(arr[0], arr[N - 1], L, i));
     return out;
   }
-  // active skin-fit snapshot: S = the skin's measured frame, P = the ACTIVE PROFILE's calibrated frame.
-  // guitarRect() uses this to conform the art to the profile's invariant lanes. null → no skin fit.
-  let _skinFit = null;
+  // build12 (the user's decree after playtest): a custom guitar draws EXACTLY like the default one —
+  // the WHOLE art, cover-fit with the body anchored at the bottom, neck receding up the screen, and
+  // the LANES ON ITS OWN PAINTED STRINGS (art-defines-lanes at natural framing). No texture warping,
+  // no invariant-lane scaling — those read as "warped/blown up". Flat front-on renders get a stronger
+  // neck-recede taper (warp) so the neck points down into the level like the default's painted
+  // perspective. `_skinArtOn` flags an active skin (drives the materialize cinematic).
+  let _skinArtOn = false;
   function _applySkinGeom(src) {
     const g = src && SKIN_GEOM[src];
-    if (!g) {   // restore the active lane-profile's default geometry
-      _skinFit = null;
-      const p = LANE_PROFILES[laneProfile];
+    const p = LANE_PROFILES[laneProfile];
+    if (!g) {   // restore the active lane-profile's default geometry (incl. fit + warp)
+      _skinArtOn = false;
       if (p) {
         ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
         ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
         ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95;
+        ART.warp = p.warp || 0; ART.persp = p.persp || 0;
       }
       return;
     }
-    // build per-string arrays (measured arrays preferred; legacy [left,right] endpoints fan evenly
-    // via the resampler's N<L branch), sized to LANE_COUNT
+    // per-string arrays (measured preferred; legacy [left,right] endpoints fan via the resampler)
     const nut = _resampleStrings(g.nutXF || [g.nut[0], g.nut[1]], LANE_COUNT);
     const brg = _resampleStrings(g.bridgeXF || [g.bridge[0], g.bridge[1]], LANE_COUNT);
     ART.aspect = g.aspect; ART.nutFY = g.nutFY; ART.bridgeFY = g.bridgeFY;
     ART.nutXF = nut; ART.bridgeXF = brg;
-    // NOTE: ART.fit / bottomAnchor / persp / warp stay the PROFILE's — the skin-fit branch in
-    // guitarRect() overrides the draw rect entirely, and the gh highway warp keeps working because
-    // the image slicer + the lanes share the same rect + warp pivot.
-    const p = LANE_PROFILES[laneProfile] || {};
-    _skinFit = {
-      S: { aspect: g.aspect, nutFY: g.nutFY, bridgeFY: g.bridgeFY },
-      P: { aspect: p.aspect, nutFY: p.nutFY, bridgeFY: p.bridgeFY,
-           nutXF: (p.nutXF || []).slice(), bridgeXF: (p.bridgeXF || []).slice(),
-           fit: p.fit || null, bottomAnchor: p.bottomAnchor || 0.95 },
-    };
+    ART.fit = 'cover'; ART.bottomAnchor = g.bottomAnchor || 0.93;
+    ART.warp = Math.max((p && p.warp) || 0, g.warp != null ? g.warp : 0.34);
+    // ART.persp stays the profile's — the note depth/vertigo feel is identical on every guitar.
+    _skinArtOn = true;
   }
   function _applySkinImg(src) {
     if (!src) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); return; }
@@ -1203,7 +1209,7 @@
     try {
       const perf = bgMode === 'performance';
       document.documentElement.classList.toggle('rr-perf-bg', perf);
-      ['bg-video', 'start-video'].forEach((id) => {
+      ['bg-video', 'bg-video-fill', 'start-video'].forEach((id) => {
         const v = document.getElementById(id);
         if (!v) return;
         if (perf) { try { v.pause(); } catch (e) {} }
@@ -1282,7 +1288,7 @@
     // build10b: LEVEL-START CINEMATIC (custom-guitar levels) — the backdrop opens slightly zoomed
     // and eases out (CSS .rr-cine) while the guitar MATERIALIZES along the highway during the
     // countdown (engine-side print, see the projection draw). Presentation only.
-    if (_skinFit && !reduceMotion) {
+    if (_skinArtOn && !reduceMotion) {
       _skinBuildT = 0;
       try { const _gc = $('game'); _gc.classList.add('rr-cine'); setTimeout(() => { try { _gc.classList.remove('rr-cine'); } catch (e) {} }, 2900); } catch (e) {}
     } else { _skinBuildT = 1; }
@@ -1580,7 +1586,7 @@
       geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } },
       // ALIGNMENT dev hooks (stripped at content-freeze): screen-space lanes + the art draw rect
       lanesPx: () => { try { const g = fretGeom(); return { nearX: g.nearX.map(v => +v.toFixed(2)), nearY: +g.nearY.toFixed(2), lw: +g.lw.toFixed(2), farX: g.farX.map(v => +v.toFixed(2)), farY: +g.farY.toFixed(2) }; } catch (e) { return 'ERR ' + e.message; } },
-      rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: !!_skinFit }; } catch (e) { return 'ERR ' + e.message; } },
+      rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: _skinArtOn }; } catch (e) { return 'ERR ' + e.message; } },
       buildT: () => +_skinBuildT.toFixed(3),   // level-start materialize progress (dev; strip at freeze)
       // GAMEPLAY probes (dev; strip at freeze): the next strikeable note + live judgment counters,
       // so a timed in-page press can assert the input→judgment loop end-to-end.
@@ -1938,6 +1944,7 @@
     'paw-poof':         { pk: 11, cut: 15 }, 'confetti-pop':    { pk: 3,  cut: 15 },
     'firework-gold':    { pk: 11, cut: 19 },
   };
+  try { window.RhythmFxTim = FX_TIM; } catch (e) {}   // PRODUCTION export (not a __rr dev hook) — UI buttons snap at peak too
   // impact-tuned spawn: jump the instance's clock to (peak-1) so the POP lands on the next paint;
   // stop at the cut frame so tails don't smear. Falls back to a plain play for loops/unknown names.
   function _playTuned(name, x, y, scale) {
@@ -2056,7 +2063,7 @@
   function _bootFxUi() {
     try {
       if (fxUi || !window.FxPlayer) return;
-      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { fxUi = p; }).catch(function () {});
+      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { alphaKeySheets(p); fxUi = p; }).catch(function () {});
     } catch (e) {}
   }
   function celebrateResults(accPct, grade) {
@@ -2448,16 +2455,8 @@
     const fg = fretGeom();
     const nearX = fg.nearX, farX = fg.farX, nearY = fg.nearY, farY = fg.farY;
     const lw = fg.lw;
-    // build9: THEMED-LEVEL NECK SCRIM — a soft dark band behind the playfield column so strings,
-    // gems and bombs stay readable over busy level backdrops (the Skully video wash problem).
-    // Only when a level accent is active → default Quick Play stays byte-identical.
-    if (levelAccentRGB) {
-      const bx0 = nearX[0] - lw * 1.7, bx1 = nearX[LANE_COUNT - 1] + lw * 1.7;
-      const bgrd = ctx.createLinearGradient(bx0, 0, bx1, 0);
-      bgrd.addColorStop(0, 'rgba(8,6,7,0)'); bgrd.addColorStop(0.16, 'rgba(8,6,7,0.44)');
-      bgrd.addColorStop(0.84, 'rgba(8,6,7,0.44)'); bgrd.addColorStop(1, 'rgba(8,6,7,0)');
-      ctx.fillStyle = bgrd; ctx.fillRect(bx0, 0, bx1 - bx0, ch);
-    }
+    // (build12: the themed neck scrim is gone — skins draw the full opaque guitar under the lanes
+    // like the default, and the alpha-keyed FX fix removed the readability problem at its source.)
     // build8b: themed ambient AURA — one subtle drifting loop behind the upper neck while a themed level
     // plays (Skully skull-flame / Bone Daddy ember-skull). Localized + low-alpha (not a full-screen wash).
     if (!isPaused && fx && !reduceMotion && !fxLite && state === 'playing') {
@@ -3327,66 +3326,44 @@
     if (activeGuitarImg._ready) {
       const gr = guitarRect();
       const gwarp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
-      const zFp = (ART.persp > 1) ? (perspOverride || ART.persp) : 0;
-      if (_skinFit && zFp > 1) {
-        // build10: SKIN HIGHWAY PROJECTION — texture-map the flat custom-guitar art onto the SAME
-        // 1/z highway plane the notes ride. Slices are uniform in SCREEN y; each slice samples the
-        // art row at d = P⁻¹(u) and is x-fitted so the art's outer strings land exactly on the outer
-        // LANES at that depth. Result: the painted neck TILTS DOWN toward the backdrop with the
-        // marbles riding it, sized to the highway — the level video stays visible around it.
-        // (Fixes "guitar too big / not tilted / can't see the video / marbles too fast".)
-        // NOTE: this block runs inside drawCathedralBg → it builds its own lane projection from
-        // module state, with the EXACT formulas render() uses (P / warpX / noteX), so art and
-        // marbles share one geometry.
-        const fgp = fretGeom();
-        const nearYp = fgp.nearY, farYp = fgp.farY;
-        const Pp = (d) => { const z = 1 + d * (zFp - 1); return (1 - 1 / z) / (1 - 1 / zFp); };
-        const wp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
-        const cxw2 = fgp.gx + 0.5 * fgp.gw;
-        const warpX2 = (wp > 0) ? ((x, u) => cxw2 + (x - cxw2) * (1 - wp * Math.max(0, u))) : ((x) => x);
-        const noteX2 = (i, d) => { const u = Pp(d); return warpX2(fgp.nearX[i] + (fgp.farX[i] - fgp.nearX[i]) * u, u); };
-        const iw = activeGuitarImg.width, ih = activeGuitarImg.height;
-        const aInv = 1 - 1 / zFp;
-        const Pinv = (u) => { const iz = Math.max(0.05, 1 - u * aInv); return ((1 / iz) - 1) / (zFp - 1); };
-        const f0b = ART.bridgeXF[0], fLb = ART.bridgeXF[LANE_COUNT - 1];
-        const f0n = ART.nutXF[0],    fLn = ART.nutXF[LANE_COUNT - 1];
-        // build10b: MATERIALIZE — during the level-start cinematic the neck PRINTS from the horizon
-        // down to the bridge behind an accent energy frontier (uGate sweeps 1→0); body fades in last.
-        const bp = _skinBuildT >= 1 ? 1 : (1 - Math.pow(1 - _skinBuildT, 3));
-        const uGate = 1 - bp;
-        const NSL = 56;
-        for (let s = 0; s < NSL; s++) {
-          const u0 = s / NSL, u1 = (s + 1) / NSL;
-          if (u0 < uGate) continue;                               // not printed yet (cinematic)
-          const y0 = nearYp + (farYp - nearYp) * u0;              // nearer edge of the slice
-          const y1 = nearYp + (farYp - nearYp) * u1;              // farther edge (higher on screen)
-          if (Math.max(y0, y1) < -8) break;                       // rest of the neck is past the top
-          const d0 = Pinv(u0), d1 = Pinv(u1);
-          const v0 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d0;
-          const v1 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d1;
-          const fA = f0b + (f0n - f0b) * d0, fB = fLb + (fLn - fLb) * d0;
-          const xa = noteX2(0, d0), xb = noteX2(LANE_COUNT - 1, d0);
-          // sc = screen px per FULL IMAGE WIDTH (fA/fB are image-width fractions). (A unit bug here
-          // once multiplied by iw again → a ~10⁵px drawImage Chrome silently refused → "no guitar".)
-          const sc = (xb - xa) / Math.max(0.004, fB - fA);
-          // build11 (user playtest: "oversized/blown up"): draw ONLY the NECK BAND around the strings
-          // — a tapering corridor like the default guitar5 silhouette — instead of the full flat art
-          // (whose body/wings, scaled to the lanes, sprawled ~1.5× the playfield across midscreen).
-          // Band = local string span + 30% margin each side, tapering with the lane fan.
-          const mB = 0.30 * (fB - fA);
-          const sxA = Math.max(0, (fA - mB)) * iw;
-          const sxB = Math.min(1, (fB + mB)) * iw;
-          ctx.drawImage(activeGuitarImg,
-            sxA, Math.min(v0, v1) * ih, Math.max(1, sxB - sxA), Math.abs(v1 - v0) * ih + 1,
-            xa - (fA * iw - sxA) * (sc / iw), y1, Math.max(1, sxB - sxA) * (sc / iw), (y0 - y1) + 0.8);
+      // (build12: the texture-projection experiment is GONE — the user's verdict: a custom guitar
+      // must look like THE ACTUAL GUITAR. Skins now draw through this same slicer as the default,
+      // with their own cover-fit + measured strings; only the MATERIALIZE gate below is new.)
+      if (gwarp > 0) {
+        // NECK-RECEDE WARP: slice the guitar into horizontal bands and narrow each toward the centerline
+        // by the SAME (1 - warp*u) factor the lanes use, so the painted strings recede WITH the note lanes
+        // (they stay aligned). u: 0 at the bridge row → 1 at the nut row (matches warpX). Body below the
+        // bridge (u<0) is left full-width. gh-only; standard takes the plain single drawImage below.
+        const nY = gr.gy + ART.bridgeFY * gr.gh, fY = gr.gy + ART.nutFY * gr.gh;
+        const cX = gr.gx + 0.5 * gr.gw, NS = 64, iw = activeGuitarImg.width, ih = activeGuitarImg.height;
+        // build12 MATERIALIZE (custom-guitar level start): the guitar prints nut→bridge behind an
+        // accent frontier while the backdrop zoom settles. bp eases 0→1 over ~2s; default = 1.
+        const bpX = (_skinArtOn && _skinBuildT < 1) ? (1 - Math.pow(1 - _skinBuildT, 3)) : 1;
+        const uGate2 = 1 - bpX;
+        for (let s = 0; s < NS; s++) {
+          const v0 = s / NS, v1 = (s + 1) / NS;
+          const dy0 = gr.gy + v0 * gr.gh, dy1 = gr.gy + v1 * gr.gh;
+          const u = ((dy0 + dy1) / 2 - nY) / (fY - nY);          // 0 bridge .. 1 nut
+          if (bpX < 1 && u >= 0 && u < uGate2) continue;         // not printed yet (cinematic)
+          // body slices (u<0) FADE IN over the print's last stretch instead of popping at t=0
+          const bodyA = (bpX < 1 && u < 0) ? Math.max(0, (bpX - 0.72) / 0.28) : 1;
+          if (bodyA <= 0.01) continue;
+          const sx = 1 - gwarp * Math.max(0, u);
+          const dw = gr.gw * sx;
+          if (bodyA < 1) { ctx.save(); ctx.globalAlpha = bodyA; }
+          ctx.drawImage(activeGuitarImg, 0, v0 * ih, iw, (v1 - v0) * ih, cX - dw / 2, dy0, dw, (dy1 - dy0) + 0.8);
+          if (bodyA < 1) { ctx.restore(); }
         }
-        // build10b: the print FRONTIER — a hot accent line + bloom sweeping down the highway
-        if (bp < 1) {
-          const dG = Pinv(Math.min(0.999, Math.max(0, uGate)));
-          const yF = nearYp + (farYp - nearYp) * uGate;
-          const x0 = noteX2(0, dG), x1 = noteX2(LANE_COUNT - 1, dG);
-          const pad = Math.max(20, (x1 - x0) * 0.3);
-          const acc = levelAccentRGB || '166,77,255';
+        // the print FRONTIER — a hot accent line + bloom sweeping down the neck
+        if (bpX < 1) {
+          const yF = nY + (fY - nY) * uGate2;
+          const sxF = 1 - gwarp * Math.max(0, uGate2);
+          const fx0 = ART.bridgeXF[0] + (ART.nutXF[0] - ART.bridgeXF[0]) * uGate2;
+          const fxL = ART.bridgeXF[LANE_COUNT - 1] + (ART.nutXF[LANE_COUNT - 1] - ART.bridgeXF[LANE_COUNT - 1]) * uGate2;
+          const x0 = cX + ((gr.gx + fx0 * gr.gw) - cX) * sxF;
+          const x1 = cX + ((gr.gx + fxL * gr.gw) - cX) * sxF;
+          const pad = Math.max(18, (x1 - x0) * 0.45);
+          const acc = levelAccentRGB || '255,31,46';   // brand crimson fallback (review find: was violet)
           ctx.save(); ctx.globalCompositeOperation = 'lighter';
           const lg = ctx.createLinearGradient(x0 - pad, 0, x1 + pad, 0);
           lg.addColorStop(0, 'rgba(' + acc + ',0)'); lg.addColorStop(0.5, 'rgba(255,246,255,0.85)'); lg.addColorStop(1, 'rgba(' + acc + ',0)');
@@ -3395,43 +3372,6 @@
           bl.addColorStop(0, 'rgba(' + acc + ',0)'); bl.addColorStop(1, 'rgba(' + acc + ',0.32)');
           ctx.fillStyle = bl; ctx.fillRect(x0 - pad, yF - 30, (x1 - x0) + pad * 2, 34);
           ctx.restore();
-        }
-        // BODY below the bridge — drops straight down at the near-plane scale, anchored at the
-        // catchers and clipped by the canvas bottom (same posture as the default guitar's body).
-        // During the cinematic it fades in over the last stretch of the print.
-        {
-          const bodyA = bp >= 1 ? 1 : Math.max(0, (bp - 0.78) / 0.22);
-          if (bodyA > 0.01) {
-            // build11: the BODY draws like the DEFAULT guitar's body — a playfield-width strip
-            // anchored under the catchers at PROFILE scale, NOT at string scale (string scale made
-            // ornate skin bodies sprawl ~1.5× the playfield = the "blown up" look). Centered by
-            // aligning the skin's bridge-string midline to the lane midline.
-            const P2 = _skinFit.P;
-            let pgw2;
-            if (P2.fit === 'cover') { pgw2 = (cw / ch > P2.aspect) ? cw : ch * P2.aspect; }
-            else { pgw2 = Math.min(ch * ART.fillFY * P2.aspect, cw * ART.fillFX); }
-            const laneC = (noteX2(0, 0) + noteX2(LANE_COUNT - 1, 0)) / 2;
-            const rows = (1 - ART.bridgeFY) * ih;                // body rows in IMAGE px
-            ctx.save(); ctx.globalAlpha = bodyA;
-            ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
-              laneC - ((f0b + fLb) / 2) * pgw2, nearYp, pgw2, rows * (pgw2 / iw));
-            ctx.restore();
-          }
-        }
-      } else if (gwarp > 0) {
-        // NECK-RECEDE WARP: slice the guitar into horizontal bands and narrow each toward the centerline
-        // by the SAME (1 - warp*u) factor the lanes use, so the painted strings recede WITH the note lanes
-        // (they stay aligned). u: 0 at the bridge row → 1 at the nut row (matches warpX). Body below the
-        // bridge (u<0) is left full-width. gh-only; standard takes the plain single drawImage below.
-        const nY = gr.gy + ART.bridgeFY * gr.gh, fY = gr.gy + ART.nutFY * gr.gh;
-        const cX = gr.gx + 0.5 * gr.gw, NS = 64, iw = activeGuitarImg.width, ih = activeGuitarImg.height;
-        for (let s = 0; s < NS; s++) {
-          const v0 = s / NS, v1 = (s + 1) / NS;
-          const dy0 = gr.gy + v0 * gr.gh, dy1 = gr.gy + v1 * gr.gh;
-          const u = ((dy0 + dy1) / 2 - nY) / (fY - nY);          // 0 bridge .. 1 nut
-          const sx = 1 - gwarp * Math.max(0, u);
-          const dw = gr.gw * sx;
-          ctx.drawImage(activeGuitarImg, 0, v0 * ih, iw, (v1 - v0) * ih, cX - dw / 2, dy0, dw, (dy1 - dy0) + 0.8);
         }
       } else {
         ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);

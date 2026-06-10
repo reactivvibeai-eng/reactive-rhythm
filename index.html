@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=106" />
+<link rel="stylesheet" href="jukebox.css?v=108" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1001,9 +1001,16 @@
     position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
     background: #0a0706;
   }
+  /* build12: the sharp layer shows the FULL frame (contain — no crop-zoom blur); the blurred cover
+     fill behind it paints the letterbox areas cinematically. */
   #bg-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; z-index: 0; pointer-events: none;
+  }
+  #bg-video-fill {
+    position: absolute; inset: -4%; width: 108%; height: 108%;
     object-fit: cover; z-index: 0; pointer-events: none;
+    filter: blur(26px) saturate(1.12) brightness(0.72);
   }
   /* Per-level static backdrop (level bgArt). Above the moon video, below the scrim. */
   #bg-image {
@@ -1025,15 +1032,16 @@
       radial-gradient(ellipse 120% 90% at 50% 42%, transparent 0%, transparent 38%, rgba(10,7,6,0.55) 100%),
       linear-gradient(180deg, rgba(10,7,6,0.42) 0%, rgba(10,7,6,0.18) 30%, rgba(10,7,6,0.30) 72%, rgba(10,7,6,0.62) 100%);
   }
-  /* DARKER BANDS behind the side HUD columns so panels read as solid instruments over the art. */
+  /* DARKER BANDS behind the side HUD columns so panels read as solid instruments over the art.
+     (build12: narrowed + lightened — they were eating the backdrop's "core details".) */
   #game-bg::before {
     content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
     background:
-      linear-gradient(90deg, rgba(10,7,6,0.86) 0px, rgba(10,7,6,0.74) 220px, rgba(10,7,6,0.0) 360px),
-      linear-gradient(270deg, rgba(10,7,6,0.86) 0px, rgba(10,7,6,0.74) 220px, rgba(10,7,6,0.0) 360px);
+      linear-gradient(90deg, rgba(10,7,6,0.80) 0px, rgba(10,7,6,0.58) 150px, rgba(10,7,6,0.0) 270px),
+      linear-gradient(270deg, rgba(10,7,6,0.80) 0px, rgba(10,7,6,0.58) 150px, rgba(10,7,6,0.0) 270px);
   }
   /* Performance background: hide the moon VIDEO so its compositing can't cap the FPS. */
-  html.rr-perf-bg #bg-video, html.rr-perf-bg #start-video { display: none !important; }
+  html.rr-perf-bg #bg-video, html.rr-perf-bg #bg-video-fill, html.rr-perf-bg #start-video { display: none !important; }
   html.rr-perf-bg #game-bg { background: radial-gradient(ellipse at 50% 0%, #160c0b, #0a0706 70%); }
   /* Browse-section video backdrop (build7): full-bleed blood-moon loop behind the library/coverflow,
      with a warm scrim so the coverflow + text stay legible. Perf/novideo-gated; self-heals if absent. */
@@ -3431,6 +3439,10 @@
          center. #bg-video/#bg-image are driven by id from applyLevelTheme (404 self-heal + poster intact);
          the transparent canvas (#hwy) composites its god-rays/embers ON TOP of this. -->
     <div id="game-bg" aria-hidden="true">
+      <!-- build12: blurred COVER fill behind the sharp CONTAIN layer — the full video frame shows
+           (no crop-zoom blur = the user's "too blown up / missing core details" fix), edges filled
+           cinematically. Src mirrors #bg-video automatically. -->
+      <video id="bg-video-fill" autoplay loop muted playsinline preload="auto" aria-hidden="true"></video>
       <video id="bg-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
       <div id="bg-image"></div>
       <div class="bg-accent"></div>
@@ -3801,11 +3813,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=106"></script>
-<script src="game.js?v=106"></script>
-<script src="jukebox.js?v=106"></script>
-<script src="catalog.js?v=106"></script>
-<script src="multiplayer.js?v=106"></script>
+<script src="assets/fx/fx-player.js?v=108"></script>
+<script src="game.js?v=108"></script>
+<script src="jukebox.js?v=108"></script>
+<script src="catalog.js?v=108"></script>
+<script src="multiplayer.js?v=108"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -3817,7 +3829,7 @@
 (function () {
   try {
     if (/[?&]novideo=1/.test(location.search)) {
-      document.querySelectorAll('#bg-video, #start-video, #lib-bg-video, #menu-hub-video').forEach(function (v) {
+      document.querySelectorAll('#bg-video, #bg-video-fill, #start-video, #lib-bg-video, #menu-hub-video').forEach(function (v) {
         try { v.pause(); } catch (e) {}
         v.removeAttribute('autoplay');
         v.style.setProperty('display', 'none', 'important');
@@ -4136,6 +4148,28 @@
     try { if (window.RhythmCatalog && window.RhythmCatalog.launchTrack) window.RhythmCatalog.launchTrack(track); } catch (e) {}
   }
   var _bgSaved = null;
+  // build12: keep the blurred COVER fill (#bg-video-fill) mirrored to the sharp CONTAIN layer
+  // (#bg-video) — src + visibility — so EVERY existing path (theme apply, intense combo swap,
+  // clear/restore) drives both without changes. Fill self-heals (hides) on error.
+  try {
+    (function () {
+      var vMain = $('bg-video'), vFill = $('bg-video-fill');
+      if (!vMain || !vFill || !window.MutationObserver) return;
+      if (/[?&]novideo=1/.test(location.search)) return;   // the diag flag owns the videos (review find)
+      var sync = function () {
+        try {
+          if (document.documentElement.classList.contains('rr-perf-bg')) { try { vFill.pause(); } catch (e2) {} return; }
+          var s = vMain.getAttribute('src') || '';
+          if (vFill.getAttribute('src') !== s) { vFill.setAttribute('src', s); vFill.load(); vFill.style.display = ''; }
+          vFill.style.visibility = vMain.style.visibility || '';
+          var pr = vFill.play(); if (pr && pr.catch) pr.catch(function () {});
+        } catch (e) {}
+      };
+      new MutationObserver(sync).observe(vMain, { attributes: true, attributeFilter: ['src', 'style'] });
+      vFill.onerror = function () { try { vFill.style.display = 'none'; } catch (e) {} };
+      sync();
+    })();
+  } catch (e) {}
   function applyLevelTheme(L) {
     var g = $('game'); if (!g) return;
     if (L && L.theme && LV_THEMES[L.theme]) {
@@ -5568,7 +5602,7 @@
       document.body.appendChild(cv); cx = cv.getContext('2d');
       window.addEventListener('resize', size); size();
     }
-    if (!p) { window.FxPlayer.load('assets/fx/manifest.json').then(function (pl) { p = pl; }).catch(function () {}); }
+    if (!p) { window.FxPlayer.load('assets/fx/manifest.json').then(function (pl) { if (window.RhythmFxKey) window.RhythmFxKey(pl); p = pl; }).catch(function () {}); }
   }
   function loop(now) {
     raf = requestAnimationFrame(loop);
@@ -5582,6 +5616,14 @@
     if (cv && Math.abs(cv.width - innerWidth * dpr) > 2) size();   // lazy re-size (boot-order/viewport drift)
     var meta = p.manifest[name] || {};
     var h = p.play(name, x, y, { scale: (meta.scale != null ? meta.scale : 1) * (scale || 1) * Math.min(1.7, Math.min(innerWidth, innerHeight) / 620), alpha: alpha != null ? alpha : 1, loop: !!lp });
+    // build12: button presses SNAP — start one-shots at their measured peak frame (table shared from game.js)
+    try {
+      var tim = window.RhythmFxTim && window.RhythmFxTim[name];
+      if (tim && !lp && !meta.loop && tim.pk > 1) {
+        var inst = p.active[p.active.length - 1];
+        if (inst && inst.start === null) inst.start = performance.now() - (tim.pk - 1) * (1000 / (meta.fps || 30));
+      }
+    } catch (e) {}
     if (!raf) raf = requestAnimationFrame(loop);
     return h;
   }
@@ -5704,12 +5746,55 @@
     try { if (/[?&]ryo=off/.test(location.search)) alreadySeen = true; } catch (e) {}
     if (!introEl || !vid || alreadySeen || reduce) return;   // missing overlay / disabled / reduced-motion → straight to hub
 
+    // build12b INTRO AUDIO — ⚠ ROOT CAUSE FOUND (adversarial review, binary box-scan):
+    // assets/ryo/ryo-intro.mp4 HAS NO AUDIO TRACK AT ALL ('vide'/avc1 only — no 'soun'/'mp4a').
+    // No unmute/WebAudio code can ever make it sound. ASSET FIX NEEDED: re-export the intro WITH
+    // its audio (or deliver assets/ryo/ryo-intro.m4a) — then point this loader at it.
+    // STOPGAP: an on-brand music bed (lunar-waves, a real audio asset) plays under the intro.
+    // The AudioContext is created LAZILY inside the begin-gesture chain (never born suspended).
+    var iac = null, ibuf = null, isrc = null, iraw = null;
+    try {
+      fetch('assets/lunar-waves.mp3').then(function (r) { return r.arrayBuffer(); })
+        .then(function (ab) { iraw = ab; }).catch(function () {});
+    } catch (e) {}
+    function introAudioStart() {
+      try {
+        if (window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted()) return;
+        if (!iraw && !ibuf) { setTimeout(function () { try { if (introEl.classList.contains('active')) introAudioStart(); } catch (e) {} }, 250); return; }
+        if (!iac) iac = new (window.AudioContext || window.webkitAudioContext)();
+        if (iac.state === 'suspended') { try { iac.resume(); } catch (e) {} }
+        if (!ibuf) {
+          var ab = iraw; iraw = null;
+          iac.decodeAudioData(ab, function (b) { ibuf = b; introAudioStart(); }, function () {});
+          return;
+        }
+        introAudioStop();
+        isrc = iac.createBufferSource(); isrc.buffer = ibuf;
+        var ig = iac.createGain();
+        ig.gain.setValueAtTime(0.0001, iac.currentTime);
+        ig.gain.exponentialRampToValueAtTime(0.55, iac.currentTime + 0.6);   // bed fades in
+        isrc.connect(ig); ig.connect(iac.destination);
+        isrc.__gain = ig;
+        isrc.start(0, Math.max(0, vid.currentTime || 0));
+      } catch (e) {}
+    }
+    function introAudioStop() {
+      try {
+        if (isrc) {
+          var s = isrc; isrc = null;
+          try { if (s.__gain && iac) { s.__gain.gain.cancelScheduledValues(iac.currentTime); s.__gain.gain.setValueAtTime(s.__gain.gain.value || 0.4, iac.currentTime); s.__gain.gain.exponentialRampToValueAtTime(0.0001, iac.currentTime + 0.18); } } catch (e2) {}
+          setTimeout(function () { try { s.stop(); } catch (e3) {} }, 200);
+        }
+      } catch (e) {}
+    }
+
     var _origShow = showHub, done = false, watchdog = 0;
     function finish() {
       if (done) return; done = true;
       try { localStorage.setItem(SEEN, '1'); } catch (e) {}
       if (watchdog) { clearTimeout(watchdog); watchdog = 0; }
       try { vid.pause(); } catch (e) {}
+      introAudioStop();
       introEl.classList.remove('active'); introEl.setAttribute('aria-hidden', 'true');
       _origShow();   // now reveal the hub
     }
@@ -5718,18 +5803,13 @@
       // hide any current screen, show the intro overlay
       try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
       introEl.classList.add('active'); introEl.setAttribute('aria-hidden', 'false');
-      // build10: the intro plays WITH SOUND — it always follows the title-screen gesture, so unmuted
-      // playback is allowed. Respects the game mute; if the browser still refuses, retry muted
-      // (never skip the intro just because audio was blocked).
-      try {
-        vid.muted = !!(window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted());
-        vid.volume = 0.9;
-      } catch (e) {}
+      // build12: the intro's SOUND rides WEBAUDIO (decoded once, started inside this same gesture and
+      // synced to the video clock) — Chrome's unmute-after-gesture was unreliable (the user heard the
+      // audio only at the very end). The <video> stays muted; audio comes from the buffer.
+      try { vid.muted = true; } catch (e) {}
       var p; try { p = vid.play(); } catch (e) { p = null; }
-      if (p && p.catch) p.catch(function () {
-        try { vid.muted = true; var p2 = vid.play(); if (p2 && p2.catch) p2.catch(function () { finish(); }); }
-        catch (e) { finish(); }
-      });
+      if (p && p.then) p.then(function () { introAudioStart(); }).catch(function () { finish(); });
+      else introAudioStart();
       // if the video can't start within 1.2s (missing/slow), bail to the hub
       watchdog = setTimeout(function () { if (vid.readyState < 2) finish(); }, 1200);
     };
