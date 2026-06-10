@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=100" />
+<link rel="stylesheet" href="jukebox.css?v=101" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3792,11 +3792,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=100"></script>
-<script src="game.js?v=100"></script>
-<script src="jukebox.js?v=100"></script>
-<script src="catalog.js?v=100"></script>
-<script src="multiplayer.js?v=100"></script>
+<script src="assets/fx/fx-player.js?v=101"></script>
+<script src="game.js?v=101"></script>
+<script src="jukebox.js?v=101"></script>
+<script src="catalog.js?v=101"></script>
+<script src="multiplayer.js?v=101"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -5385,6 +5385,16 @@
     dismissed = true;
     flamesRunning = false;           // stop the flame loop once we leave the start screen
     try { RhythmIntro && RhythmIntro.stop(); } catch (e) {}   // halt the supernova ignition too
+    // build10: the IGNITION moment — clear the title ambience, slam a shockwave+explosion over the
+    // lockup, and hit the FX pack's bass (the _src clip audio). This is a user gesture by definition.
+    try {
+      if (window.RhythmUiFx) {
+        RhythmUiFx.clear();
+        RhythmUiFx.burst('shockwave', innerWidth / 2, innerHeight * 0.52, 2.3);
+        RhythmUiFx.burst('explosion', innerWidth / 2, innerHeight * 0.52, 1.7);
+        RhythmUiFx.boom('explosion', 0.7);
+      }
+    } catch (e) {}
     start.classList.add('leaving');
     setTimeout(function () {
       start.classList.remove('active', 'leaving');
@@ -5526,6 +5536,107 @@
   try { window.RhythmEnvPicker = { rebuild: rebuild, select: select, selected: function () { return selectedEnvId; } }; } catch (e) {}
 })();
 </script>
+<!-- build10: UI FX LAYER — the 31-effect flipbook pack (+ the _src clips' BASS AUDIO) on the MENU
+     layer: title ambience, button-press bursts, the title-ENTER impact. Pure presentation; gameplay
+     FX stay on the in-game layer. reduceMotion → inert visuals; mute/sfx settings gate the audio. -->
+<script>
+(function () {
+  if (!window.FxPlayer) return;
+  var p = null, cv = null, cx = null, raf = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  function reduce() {
+    try {
+      if (document.documentElement.classList.contains('rr-reduce-motion')) return true;
+      if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+      var s = window.RhythmGame && RhythmGame.getSettings && RhythmGame.getSettings();
+      return !!(s && s.reduceMotion);
+    } catch (e) { return false; }
+  }
+  function size() { if (!cv) return; cv.width = Math.max(1, Math.floor(innerWidth * dpr)); cv.height = Math.max(1, Math.floor(innerHeight * dpr)); cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  function ensure() {
+    if (!cv) {
+      cv = document.createElement('canvas'); cv.id = 'ui-fx';
+      cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:400;';
+      document.body.appendChild(cv); cx = cv.getContext('2d');
+      window.addEventListener('resize', size); size();
+    }
+    if (!p) { window.FxPlayer.load('assets/fx/manifest.json').then(function (pl) { p = pl; }).catch(function () {}); }
+  }
+  function loop(now) {
+    raf = requestAnimationFrame(loop);
+    if (cv && Math.abs(cv.width - innerWidth * dpr) > 2) size();   // lazy re-size (viewport drift)
+    cx.clearRect(0, 0, innerWidth, innerHeight);
+    var n = p ? p.draw(cx, now) : 0;
+    if (!n) { cancelAnimationFrame(raf); raf = 0; cx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+  function burst(name, x, y, scale, alpha, lp) {
+    if (reduce()) return null; ensure(); if (!p || !p.images[name]) return null;
+    if (cv && Math.abs(cv.width - innerWidth * dpr) > 2) size();   // lazy re-size (boot-order/viewport drift)
+    var meta = p.manifest[name] || {};
+    var h = p.play(name, x, y, { scale: (meta.scale != null ? meta.scale : 1) * (scale || 1) * Math.min(1.7, Math.min(innerWidth, innerHeight) / 620), alpha: alpha != null ? alpha : 1, loop: !!lp });
+    if (!raf) raf = requestAnimationFrame(loop);
+    return h;
+  }
+  function burstAt(el, name, scale) { try { var r = el.getBoundingClientRect(); burst(name, r.left + r.width / 2, r.top + r.height / 2, scale); } catch (e) {} }
+  function clearAll() { try { if (p) p.clear(); } catch (e) {} }
+  // ---- CLIP AUDIO: the FX pack's _src mp4s carry the impact/bass sound the user loves. An <audio>
+  // element plays an mp4's audio track; every call site is a user gesture (click/key), so playback is
+  // allowed. Respects the game mute + the SFX volume slider; failures are silent. ----
+  var pool = {};
+  function boom(name, vol, cutMs) {
+    try {
+      if (window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted()) return;
+      var s = (window.RhythmGame && RhythmGame.getSettings) ? RhythmGame.getSettings() : null;
+      var sfx = (s && typeof s.sfx === 'number') ? s.sfx : 1;
+      if (sfx <= 0.01) return;
+      var a = pool[name];
+      if (!a) { a = pool[name] = new Audio('assets/fx/_src/' + name + '.mp4'); a.preload = 'auto'; }
+      a.currentTime = 0;
+      a.volume = Math.max(0, Math.min(1, (vol == null ? 0.5 : vol) * sfx));
+      var pr = a.play(); if (pr && pr.catch) pr.catch(function () {});
+      if (cutMs) setTimeout(function () { try { if (!a.paused) a.pause(); } catch (e) {} }, cutMs);
+    } catch (e) {}
+  }
+  ensure();
+  window.RhythmUiFx = { burst: burst, burstAt: burstAt, boom: boom, clear: clearAll };
+  // dev-only test hook (strip at content-freeze): inspect/pump the UI layer under headless rAF throttle
+  try { window.__rrUiFx = {
+    state: function () { return { loaded: !!p, active: p ? p.active.length : -1, canvas: !!cv }; },
+    draw: function () { if (p && cx) { cx.clearRect(0, 0, innerWidth, innerHeight); return p.draw(cx, performance.now()); } return -1; }
+  }; } catch (e) {}
+  // ---- TITLE AMBIENCE: two slow ember columns rising behind the lockup (cleared on ENTER) ----
+  try {
+    var st = document.getElementById('start');
+    if (st && st.classList.contains('active') && !reduce()) {
+      setTimeout(function () {
+        if (!st.classList.contains('active')) return;
+        burst('ember-rise', innerWidth * 0.22, innerHeight * 0.84, 1.5, 0.4, true);
+        burst('ember-rise', innerWidth * 0.78, innerHeight * 0.86, 1.7, 0.35, true);
+      }, 900);
+    }
+  } catch (e) {}
+  // ---- BUTTON-PRESS bursts (delegated): each key UI target answers with its own effect; the big
+  // navigation moments also get a soft low thump from the shockwave clip. ----
+  var MAP = [
+    ['#mh-campaign',          'explosion',      1.00, 0.30],
+    ['#mh-quickplay',         'hit-burst',      1.00, 0.26],
+    ['#mh-multiplayer',       'shockwave',      0.95, 0.26],
+    ['#mh-store',             'star-pickup',    1.00, 0.26],
+    ['#mh-leaderboard',       'multiplier-up',  1.00, 0.26],
+    ['#mh-profile',           'gradeup-flare',  0.90, 0.26],
+    ['#play-btn',             'string-ripple',  1.15, 0.34],
+    ['[data-lvl]',            'shard-burst',    0.90, 0.26],
+    ['#store-grid .store-buy','star-pickup',    0.80, 0],
+    ['#env-row .env-chip',    'lane-pulse',     0.70, 0]
+  ];
+  document.addEventListener('click', function (e) {
+    if (!e.isTrusted && !window.__rrUiFxTest) return;   // real users only (dev flag for headless tests)
+    for (var i = 0; i < MAP.length; i++) {
+      var hit = e.target && e.target.closest && e.target.closest(MAP[i][0]);
+      if (hit) { burstAt(hit, MAP[i][1], MAP[i][2]); if (MAP[i][3]) boom('shockwave', MAP[i][3], 520); break; }
+    }
+  }, true);
+})();
+</script>
 <!-- MAIN MENU HUB router — fronts the existing screens with a guided centered console + back-nav -->
 <script>
 (function () {
@@ -5598,8 +5709,18 @@
       // hide any current screen, show the intro overlay
       try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
       introEl.classList.add('active'); introEl.setAttribute('aria-hidden', 'false');
+      // build10: the intro plays WITH SOUND — it always follows the title-screen gesture, so unmuted
+      // playback is allowed. Respects the game mute; if the browser still refuses, retry muted
+      // (never skip the intro just because audio was blocked).
+      try {
+        vid.muted = !!(window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted());
+        vid.volume = 0.9;
+      } catch (e) {}
       var p; try { p = vid.play(); } catch (e) { p = null; }
-      if (p && p.catch) p.catch(function () { finish(); });   // autoplay blocked → skip
+      if (p && p.catch) p.catch(function () {
+        try { vid.muted = true; var p2 = vid.play(); if (p2 && p2.catch) p2.catch(function () { finish(); }); }
+        catch (e) { finish(); }
+      });
       // if the video can't start within 1.2s (missing/slow), bail to the hub
       watchdog = setTimeout(function () { if (vid.readyState < 2) finish(); }, 1200);
     };
