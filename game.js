@@ -1225,7 +1225,13 @@
     try {
       const m = location.search.match(/[?&]gh=([01])/);
       if (m) mode = (m[1] === '1') ? 'gh' : 'standard';      // ?gh=1 → 5-string; ?gh=0 → legacy 6-string
-      else if (localStorage.getItem('rr_lanemode') === 'standard') mode = 'standard';   // stored legacy choice honored
+      else if (localStorage.getItem('rr_lanemode') === 'standard') {
+        // ONE-TIME MIGRATION (build10c — the user's playtest): a stored 'standard' that PREDATES the
+        // 5-lane decree is exactly the "huge flat 6-string default" they reported. Migrate it to gh
+        // once; choosing standard in Settings AFTER this sticks (the marker records the migration).
+        if (localStorage.getItem('rr_lane_migrated5') === '1') mode = 'standard';   // deliberate post-decree choice
+        else { try { localStorage.setItem('rr_lane_migrated5', '1'); localStorage.setItem('rr_lanemode', 'gh'); } catch (e2) {} }
+      }
     } catch (e) {}
     applyLaneProfile(mode);
     try { const pm = location.search.match(/[?&]persp=([0-9.]+)/); if (pm) perspOverride = parseFloat(pm[1]) || 0; } catch (e) {}
@@ -3294,10 +3300,13 @@
           const v1 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d1;
           const fA = f0b + (f0n - f0b) * d0, fB = fLb + (fLn - fLb) * d0;
           const xa = noteX2(0, d0), xb = noteX2(LANE_COUNT - 1, d0);
+          // sc = screen px per FULL IMAGE WIDTH (fA/fB are image-width fractions) — so the slice's
+          // destination width is sc itself. (A unit bug here once multiplied by iw again → a ~10⁵px
+          // drawImage that Chrome silently refused → "no guitar". Caught by the user's playtest.)
           const sc = (xb - xa) / Math.max(0.004, fB - fA);
           ctx.drawImage(activeGuitarImg,
             0, Math.min(v0, v1) * ih, iw, Math.abs(v1 - v0) * ih + 1,
-            xa - fA * sc, y1, sc * iw, (y0 - y1) + 0.8);
+            xa - fA * sc, y1, sc, (y0 - y1) + 0.8);
         }
         // build10b: the print FRONTIER — a hot accent line + bloom sweeping down the highway
         if (bp < 1) {
@@ -3322,11 +3331,11 @@
           const bodyA = bp >= 1 ? 1 : Math.max(0, (bp - 0.78) / 0.22);
           if (bodyA > 0.01) {
             const xa = noteX2(0, 0), xb = noteX2(LANE_COUNT - 1, 0);
-            const sc = (xb - xa) / Math.max(0.004, fLb - f0b);
-            const rows = (1 - ART.bridgeFY) * ih;
+            const sc = (xb - xa) / Math.max(0.004, fLb - f0b);   // screen px per full image width
+            const rows = (1 - ART.bridgeFY) * ih;                // body rows in IMAGE px
             ctx.save(); ctx.globalAlpha = bodyA;
             ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
-              xa - f0b * sc, nearYp, sc * iw, rows * sc);
+              xa - f0b * sc, nearYp, sc, rows * (sc / iw));      // square pixels: px-per-image-px = sc/iw
             ctx.restore();
           }
         }
