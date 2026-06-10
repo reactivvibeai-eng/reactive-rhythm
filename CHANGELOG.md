@@ -1107,6 +1107,16 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v98 — FX union COMPLETE (all 31 effects wired)  ✅
+multiplier-up (tier climb) · note-comet (hits streak during OD) · string-ripple (chord bar, centered) ·
+lane-pulse (sustain banked) · chrome-pulse-ring (every catcher pulses while OD is READY — the
+press-Space cue) · charge-loop (rides a sustaining hold) · ember-rise (ambient aura for ember/crimson
+levels) · note-sparkle-pink (2nd layer on Melody perfects) · shard-burst (wipeout glass-shatter) ·
+**results celebration** (own FxPlayer + `#results-fx` canvas: confetti-pop/firework-gold staggered
+bursts, gradeup-flare on the GRADE UP/NEW BEST badge; none on fail/reduceMotion, fewer on fxLite).
+All headless-verified (mappings, ready-rings stop on activate, charge-loop on a real hold, celebration
+paints). Bump ?v 97→98.
+
 ### v97 — FX deepening + RYO startup intro  ✅
 Wire more of the asset agent's 31-effect union + make RYO the startup intro. All additive/guarded.
 - **Theme aura loops:** a subtle low-alpha ambient loop drifts behind the upper neck while a themed

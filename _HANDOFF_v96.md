@@ -1,8 +1,13 @@
-# CONTINUATION HANDOFF — Reactive Rhythm @ v97 (read with CLAUDE.md + memories)
+# CONTINUATION HANDOFF — Reactive Rhythm @ v98 (read with CLAUDE.md + memories)
 
-Branch `visual-overhaul`, **currently v97**, tree committed (commits `f621fbc`→`433e639`), serve.py
+Branch `visual-overhaul`, **currently v98**, tree committed (commits `f621fbc`→`f315362`), serve.py
 running (http 200, no-cache). **DO NOT deploy.** This supersedes `_HANDOFF_v91.md` — its 5-item queue
-is **DONE**, plus a v97 FX-deepening pass on the asset agent's 31-effect union.
+is **DONE**, plus v97–v98 passes that wired the asset agent's ENTIRE 31-effect FX union (incl. a
+results-screen celebration surface). **NEXT: a user-co-designed roadmap (user directive 2026-06-09) —
+top items: per-guitar precision alignment (user confirms skins misaligned; note the tall-skin aspect
+problem: e.g. crimson-chrome is 904×2194 vs base 904×1268 → contain-fit makes its lanes ~4× narrower)
+and the Skully level(s) as the template. measure.html is a ready string-calibrator (currently
+guitar5-only — generalize it). Do NOT start roadmap work before the user signs off.**
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`
