@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=101" />
+<link rel="stylesheet" href="jukebox.css?v=102" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -933,6 +933,15 @@
   #results-next { display: none; }
   #results-next.show { display: inline-flex; }
   #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
+
+  /* build10b: LEVEL-START CINEMATIC — the backdrop opens slightly zoomed-in and slowly settles while
+     the custom guitar materializes on the highway (engine-side print). Presentation only. */
+  #game.rr-cine #game-bg { overflow: hidden; }
+  #game.rr-cine #bg-video, #game.rr-cine #bg-image {
+    animation: rrCineZoom 2.7s cubic-bezier(.2,.6,.2,1) both;
+  }
+  @keyframes rrCineZoom { 0% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  html.rr-reduce-motion #game.rr-cine #bg-video, html.rr-reduce-motion #game.rr-cine #bg-image { animation: none; }
 
   /* ---- PER-LEVEL MECHANIC overlays (Bone Daddy booty-shake · Melody cat-paw). Pure visual, over the
         playfield, driven by RhythmLevelFx; reduceMotion disables the motion. ---- */
@@ -3792,11 +3801,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=101"></script>
-<script src="game.js?v=101"></script>
-<script src="jukebox.js?v=101"></script>
-<script src="catalog.js?v=101"></script>
-<script src="multiplayer.js?v=101"></script>
+<script src="assets/fx/fx-player.js?v=102"></script>
+<script src="game.js?v=102"></script>
+<script src="jukebox.js?v=102"></script>
+<script src="catalog.js?v=102"></script>
+<script src="multiplayer.js?v=102"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop

@@ -1269,6 +1269,13 @@
     }
 
     showScreen('game');
+    // build10b: LEVEL-START CINEMATIC (custom-guitar levels) — the backdrop opens slightly zoomed
+    // and eases out (CSS .rr-cine) while the guitar MATERIALIZES along the highway during the
+    // countdown (engine-side print, see the projection draw). Presentation only.
+    if (_skinFit && !reduceMotion) {
+      _skinBuildT = 0;
+      try { const _gc = $('game'); _gc.classList.add('rr-cine'); setTimeout(() => { try { _gc.classList.remove('rr-cine'); } catch (e) {} }, 2900); } catch (e) {}
+    } else { _skinBuildT = 1; }
     resize();
     layoutTapZones();   // canvas is now visible & sized — pin touch lanes under the buttons
     // belt-and-suspenders: the grid/flex layout may not have its final width on this very
@@ -1564,6 +1571,7 @@
       // ALIGNMENT dev hooks (stripped at content-freeze): screen-space lanes + the art draw rect
       lanesPx: () => { try { const g = fretGeom(); return { nearX: g.nearX.map(v => +v.toFixed(2)), nearY: +g.nearY.toFixed(2), lw: +g.lw.toFixed(2), farX: g.farX.map(v => +v.toFixed(2)), farY: +g.farY.toFixed(2) }; } catch (e) { return 'ERR ' + e.message; } },
       rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: !!_skinFit }; } catch (e) { return 'ERR ' + e.message; } },
+      buildT: () => +_skinBuildT.toFixed(3),   // level-start materialize progress (dev; strip at freeze)
       // RESULTS celebration dev hooks (stripped at content-freeze)
       celebrate: () => { celebrateResults(96, 'S'); return true; },
       celebrateState: () => ({ ui: !!fxUi, canvas: !!_celCanvas, live: fxUi ? (fxUi.active || []).length : -1 }),
@@ -1639,10 +1647,12 @@
       e.preventDefault(); laneProbe(keyMap[k], 'key'); return;
     }
     if (state === 'menu') {
-      // build9: the menu-state Enter shortcut belongs to the LIBRARY — never fire it while the
-      // title screen or the RYO intro overlays the menu (Enter there means "begin").
+      // build10b (beta-test find): the menu-state Enter shortcut belongs to the LIBRARY only — it
+      // used to fire on the HUB too (Enter there silently launched whatever song the library had
+      // focused, underneath the hub). Now it requires #menu to be the ACTIVE screen, which also
+      // excludes the title screen and the RYO intro.
       if (e.key === 'Enter') {
-        try { if (document.querySelector('#start.active, #ryo-intro.active')) return; } catch (e2) {}
+        try { const lib = $('menu'); if (!lib || !lib.classList.contains('active')) return; } catch (e2) {}
         e.preventDefault(); $('play-btn').click();
       }
       return;
@@ -1959,6 +1969,9 @@
   // per-lane hold charge loops) — spawned/repositioned in render(), stopped on clear / resetScoring.
   // Pure visual; never affect gameplay.
   let _auraFx = null, _odAura = null, _readyRings = null, _holdFxL = [];
+  // build10b: level-start cinematic progress — 0→1 while a custom guitar MATERIALIZES along the
+  // highway (advanced in render; 1 = fully built; default guitar never builds).
+  let _skinBuildT = 1;
   function _stopReadyRings() { if (_readyRings) { for (let i = 0; i < _readyRings.length; i++) { const h = _readyRings[i]; if (h) { try { h.stop(); } catch (e) {} } } _readyRings = null; } }
   function _stopHoldFx(i) { const h = _holdFxL[i]; if (h) { try { h.stop(); } catch (e) {} _holdFxL[i] = null; } }
 
@@ -2349,6 +2362,8 @@
 
   function render(dt, isPaused) {
     if (cw === 0) return;
+    // build10b: advance the materialize cinematic (≈2s, finishes with the countdown)
+    if (!isPaused && _skinBuildT < 1) _skinBuildT = Math.min(1, _skinBuildT + dt / 2.0);
     const t = songTime();
     const approach = DIFFICULTY[difficulty].approach / userScroll;
     const sx = (Math.random() - 0.5) * cameraShake, sy = (Math.random() - 0.5) * cameraShake;
@@ -3263,9 +3278,14 @@
         const Pinv = (u) => { const iz = Math.max(0.05, 1 - u * aInv); return ((1 / iz) - 1) / (zFp - 1); };
         const f0b = ART.bridgeXF[0], fLb = ART.bridgeXF[LANE_COUNT - 1];
         const f0n = ART.nutXF[0],    fLn = ART.nutXF[LANE_COUNT - 1];
+        // build10b: MATERIALIZE — during the level-start cinematic the neck PRINTS from the horizon
+        // down to the bridge behind an accent energy frontier (uGate sweeps 1→0); body fades in last.
+        const bp = _skinBuildT >= 1 ? 1 : (1 - Math.pow(1 - _skinBuildT, 3));
+        const uGate = 1 - bp;
         const NSL = 56;
         for (let s = 0; s < NSL; s++) {
           const u0 = s / NSL, u1 = (s + 1) / NSL;
+          if (u0 < uGate) continue;                               // not printed yet (cinematic)
           const y0 = nearYp + (farYp - nearYp) * u0;              // nearer edge of the slice
           const y1 = nearYp + (farYp - nearYp) * u1;              // farther edge (higher on screen)
           if (Math.max(y0, y1) < -8) break;                       // rest of the neck is past the top
@@ -3279,14 +3299,36 @@
             0, Math.min(v0, v1) * ih, iw, Math.abs(v1 - v0) * ih + 1,
             xa - fA * sc, y1, sc * iw, (y0 - y1) + 0.8);
         }
+        // build10b: the print FRONTIER — a hot accent line + bloom sweeping down the highway
+        if (bp < 1) {
+          const dG = Pinv(Math.min(0.999, Math.max(0, uGate)));
+          const yF = nearYp + (farYp - nearYp) * uGate;
+          const x0 = noteX2(0, dG), x1 = noteX2(LANE_COUNT - 1, dG);
+          const pad = Math.max(20, (x1 - x0) * 0.3);
+          const acc = levelAccentRGB || '166,77,255';
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          const lg = ctx.createLinearGradient(x0 - pad, 0, x1 + pad, 0);
+          lg.addColorStop(0, 'rgba(' + acc + ',0)'); lg.addColorStop(0.5, 'rgba(255,246,255,0.85)'); lg.addColorStop(1, 'rgba(' + acc + ',0)');
+          ctx.fillStyle = lg; ctx.fillRect(x0 - pad, yF - 2.5, (x1 - x0) + pad * 2, 5);
+          const bl = ctx.createLinearGradient(0, yF - 30, 0, yF + 4);
+          bl.addColorStop(0, 'rgba(' + acc + ',0)'); bl.addColorStop(1, 'rgba(' + acc + ',0.32)');
+          ctx.fillStyle = bl; ctx.fillRect(x0 - pad, yF - 30, (x1 - x0) + pad * 2, 34);
+          ctx.restore();
+        }
         // BODY below the bridge — drops straight down at the near-plane scale, anchored at the
         // catchers and clipped by the canvas bottom (same posture as the default guitar's body).
+        // During the cinematic it fades in over the last stretch of the print.
         {
-          const xa = noteX2(0, 0), xb = noteX2(LANE_COUNT - 1, 0);
-          const sc = (xb - xa) / Math.max(0.004, fLb - f0b);
-          const rows = (1 - ART.bridgeFY) * ih;
-          ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
-            xa - f0b * sc, nearYp, sc * iw, rows * sc);
+          const bodyA = bp >= 1 ? 1 : Math.max(0, (bp - 0.78) / 0.22);
+          if (bodyA > 0.01) {
+            const xa = noteX2(0, 0), xb = noteX2(LANE_COUNT - 1, 0);
+            const sc = (xb - xa) / Math.max(0.004, fLb - f0b);
+            const rows = (1 - ART.bridgeFY) * ih;
+            ctx.save(); ctx.globalAlpha = bodyA;
+            ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
+              xa - f0b * sc, nearYp, sc * iw, rows * sc);
+            ctx.restore();
+          }
         }
       } else if (gwarp > 0) {
         // NECK-RECEDE WARP: slice the guitar into horizontal bands and narrow each toward the centerline
