@@ -12,11 +12,17 @@ verified in real play: skin on/off Δ0.00px at catchers); `?align=1` overlay + `
 playability pass (cards hug the guitar arm via the new public `RhythmGame.getLaneFrame()`, themed neck
 scrim, re-lit tinted gems, accent bombs) + two critical e2e fixes (title-Enter fired the engine's menu
 play shortcut; first-run how-to popped under the title/intro — both guarded).
-**NEXT:** the user PLAYS THROUGH Skully + the title flow and gives the verdict (this gates everything —
-no new levels until Skully meets their standard; they teach the level template on it). Then: user
-eyeballs skins with `?align=1` (melody-pink + ember-bone = roughest measured art, re-render candidates);
-user 2-device MP test. Asset wishes when the user is ready: a transparent RYO cutout (for in-scene
-placements) + Skully-themed bomb/hazard art (design memory: Higgsfield varied hazards).
+**v101 SHIPPED (commits `0fdaeb1`+`4b7cc81`) — the user's Skully playtest feedback:** (a) **SKIN
+HIGHWAY PROJECTION** — flat custom-guitar art texture-mapped onto the notes' 1/z plane (neck tilts
+down into the level, video visible around it, full runway → pacing matches default; the "guitar too
+big / not tilted / marbles too fast" fix); bomb-warn telegraph rides wall-bombs. (b) **RhythmUiFx
+menu-layer FX** — title ember ambience, ENTER ignition (bursts + the `assets/fx/_src/*.mp4` clips'
+BASS via pooled `<audio>`), per-tile click bursts; **RYO intro plays WITH SOUND** (unmuted
+post-gesture, muted-retry). New dev hooks to strip at freeze: `__rrUiFx`, `__rrUiFxTest`.
+**NEXT:** user re-plays Skully (projection look + intro sound + button FX are their visual/audio
+verdict; dial knobs: NSL slices, scrim alpha, boom volumes, MAP table). Then the level template
+lock-in together → more levels. Carryover: `?align=1` skin eyeball (melody-pink/ember-bone roughest);
+2-device MP test; asset wishes (transparent RYO cutout, Skully hazard art).
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`

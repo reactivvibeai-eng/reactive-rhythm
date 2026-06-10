@@ -1107,6 +1107,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v101 — SKIN HIGHWAY PROJECTION + UI FX layer + intro SOUND  ✅
+**Projection (the user's Skully playtest fix):** flat custom-guitar art is now texture-mapped onto the
+SAME 1/z highway plane the notes ride (slices uniform in screen y, source row at P⁻¹(u), x-fitted so
+the painted outer strings sit on the outer lanes at every depth). The neck TILTS DOWN into the level,
+sized to the lane field — the backdrop video is visible around it (canvas margins alpha≈2), and the
+full runway is back so note pacing matches default. gh+skin only; default byte-identical. Bomb-warn
+telegraph loop rides wall-bomb rows. **UI FX:** `RhythmUiFx` menu-layer canvas — title ember ambience,
+ENTER "ignition" (shockwave+explosion + the explosion clip's BASS via pooled `<audio>` over
+`assets/fx/_src/*.mp4`), per-tile button bursts (delegated), respecting mute/SFX/reduce-motion.
+**Intro now plays WITH SOUND** (unmuted post-gesture, vol .9, muted-retry rather than skip). Verified
+on a fresh log buffer: zero console errors. Bump ?v 100→101.
+
 ### v100 — TITLE SCREEN (RYO key art) + SKULLY playability + e2e fixes  ✅
 **Title:** full-bleed cinematic RYO key art (Ken-Burns drift, warm grade, fire FX over it), lower-third
 lockup (Nosifer slam + breathe, gold hairline, PRESS ENTER · TAP, console meta bar), ENTER/SPACE starts;
