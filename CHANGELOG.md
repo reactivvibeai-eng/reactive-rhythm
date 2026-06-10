@@ -1107,6 +1107,13 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v102 — LEVEL-START CINEMATIC + beta-sweep fix  ✅
+On custom-guitar levels the backdrop opens zoomed-in and settles while the guitar **materializes** —
+the projection renderer prints the neck horizon→bridge behind an accent energy frontier; body fades in
+last (`_skinBuildT`, reduceMotion-safe, restart replays). Beta-sweep critical fix: the hub-Enter leak
+(engine menu shortcut now requires the LIBRARY to be the active screen). Full sweep verified with zero
+console errors (boot→intro→hub→Skully+cinematic→library/Random→overlays→mobile). Bump ?v 101→102.
+
 ### v101 — SKIN HIGHWAY PROJECTION + UI FX layer + intro SOUND  ✅
 **Projection (the user's Skully playtest fix):** flat custom-guitar art is now texture-mapped onto the
 SAME 1/z highway plane the notes ride (slices uniform in screen y, source row at P⁻¹(u), x-fitted so

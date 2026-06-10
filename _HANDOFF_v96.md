@@ -19,10 +19,15 @@ big / not tilted / marbles too fast" fix); bomb-warn telegraph rides wall-bombs.
 menu-layer FX** — title ember ambience, ENTER ignition (bursts + the `assets/fx/_src/*.mp4` clips'
 BASS via pooled `<audio>`), per-tile click bursts; **RYO intro plays WITH SOUND** (unmuted
 post-gesture, muted-retry). New dev hooks to strip at freeze: `__rrUiFx`, `__rrUiFxTest`.
-**NEXT:** user re-plays Skully (projection look + intro sound + button FX are their visual/audio
-verdict; dial knobs: NSL slices, scrim alpha, boom volumes, MAP table). Then the level template
-lock-in together → more levels. Carryover: `?align=1` skin eyeball (melody-pink/ember-bone roughest);
-2-device MP test; asset wishes (transparent RYO cutout, Skully hazard art).
+**v102 SHIPPED (`c6c4099`):** LEVEL-START CINEMATIC (backdrop zoom-settle + the guitar MATERIALIZES
+horizon→bridge behind an accent frontier; `_skinBuildT`, `__rrDebug.buildT()`) + hub-Enter leak fixed
+(library-only shortcut). Full beta sweep: zero console errors.
+**NEXT:** user PLAYS SKULLY (the verdict gates the template lock-in). Dial knobs ready: zoom amount
+(rrCineZoom 1.16), print speed (dt/2.0), frontier colors, NSL slices, scrim alpha, boom volumes, the
+click-FX MAP. Open beta-feedback items (user's call): intro-every-launch fatigue (consider instant-
+skip memory), Random-default stickiness per session, strings-visible-before-wood during the print,
+pause-menu press FX, ENTER label on touch. Carryover: `?align=1` skin eyeball (melody-pink/ember-bone
+roughest); 2-device MP test; asset wishes (transparent RYO cutout, Skully hazard art).
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`
