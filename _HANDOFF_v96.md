@@ -1,13 +1,19 @@
-# CONTINUATION HANDOFF — Reactive Rhythm @ v98 (read with CLAUDE.md + memories)
+# CONTINUATION HANDOFF — Reactive Rhythm @ v99 (read with CLAUDE.md + memories)
 
-Branch `visual-overhaul`, **currently v98**, tree committed (commits `f621fbc`→`f315362`), serve.py
-running (http 200, no-cache). **DO NOT deploy.** This supersedes `_HANDOFF_v91.md` — its 5-item queue
-is **DONE**, plus v97–v98 passes that wired the asset agent's ENTIRE 31-effect FX union (incl. a
-results-screen celebration surface). **NEXT: a user-co-designed roadmap (user directive 2026-06-09) —
-top items: per-guitar precision alignment (user confirms skins misaligned; note the tall-skin aspect
-problem: e.g. crimson-chrome is 904×2194 vs base 904×1268 → contain-fit makes its lanes ~4× narrower)
-and the Skully level(s) as the template. measure.html is a ready string-calibrator (currently
-guitar5-only — generalize it). Do NOT start roadmap work before the user signs off.**
+Branch `visual-overhaul`, **currently v99**, tree committed (commits `f621fbc`→`4d1f112`), serve.py
+running (http 200, no-cache). **DO NOT deploy.**
+
+**ROADMAP (user-co-designed 2026-06-09, memory `reactive-rhythm-5lane-spec`):** ✅ Phase 1 PRECISION
+shipped in v99 — THE GAME IS 5-LANE (gh boots default; legacy 6-string = dormant `?gh=0` toggle);
+invariant-lane skin fit (lanes never move, skin art conforms via per-string PIXEL-MEASURED SKIN_GEOM —
+verified in real play: skin on/off Δ0.00px at catchers); `?align=1` overlay + `__rrDebug.lanesPx/rect`.
+**NEXT, in order:** (a) **start screen + splash professional redo** — user: "doesn't look well put
+together… the image over on the side doesn't look good at all; I want a professional UI per our brand"
+(the side image = mascot.png on #start; RYO hero + menu-loop are the intended identity); (b) **SKULLY
+LEVEL with the user** — they will teach their level standard on it before ANY new level is built;
+known directives: fate cards flank the GUITAR NECK (not screen sides), level is hard to see (contrast
+pass), keys/feel now fixed by v99. User should eyeball skins with `?align=1`; melody-pink + ember-bone
+measured as the roughest art (possible asset re-renders). Pending user 2-device MP test.
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`

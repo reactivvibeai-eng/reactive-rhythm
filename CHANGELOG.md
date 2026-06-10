@@ -1107,6 +1107,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v99 — 5-LANE DECREE: gh default + invariant-lane skin fit + pixel-measured skins  ✅
+The game is **5-lane** (user decision 2026-06-09). (1) `gh` is the boot default (legacy 6-string =
+dormant `?gh=0`/Settings toggle). (2) **Invariant-lane skin fit:** lanes never move — catcher row,
+span and center come from the calibrated profile; a skin's art is fitted so its measured strings land
+ON those lanes (tall art crops; lw pinned to the outer span → uniform note/catcher sizes on every
+guitar). Kills the misalignment class (skins used to flip to 6-string contain-fit; crimson-chrome's
+lanes were ~4× narrower). (3) **SKIN_GEOM v2:** per-string pixel-measured fractions for all 6 skins
+via string-tracking (validated vs guitar5's hand calibration ≤0.003); bone-daddy + melody-pink are
+6-string art (centered-5 subset). Dev: `?align=1` lane-guide overlay, `__rrDebug.lanesPx/rect`.
+Verified in REAL play (Skully): skin on/off at same canvas → outer lanes Δ0.00px, catcher row Δ0.00px,
+interior 1.5px (honest painted strings). Bump ?v 98→99.
+
 ### v98 — FX union COMPLETE (all 31 effects wired)  ✅
 multiplier-up (tier climb) · note-comet (hits streak during OD) · string-ripple (chord bar, centered) ·
 lane-pulse (sustain banked) · chrome-pulse-ring (every catcher pulses while OD is READY — the
