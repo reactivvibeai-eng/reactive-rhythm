@@ -1139,7 +1139,13 @@
     x.drawImage(srcImg, 0, 0);
     x.globalCompositeOperation = 'multiply'; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
     x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.42; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
-    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+    // build9: the multiply tint crushes the marble's glossy core → notes sink into same-hue backdrops
+    // (the Skully "hard to see" issue). Re-light a specular core so tinted gems still POP.
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-atop';
+    const hg = x.createRadialGradient(c.width * 0.40, c.height * 0.36, 0, c.width * 0.46, c.height * 0.44, c.width * 0.52);
+    hg.addColorStop(0, 'rgba(255,255,255,0.62)'); hg.addColorStop(0.38, 'rgba(255,255,255,0.16)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = hg; x.fillRect(0, 0, c.width, c.height);
+    x.globalCompositeOperation = 'source-over';
     return c;
   }
   function _gemTintFor(kind) {
@@ -1159,6 +1165,17 @@
         if (m) h = '#' + [m[1], m[2], m[3]].map(n => Math.max(0, Math.min(255, +n)).toString(16).padStart(2, '0')).join(''); }
     }
     levelGemHex = h;
+  };
+  // PUBLIC UI-layer API (build9): the live lane frame in PAGE coordinates (the canvas draws in CSS px,
+  // so canvasRect + lane coords compose directly). Lets DOM layers — the per-level reactive cards,
+  // future level UI — anchor to the playfield instead of the screen edges. Null until the canvas sizes.
+  window.RhythmGame.getLaneFrame = () => {
+    try {
+      if (!cw || !ch) return null;
+      const g = fretGeom(); const r = canvas.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height,
+        nearX: g.nearX.slice(), farX: g.farX.slice(), nearY: g.nearY, farY: g.farY, lw: g.lw };
+    } catch (e) { return null; }
   };
   window.RhythmGame.lastResults = () => _lastResults;
   window.RhythmGame.__demoProvider = () => demoProvider;
@@ -1622,7 +1639,12 @@
       e.preventDefault(); laneProbe(keyMap[k], 'key'); return;
     }
     if (state === 'menu') {
-      if (e.key === 'Enter') { e.preventDefault(); $('play-btn').click(); }
+      // build9: the menu-state Enter shortcut belongs to the LIBRARY — never fire it while the
+      // title screen or the RYO intro overlays the menu (Enter there means "begin").
+      if (e.key === 'Enter') {
+        try { if (document.querySelector('#start.active, #ryo-intro.active')) return; } catch (e2) {}
+        e.preventDefault(); $('play-btn').click();
+      }
       return;
     }
     // results screen: keyboard flow so you can chain runs without the mouse
@@ -2338,6 +2360,16 @@
     const fg = fretGeom();
     const nearX = fg.nearX, farX = fg.farX, nearY = fg.nearY, farY = fg.farY;
     const lw = fg.lw;
+    // build9: THEMED-LEVEL NECK SCRIM — a soft dark band behind the playfield column so strings,
+    // gems and bombs stay readable over busy level backdrops (the Skully video wash problem).
+    // Only when a level accent is active → default Quick Play stays byte-identical.
+    if (levelAccentRGB) {
+      const bx0 = nearX[0] - lw * 1.7, bx1 = nearX[LANE_COUNT - 1] + lw * 1.7;
+      const bgrd = ctx.createLinearGradient(bx0, 0, bx1, 0);
+      bgrd.addColorStop(0, 'rgba(8,6,7,0)'); bgrd.addColorStop(0.16, 'rgba(8,6,7,0.44)');
+      bgrd.addColorStop(0.84, 'rgba(8,6,7,0.44)'); bgrd.addColorStop(1, 'rgba(8,6,7,0)');
+      ctx.fillStyle = bgrd; ctx.fillRect(bx0, 0, bx1 - bx0, ch);
+    }
     // build8b: themed ambient AURA — one subtle drifting loop behind the upper neck while a themed level
     // plays (Skully skull-flame / Bone Daddy ember-skull). Localized + low-alpha (not a full-screen wash).
     if (!isPaused && fx && !reduceMotion && !fxLite && state === 'playing') {
@@ -2951,13 +2983,15 @@
     const pulse = 0.5 + 0.5 * Math.sin(tt * 9);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(255,46,24,' + (0.10 + 0.14 * pulse) + ')';
+    // build9: bombs adopt the level accent (Skully violet etc.) so hazards read as part of the world;
+    // default (no accent) is byte-identical crimson-ember.
+    ctx.fillStyle = 'rgba(' + (levelAccentRGB || '255,46,24') + ',' + (0.10 + 0.14 * pulse) + ')';
     ctx.beginPath(); ctx.arc(cx, y, r * 1.9, 0, Math.PI * 2); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
     const g = ctx.createRadialGradient(cx - r * 0.3, y - r * 0.32, r * 0.1, cx, y, r);
     g.addColorStop(0, '#3a1216'); g.addColorStop(1, '#080304');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, y, r, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = Math.max(1.5, r * 0.12); ctx.strokeStyle = 'rgba(255,64,40,' + (0.55 + 0.45 * pulse) + ')';
+    ctx.lineWidth = Math.max(1.5, r * 0.12); ctx.strokeStyle = 'rgba(' + (levelAccentRGB || '255,64,40') + ',' + (0.55 + 0.45 * pulse) + ')';
     ctx.beginPath(); ctx.arc(cx, y, r, 0, Math.PI * 2); ctx.stroke();
     // the ✕ (do-not-hit)
     ctx.strokeStyle = 'rgba(255,216,190,0.95)'; ctx.lineWidth = Math.max(1.6, r * 0.16); ctx.lineCap = 'round';
@@ -3553,8 +3587,20 @@
     if (hc) hc.addEventListener('click', closeHowto);
     { const hcal = $('howto-calibrate'); if (hcal) hcal.addEventListener('click', () => { closeHowto(); openCalib(); }); }
     if (hs) hs.addEventListener('click', (e) => { if (e.target === hs) closeHowto(); });   // click backdrop to dismiss
-    // first-time players get it once, automatically
-    try { if (hs && !localStorage.getItem('rr_howto_seen')) setTimeout(() => hs.classList.add('active'), 800); } catch (e) {}
+    // first-time players get it once, automatically — but AFTER the title screen + RYO intro have
+    // finished (it used to pop on a boot timer underneath them = broken first impression), and never
+    // over gameplay/loading if they raced straight into a song.
+    try {
+      if (hs && !localStorage.getItem('rr_howto_seen')) {
+        const tryShowHowto = () => {
+          try {
+            if (document.querySelector('#start.active, #ryo-intro.active, #game.active, #loading.active')) { setTimeout(tryShowHowto, 900); return; }
+            hs.classList.add('active');
+          } catch (e) {}
+        };
+        setTimeout(tryShowHowto, 800);
+      }
+    } catch (e) {}
   }
   $('set-close').addEventListener('click', closeSettings);
   $('set-calibrate').addEventListener('click', () => { closeSettings(); openCalib(); });
