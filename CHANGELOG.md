@@ -1107,6 +1107,15 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v103 — projection UNIT FIX (the guitar exists) + one-time lane migration  ✅
+The user's screenshots caught what headless probes missed: (1) the projection's destination width was
+`sc*iw` (≈676,000px) — Chrome silently refused the draw → **Skully had no guitar at all**; fixed in
+slice + body (`dw = sc`; body `dh = rows*(sc/iw)`). (2) Their browser stored pre-decree `standard` →
+the huge flat 6-string default; one-time migration to gh (marker `rr_lane_migrated5`; a deliberate
+post-decree standard choice sticks). **Verification upgraded** to region-RGB-distance probes: print-
+sweep diff 74/px (wood prints in), skin-vs-default art diff 66–120/px (violet-gothic truly renders),
+re-applied skin reproduces pixels (diff 3). Zero console errors. Bump ?v 102→103.
+
 ### v102 — LEVEL-START CINEMATIC + beta-sweep fix  ✅
 On custom-guitar levels the backdrop opens zoomed-in and settles while the guitar **materializes** —
 the projection renderer prints the neck horizon→bridge behind an accent energy frontier; body fades in

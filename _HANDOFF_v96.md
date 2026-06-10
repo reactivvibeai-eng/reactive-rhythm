@@ -22,6 +22,13 @@ post-gesture, muted-retry). New dev hooks to strip at freeze: `__rrUiFx`, `__rrU
 **v102 SHIPPED (`c6c4099`):** LEVEL-START CINEMATIC (backdrop zoom-settle + the guitar MATERIALIZES
 horizon→bridge behind an accent frontier; `_skinBuildT`, `__rrDebug.buildT()`) + hub-Enter leak fixed
 (library-only shortcut). Full beta sweep: zero console errors.
+**v103 SHIPPED (`e1eb785`) — the user's screenshots caught two bugs:** (1) projection dest width was
+`sc*iw` (~676k px → Chrome silently no-ops) → **Skully had NO guitar**; fixed (`dw=sc`, body
+`rows*(sc/iw)`). (2) The user's stored pre-decree `standard` made their default the huge flat
+6-string; one-time migration → gh (`rr_lane_migrated5`, deliberate post-decree standard sticks).
+⚠️ **TESTING LESSON (binding):** single-pixel ALPHA probes cannot verify art (scrim/strings mimic
+it) — verify canvas art with **REGION RGB-DISTANCE probes across a state toggle** (skin on/off,
+build 0→1): v103's numbers were 74/px print-sweep, 66–120/px skin-vs-default, 3/px re-applied.
 **NEXT:** user PLAYS SKULLY (the verdict gates the template lock-in). Dial knobs ready: zoom amount
 (rrCineZoom 1.16), print speed (dt/2.0), frontier colors, NSL slices, scrim alpha, boom volumes, the
 click-FX MAP. Open beta-feedback items (user's call): intro-every-launch fatigue (consider instant-
