@@ -32,6 +32,14 @@ build 0→1): v103's numbers were 74/px print-sweep, 66–120/px skin-vs-default
 **v104 (`21f1407`):** SQUARE-MARBLES fix — gem tint's `multiply` made the sprite canvas fully opaque
 (squares on every tinted level since build8); fixed with `destination-in` alpha restore +
 `__rrDebug.gemTint` corner/center probe (sprite-canvas alpha checks are now part of the test kit).
+**v105–v106 (`eabe0bf`→`700e234`):** gameplay signed off with precision input probes (exact-time
+press → PERFECT on both guitars; early press consumes nothing); Skully guitar reshaped to the
+DEFAULT's anatomy (projection = tapering NECK BAND 1.8× lane span + body strip at PROFILE scale —
+the "blown up" fix); FX became impacts (PEAK-frame spawn via FX_TIM/_playTuned — measure peaks with
+the luminance-argmax sweep; combo escalation 25/50/75/century; multiplier tiers; odend). User count
+correction: the FX pack is 31 total ("100" was exaggeration) — FX_BATCH2_BRIEF.md exists if more are
+ever commissioned. **Skully gate still open: the user must approve the level visually before any new
+level is built.**
 **ASSET TRUTH (the user's "100 effect videos"):** the repo holds **36 mp4s** (31 FX — all wired — +
 3 level loops + moon + ryo-intro); no asset-agent commits in 3 days. A bigger clip batch is NOT in
 the repo. Drop path when it lands: clips → `assets/fx/_src/` → `python build_sheet.py <name> --count

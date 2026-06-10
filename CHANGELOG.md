@@ -1107,6 +1107,16 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v105–v106 — gameplay sign-off + Skully anatomy + FX as real impacts  ✅
+**v105:** precision input probes — exact-time press → PERFECT on BOTH guitars (−2ms default, −1ms
+Skully under the projection); early press consumes nothing (GH semantics). **v106 (user playtest):**
+(1) Skully guitar matches the DEFAULT's anatomy — the projection draws only a tapering NECK BAND
+(1.8× lane span, measured) + the body as a playfield-width strip at PROFILE scale (was: full flat art
+≈1.5× playfield = "blown up"). (2) FX = impacts, not clips: one-shots spawn AT their measured PEAK
+frame (shockwave peaked at 12/16 — 75% wind-up!) + cut before the smoke tail; combo ESCALATION
+(25/50/75/centuries), multiplier tiers (x4 adds gradeup-flare), OD-end dissipate; tighter scales.
+First draw after a hit verified instantly bright. Judge re-verified post-change. ?v→106.
+
 ### v104 — square-marbles fix (gem tint preserves sprite alpha)  ✅
 Canvas `multiply` composites source-over → the opaque tint fill made the whole sprite canvas opaque =
 colored SQUARES on every gem-tinted level (since build8). Fixed with a `destination-in` alpha restore;
