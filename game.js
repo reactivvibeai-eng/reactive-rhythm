@@ -309,6 +309,33 @@
   function guitarRect() {
     const aspect = (activeGuitarImg && activeGuitarImg.width && activeGuitarImg.height) ? activeGuitarImg.width / activeGuitarImg.height : ART.aspect;
     let gw, gh, gx, gy;
+    // ---- INVARIANT-LANE SKIN FIT (5-lane decree) ----------------------------------------------
+    // When a custom guitar is active, the LANES never move: catcher row Y, lane span and center all
+    // come from the ACTIVE PROFILE's calibrated frame (computed below exactly as if no skin were on).
+    // The skin ART is then sized/placed so its measured bridge strings land ON those invariant lanes
+    // — same muscle memory, same lane width, on every guitar; tall art just crops off-screen.
+    if (_skinFit) {
+      const P = _skinFit.P;
+      let pgw, pgh, pgx, pgy;
+      if (P.fit === 'cover') {
+        if (cw / ch > P.aspect) { pgw = cw; pgh = pgw / P.aspect; } else { pgh = ch; pgw = pgh * P.aspect; }
+        pgx = (cw - pgw) / 2; pgy = ch - (P.bottomAnchor || 0.95) * pgh;
+      } else {
+        pgh = ch * ART.fillFY; pgw = pgh * P.aspect;
+        if (pgw > cw * ART.fillFX) { pgw = cw * ART.fillFX; pgh = pgw / P.aspect; }
+        pgx = (cw - pgw) / 2; pgy = ch * ART.bridgeScreenY - P.bridgeFY * pgh;
+      }
+      const pb = P.bridgeXF && P.bridgeXF.length ? P.bridgeXF : [0.33, 0.66];
+      const tNearY = pgy + P.bridgeFY * pgh;                          // invariant catcher row (px)
+      const tX0 = pgx + pb[0] * pgw, tX1 = pgx + pb[pb.length - 1] * pgw;   // invariant outer lanes (px)
+      const sB = ART.bridgeXF;                                        // skin's measured bridge fractions
+      const span = Math.max(0.02, sB[sB.length - 1] - sB[0]);
+      gw = (tX1 - tX0) / span;
+      gx = tX0 - sB[0] * gw;
+      gh = gw / aspect;
+      gy = tNearY - ART.bridgeFY * gh;
+      return { gx: gx, gy: gy, gw: gw, gh: gh };
+    }
     if (ART.fit === 'cover') {
       // COVER-FIT (5-string gh): FILL the playfield so there's no dead space left/right/under the
       // guitar. The playfield is portrait, so this fills the WIDTH (body reaches the side edges) and
@@ -352,8 +379,13 @@
       const vanishX = r.gx + 0.5 * r.gw;
       for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
     }
-    // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform)
-    const lw = Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072);
+    // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform).
+    // With a skin active, use the OUTER-span average instead — the outer lanes are pinned to the
+    // profile, so note/catcher sizes stay identical on every guitar even when the skin's painted
+    // interior fan is irregular. (Default path untouched → byte-identical.)
+    const lw = _skinFit
+      ? Math.abs(nearX[LANE_COUNT - 1] - nearX[0]) / Math.max(1, LANE_COUNT - 1)
+      : (Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072));
     return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
   }
 
@@ -438,18 +470,62 @@
   // this the catchers ride the lane-profile defaults and miss the painted strings. Endpoints [left,right]
   // measured by the asset agent (fine-tune with __rrDebug); evenly interpolated across LANE_COUNT. The
   // skin fractions are full-PNG (contain-fit). Falsy/unknown src → restore the lane-profile default geom.
+  // SKIN_GEOM v2 (5-lane decree, 2026-06-09): per-skin PIXEL-MEASURED string data.
+  //  nutXF/bridgeXF — per-string x fractions of the PNG (any count; resampled/subset to LANE_COUNT).
+  //  nutFY/bridgeFY — the rows those were measured at (image-height fractions).
+  //  Legacy `nut`/`bridge` [left,right] endpoints still accepted (lerped) until a skin is measured.
+  // PRESENTATION CONTRACT: lanes are INVARIANT (see guitarRect's skin-fit branch) — these fractions
+  // only tell the fitter where the painted strings live inside the art.
+  // Values below are PIXEL-MEASURED (string-tracking: contrast peaks across 16–26 neck rows →
+  // least-squares line per string → evaluated at nutFY/bridgeFY; method validated against
+  // guitar5.png's hand calibration to ≤0.003). 6-entry arrays = the art paints 6 strings; the
+  // resampler subsets the most centered 5 for the gh profile.
   const SKIN_GEOM = {
-    'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795, nut: [0.460, 0.565], bridge: [0.420, 0.605] },
-    'assets/guitars/bone-daddy.png':    { aspect: 904 / 1314, nutFY: 0.105, bridgeFY: 0.775, nut: [0.465, 0.555], bridge: [0.425, 0.595] },
-    'assets/guitars/melody-pink.png':   { aspect: 904 / 1477, nutFY: 0.095, bridgeFY: 0.80,  nut: [0.455, 0.555], bridge: [0.415, 0.595] },
-    'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800, nut: [0.450, 0.560], bridge: [0.400, 0.605] },
-    'assets/guitars/ember-bone.png':    { aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810, nut: [0.450, 0.560], bridge: [0.410, 0.600] },
-    'assets/guitars/gold-relic.png':    { aspect: 904 / 2160, nutFY: 0.085, bridgeFY: 0.800, nut: [0.450, 0.560], bridge: [0.400, 0.605] },
+    'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
+      nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
+      bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
+    'assets/guitars/bone-daddy.png':    { aspect: 904 / 1314, nutFY: 0.105, bridgeFY: 0.775,
+      nutXF:    [0.4893, 0.4902, 0.5064, 0.5119, 0.5206, 0.5302],
+      bridgeXF: [0.3823, 0.4381, 0.4820, 0.5264, 0.5710, 0.6155] },
+    'assets/guitars/melody-pink.png':   { aspect: 904 / 1477, nutFY: 0.095, bridgeFY: 0.80,
+      nutXF:    [0.4380, 0.4569, 0.4865, 0.5072, 0.5270, 0.5432],
+      bridgeXF: [0.3132, 0.3924, 0.4558, 0.5246, 0.5982, 0.6787] },
+    'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
+      nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
+      bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },
+    'assets/guitars/ember-bone.png':    { aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810,
+      nutXF:    [0.4339, 0.4494, 0.4878, 0.5132, 0.5314],
+      bridgeXF: [0.3182, 0.3848, 0.4708, 0.5609, 0.6209] },
+    'assets/guitars/gold-relic.png':    { aspect: 904 / 2160, nutFY: 0.085, bridgeFY: 0.800,
+      nutXF:    [0.4332, 0.4480, 0.4644, 0.4782, 0.4921],
+      bridgeXF: [0.3341, 0.3743, 0.4160, 0.4582, 0.5008] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
+  // resample a measured per-string array to the active LANE_COUNT: exact when counts match; the most
+  // CENTERED contiguous subset when the art paints more strings than lanes (e.g. 6-string art, 5 lanes);
+  // an even fan across the span when it paints fewer (dormant 6-lane mode on 5-string art).
+  function _resampleStrings(arr, L) {
+    const N = arr.length;
+    if (N === L) return arr.slice();
+    if (N > L) {
+      let best = 0, bestD = Infinity;
+      const mid = (arr[0] + arr[N - 1]) / 2;
+      for (let s = 0; s + L <= N; s++) {
+        const c = (arr[s] + arr[s + L - 1]) / 2, d = Math.abs(c - mid);
+        if (d < bestD) { bestD = d; best = s; }
+      }
+      return arr.slice(best, best + L);
+    }
+    const out = []; for (let i = 0; i < L; i++) out.push(_lerpLane(arr[0], arr[N - 1], L, i));
+    return out;
+  }
+  // active skin-fit snapshot: S = the skin's measured frame, P = the ACTIVE PROFILE's calibrated frame.
+  // guitarRect() uses this to conform the art to the profile's invariant lanes. null → no skin fit.
+  let _skinFit = null;
   function _applySkinGeom(src) {
     const g = src && SKIN_GEOM[src];
     if (!g) {   // restore the active lane-profile's default geometry
+      _skinFit = null;
       const p = LANE_PROFILES[laneProfile];
       if (p) {
         ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
@@ -458,11 +534,22 @@
       }
       return;
     }
+    // build per-string arrays (measured arrays preferred; legacy [left,right] endpoints fan evenly
+    // via the resampler's N<L branch), sized to LANE_COUNT
+    const nut = _resampleStrings(g.nutXF || [g.nut[0], g.nut[1]], LANE_COUNT);
+    const brg = _resampleStrings(g.bridgeXF || [g.bridge[0], g.bridge[1]], LANE_COUNT);
     ART.aspect = g.aspect; ART.nutFY = g.nutFY; ART.bridgeFY = g.bridgeFY;
-    ART.fit = null; ART.bottomAnchor = 0.95;   // skin fractions are full-PNG → contain-fit
-    const nut = [], brg = [];
-    for (let i = 0; i < LANE_COUNT; i++) { nut.push(_lerpLane(g.nut[0], g.nut[1], LANE_COUNT, i)); brg.push(_lerpLane(g.bridge[0], g.bridge[1], LANE_COUNT, i)); }
     ART.nutXF = nut; ART.bridgeXF = brg;
+    // NOTE: ART.fit / bottomAnchor / persp / warp stay the PROFILE's — the skin-fit branch in
+    // guitarRect() overrides the draw rect entirely, and the gh highway warp keeps working because
+    // the image slicer + the lanes share the same rect + warp pivot.
+    const p = LANE_PROFILES[laneProfile] || {};
+    _skinFit = {
+      S: { aspect: g.aspect, nutFY: g.nutFY, bridgeFY: g.bridgeFY },
+      P: { aspect: p.aspect, nutFY: p.nutFY, bridgeFY: p.bridgeFY,
+           nutXF: (p.nutXF || []).slice(), bridgeXF: (p.bridgeXF || []).slice(),
+           fit: p.fit || null, bottomAnchor: p.bottomAnchor || 0.95 },
+    };
   }
   function _applySkinImg(src) {
     if (!src) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); return; }
@@ -1115,15 +1202,18 @@
   // Boot the lane profile: ?gh=1 forces 5-string Guitar-Hero mode; otherwise restore the saved choice.
   // Standard (6-lane keyboard) users hit NO new code path — applyLaneProfile only runs for gh.
   (function bootLaneProfile() {
-    let mode = null;
+    // THE GAME IS 5-LANE (user decree 2026-06-09): `gh` is the DEFAULT profile. The legacy 6-string
+    // `standard` stays available as a dormant toggle (?gh=0 / Settings) — byte-identical when chosen.
+    let mode = 'gh';
     try {
       const m = location.search.match(/[?&]gh=([01])/);
-      if (m) mode = (m[1] === '1') ? 'gh' : 'standard';      // ?gh=1 → 5-string; ?gh=0 → reset to 6-string
-      else if (localStorage.getItem('rr_lanemode') === 'gh') mode = 'gh';   // else restore saved choice
+      if (m) mode = (m[1] === '1') ? 'gh' : 'standard';      // ?gh=1 → 5-string; ?gh=0 → legacy 6-string
+      else if (localStorage.getItem('rr_lanemode') === 'standard') mode = 'standard';   // stored legacy choice honored
     } catch (e) {}
-    if (mode) applyLaneProfile(mode);
+    applyLaneProfile(mode);
     try { const pm = location.search.match(/[?&]persp=([0-9.]+)/); if (pm) perspOverride = parseFloat(pm[1]) || 0; } catch (e) {}
     try { const wm = location.search.match(/[?&]warp=([0-9.]+)/); if (wm) warpOverride = parseFloat(wm[1]); } catch (e) {}
+    try { if (/[?&]align=1/.test(location.search)) window.__rrAlign = true; } catch (e) {}   // dev: draw lane guides (strip at freeze)
   })();
 
   function resetScoring() {
@@ -1454,6 +1544,9 @@
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
       // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
       geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } },
+      // ALIGNMENT dev hooks (stripped at content-freeze): screen-space lanes + the art draw rect
+      lanesPx: () => { try { const g = fretGeom(); return { nearX: g.nearX.map(v => +v.toFixed(2)), nearY: +g.nearY.toFixed(2), lw: +g.lw.toFixed(2), farX: g.farX.map(v => +v.toFixed(2)), farY: +g.farY.toFixed(2) }; } catch (e) { return 'ERR ' + e.message; } },
+      rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: !!_skinFit }; } catch (e) { return 'ERR ' + e.message; } },
       // RESULTS celebration dev hooks (stripped at content-freeze)
       celebrate: () => { celebrateResults(96, 'S'); return true; },
       celebrateState: () => ({ ui: !!fxUi, canvas: !!_celCanvas, live: fxUi ? (fxUi.active || []).length : -1 }),
@@ -2614,6 +2707,17 @@
         ctx.fillStyle = 'rgba(255, 31, 46, ' + (glitchAmount * 0.15) + ')'; ctx.fillRect(0, ty, cw, th);
         ctx.fillStyle = 'rgba(224, 218, 214, ' + (glitchAmount * 0.10) + ')'; ctx.fillRect(dx, ty + th * 0.5, cw, 1);
       }
+    }
+    // DEV (?align=1, strip at freeze): lane guides over the art — dashed lane lines, the catcher row,
+    // and a dot on each catcher, so skin/string alignment can be eyeballed instantly.
+    if (window.__rrAlign) {
+      ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.25; ctx.strokeStyle = '#3affc3';
+      for (let i = 0; i < LANE_COUNT; i++) { ctx.beginPath(); ctx.moveTo(noteX(i, 0), noteY(0)); ctx.lineTo(noteX(i, 1), noteY(1)); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.strokeStyle = '#ffd23c';
+      ctx.beginPath(); ctx.moveTo(nearX[0] - 30, nearY); ctx.lineTo(nearX[LANE_COUNT - 1] + 30, nearY); ctx.stroke();
+      ctx.fillStyle = '#3affc3';
+      for (let i = 0; i < LANE_COUNT; i++) { ctx.beginPath(); ctx.arc(nearX[i], nearY, 4, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
     }
     // FLIPBOOK FX — additive sprite layer composited over the scene, inside the camera-shake
     // transform so bursts ride the shake. No-op until fx-player.js settles its sheets.
