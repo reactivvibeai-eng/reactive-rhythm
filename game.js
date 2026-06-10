@@ -1138,6 +1138,10 @@
     const x = c.getContext('2d');
     x.drawImage(srcImg, 0, 0);
     x.globalCompositeOperation = 'multiply'; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
+    // CRITICAL (the user's "square marbles" report): canvas 'multiply' COMPOSITES source-over, so an
+    // opaque full-canvas fill makes the ENTIRE canvas opaque — the marble became a colored SQUARE on
+    // every gem-tinted level. Restore the sprite's alpha mask before the overlay passes.
+    x.globalCompositeOperation = 'destination-in'; x.globalAlpha = 1; x.drawImage(srcImg, 0, 0);
     x.globalCompositeOperation = 'source-atop'; x.globalAlpha = 0.42; x.fillStyle = hex; x.fillRect(0, 0, c.width, c.height);
     // build9: the multiply tint crushes the marble's glossy core → notes sink into same-hue backdrops
     // (the Skully "hard to see" issue). Re-light a specular core so tinted gems still POP.
@@ -1578,6 +1582,18 @@
       lanesPx: () => { try { const g = fretGeom(); return { nearX: g.nearX.map(v => +v.toFixed(2)), nearY: +g.nearY.toFixed(2), lw: +g.lw.toFixed(2), farX: g.farX.map(v => +v.toFixed(2)), farY: +g.farY.toFixed(2) }; } catch (e) { return 'ERR ' + e.message; } },
       rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: !!_skinFit }; } catch (e) { return 'ERR ' + e.message; } },
       buildT: () => +_skinBuildT.toFixed(3),   // level-start materialize progress (dev; strip at freeze)
+      // GEM-TINT regression probe (dev; strip at freeze): the tinted marble canvas must keep the
+      // sprite's alpha — corners ~0 (transparent), center opaque. Catches the "square marble" class.
+      gemTint: (kind) => { try {
+        if (!levelGemHex) return { tint: null };
+        const cv2 = _gemTintFor(kind === 'star' ? 'star' : 'normal');
+        if (!cv2) return { tint: levelGemHex, canvas: false };
+        const g2 = cv2.getContext('2d'); const W2 = cv2.width, H2 = cv2.height;
+        const pa = (px, py) => g2.getImageData(px, py, 1, 1).data[3];
+        return { tint: levelGemHex, size: W2 + 'x' + H2,
+          corners: [pa(2, 2), pa(W2 - 3, 2), pa(2, H2 - 3), pa(W2 - 3, H2 - 3)],
+          center: pa(W2 >> 1, H2 >> 1) };
+      } catch (e) { return 'ERR ' + e.message; } },
       // RESULTS celebration dev hooks (stripped at content-freeze)
       celebrate: () => { celebrateResults(96, 'S'); return true; },
       celebrateState: () => ({ ui: !!fxUi, canvas: !!_celCanvas, live: fxUi ? (fxUi.active || []).length : -1 }),
