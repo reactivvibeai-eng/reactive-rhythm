@@ -7,13 +7,16 @@ running (http 200, no-cache). **DO NOT deploy.**
 shipped in v99 — THE GAME IS 5-LANE (gh boots default; legacy 6-string = dormant `?gh=0` toggle);
 invariant-lane skin fit (lanes never move, skin art conforms via per-string PIXEL-MEASURED SKIN_GEOM —
 verified in real play: skin on/off Δ0.00px at catchers); `?align=1` overlay + `__rrDebug.lanesPx/rect`.
-**NEXT, in order:** (a) **start screen + splash professional redo** — user: "doesn't look well put
-together… the image over on the side doesn't look good at all; I want a professional UI per our brand"
-(the side image = mascot.png on #start; RYO hero + menu-loop are the intended identity); (b) **SKULLY
-LEVEL with the user** — they will teach their level standard on it before ANY new level is built;
-known directives: fate cards flank the GUITAR NECK (not screen sides), level is hard to see (contrast
-pass), keys/feel now fixed by v99. User should eyeball skins with `?align=1`; melody-pink + ember-bone
-measured as the roughest art (possible asset re-renders). Pending user 2-device MP test.
+**v100 SHIPPED (commits `670342d`+`f5b6367`):** TITLE SCREEN rebuilt as full-bleed RYO key art
+(lower-third lockup, meta bar, ENTER/SPACE; mascot + the hub's pasted RYO rect removed) and the SKULLY
+playability pass (cards hug the guitar arm via the new public `RhythmGame.getLaneFrame()`, themed neck
+scrim, re-lit tinted gems, accent bombs) + two critical e2e fixes (title-Enter fired the engine's menu
+play shortcut; first-run how-to popped under the title/intro — both guarded).
+**NEXT:** the user PLAYS THROUGH Skully + the title flow and gives the verdict (this gates everything —
+no new levels until Skully meets their standard; they teach the level template on it). Then: user
+eyeballs skins with `?align=1` (melody-pink + ember-bone = roughest measured art, re-render candidates);
+user 2-device MP test. Asset wishes when the user is ready: a transparent RYO cutout (for in-scene
+placements) + Skully-themed bomb/hazard art (design memory: Higgsfield varied hazards).
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`

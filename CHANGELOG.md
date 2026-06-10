@@ -1107,6 +1107,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v100 — TITLE SCREEN (RYO key art) + SKULLY playability + e2e fixes  ✅
+**Title:** full-bleed cinematic RYO key art (Ken-Burns drift, warm grade, fire FX over it), lower-third
+lockup (Nosifer slam + breathe, gold hairline, PRESS ENTER · TAP, console meta bar), ENTER/SPACE starts;
+mascot.png removed; the hub's pasted RYO rect removed (RYO owns the title). **Skully:** the DEATH/WORLD
+fate cards now HUG THE GUITAR ARM (new public `RhythmGame.getLaneFrame()`; symmetric 16px gaps, sized to
+the visible neck, resize-tracking); themed NECK SCRIM behind the playfield (notes readable over the
+video); tinted gems re-lit (specular core survives the violet bake); bombs adopt the level accent.
+**Critical e2e finds:** Enter on the title also fired the engine's menu play-shortcut (launched a song
+under the intro) — guarded; the first-run HOW-TO popped on a boot timer UNDER the title/intro — now
+waits for them. Verified end-to-end muted: title→intro→hub→Skully (cards flank arm, fate meters fill
+from real misses)→resize→exit→default Arena regression; zero console errors. Bump ?v 99→100.
+
 ### v99 — 5-LANE DECREE: gh default + invariant-lane skin fit + pixel-measured skins  ✅
 The game is **5-lane** (user decision 2026-06-09). (1) `gh` is the boot default (legacy 6-string =
 dormant `?gh=0`/Settings toggle). (2) **Invariant-lane skin fit:** lanes never move — catcher row,
