@@ -1131,7 +1131,7 @@
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
-    _auraFx = null; _odAura = null;   // build8b: handles cleared with fx.clear() → drop refs so they respawn
+    _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
     bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
@@ -1323,6 +1323,8 @@
 
     // remember for the Copy Score action
     lastResults = { results, accPct, grade, track: tname, artist: tartist, diff: DIFFICULTY[difficulty].name };
+    // build8c: celebratory burst over the card — confetti/fireworks (+ gradeup-flare when the badge lands)
+    if (!results.failed) celebrateResults(accPct, grade);
   }
 
   // ---------- PAUSE ----------
@@ -1400,6 +1402,7 @@
     holdScored[lane] = 1; holdNote[lane] = null;
     laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
     spawnHitParticles(lane, 'great');
+    emitFx('holdend', 'hold', lane);   // build8c: sustain banked — column pulse up the lane
     flashJudgment('HOLD!', '#e0a93f');
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     updateHUD();
@@ -1450,7 +1453,11 @@
       fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
       // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
-      geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } }
+      geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } },
+      // RESULTS celebration dev hooks (stripped at content-freeze)
+      celebrate: () => { celebrateResults(96, 'S'); return true; },
+      celebrateState: () => ({ ui: !!fxUi, canvas: !!_celCanvas, live: fxUi ? (fxUi.active || []).length : -1 }),
+      celebrateDraw: () => { if (fxUi && _celCanvas) { const c2 = _celCanvas.getContext('2d'); return fxUi.draw(c2, performance.now()); } return -1; }
     };
   } catch (e) {}
   // while the test panel is open, poll gamepads (gameplay polls in its own loop)
@@ -1676,6 +1683,7 @@
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
     const mult = Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier);
     score += JUDGE[kind].score * mult;
+    if (mult > lastMult) emitFx('multup', 'x' + mult, lane);   // build8c: multiplier tier climbed — gold flare
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
     overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : 0.022)); // charge the meter
@@ -1685,6 +1693,11 @@
     spawnHitParticles(lane, kind);
     emitFx(kind === 'perfect' ? 'perfect' : 'hit', kind, lane);
     if (target.type === 'star') emitFx('star', kind, lane);   // build8b: star-pickup pop on a surge note
+    // build8c: chord-bar strike — a strum ripple centered between the chord's lanes (lead note only)
+    if (target.chordLead && target.chordLanes && target.chordLanes.length > 1) {
+      try { const _cg = fretGeom(); let _cx = 0; for (let _ci = 0; _ci < target.chordLanes.length; _ci++) _cx += _cg.nearX[target.chordLanes[_ci]] || 0;
+        emitFx('chord', 'chord', lane, _cx / target.chordLanes.length, _cg.nearY); } catch (e) {}
+    }
     flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane);
@@ -1760,11 +1773,11 @@
   const THEME_FX = {
     violet: { hit: 'soul-burst-violet', perfect: 'soul-burst-violet' },   // Skully "The World"
     bone:   { hit: 'bone-shatter',      perfect: 'bone-shatter' },        // Bone Daddy
-    pink:   { hit: 'paw-poof',          perfect: 'heart-pop-pink' },      // Melody (cat-paw poof + heart)
+    pink:   { hit: 'paw-poof',          perfect: 'heart-pop-pink', perfect2: 'note-sparkle-pink' },  // Melody (paw bat + heart, sparkle on perfects)
   };
   // build8b: per-level ambient AURA loop — drifts behind the upper neck while a themed level plays
   // (the "living world" cue). Subtle + localized (NOT a full-screen wash). null/absent → no aura.
-  const THEME_AURA = { violet: 'skull-flame-violet', bone: 'ember-skull-loop' };
+  const THEME_AURA = { violet: 'skull-flame-violet', bone: 'ember-skull-loop', ember: 'ember-rise', crimson: 'ember-rise' };
   function _fxTheme() {
     try { const g = document.getElementById('game'); return (g && g.dataset && g.dataset.rrtheme) || ''; } catch (e) { return ''; }
   }
@@ -1772,10 +1785,23 @@
   function _fxLayers(type) {
     const th = THEME_FX[_fxTheme()] || null;
     switch (type) {
-      case 'hit':       return [{ name: (th && th.hit) || 'hit-burst', mult: 1 }];
-      case 'perfect':   return [{ name: (th && th.perfect) || 'perfect-flare', mult: 1.05 }];
+      case 'hit': {
+        const L = [{ name: (th && th.hit) || 'hit-burst', mult: 1 }];
+        if (odActive) L.push({ name: 'note-comet', mult: 0.95 });          // star power: every hit streaks
+        return L;
+      }
+      case 'perfect': {
+        const L = [{ name: (th && th.perfect) || 'perfect-flare', mult: 1.05 }];
+        if (th && th.perfect2) L.push({ name: th.perfect2, mult: 0.9 });   // themed 2nd layer (Melody sparkle)
+        if (odActive) L.push({ name: 'note-comet', mult: 0.95 });
+        return L;
+      }
       case 'miss':      return [{ name: 'miss-shatter', mult: 1 }];
       case 'star':      return [{ name: 'star-pickup', mult: 1.1 }];
+      case 'multup':    return [{ name: 'multiplier-up', mult: 1.15 }];     // multiplier tier climbed
+      case 'chord':     return [{ name: 'string-ripple', mult: 1.3 }];      // chord bar struck (centered)
+      case 'holdend':   return [{ name: 'lane-pulse', mult: 1.05 }];        // sustain banked to the tail
+      case 'wipeout':   return [{ name: 'shard-burst', mult: 1.1 }];        // mass-fail shatter
       case 'combo':     return [{ name: 'combo-burst', mult: 1.05 }, { name: 'shockwave', mult: 0.9 }];
       case 'overdrive': return [{ name: 'shockwave', mult: 1.2 }, { name: 'explosion', mult: 1 }];
       case 'bomb':      return [{ name: 'bomb-explode', mult: 1 }, { name: 'shockwave', mult: 0.8 }];
@@ -1813,9 +1839,73 @@
       return fx.play(name, x, y, { loop: true, scale: scale, alpha: (alpha != null ? alpha : 1) });
     } catch (e) { return null; }
   }
-  // build8b: managed ambient loop handles (theme aura + overdrive aura) — spawned/repositioned in
-  // render(), stopped on clear / resetScoring. Pure visual; never affect gameplay.
-  let _auraFx = null, _odAura = null;
+  // build8b/c: managed ambient loop handles (theme aura, overdrive aura, OD-ready catcher rings,
+  // per-lane hold charge loops) — spawned/repositioned in render(), stopped on clear / resetScoring.
+  // Pure visual; never affect gameplay.
+  let _auraFx = null, _odAura = null, _readyRings = null, _holdFxL = [];
+  function _stopReadyRings() { if (_readyRings) { for (let i = 0; i < _readyRings.length; i++) { const h = _readyRings[i]; if (h) { try { h.stop(); } catch (e) {} } } _readyRings = null; } }
+  function _stopHoldFx(i) { const h = _holdFxL[i]; if (h) { try { h.stop(); } catch (e) {} _holdFxL[i] = null; } }
+
+  // ---------- RESULTS CELEBRATION (build8c) — a DOM-side FX surface over #results ----------
+  // The in-game layer draws on #hwy, which the results screen covers — so celebrations get their own
+  // FxPlayer instance + a transparent canvas over the results card. Spawns ride setTimeout (not rAF)
+  // so the schedule holds even when rAF is throttled; the rAF loop only draws + self-terminates.
+  // reduceMotion → skipped; fxLite → fewer bursts. Pure visual.
+  let fxUi = null, _celCanvas = null, _celRaf = 0, _celGen = 0;
+  function _bootFxUi() {
+    try {
+      if (fxUi || !window.FxPlayer) return;
+      window.FxPlayer.load('assets/fx/manifest.json').then(function (p) { fxUi = p; }).catch(function () {});
+    } catch (e) {}
+  }
+  function celebrateResults(accPct, grade) {
+    try {
+      if (reduceMotion) return;
+      _bootFxUi();
+      const scr = $('results'); if (!scr) return;
+      if (!_celCanvas) {
+        _celCanvas = document.createElement('canvas');
+        _celCanvas.id = 'results-fx';
+        _celCanvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6;';
+        scr.appendChild(_celCanvas);
+      }
+      const dpr2 = Math.min(2, window.devicePixelRatio || 1);
+      const W = scr.clientWidth || window.innerWidth, H = scr.clientHeight || window.innerHeight;
+      _celCanvas.width = Math.max(1, Math.floor(W * dpr2)); _celCanvas.height = Math.max(1, Math.floor(H * dpr2));
+      const cx2 = _celCanvas.getContext('2d'); cx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+      const gen = ++_celGen;
+      const k = Math.min(W, H) / 560;                      // size bursts to the card (128px native cells)
+      const big = grade === 'S' || grade === 'A';
+      const n = fxLite ? 3 : (big ? 7 : 5);
+      let lastT = 0;
+      for (let i = 0; i < n; i++) {
+        const p = { t: 150 + i * 260, name: (i % 2) ? 'firework-gold' : 'confetti-pop',
+          x: W * (0.2 + Math.random() * 0.6), y: H * (0.14 + Math.random() * 0.3), s: (1.2 + Math.random() * 0.6) * k };
+        lastT = p.t;
+        setTimeout(function () { if (gen === _celGen && fxUi) { try { fxUi.play(p.name, p.x, p.y, { scale: p.s }); } catch (e) {} } }, p.t);
+      }
+      // grade-up / new-best flare: the badge is inserted async (catalog layer) — check for it at ~1s
+      setTimeout(function () {
+        try {
+          if (gen !== _celGen || !fxUi) return;
+          const b = scr.querySelector('#results-badges .rbadge.gradeup, #results-badges .rbadge.newbest');
+          if (!b) return;
+          const r = b.getBoundingClientRect(), sr = scr.getBoundingClientRect();
+          fxUi.play('gradeup-flare', (r.left - sr.left) + r.width / 2, (r.top - sr.top) + r.height / 2, { scale: 1.5 * k });
+        } catch (e) {}
+      }, 1000);
+      const t0 = performance.now();
+      if (_celRaf) cancelAnimationFrame(_celRaf);
+      (function frame(now) {
+        if (gen !== _celGen) return;                       // superseded by a newer celebration
+        const el = now - t0;
+        cx2.clearRect(0, 0, W, H);
+        const live = fxUi ? fxUi.draw(cx2, now) : 0;
+        if ((live > 0 || el < lastT + 1400) && el < 9000) { _celRaf = requestAnimationFrame(frame); }
+        else { cx2.clearRect(0, 0, W, H); _celRaf = 0; }
+      })(t0);
+    } catch (e) {}
+  }
 
   // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
   // Does NOT touch combo/score/stability — call it ALONGSIDE the existing miss logic.
@@ -1848,6 +1938,7 @@
         const _fg = fretGeom();
         for (let i = 0; i < LANE_COUNT; i++) {
           particles.push({ ring: true, x: _fg.nearX[i], y: _fg.nearY, age: 0, life: 0.5, color: '150,28,32', max: 120 });
+          emitFx('wipeout', 'wipe', i, _fg.nearX[i], _fg.nearY);   // build8c: glass-shatter across the board
         }
       } catch (e) {}
     }
@@ -2163,7 +2254,24 @@
         if (!_auraFx || !_auraFx.alive()) { _auraFx = _fxRide(_an, _ax, _ay, _as, 0.4); }
         else { _auraFx.move(_ax, _ay); _auraFx.setScale(_as); }
       } else if (_auraFx) { _auraFx.stop(); _auraFx = null; }
-    } else if (_auraFx) { _auraFx.stop(); _auraFx = null; }
+      // build8c: OD-READY cue — a chrome pulse ring on every catcher while star power is armed
+      if (overdrive >= 1 && !odActive) {
+        if (!_readyRings) { _readyRings = []; for (let i = 0; i < LANE_COUNT; i++) _readyRings.push(_fxRide('chrome-pulse-ring', nearX[i], nearY, (lw * 1.7 / 128), 0.5)); }
+        else { for (let i = 0; i < _readyRings.length && i < LANE_COUNT; i++) { const h = _readyRings[i]; if (h && h.alive()) h.move(nearX[i], nearY); } }
+      } else { _stopReadyRings(); }
+      // build8c: SUSTAIN charge loop — rides the catcher while a hold is actively banking
+      for (let i = 0; i < LANE_COUNT; i++) {
+        if (holdNote[i]) {
+          const h = _holdFxL[i];
+          if (!h || !h.alive()) _holdFxL[i] = _fxRide('charge-loop', nearX[i], nearY, (lw * 2.0 / 128), 0.55);
+          else h.move(nearX[i], nearY);
+        } else { _stopHoldFx(i); }
+      }
+    } else {
+      if (_auraFx) { _auraFx.stop(); _auraFx = null; }
+      _stopReadyRings();
+      for (let i = 0; i < _holdFxL.length; i++) _stopHoldFx(i);
+    }
     // PERSPECTIVE depth warp (gh Highway): map the linear timeline d (0=catcher, 1=nut) through a 1/z
     // camera so far notes bunch up + crawl and near notes spread + ACCELERATE — the depth/vertigo cue.
     // Hit timing is unaffected (it uses note TIME, not screen position); only the visual gains depth.
