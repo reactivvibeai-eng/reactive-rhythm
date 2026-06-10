@@ -1107,6 +1107,19 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v107–v108 — THE GUITAR IS THE GUITAR · black-box FX root cause · backdrop detail · intro-audio truth  ✅
+User playtest + a 31-agent adversarial review workflow. **Guitar:** the projection experiment is gone —
+a custom guitar is a PROFILE RESKIN (whole art, cover-fit like the default, lanes on ITS measured
+strings, materialize in the smooth slicer w/ body fade, crimson frontier). **FX black-box root cause:**
+additive RGB-on-black sheets over TRANSPARENT canvases paint black rectangles; all sheets are now
+luminance-keyed at load (`RhythmFxKey`, cached/shared ×3 layers) → real particles on every surface.
+**Backdrop:** #bg-video contain (full frame, native sharpness) over a blurred cover fill; side bands
+lightened; ?novideo/perf-bg own both layers. **Intro audio root cause: ryo-intro.mp4 HAS NO AUDIO
+TRACK** (binary-verified) — asset re-export needed; lunar-waves bed stopgap (gesture-side AudioContext).
+**Asset debt flagged:** crimson-chrome + gold-relic too tall for natural framing (re-render needed).
+Verified: Skully whole-guitar + lanes-on-strings + materialize + exact-press PERFECT in one run; UI
+burst = 0 opaque-black px; novideo hides+pauses both videos; zero console errors. ?v→108.
+
 ### v105–v106 — gameplay sign-off + Skully anatomy + FX as real impacts  ✅
 **v105:** precision input probes — exact-time press → PERFECT on BOTH guitars (−2ms default, −1ms
 Skully under the projection); early press consumes nothing (GH semantics). **v106 (user playtest):**

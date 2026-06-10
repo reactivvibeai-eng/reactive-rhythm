@@ -32,6 +32,13 @@ build 0→1): v103's numbers were 74/px print-sweep, 66–120/px skin-vs-default
 **v104 (`21f1407`):** SQUARE-MARBLES fix — gem tint's `multiply` made the sprite canvas fully opaque
 (squares on every tinted level since build8); fixed with `destination-in` alpha restore +
 `__rrDebug.gemTint` corner/center probe (sprite-canvas alpha checks are now part of the test kit).
+**v107–v108 (`d048135`) — playtest + 31-agent adversarial review:** custom guitars are PROFILE RESKINS
+now (whole art, cover-fit, lanes on their OWN measured strings — both the invariant fit and the
+projection are deleted; the user's verdict). FX sheets are LUMINANCE-KEYED at load (`RhythmFxKey`,
+production export — black-box root cause: additive-on-transparent). Backdrop = contain + blurred fill.
+⚠ **ASSET DEBT for the asset agent:** (1) `ryo-intro.mp4` HAS NO AUDIO TRACK — re-export with audio
+(lunar-waves bed is the stopgap); (2) crimson-chrome + gold-relic guitars too tall for natural framing
+(spawn ~300px off-screen) — re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver).
 **v105–v106 (`eabe0bf`→`700e234`):** gameplay signed off with precision input probes (exact-time
 press → PERFECT on both guitars; early press consumes nothing); Skully guitar reshaped to the
 DEFAULT's anatomy (projection = tapering NECK BAND 1.8× lane span + body strip at PROFILE scale —
