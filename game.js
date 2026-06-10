@@ -1573,7 +1573,7 @@
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
       fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }) } : { loaded: false },
-      fxEmit: (type, lane) => { emitFx(type || 'overdrive', 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
+      fxEmit: (type, lane, kind) => { emitFx(type || 'overdrive', kind || 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
       fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
       // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
@@ -1920,7 +1920,40 @@
   }
 
   // ---------- FLIPBOOK FX dispatch (VISUAL-ONLY; never touches gameplay/scoring/timing) ----------
-  const FX_GLOBAL = 1.3;            // overall flipbook size (× lane width / 128 native frame)
+  const FX_GLOBAL = 1.15;           // overall flipbook size (× lane width / 128 native frame)
+  // build11 GAME-FEEL (user playtest: "they look like little videos, not impacts"): the Seedance
+  // clips ignite over their first ~5-12 frames — on a hit you watched a video START instead of an
+  // impact POP. One-shots now spawn AT their pre-measured PEAK frame (luminance argmax per sheet)
+  // and CUT before the lingering smoke tail. Loops are untouched.
+  const FX_TIM = {
+    'hit-burst':        { pk: 5,  cut: 12 }, 'perfect-flare':   { pk: 8,  cut: 15 },
+    'explosion':        { pk: 7,  cut: 17 }, 'shockwave':       { pk: 12, cut: 14 },
+    'miss-shatter':     { pk: 4,  cut: 14 }, 'bomb-explode':    { pk: 1,  cut: 23 },
+    'combo-burst':      { pk: 8,  cut: 15 }, 'multiplier-up':   { pk: 9,  cut: 13 },
+    'note-comet':       { pk: 1,  cut: 8  }, 'star-pickup':     { pk: 2,  cut: 12 },
+    'gradeup-flare':    { pk: 4,  cut: 19 }, 'lane-pulse':      { pk: 8,  cut: 13 },
+    'string-ripple':    { pk: 7,  cut: 14 }, 'shard-burst':     { pk: 7,  cut: 15 },
+    'soul-burst-violet':{ pk: 7,  cut: 17 }, 'bone-shatter':    { pk: 4,  cut: 14 },
+    'note-sparkle-pink':{ pk: 8,  cut: 15 }, 'heart-pop-pink':  { pk: 5,  cut: 13 },
+    'paw-poof':         { pk: 11, cut: 15 }, 'confetti-pop':    { pk: 3,  cut: 15 },
+    'firework-gold':    { pk: 11, cut: 19 },
+  };
+  // impact-tuned spawn: jump the instance's clock to (peak-1) so the POP lands on the next paint;
+  // stop at the cut frame so tails don't smear. Falls back to a plain play for loops/unknown names.
+  function _playTuned(name, x, y, scale) {
+    const meta = fx.manifest[name];
+    const h = fx.play(name, x, y, { scale: scale });
+    const tim = FX_TIM[name];
+    if (tim && meta && !meta.loop) {
+      try {
+        const inst = fx.active[fx.active.length - 1];
+        const frameMs = 1000 / (meta.fps || 30);
+        if (inst && inst.start === null && tim.pk > 1) inst.start = performance.now() - (tim.pk - 1) * frameMs;
+        if (tim.cut < meta.count - 1) setTimeout(() => { try { h.stop(); } catch (e) {} }, Math.max(40, (tim.cut - (tim.pk - 1)) * frameMs + 20));
+      } catch (e) {}
+    }
+    return h;
+  }
   // per-level themed hit/perfect variants, keyed by #game[data-rrtheme]; else the brand-default set
   const THEME_FX = {
     violet: { hit: 'soul-burst-violet', perfect: 'soul-burst-violet' },   // Skully "The World"
@@ -1934,29 +1967,42 @@
     try { const g = document.getElementById('game'); return (g && g.dataset && g.dataset.rrtheme) || ''; } catch (e) { return ''; }
   }
   // gameplay event 'type' -> additive layers [{name, mult}]; mult scales the manifest's per-effect scale
-  function _fxLayers(type) {
+  function _fxLayers(type, kind) {
     const th = THEME_FX[_fxTheme()] || null;
     switch (type) {
       case 'hit': {
-        const L = [{ name: (th && th.hit) || 'hit-burst', mult: 1 }];
-        if (odActive) L.push({ name: 'note-comet', mult: 0.95 });          // star power: every hit streaks
+        const L = [{ name: (th && th.hit) || 'hit-burst', mult: 0.85 }];   // tight to the note
+        if (odActive) L.push({ name: 'note-comet', mult: 0.9 });           // star power: every hit streaks
         return L;
       }
       case 'perfect': {
-        const L = [{ name: (th && th.perfect) || 'perfect-flare', mult: 1.05 }];
-        if (th && th.perfect2) L.push({ name: th.perfect2, mult: 0.9 });   // themed 2nd layer (Melody sparkle)
-        if (odActive) L.push({ name: 'note-comet', mult: 0.95 });
+        const L = [{ name: (th && th.perfect) || 'perfect-flare', mult: 0.95 }];
+        if (th && th.perfect2) L.push({ name: th.perfect2, mult: 0.85 });  // themed 2nd layer (Melody sparkle)
+        if (odActive) L.push({ name: 'note-comet', mult: 0.9 });
         return L;
       }
-      case 'miss':      return [{ name: 'miss-shatter', mult: 1 }];
-      case 'star':      return [{ name: 'star-pickup', mult: 1.1 }];
-      case 'multup':    return [{ name: 'multiplier-up', mult: 1.15 }];     // multiplier tier climbed
-      case 'chord':     return [{ name: 'string-ripple', mult: 1.3 }];      // chord bar struck (centered)
-      case 'holdend':   return [{ name: 'lane-pulse', mult: 1.05 }];        // sustain banked to the tail
-      case 'wipeout':   return [{ name: 'shard-burst', mult: 1.1 }];        // mass-fail shatter
-      case 'combo':     return [{ name: 'combo-burst', mult: 1.05 }, { name: 'shockwave', mult: 0.9 }];
-      case 'overdrive': return [{ name: 'shockwave', mult: 1.2 }, { name: 'explosion', mult: 1 }];
-      case 'bomb':      return [{ name: 'bomb-explode', mult: 1 }, { name: 'shockwave', mult: 0.8 }];
+      case 'miss':      return [{ name: 'miss-shatter', mult: 0.9 }];
+      case 'star':      return [{ name: 'star-pickup', mult: 1.05 }];
+      case 'multup': {  // multiplier tier climbed — escalates with the tier (kind = 'x2'|'x3'|'x4')
+        const mt = parseInt(String(kind || '').replace(/\D/g, ''), 10) || 2;
+        const L = [{ name: 'multiplier-up', mult: mt >= 4 ? 1.3 : mt === 3 ? 1.05 : 0.85 }];
+        if (mt >= 4) L.push({ name: 'gradeup-flare', mult: 0.9 });         // max multiplier = a real moment
+        return L;
+      }
+      case 'chord':     return [{ name: 'string-ripple', mult: 1.2 }];      // chord bar struck (centered)
+      case 'holdend':   return [{ name: 'lane-pulse', mult: 1.0 }];         // sustain banked to the tail
+      case 'wipeout':   return [{ name: 'shard-burst', mult: 1.05 }];       // mass-fail shatter
+      case 'combo': {   // STREAK ESCALATION — every 25 grows; CENTURIES are the big stage moment
+        const tier = Math.max(1, Math.round(combo / 25));
+        const century = combo > 0 && combo % 100 === 0;
+        if (century)    return [{ name: 'firework-gold', mult: 1.25 }, { name: 'explosion', mult: 1.1 }, { name: 'shockwave', mult: 1.25 }];
+        if (tier >= 3)  return [{ name: 'explosion', mult: 1.0 }, { name: 'shockwave', mult: 1.0 }];
+        if (tier === 2) return [{ name: 'combo-burst', mult: 1.0 }, { name: 'shockwave', mult: 0.8 }];
+        return [{ name: 'combo-burst', mult: 0.85 }];
+      }
+      case 'overdrive': return [{ name: 'shockwave', mult: 1.15 }, { name: 'explosion', mult: 0.95 }];
+      case 'odend':     return [{ name: 'shockwave', mult: 0.85 }];         // star power dissipates
+      case 'bomb':      return [{ name: 'bomb-explode', mult: 1.0 }, { name: 'shockwave', mult: 0.8 }];
       default: return [];
     }
   }
@@ -1966,7 +2012,7 @@
     try {
       if (!fx || reduceMotion) return;
       if (fx.active && fx.active.length > (fxLite ? 14 : 96)) return;     // soft concurrency guard
-      let layers = _fxLayers(type);
+      let layers = _fxLayers(type, kind);
       if (!layers.length) return;
       if (fxLite) layers = layers.slice(0, 1);                           // lite: primary layer only
       const _g = fretGeom();
@@ -1979,7 +2025,7 @@
         const L = layers[i];
         if (!_fxHas(L.name)) continue;                                   // sheet absent/failed → skip (no warn spam)
         const meta = fx.manifest[L.name];
-        fx.play(L.name, x, y, { scale: (meta.scale != null ? meta.scale : 1) * (L.mult || 1) * k });
+        _playTuned(L.name, x, y, (meta.scale != null ? meta.scale : 1) * (L.mult || 1) * k);
       }
     } catch (e) {}
   }
@@ -2365,7 +2411,7 @@
       odTimer -= dt;
       overdrive = Math.max(0, odTimer / OD_DURATION);
       bgPulse = Math.max(bgPulse, 0.35);
-      if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } }
+      if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } emitFx('odend', 'od'); }
     }
     applyGate(); // expire miss-dropouts so the music returns
     for (const n of notes) { if (!n._pulsed && Math.abs(n.time - t) < dt) { n._pulsed = true; bgPulse = Math.min(1, bgPulse + 0.5); } }
@@ -3320,13 +3366,19 @@
           const v1 = ART.bridgeFY + (ART.nutFY - ART.bridgeFY) * d1;
           const fA = f0b + (f0n - f0b) * d0, fB = fLb + (fLn - fLb) * d0;
           const xa = noteX2(0, d0), xb = noteX2(LANE_COUNT - 1, d0);
-          // sc = screen px per FULL IMAGE WIDTH (fA/fB are image-width fractions) — so the slice's
-          // destination width is sc itself. (A unit bug here once multiplied by iw again → a ~10⁵px
-          // drawImage that Chrome silently refused → "no guitar". Caught by the user's playtest.)
+          // sc = screen px per FULL IMAGE WIDTH (fA/fB are image-width fractions). (A unit bug here
+          // once multiplied by iw again → a ~10⁵px drawImage Chrome silently refused → "no guitar".)
           const sc = (xb - xa) / Math.max(0.004, fB - fA);
+          // build11 (user playtest: "oversized/blown up"): draw ONLY the NECK BAND around the strings
+          // — a tapering corridor like the default guitar5 silhouette — instead of the full flat art
+          // (whose body/wings, scaled to the lanes, sprawled ~1.5× the playfield across midscreen).
+          // Band = local string span + 30% margin each side, tapering with the lane fan.
+          const mB = 0.30 * (fB - fA);
+          const sxA = Math.max(0, (fA - mB)) * iw;
+          const sxB = Math.min(1, (fB + mB)) * iw;
           ctx.drawImage(activeGuitarImg,
-            0, Math.min(v0, v1) * ih, iw, Math.abs(v1 - v0) * ih + 1,
-            xa - fA * sc, y1, sc, (y0 - y1) + 0.8);
+            sxA, Math.min(v0, v1) * ih, Math.max(1, sxB - sxA), Math.abs(v1 - v0) * ih + 1,
+            xa - (fA * iw - sxA) * (sc / iw), y1, Math.max(1, sxB - sxA) * (sc / iw), (y0 - y1) + 0.8);
         }
         // build10b: the print FRONTIER — a hot accent line + bloom sweeping down the highway
         if (bp < 1) {
@@ -3350,12 +3402,19 @@
         {
           const bodyA = bp >= 1 ? 1 : Math.max(0, (bp - 0.78) / 0.22);
           if (bodyA > 0.01) {
-            const xa = noteX2(0, 0), xb = noteX2(LANE_COUNT - 1, 0);
-            const sc = (xb - xa) / Math.max(0.004, fLb - f0b);   // screen px per full image width
+            // build11: the BODY draws like the DEFAULT guitar's body — a playfield-width strip
+            // anchored under the catchers at PROFILE scale, NOT at string scale (string scale made
+            // ornate skin bodies sprawl ~1.5× the playfield = the "blown up" look). Centered by
+            // aligning the skin's bridge-string midline to the lane midline.
+            const P2 = _skinFit.P;
+            let pgw2;
+            if (P2.fit === 'cover') { pgw2 = (cw / ch > P2.aspect) ? cw : ch * P2.aspect; }
+            else { pgw2 = Math.min(ch * ART.fillFY * P2.aspect, cw * ART.fillFX); }
+            const laneC = (noteX2(0, 0) + noteX2(LANE_COUNT - 1, 0)) / 2;
             const rows = (1 - ART.bridgeFY) * ih;                // body rows in IMAGE px
             ctx.save(); ctx.globalAlpha = bodyA;
             ctx.drawImage(activeGuitarImg, 0, ART.bridgeFY * ih, iw, rows,
-              xa - f0b * sc, nearYp, sc, rows * (sc / iw));      // square pixels: px-per-image-px = sc/iw
+              laneC - ((f0b + fLb) / 2) * pgw2, nearYp, pgw2, rows * (pgw2 / iw));
             ctx.restore();
           }
         }
