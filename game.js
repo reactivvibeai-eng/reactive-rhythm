@@ -1582,6 +1582,10 @@
       lanesPx: () => { try { const g = fretGeom(); return { nearX: g.nearX.map(v => +v.toFixed(2)), nearY: +g.nearY.toFixed(2), lw: +g.lw.toFixed(2), farX: g.farX.map(v => +v.toFixed(2)), farY: +g.farY.toFixed(2) }; } catch (e) { return 'ERR ' + e.message; } },
       rect: () => { try { const r = guitarRect(); return { gx: +r.gx.toFixed(1), gy: +r.gy.toFixed(1), gw: +r.gw.toFixed(1), gh: +r.gh.toFixed(1), skinFit: !!_skinFit }; } catch (e) { return 'ERR ' + e.message; } },
       buildT: () => +_skinBuildT.toFixed(3),   // level-start materialize progress (dev; strip at freeze)
+      // GAMEPLAY probes (dev; strip at freeze): the next strikeable note + live judgment counters,
+      // so a timed in-page press can assert the input→judgment loop end-to-end.
+      nextNote: () => { try { const j = songTime() - audioOffset; const n = notes.find(nn => !nn.judged && nn.type !== 'bomb' && nn.type !== 'hold' && !nn.open && nn.time > j + 0.05); return n ? { lane: n.lane, time: +n.time.toFixed(3), inSec: +(n.time - j).toFixed(3), type: n.type } : null; } catch (e) { return null; } },
+      counts: () => ({ perfect: counts.perfect, great: counts.great, good: counts.good, miss: counts.miss, combo: combo, score: Math.floor(score) }),
       // GEM-TINT regression probe (dev; strip at freeze): the tinted marble canvas must keep the
       // sprite's alpha — corners ~0 (transparent), center opaque. Catches the "square marble" class.
       gemTint: (kind) => { try {
