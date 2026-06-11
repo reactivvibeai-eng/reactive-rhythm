@@ -39,6 +39,25 @@ production export — black-box root cause: additive-on-transparent). Backdrop =
 ⚠ **ASSET DEBT for the asset agent:** (1) `ryo-intro.mp4` HAS NO AUDIO TRACK — re-export with audio
 (lunar-waves bed is the stopgap); (2) crimson-chrome + gold-relic guitars too tall for natural framing
 (spawn ~300px off-screen) — re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver).
+**v109 — the user's v108 playtest verdicts, all shipped + self-playtested (zero console errors):**
+(a) **Backdrop SMART-FIT** — sharp layer scales between contain↔cover (`--rr-bgfit` =
+min(cover/contain, 1.18), JS in the build12 fill IIFE; rrCineZoom multiplies the var), 6% edge
+FEATHER mask melts it into a BRIGHTER blurred fill (.86, blur 30, 38s Ken-Burns drift),
+`object-position 50% 42%` (fixes "Skully video too lowered"; moon-loop is 976×2116 portrait — the
+"cropped box" root). Depth: cached CONTACT SHADOW (guitar's blurred silhouette, sliced w/ same
+warp+materialize gates). (b) **FX = board particles** — `emitComboWave` (catcher-row ripple +
+`lane-pulse` surge up the exact warped note path via `_lanePtPx` + century fireworks in the SKY
+above the nut + mid-board shockwave), multup flare lifted + comet up the string, **x3+ = fire-loop
+riding every catcher** (was unused!), OD comets all lanes; `_fxGen` guards queued spawns.
+(c) **Skins (user decree): shrink + OUR strings** — skin draws at widthF 0.78 of the panel (crisp,
+world visible at the sides), lanes = EVEN FAN across the neck band (outer measured strings ×1.16),
+engine strings boosted (alpha floor .50, dark seat) ARE the visible lanes; painted-string matching
+retired; default byte-identical. DIALS: widthF/laneSpread per skin in SKIN_GEOM, fit cap 1.18,
+feather 6%, fill brightness .86, fire threshold x3 / scales in render, wave timings in emitComboWave.
+NEW dev hooks (strip at freeze): `__rrDebug.tick` (manual frame — headless rAF is FULLY FROZEN, 0
+ticks/s; ticks also advance the materialize cinematic), `fxWave/fxPt/fx().pts`, chord-aware
+`nextNote` (`lanes[]`+`holdDur`+opens — the driver must press chord partners + hold sustains to
+their real end or the next tick's sweep breaks the combo).
 **v105–v106 (`eabe0bf`→`700e234`):** gameplay signed off with precision input probes (exact-time
 press → PERFECT on both guitars; early press consumes nothing); Skully guitar reshaped to the
 DEFAULT's anatomy (projection = tapering NECK BAND 1.8× lane span + body strip at PROFILE scale —
@@ -53,12 +72,15 @@ the repo. Drop path when it lands: clips → `assets/fx/_src/` → `python build
 N --cols C --rows R [--loop]` → UNION-merge `manifest.json` (never overwrite; bomb-* names are
 engine-owned) → the engine auto-loads any manifest entry; wire new names into THEME_FX/_fxLayers/the
 UI MAP as fits. The engine agent (me) can tile + wire the moment files exist.
-**NEXT:** user PLAYS SKULLY (the verdict gates the template lock-in). Dial knobs ready: zoom amount
-(rrCineZoom 1.16), print speed (dt/2.0), frontier colors, NSL slices, scrim alpha, boom volumes, the
-click-FX MAP. Open beta-feedback items (user's call): intro-every-launch fatigue (consider instant-
-skip memory), Random-default stickiness per session, strings-visible-before-wood during the print,
-pause-menu press FX, ENTER label on touch. Carryover: `?align=1` skin eyeball (melody-pink/ember-bone
-roughest); 2-device MP test; asset wishes (transparent RYO cutout, Skully hazard art).
+**NEXT:** user RE-PLAYTESTS v109 (Skully + the default level + combo FX — their verdict still gates
+the level template lock-in / any new level). Dial knobs ready: skin widthF (0.78) + laneSpread (1.16)
+in SKIN_GEOM/_applySkinGeom, backdrop fit cap (1.18) + feather (6%) + fill brightness (.86), fire
+tier/scale, wave timing/scales in emitComboWave, zoom (rrCineZoom 1.16), print speed (dt/2.0), scrim
+alpha, boom volumes, the click-FX MAP. Open beta-feedback items (user's call): intro-every-launch
+fatigue (consider instant-skip memory), Random-default stickiness per session, strings-visible-
+before-wood during the print, pause-menu press FX, ENTER label on touch. Carryover: `?align=1` skin
+eyeball (melody-pink/ember-bone roughest); 2-device MP test; asset wishes (transparent RYO cutout,
+Skully hazard art, ryo-intro audio, crimson-chrome/gold-relic re-frames).
 
 ## HOW TO TEST (memory `rhythm-game-local-verify` — read it)
 Claude_Preview headless browser CAN boot+run the game. Recipe: kill all 8787 procs → `preview_start`

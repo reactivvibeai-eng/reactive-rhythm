@@ -1107,6 +1107,43 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v109 — backdrop SMART-FIT · FX become BOARD particles · skins shrink w/ engine-string lanes  ✅
+The user's v108 playtest, three verdicts, all shipped + self-playtested end-to-end:
+- **Backdrop composition ("contain = cropped box, cover = blown up"):** the sharp layer now scales
+  BETWEEN contain and cover — JS sets `--rr-bgfit` = min(cover/contain, **1.18**) per video×viewport
+  (moon-loop is 976×2116 PORTRAIT — the root of the "box") — its edges **FEATHER** (6% mask) into a
+  **brighter** blurred fill (brightness .72→.86, blur 30) so sharp melts into blur with no seam;
+  content biased UP (`object-position 50% 42%` — the guitar owns the lower third; also fixes Skully's
+  "video too lowered"). `rrCineZoom` keyframes multiply the fit var (no snap). **Depth:** the guitar
+  grounds via a real **CONTACT SHADOW** (its own blurred silhouette, cached, sliced with the same warp
+  + materialize gates) and the fill layer gets a 38s Ken-Burns **drift** — three planes: drifting blur
+  → locked video → reactive guitar. Skully's 1280×720 loop on 16:9 ≈ true full-bleed (fit 1.0005).
+- **FX = particles ON THE BOARD ("effects float at the bottom"):** GH rule applied — anchor to
+  gameplay geometry, energy flows UP the strings. Streak milestones → `emitComboWave`: catcher-row
+  RIPPLE spreading from the hit lane (y lifted lw·0.4 off the buttons) + `lane-pulse` SURGE traveling
+  up the lanes along the exact warped/1-z note path (`_lanePtPx`, scale shrinks with depth) + tier≥3
+  mid-board detonation + CENTURY = 3 gold fireworks in the BACKDROP SKY above the nut + mid-board
+  shockwave. Multiplier-up: flare lifts off the button + a comet surges up that string. **x3+ sets the
+  catcher buttons ON FIRE** (the unused `fire-loop` sheet rides each button via handles, rages at max;
+  stops on tier drop/reset). OD activation: bursts lifted + comets race up all five strings.
+  Spawns are generation-guarded (`_fxGen`) so queued waves die with the run.
+- **Custom guitars (user decree): SHRINK + OUR STRINGS.** A skin draws at `widthF` **0.78** of the
+  panel (crisper — violet-gothic ≈ native px at 1366×768 — and the level world shows at the sides);
+  lanes are an **EVEN FAN across the art's neck band** (measured outer strings × 1.16 spread) — the
+  ENGINE's neon strings (alpha floor .50, +0.8px, dark seat under-stroke) are now the visible play
+  lanes on skin art; painted-string matching is retired. Default guitar byte-identical (skinWF=0).
+- New dev hooks (strip at freeze): `__rrDebug.tick` (manual frame — headless rAF is FULLY frozen, 0
+  ticks), `fxWave`, `fxPt`, `fx().pts`, chord-aware `nextNote` (`lanes[]`, `holdDur`, opens included).
+**Self-playtest (real input, audio-clock busy-wait):** demo run 26/26 PERFECT zero miss; milestone
+wave verified at combo 25 live + by position audit (5 ripple bursts at the catcher xs, 20 surge
+pulses climbing 429→110px converging with the warp, fireworks y 15–50 ABOVE the nut at 75, shockwave
+mid-board); fire-loop ×5 riding all catchers at x3 (combo 13 + OD), scale lw·0.92; OD comets;
+Skully: even fan (bridge step .0640 about her measured center .4661), gw 394.7 = .78×506 with
+transparent gutters (video visible), materialize print Δ208.7/px, strings read over her art
+(center-line 228–252 vs 155–184 sides at idle); unequip restores gh defaults byte-identical;
+**zero console errors across the whole session**. Catalog fetch flaked once mid-test (supabase,
+transient — warn + mock fallback worked as designed; unrelated). Bump ?v 108→109.
+
 ### v107–v108 — THE GUITAR IS THE GUITAR · black-box FX root cause · backdrop detail · intro-audio truth  ✅
 User playtest + a 31-agent adversarial review workflow. **Guitar:** the projection experiment is gone —
 a custom guitar is a PROFILE RESKIN (whole art, cover-fit like the default, lanes on ITS measured
