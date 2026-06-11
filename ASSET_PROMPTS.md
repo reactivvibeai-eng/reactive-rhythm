@@ -294,6 +294,18 @@ reference (upload via `media_upload` → use the returned UUID as a `medias[]` r
 
 ---
 
+## ⚠️ STANDING RULE (user decree 2026-06-11): EVERY guitar asset paints EXACTLY 5 STRINGS
+The game is 5-lane. Six-string art is REJECTED. Framing spec for in-game guitars: vertical
+player-POV down the neck (neck ~70% of height, headstock croppable at top, body a sliver at
+bottom), aspect ≈ 0.56 (1080×1920, match `assets/guitar5.png`), strings light-metal and clearly
+CONTRASTING against a dark fretboard (the engine pixel-measures strings by contrast), fanning
+slightly wider at bridge than nut. Best method: img2img off `guitar5.png` (it has 5 strings) on a
+flat chroma-green bg, hammer "EXACTLY FIVE strings, five saddles, five pegs" in the prompt, then
+COUNT the strings in the output before filing. 5-string deliverables so far:
+`assets/guitars/violet-gothic-5.png` (Skully) and `assets/guitars/crimson-chaos-ryo.png` (RYO
+flagship, black atom logo). The engine agent measures geometry itself — old 6-string files stay
+until new art verifies in-game.
+
 ## PREMIUM GUITAR SKINS — real re-themed instruments (NOT recolors)
 
 A sellable skin must be a genuinely different, detailed instrument — new finish, material, carvings,
