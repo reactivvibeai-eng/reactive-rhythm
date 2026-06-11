@@ -40,9 +40,13 @@ production export — black-box root cause: additive-on-transparent). Backdrop =
 (delivered with audio, binary-verified soun/mp4a, wired: the WebAudio path decodes the mp4's own
 track, lunar-waves = fallback only; silent original kept as `ryo-intro-noaudio.bak.mp4`);
 (2) crimson-chrome + gold-relic guitars too tall for natural framing (spawn ~300px off-screen) —
-re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver); (3) **v111 guitar orders
-OPEN** (`ASSET_ORDERS_GUITARS.md`): violet-gothic-5.png (Skully, EXACTLY 5 strings) +
-crimson-chaos-ryo.png (default-level flagship).
+re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver) **+ now also the 5-string
+decree applies**; (3) ~~v111 guitar orders~~ **DELIVERED (asset `0698670`) + WIRED v113**:
+Crimson Chaos = the gh-profile DEFAULT guitar (measured fractions; guitar5 in git for revert),
+Skully level+store = violet-gothic-5. **Calibration kit:** `assets/guitars/_calibrate.py`
+(string-tracking + peak-snap — run it on any future guitar, paste the printed SKIN_GEOM entry).
+**EXACT-STRINGS RULE (v113):** 5-measured-string art rides its painted strings; the even fan is
+only for legacy 6-string art.
 **v109 — the user's v108 playtest verdicts, all shipped + self-playtested (zero console errors):**
 (a) **Backdrop SMART-FIT** — sharp layer scales between contain↔cover (`--rr-bgfit` =
 min(cover/contain, 1.18), JS in the build12 fill IIFE; rrCineZoom multiplies the var), 6% edge

@@ -255,7 +255,10 @@
   const neckImg = loadImg('assets/neck-cut.png');
   const bodyImg = loadImg('assets/body-cut.png');
   const guitarImg = loadImg('assets/guitar.png');
-  const guitarImg5 = loadImg('assets/guitar5.png');   // 5-string neck for the Guitar-Hero controller mode
+  // build16: the DEFAULT guitar is now "CRIMSON CHAOS" (RYO flagship, user order v111 — asset
+  // commit 0698670, 5 strings, guitar5 anatomy). Revert path: loadImg('assets/guitar5.png') +
+  // restore the gh profile's guitar5 fractions (in git history).
+  const guitarImg5 = loadImg('assets/guitars/crimson-chaos-ryo.png');   // 5-string neck for the Guitar-Hero controller mode
   let activeGuitarImg = guitarImg;                     // swapped by the active lane profile
   const noteImg = loadImg('assets/note-normal.png');
   const noteStarImg = loadImg('assets/note-star.png');
@@ -424,10 +427,11 @@
     },
     gh: {
       count: 5, img: guitarImg5, store: 'rr_keymap_gh', padStore: 'rr_padmap_gh',
-      // measured from assets/guitar5.png (pixel-calibrated via measure.html — do NOT even-space)
+      // measured from assets/guitars/crimson-chaos-ryo.png (string-tracking + peak snap at the
+      // eval rows, _calibrate.py — do NOT even-space). guitar5.png's old fractions are in git.
       aspect: 0.5625, nutFY: 0.16, bridgeFY: 0.81, fit: 'cover', bottomAnchor: 0.93, persp: 4, warp: 0.2,
-      nutXF:    [0.4599, 0.4825, 0.5024, 0.5275, 0.5504],
-      bridgeXF: [0.3321, 0.4112, 0.4945, 0.5747, 0.6572],
+      nutXF:    [0.4620, 0.4833, 0.5065, 0.5296, 0.5528],
+      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380],
       // Guitar-Hero fret colours (green/red/yellow/ORANGE) with the BLUE fret chrome-swapped (brand: no blue)
       colors: [
         { c: '#3ad15a', rgb: '58, 209, 90'  }, { c: '#ff3c3c', rgb: '255, 60, 60'  },
@@ -498,6 +502,14 @@
   // guitar5.png's hand calibration to ≤0.003). 6-entry arrays = the art paints 6 strings; the
   // resampler subsets the most centered 5 for the gh profile.
   const SKIN_GEOM = {
+    // build16: TRUE-5-STRING deliveries (asset commit 0698670; string-tracking + peak snap via
+    // assets/guitars/_calibrate.py) — exactly-5 arrays ride the painted strings (no fan).
+    'assets/guitars/violet-gothic-5.png': { aspect: 1080 / 1920, nutFY: 0.105, bridgeFY: 0.795,
+      nutXF:    [0.4565, 0.4742, 0.4981, 0.5222, 0.5398],
+      bridgeXF: [0.3380, 0.4093, 0.4843, 0.5565, 0.6333] },
+    'assets/guitars/crimson-chaos-ryo.png': { aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
+      nutXF:    [0.4620, 0.4833, 0.5065, 0.5296, 0.5528],
+      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380] },
     'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
@@ -561,19 +573,25 @@
     const nut = _resampleStrings(g.nutXF || [g.nut[0], g.nut[1]], LANE_COUNT);
     const brg = _resampleStrings(g.bridgeXF || [g.bridge[0], g.bridge[1]], LANE_COUNT);
     ART.aspect = g.aspect; ART.nutFY = g.nutFY; ART.bridgeFY = g.bridgeFY;
-    // build13 (user decree, Skully playtest): on a custom guitar THE ENGINE'S strings define the
-    // play lanes — an EVEN fan across the art's neck band (the measured outer strings × a small
-    // spread), drawn visibly over the art (see the string render's skin under-stroke). Lanes align
-    // with the guitar ARM; matching its painted strings is explicitly no longer required.
-    const spread = g.laneSpread != null ? g.laneSpread : 1.16;
-    const fan = (arr) => {
-      const a0 = arr[0], aN = arr[arr.length - 1];
-      const mid = (a0 + aN) / 2, half = Math.abs(aN - a0) / 2 * spread;
-      const out = [];
-      for (let i = 0; i < LANE_COUNT; i++) out.push(mid - half + 2 * half * (LANE_COUNT > 1 ? i / (LANE_COUNT - 1) : 0.5));
-      return out;
-    };
-    ART.nutXF = fan(nut); ART.bridgeXF = fan(brg);
+    // build16 (5-STRING ASSET DECREE, first true-5 deliveries): when the art paints EXACTLY
+    // LANE_COUNT strings, the lanes ride the MEASURED painted strings — the guitar5 ideal; the
+    // engine's drawn strings land ON the art's. The build13 EVEN FAN (×laneSpread) survives ONLY
+    // for count-mismatch art (legacy 6-string renders), where painted matching is impossible and
+    // alignment-to-ARM is the contract.
+    const exact = !!(g.nutXF && g.nutXF.length === LANE_COUNT && g.bridgeXF && g.bridgeXF.length === LANE_COUNT);
+    if (exact) {
+      ART.nutXF = nut; ART.bridgeXF = brg;
+    } else {
+      const spread = g.laneSpread != null ? g.laneSpread : 1.16;
+      const fan = (arr) => {
+        const a0 = arr[0], aN = arr[arr.length - 1];
+        const mid = (a0 + aN) / 2, half = Math.abs(aN - a0) / 2 * spread;
+        const out = [];
+        for (let i = 0; i < LANE_COUNT; i++) out.push(mid - half + 2 * half * (LANE_COUNT > 1 ? i / (LANE_COUNT - 1) : 0.5));
+        return out;
+      };
+      ART.nutXF = fan(nut); ART.bridgeXF = fan(brg);
+    }
     ART.fit = 'cover'; ART.bottomAnchor = g.bottomAnchor || 0.93;
     ART.skinWF = g.widthF != null ? g.widthF : 0.78;   // build13: skin draw width (fraction of the panel)
     ART.warp = Math.max((p && p.warp) || 0, g.warp != null ? g.warp : 0.34);

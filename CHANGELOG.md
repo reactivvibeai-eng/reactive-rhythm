@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v113 — THE 5-STRING GUITARS LAND: Crimson Chaos is the default · Skully re-skinned  ✅
+Asset commit `0698670` delivered both v111 orders (1080×1920, exactly 5 strings, guitar5 framing).
+- **Calibration kit built** (`assets/guitars/_measure_strings.py` + `_calibrate.py` + probes):
+  per-row contrast peaks → exactly-5-peak clean rows (57/64 rows, residuals ≤7.3px) → per-string
+  least-squares lines → **local-peak SNAP at the eval rows** (the leftmost string curves outward
+  toward the body; linear extrapolation drifted up to 14px — snapping nails it, verified 253–255
+  luminance at every snapped point).
+- **"CRIMSON CHAOS" (RYO) is the DEFAULT guitar** — gh profile img + measured fractions swapped
+  (nut span 0.0908 ≈ guitar5's 0.0905; bridge gaps even to ±0.001; guitar5 fractions in git for
+  revert). **Skully runs `violet-gothic-5.png`** (level + store).
+- **EXACT-STRINGS RULE:** when art paints exactly LANE_COUNT strings, lanes ride the MEASURED
+  painted strings (the guitar5 ideal — engine strings land ON the art's); the build13 even fan
+  survives only for legacy 6-string art (count mismatch).
+**Self-playtest:** default = Crimson Chaos draws (neck 3593/3600 opaque px), lanes at the new
+geometry (lw 37), 15/15 PERFECT; Skully = `exactNotFanned:true` (measured arrays live, not the
+fan), 0.78 shrink retained, materialize completes, string columns hot, 13/13 pressed PERFECT;
+zero console errors. Bump ?v 112→113.
+
 ### v112 — RYO INTRO HAS ITS VOICE (asset delivered + wired)  ✅
 The asset agent delivered the intro re-export WITH audio (`assets/ryo/` drop, installed as
 `ryo-intro.mp4`; silent original kept as `ryo-intro-noaudio.bak.mp4`). **Binary-verified:**
