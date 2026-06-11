@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=111" />
+<link rel="stylesheet" href="jukebox.css?v=112" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3824,11 +3824,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=111"></script>
-<script src="game.js?v=111"></script>
-<script src="jukebox.js?v=111"></script>
-<script src="catalog.js?v=111"></script>
-<script src="multiplayer.js?v=111"></script>
+<script src="assets/fx/fx-player.js?v=112"></script>
+<script src="game.js?v=112"></script>
+<script src="jukebox.js?v=112"></script>
+<script src="catalog.js?v=112"></script>
+<script src="multiplayer.js?v=112"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -5813,17 +5813,25 @@
     try { if (/[?&]ryo=off/.test(location.search)) alreadySeen = true; } catch (e) {}
     if (!introEl || !vid || alreadySeen || reduce) return;   // missing overlay / disabled / reduced-motion → straight to hub
 
-    // build12b INTRO AUDIO — ⚠ ROOT CAUSE FOUND (adversarial review, binary box-scan):
-    // assets/ryo/ryo-intro.mp4 HAS NO AUDIO TRACK AT ALL ('vide'/avc1 only — no 'soun'/'mp4a').
-    // No unmute/WebAudio code can ever make it sound. ASSET FIX NEEDED: re-export the intro WITH
-    // its audio (or deliver assets/ryo/ryo-intro.m4a) — then point this loader at it.
-    // STOPGAP: an on-brand music bed (lunar-waves, a real audio asset) plays under the intro.
+    // build15 INTRO AUDIO — the asset agent delivered the intro WITH its audio track
+    // (binary-verified: 'soun' handler + 'mp4a' atoms present). The proven WebAudio path stays
+    // (the <video> remains muted; Chrome's unmute-after-gesture was unreliable): we decode the
+    // mp4's OWN audio track and play it gesture-started + synced to the video clock. The old
+    // lunar-waves bed is now only the decode-failure fallback.
     // The AudioContext is created LAZILY inside the begin-gesture chain (never born suspended).
     var iac = null, ibuf = null, isrc = null, iraw = null;
     try {
-      fetch('assets/lunar-waves.mp3').then(function (r) { return r.arrayBuffer(); })
+      fetch('assets/ryo/ryo-intro.mp4').then(function (r) { return r.arrayBuffer(); })
         .then(function (ab) { iraw = ab; }).catch(function () {});
     } catch (e) {}
+    function introAudioFallback() {   // mp4 audio undecodable in this browser → lunar-waves bed
+      try {
+        fetch('assets/lunar-waves.mp3').then(function (r) { return r.arrayBuffer(); }).then(function (ab2) {
+          if (!iac) return;
+          iac.decodeAudioData(ab2, function (b2) { ibuf = b2; introAudioStart(); }, function () {});
+        }).catch(function () {});
+      } catch (e) {}
+    }
     function introAudioStart() {
       try {
         if (window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted()) return;
@@ -5832,14 +5840,14 @@
         if (iac.state === 'suspended') { try { iac.resume(); } catch (e) {} }
         if (!ibuf) {
           var ab = iraw; iraw = null;
-          iac.decodeAudioData(ab, function (b) { ibuf = b; introAudioStart(); }, function () {});
+          iac.decodeAudioData(ab, function (b) { ibuf = b; introAudioStart(); }, function () { introAudioFallback(); });
           return;
         }
         introAudioStop();
         isrc = iac.createBufferSource(); isrc.buffer = ibuf;
         var ig = iac.createGain();
         ig.gain.setValueAtTime(0.0001, iac.currentTime);
-        ig.gain.exponentialRampToValueAtTime(0.55, iac.currentTime + 0.6);   // bed fades in
+        ig.gain.exponentialRampToValueAtTime(0.9, iac.currentTime + 0.35);   // the REAL soundtrack — full voice, fast fade-in
         isrc.connect(ig); ig.connect(iac.destination);
         isrc.__gain = ig;
         isrc.start(0, Math.max(0, vid.currentTime || 0));

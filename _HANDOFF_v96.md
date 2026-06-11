@@ -36,9 +36,13 @@ build 0→1): v103's numbers were 74/px print-sweep, 66–120/px skin-vs-default
 now (whole art, cover-fit, lanes on their OWN measured strings — both the invariant fit and the
 projection are deleted; the user's verdict). FX sheets are LUMINANCE-KEYED at load (`RhythmFxKey`,
 production export — black-box root cause: additive-on-transparent). Backdrop = contain + blurred fill.
-⚠ **ASSET DEBT for the asset agent:** (1) `ryo-intro.mp4` HAS NO AUDIO TRACK — re-export with audio
-(lunar-waves bed is the stopgap); (2) crimson-chrome + gold-relic guitars too tall for natural framing
-(spawn ~300px off-screen) — re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver).
+⚠ **ASSET DEBT for the asset agent:** (1) ~~`ryo-intro.mp4` HAS NO AUDIO TRACK~~ **RESOLVED v112**
+(delivered with audio, binary-verified soun/mp4a, wired: the WebAudio path decodes the mp4's own
+track, lunar-waves = fallback only; silent original kept as `ryo-intro-noaudio.bak.mp4`);
+(2) crimson-chrome + gold-relic guitars too tall for natural framing (spawn ~300px off-screen) —
+re-render framed like guitar5 (mostly neck, ~0.56 aspect, body sliver); (3) **v111 guitar orders
+OPEN** (`ASSET_ORDERS_GUITARS.md`): violet-gothic-5.png (Skully, EXACTLY 5 strings) +
+crimson-chaos-ryo.png (default-level flagship).
 **v109 — the user's v108 playtest verdicts, all shipped + self-playtested (zero console errors):**
 (a) **Backdrop SMART-FIT** — sharp layer scales between contain↔cover (`--rr-bgfit` =
 min(cover/contain, 1.18), JS in the build12 fill IIFE; rrCineZoom multiplies the var), 6% edge

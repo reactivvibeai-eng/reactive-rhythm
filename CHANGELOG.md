@@ -1107,6 +1107,16 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v112 — RYO INTRO HAS ITS VOICE (asset delivered + wired)  ✅
+The asset agent delivered the intro re-export WITH audio (`assets/ryo/` drop, installed as
+`ryo-intro.mp4`; silent original kept as `ryo-intro-noaudio.bak.mp4`). **Binary-verified:**
+'soun' handler + 'mp4a' atoms present (the old file had neither). The proven WebAudio path stays
+(video stays muted — Chrome unmute-after-gesture was unreliable): the loader now fetches +
+**decodes the mp4's OWN audio track** (verified in-browser: stereo / 48kHz / 6.08s decode OK),
+gesture-started + synced to the video clock, gain 0.9 fast fade-in; **lunar-waves is demoted to
+decode-failure fallback**. Flow verified headless: start → Enter → intro active (new file,
+duration 6.08) → skip → menu-hub; zero console errors. Bump ?v 111→112.
+
 ### v111 — the weird line over the video · 5-STRING ASSET DECREE · guitar re-render orders  ✅
 - **"A weird line over the video" (Skully):** the `.game-center::before/::after` 1px chrome
   hairlines — invisible in the dark-column era, a stray artifact over the v110 full-bleed video.
