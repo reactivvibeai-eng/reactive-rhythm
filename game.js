@@ -351,6 +351,14 @@
       // the non-playable headstock crops off the TOP. Anchor the body's bottom at the screen bottom.
       if (cw / ch > aspect) { gw = cw; gh = gw / aspect; }   // panel wider than guitar → fill width
       else { gh = ch; gw = gh * aspect; }                    // panel narrower → fill height
+      // build13 (user playtest): a CUSTOM skin draws SMALLER than full-bleed — crisper art (less
+      // upscale past its native px) and the level's world stays visible at the sides (play space).
+      // The default guitar is untouched (skinWF only set while a skin is active).
+      if (_skinArtOn && ART.skinWF > 0 && ART.skinWF < 1) {
+        const wf = Math.min(0.95, Math.max(0.46, ART.skinWF));
+        const gw2 = Math.min(gw, cw * wf);
+        gh = gh * (gw2 / gw); gw = gw2;
+      }
       gx = (cw - gw) / 2;
       gy = ch - (ART.bottomAnchor || 0.95) * gh;             // body bottom ≈ screen bottom
     } else {
@@ -448,6 +456,7 @@
     ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
     ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
     ART.fit = p.fit || null; ART.bottomAnchor = p.bottomAnchor || 0.95; ART.persp = p.persp || 0; ART.warp = p.warp || 0;
+    ART.skinWF = 0;   // build13: profiles are full-bleed; only an active skin sets a width cap
     LANE_COLORS.length = 0; for (const c of p.colors) LANE_COLORS.push(c);
     keyMapStore = p.store; keyMap = loadKeyMapFor(p);
     padStore = p.padStore; padMap = loadPadMapFor(p.padStore, p.count);
@@ -539,6 +548,7 @@
     const p = LANE_PROFILES[laneProfile];
     if (!g) {   // restore the active lane-profile's default geometry (incl. fit + warp)
       _skinArtOn = false;
+      ART.skinWF = 0;   // build13: full-bleed again (the default guitar never shrinks)
       if (p) {
         ART.aspect = p.aspect; ART.nutFY = p.nutFY; ART.bridgeFY = p.bridgeFY;
         ART.nutXF = p.nutXF.slice(); ART.bridgeXF = p.bridgeXF.slice();
@@ -551,8 +561,21 @@
     const nut = _resampleStrings(g.nutXF || [g.nut[0], g.nut[1]], LANE_COUNT);
     const brg = _resampleStrings(g.bridgeXF || [g.bridge[0], g.bridge[1]], LANE_COUNT);
     ART.aspect = g.aspect; ART.nutFY = g.nutFY; ART.bridgeFY = g.bridgeFY;
-    ART.nutXF = nut; ART.bridgeXF = brg;
+    // build13 (user decree, Skully playtest): on a custom guitar THE ENGINE'S strings define the
+    // play lanes — an EVEN fan across the art's neck band (the measured outer strings × a small
+    // spread), drawn visibly over the art (see the string render's skin under-stroke). Lanes align
+    // with the guitar ARM; matching its painted strings is explicitly no longer required.
+    const spread = g.laneSpread != null ? g.laneSpread : 1.16;
+    const fan = (arr) => {
+      const a0 = arr[0], aN = arr[arr.length - 1];
+      const mid = (a0 + aN) / 2, half = Math.abs(aN - a0) / 2 * spread;
+      const out = [];
+      for (let i = 0; i < LANE_COUNT; i++) out.push(mid - half + 2 * half * (LANE_COUNT > 1 ? i / (LANE_COUNT - 1) : 0.5));
+      return out;
+    };
+    ART.nutXF = fan(nut); ART.bridgeXF = fan(brg);
     ART.fit = 'cover'; ART.bottomAnchor = g.bottomAnchor || 0.93;
+    ART.skinWF = g.widthF != null ? g.widthF : 0.78;   // build13: skin draw width (fraction of the panel)
     ART.warp = Math.max((p && p.warp) || 0, g.warp != null ? g.warp : 0.34);
     // ART.persp stays the profile's — the note depth/vertigo feel is identical on every guitar.
     _skinArtOn = true;
@@ -1255,6 +1278,7 @@
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
     _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
+    _multFireL = []; _fxGen++;   // build13: drop fire refs + kill any queued wave spawns from the old run
     bossPhase = 1; bossPhaseShown = false;
     bgPulse = 0; lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
@@ -1578,9 +1602,12 @@
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3) }),
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
-      fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }) } : { loaded: false },
+      fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }), pts: (fx.active || []).map(function (i) { return { n: (i.meta && i.meta.src ? i.meta.src.split('/').pop().replace('.png', '') : '?'), x: Math.round(i.x), y: Math.round(i.y), s: +(+i.scale).toFixed(2) }; }) } : { loaded: false },
       fxEmit: (type, lane, kind) => { emitFx(type || 'overdrive', kind || 'dev', lane == null ? 2 : lane); return fx ? (fx.active || []).length : -1; },
+      fxWave: (lane, tier, century) => { emitComboWave(lane == null ? 2 : lane, tier == null ? 2 : tier, !!century); return fx ? (fx.active || []).length : -1; },
+      fxPt: (lane, d) => { try { return _lanePtPx(fretGeom(), lane == null ? 2 : lane, d == null ? 0.5 : d); } catch (e) { return 'ERR ' + e.message; } },
       fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
+      tick: () => { try { loop(); return true; } catch (e) { return 'ERR ' + e.message; } },   // manual frame for frozen-rAF headless testing
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
       // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
       geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } },
@@ -1590,7 +1617,7 @@
       buildT: () => +_skinBuildT.toFixed(3),   // level-start materialize progress (dev; strip at freeze)
       // GAMEPLAY probes (dev; strip at freeze): the next strikeable note + live judgment counters,
       // so a timed in-page press can assert the input→judgment loop end-to-end.
-      nextNote: () => { try { const j = songTime() - audioOffset; const n = notes.find(nn => !nn.judged && nn.type !== 'bomb' && nn.type !== 'hold' && !nn.open && nn.time > j + 0.05); return n ? { lane: n.lane, time: +n.time.toFixed(3), inSec: +(n.time - j).toFixed(3), type: n.type } : null; } catch (e) { return null; } },
+      nextNote: () => { try { const j = songTime() - audioOffset; const n = notes.find(nn => !nn.judged && nn.type !== 'bomb' && nn.type !== 'hold' && nn.time > j + 0.05); if (!n) return null; const sim = notes.filter(x => !x.judged && x.type !== 'bomb' && Math.abs(x.time - n.time) < 0.012); return { lane: n.lane, time: +n.time.toFixed(3), inSec: +(n.time - j).toFixed(3), type: n.type, open: !!n.open, lanes: sim.map(x => x.lane), holdDur: Math.max(0, ...sim.map(x => x.type === 'hold' ? (x.hold || 0) : 0)) }; } catch (e) { return null; } },
       counts: () => ({ perfect: counts.perfect, great: counts.great, good: counts.good, miss: counts.miss, combo: combo, score: Math.floor(score) }),
       // GEM-TINT regression probe (dev; strip at freeze): the tinted marble canvas must keep the
       // sprite's alpha — corners ~0 (transparent), center opaque. Catches the "square marble" class.
@@ -1640,7 +1667,12 @@
     if (state !== 'playing' || overdrive < 1 || odActive) return;
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
     scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
-    try { const _g = fretGeom(); for (let _i = 0; _i < LANE_COUNT; _i++) emitFx('overdrive', 'od', _i, _g.nearX[_i], _g.nearY); } catch (e) {}
+    try {
+      const _g = fretGeom();
+      for (let _i = 0; _i < LANE_COUNT; _i++) emitFx('overdrive', 'od', _i, _g.nearX[_i], _g.nearY - _g.lw * 0.30);
+      // build13: star power LAUNCHES — comets race up every string as it ignites
+      if (!fxLite && !reduceMotion) { const _k = (_g.lw / 128) * FX_GLOBAL; for (let _i = 0; _i < LANE_COUNT; _i++) emitStringSurge(_i, 'note-comet', 60 + _i * 24, _k, _g); }
+    } catch (e) {}
     // build8b: sustained star-power AURA over the board for the whole overdrive (stopped when it expires)
     try { if (_odAura) { _odAura.stop(); _odAura = null; } const _g2 = fretGeom();
       _odAura = _fxRide('overdrive-aura', (_g2.nearX[0] + _g2.nearX[LANE_COUNT - 1]) / 2, _g2.nearY - _g2.lw * 1.2, (_g2.lw * 6 / 128), 0.6); } catch (e) {}
@@ -1825,7 +1857,7 @@
     // combo milestone → LIGHTNING STRIKE (Guitar-Hero-style streak reward)
     if (combo > 0 && combo % 25 === 0) {
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
-      emitFx('combo', 'milestone', lane);
+      emitComboWave(lane, tier, combo % 100 === 0);             // build13: board-wide wave, not a bottom blob
       lightningT = Math.min(0.55, 0.3 + tier * 0.05);
       scanT = scanDur = 0.42; scanTier = tier;   // combo-milestone scan sweep, brighter with the streak
       cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
@@ -1841,7 +1873,13 @@
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
     const mult = Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier);
     score += JUDGE[kind].score * mult;
-    if (mult > lastMult) emitFx('multup', 'x' + mult, lane);   // build8c: multiplier tier climbed — gold flare
+    if (mult > lastMult) {   // build13: the tier flare lifts off the button + a comet surges up the string
+      try {
+        const _gM = fretGeom(), _kM = (_gM.lw / 128) * FX_GLOBAL;
+        emitFx('multup', 'x' + mult, lane, _gM.nearX[lane], _gM.nearY - _gM.lw * 0.78);
+        if (!fxLite && !reduceMotion) emitStringSurge(lane, 'note-comet', 40, _kM, _gM);
+      } catch (e) { emitFx('multup', 'x' + mult, lane); }
+    }
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
     overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : 0.022)); // charge the meter
@@ -2044,13 +2082,119 @@
       return fx.play(name, x, y, { loop: true, scale: scale, alpha: (alpha != null ? alpha : 1) });
     } catch (e) { return null; }
   }
+  // ---------- build13: FX ARE PARTICLES ON THE BOARD (user playtest: "the effects just float at
+  // the bottom — it doesn't make sense"). Guitar-Hero's rule applied: every effect anchors to
+  // gameplay geometry and energy flows UP the strings. Streak milestones are now WAVES — a
+  // catcher-row ripple spreading from the hit lane + pulses traveling up the lanes with
+  // perspective shrink; centuries fire fireworks into the BACKDROP SKY above the nut (the venue
+  // celebrates); multiplier tiers set the catcher buttons themselves on FIRE (fire-loop). ----------
+  let _fxGen = 0;                      // generation guard — bumped on reset so queued spawns die with the run
+  function _fxLater(ms, fn) {
+    if (ms <= 0) { try { fn(); } catch (e) {} return; }
+    const g = _fxGen;
+    setTimeout(() => { if (g === _fxGen && state === 'playing') { try { fn(); } catch (e) {} } }, ms);
+  }
+  // absolute-position spawn under emitFx's scale law (manifest scale × mult × lane-width norm)
+  function _spawnAt(name, x, y, mult, kk) {
+    if (!_fxHas(name)) return;
+    const meta = fx.manifest[name];
+    _playTuned(name, x, y, (meta.scale != null ? meta.scale : 1) * (mult || 1) * kk);
+  }
+  // point on lane `i` at depth d (0 = catcher .. 1 = nut) in SCREEN px — mirrors render()'s
+  // noteX/noteY (1/z persp + neck-recede warp) so traveling FX ride the exact note path.
+  function _lanePtPx(g, i, d) {
+    const zFar = (ART.persp > 1) ? ART.persp : 0;
+    const u = (zFar > 1) ? ((1 - 1 / (1 + d * (zFar - 1))) / (1 - 1 / zFar)) : d;
+    let x = g.nearX[i] + (g.farX[i] - g.nearX[i]) * u;
+    const w = ART.warp || 0;
+    if (w > 0) { const cx0 = g.gx + 0.5 * g.gw; x = cx0 + (x - cx0) * (1 - w * Math.max(0, u)); }
+    const y = g.nearY + (g.farY - g.nearY) * u;
+    const k = (zFar > 1) ? (1 / (1 + Math.max(0, d) * (zFar - 1))) : (1 - 0.7 * d);
+    return { x: x, y: y, k: Math.max(0.30, k) };
+  }
+  // a pulse SURGES up one lane — catcher → nut, shrinking with depth (the energy you fed the string)
+  function emitStringSurge(lane, name, baseMs, kk, g) {
+    const steps = fxLite ? [0.30, 0.72] : [0.14, 0.36, 0.58, 0.80];
+    for (let s = 0; s < steps.length; s++) {
+      const pt = _lanePtPx(g, lane, steps[s]);
+      _fxLater(baseMs + s * 64, () => _spawnAt(name, pt.x, pt.y, 0.92 * pt.k, kk));
+    }
+  }
+  // streak milestone (every 25 / century) — the BOARD celebrates, radiating from the lane you hit
+  function emitComboWave(originLane, tier, century) {
+    try {
+      if (!fx || reduceMotion) return;
+      const g = fretGeom();
+      const kk = (g.lw / 128) * FX_GLOBAL;
+      const th = THEME_FX[_fxTheme()] || null;
+      const burst = (th && th.hit) || 'combo-burst';
+      const oL = (typeof originLane === 'number' && originLane >= 0 && originLane < LANE_COUNT)
+        ? originLane : ((LANE_COUNT / 2) | 0);
+      // (a) catcher-row RIPPLE — every button pops, spreading outward from the origin
+      for (let i = 0; i < LANE_COUNT; i++) {
+        const x = g.nearX[i], y = g.nearY - g.lw * 0.40;
+        _fxLater(Math.abs(i - oL) * 46, () => _spawnAt(burst, x, y, 0.62 + 0.10 * Math.min(4, tier), kk));
+      }
+      if (fxLite) return;                                  // lite: the ripple IS the celebration
+      // (b) STRING SURGE — the first milestone rides the hit lane; deeper streaks light every string
+      if (tier >= 2) { for (let i = 0; i < LANE_COUNT; i++) emitStringSurge(i, 'lane-pulse', 120 + Math.abs(i - oL) * 40, kk, g); }
+      else emitStringSurge(oL, 'lane-pulse', 110, kk, g);
+      // (c) deep streaks detonate MID-BOARD (on the neck — never at the screen edge)
+      if (tier >= 3 && !century) {
+        const mid = _lanePtPx(g, (LANE_COUNT / 2) | 0, 0.45);
+        _fxLater(170, () => _spawnAt('explosion', mid.x, mid.y, 0.95 * mid.k, kk));
+      }
+      // (d) CENTURY — gold fireworks in the SKY above the nut + a shockwave off the mid-board
+      if (century) {
+        const skyY = Math.max(ch * 0.05, g.farY - (g.nearY - g.farY) * 0.10);
+        const xs = [0.34, 0.5, 0.66];
+        for (let i = 0; i < xs.length; i++) {
+          const sx = g.gx + g.gw * xs[i], sy = skyY + (i === 1 ? -ch * 0.03 : ch * 0.015);
+          _fxLater(140 + i * 170, () => _spawnAt('firework-gold', sx, sy, 1.15 + (i === 1 ? 0.25 : 0), kk));
+        }
+        const mid = _lanePtPx(g, (LANE_COUNT / 2) | 0, 0.40);
+        _fxLater(120, () => _spawnAt('shockwave', mid.x, mid.y, 1.15 * mid.k, kk));
+      }
+    } catch (e) {}
+  }
   // build8b/c: managed ambient loop handles (theme aura, overdrive aura, OD-ready catcher rings,
   // per-lane hold charge loops) — spawned/repositioned in render(), stopped on clear / resetScoring.
   // Pure visual; never affect gameplay.
   let _auraFx = null, _odAura = null, _readyRings = null, _holdFxL = [];
+  // build13: per-lane MULTIPLIER FIRE loop handles (fire-loop riding the catcher buttons at x3+)
+  let _multFireL = [];
+  function _stopMultFire() {
+    for (let i = 0; i < _multFireL.length; i++) { const h = _multFireL[i]; if (h) { try { h.stop(); } catch (e) {} } }
+    _multFireL = [];
+  }
   // build10b: level-start cinematic progress — 0→1 while a custom guitar MATERIALIZES along the
   // highway (advanced in render; 1 = fully built; default guitar never builds).
   let _skinBuildT = 1;
+  // build13 DEPTH: the guitar grounds against the (now brighter) backdrop via a CONTACT SHADOW —
+  // its own blurred silhouette drawn behind it. Cached per image (rebuilt on skin swap); warm
+  // near-black (#070403), never grey/blue. Skipped under fxLite.
+  let _shadowCv = null, _shadowKey = '';
+  function _guitarShadow() {
+    const img = activeGuitarImg;
+    if (!img || !img._ready || !img.width) return null;
+    const key = (img.src || 'def') + '|' + img.width;
+    if (_shadowCv && _shadowKey === key) return _shadowCv;
+    try {
+      const pad = Math.max(24, Math.round(img.width * 0.085));
+      const c = document.createElement('canvas');
+      c.width = img.width + pad * 2; c.height = img.height + pad * 2;
+      const x2 = c.getContext('2d');
+      x2.filter = 'blur(' + Math.max(10, Math.round(img.width * 0.03)) + 'px)';
+      x2.drawImage(img, pad, pad);
+      x2.filter = 'none';
+      x2.globalCompositeOperation = 'source-in';
+      x2.fillStyle = '#070403';
+      x2.fillRect(0, 0, c.width, c.height);
+      c._pad = pad;
+      _shadowCv = c; _shadowKey = key;
+      return c;
+    } catch (e) { return null; }
+  }
   function _stopReadyRings() { if (_readyRings) { for (let i = 0; i < _readyRings.length; i++) { const h = _readyRings[i]; if (h) { try { h.stop(); } catch (e) {} } } _readyRings = null; } }
   function _stopHoldFx(i) { const h = _holdFxL[i]; if (h) { try { h.stop(); } catch (e) {} _holdFxL[i] = null; } }
 
@@ -2479,10 +2623,24 @@
           else h.move(nearX[i], nearY);
         } else { _stopHoldFx(i); }
       }
+      // build13: MULTIPLIER FIRE — at x3 the catcher buttons themselves catch fire; max tier RAGES
+      // (the user's ask: "fire coming out of where the buttons are"). Pure visual, theme-agnostic
+      // (fire = the universal heat language; themed auras already own the neck).
+      const _mNow = curMult();
+      if (_mNow >= 3 && _fxHas('fire-loop')) {
+        const _fs = (lw * (_mNow >= 4 ? 1.30 : 0.92)) / 128, _fa = _mNow >= 4 ? 0.92 : 0.78;
+        for (let i = 0; i < LANE_COUNT; i++) {
+          const _fy = nearY - lw * 0.34;
+          const h = _multFireL[i];
+          if (!h || !h.alive()) _multFireL[i] = _fxRide('fire-loop', nearX[i], _fy, _fs, _fa);
+          else { h.move(nearX[i], _fy); h.setScale(_fs); }
+        }
+      } else if (_multFireL.length) { _stopMultFire(); }
     } else {
       if (_auraFx) { _auraFx.stop(); _auraFx = null; }
       _stopReadyRings();
       for (let i = 0; i < _holdFxL.length; i++) _stopHoldFx(i);
+      _stopMultFire();
     }
     // PERSPECTIVE depth warp (gh Highway): map the linear timeline d (0=catcher, 1=nut) through a 1/z
     // camera so far notes bunch up + crawl and near notes spread + ACCELERATE — the depth/vertigo cue.
@@ -2531,14 +2689,14 @@
       const r = Math.round(baseR + (150 - baseR) * dz);
       const g = Math.round(baseG + (150 - baseG) * dz);
       const b = Math.round(baseB + (150 - baseB) * dz);
-      const sAlpha = (0.24 + live * 0.6) * (1 - 0.55 * dz) * (1 - 0.5 * cold);
-      ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + sAlpha.toFixed(3) + ')';
-      ctx.lineWidth = 1.6 + live * 2.6 + hI * 1.6;
-      ctx.shadowColor = dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30');
-      ctx.shadowBlur = (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);
-      ctx.beginPath();
+      // build13: on a custom skin OUR strings ARE the lanes (they no longer ride painted strings)
+      // — floor the alpha so they always read over ornate art.
+      const sAlpha0 = (0.24 + live * 0.6) * (1 - 0.55 * dz) * (1 - 0.5 * cold);
+      const sAlpha = _skinArtOn ? Math.max(0.50, sAlpha0) : sAlpha0;
+      const sWidth = (1.6 + live * 2.6 + hI * 1.6) + (_skinArtOn ? 0.8 : 0);
+      const pth = new Path2D();
       const undu = Math.max(pl, heat * 0.5);                  // hot strings shimmer even un-plucked
-      if (undu < 0.05 && warp <= 0) { ctx.moveTo(nearX[i], nearY); ctx.lineTo(farX[i], farY); }
+      if (undu < 0.05 && warp <= 0) { pth.moveTo(nearX[i], nearY); pth.lineTo(farX[i], farY); }
       else {
         const segs = 16, amp = undu * 11;
         for (let s = 0; s <= segs; s++) {
@@ -2546,10 +2704,22 @@
           const bx = nearX[i] + (farX[i] - nearX[i]) * u, by = nearY + (farY - nearY) * u;
           const wob = Math.sin(u * Math.PI) * Math.sin(ph0 + u * 13 + i) * amp;
           const wx = warpX(bx, u) + wob;                       // follow the neck warp so strings ride the art
-          s === 0 ? ctx.moveTo(wx, by) : ctx.lineTo(wx, by);
+          s === 0 ? pth.moveTo(wx, by) : pth.lineTo(wx, by);
         }
       }
-      ctx.stroke(); ctx.restore();
+      if (_skinArtOn) {   // dark SEAT under the neon line — contrast against busy skin art
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(12,7,6,' + (0.40 + live * 0.18).toFixed(3) + ')';
+        ctx.lineWidth = sWidth + 2.6;
+        ctx.stroke(pth);
+        ctx.globalCompositeOperation = 'lighter';
+      }
+      ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + sAlpha.toFixed(3) + ')';
+      ctx.lineWidth = sWidth;
+      ctx.shadowColor = dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30');
+      ctx.shadowBlur = (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);
+      ctx.stroke(pth); ctx.restore();
     }
     // COMBO-REACTIVE neck energy — the board visibly "charges up" as the multiplier tier climbs.
     drawComboEnergy(t, fg);
@@ -3340,6 +3510,25 @@
         // accent frontier while the backdrop zoom settles. bp eases 0→1 over ~2s; default = 1.
         const bpX = (_skinArtOn && _skinBuildT < 1) ? (1 - Math.pow(1 - _skinBuildT, 3)) : 1;
         const uGate2 = 1 - bpX;
+        // build13 DEPTH: contact-shadow pass FIRST (the guitar's blurred silhouette, slightly wider,
+        // sliced with the same warp/gates) — then the art pass paints over its core, leaving the halo.
+        const sh = fxLite ? null : _guitarShadow();
+        if (sh) {
+          const swRatio = sh.width / iw;
+          ctx.save();
+          for (let s = 0; s < NS; s++) {
+            const v0 = s / NS, v1 = (s + 1) / NS;
+            const dy0 = gr.gy + v0 * gr.gh, dy1 = gr.gy + v1 * gr.gh;
+            const u = ((dy0 + dy1) / 2 - nY) / (fY - nY);
+            if (bpX < 1 && u >= 0 && u < uGate2) continue;
+            const bodyA = (bpX < 1 && u < 0) ? Math.max(0, (bpX - 0.72) / 0.28) : 1;
+            if (bodyA <= 0.01) continue;
+            const dwSh = gr.gw * (1 - gwarp * Math.max(0, u)) * swRatio;
+            ctx.globalAlpha = 0.5 * bodyA;
+            ctx.drawImage(sh, 0, sh._pad + v0 * ih, sh.width, (v1 - v0) * ih, cX - dwSh / 2, dy0, dwSh, (dy1 - dy0) + 0.8);
+          }
+          ctx.restore();
+        }
         for (let s = 0; s < NS; s++) {
           const v0 = s / NS, v1 = (s + 1) / NS;
           const dy0 = gr.gy + v0 * gr.gh, dy1 = gr.gy + v1 * gr.gh;
@@ -3374,6 +3563,14 @@
           ctx.restore();
         }
       } else {
+        // build13 DEPTH: contact shadow behind the plain (un-warped) draw too
+        const sh0 = fxLite ? null : _guitarShadow();
+        if (sh0) {
+          const px = sh0._pad * (gr.gw / activeGuitarImg.width), py = sh0._pad * (gr.gh / activeGuitarImg.height);
+          ctx.save(); ctx.globalAlpha = 0.5;
+          ctx.drawImage(sh0, gr.gx - px, gr.gy - py, gr.gw + px * 2, gr.gh + py * 2);
+          ctx.restore();
+        }
         ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
       }
       // fade the headstock (top of the guitar) into the moon so the neck top doesn't hard-cut
