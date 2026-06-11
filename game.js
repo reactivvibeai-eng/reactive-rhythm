@@ -3470,8 +3470,13 @@
   }
   function drawCathedralBg(t) {
     // ---- VS3: reactive atmosphere behind the guitar (god-rays, haze, embers) ----
+    // build17 (user, Skully playtest: "a weird line towards the top of the guitar"): this painted
+    // atmosphere is the DEFAULT (moon) world's — hardcoded crimson rays + a dark horizon BAND at
+    // ch 0.16–0.40 + embers. On a THEMED level it stripes the level's own video with the wrong
+    // world's light. Themed levels (levelAccentRGB set) now show their video PURE — only
+    // gameplay-reactive layers draw over it.
     const intensity0 = Math.max(bgPulse, energy * 0.85);
-    if (!fxLite && !reduceMotion) {
+    if (!fxLite && !reduceMotion && !levelAccentRGB) {
     // volumetric crimson god-rays radiating from the moon, slow rotation + energy pulse
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     ctx.translate(cw / 2, ch * 0.06);
@@ -3599,13 +3604,9 @@
       const nf = ctx.createLinearGradient(0, fadeTop, 0, fadeBot);
       nf.addColorStop(0, 'rgba(0,0,0,1)'); nf.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = nf; ctx.fillRect(0, fadeTop - 4, cw, (fadeBot - fadeTop) + 8); ctx.restore();
-      // gh: a soft glowing spawn band where notes emerge from the fade (the strings "light up" at the far end)
-      if (coverFit) {
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        const sg2 = ctx.createLinearGradient(0, ch * 0.16, 0, ch * 0.34);
-        sg2.addColorStop(0, 'rgba(255,70,60,0)'); sg2.addColorStop(0.45, 'rgba(255,95,72,0.13)'); sg2.addColorStop(1, 'rgba(255,70,60,0)');
-        ctx.fillStyle = sg2; ctx.fillRect(0, ch * 0.16, cw, ch * 0.18); ctx.restore();
-      }
+      // build17: the static "spawn band" glow is GONE (user: "a weird line towards the top of the
+      // guitar" — a hardcoded-crimson full-width stripe at ch 0.16–0.34 over every level's video).
+      // The headstock fade + the notes themselves already communicate where notes emerge.
       // OVERDRIVE / combo SCAN — an additive amber→crimson band sweeps up the guitar (GH Star-Power wash)
       if (scanT > 0) {
         const fg = fretGeom();

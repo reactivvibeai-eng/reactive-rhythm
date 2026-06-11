@@ -1107,6 +1107,22 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v114 — the REAL "weird line" fix · millimeter alignment proof · EYES-ON screenshots  ✅
+The user challenged readiness — rightly. Two deliverables:
+- **The line "towards the top of the guitar":** the v111 hairline removal targeted the wrong
+  artifact. The real offenders: the static **spawn-band glow** (hardcoded-crimson full-width
+  stripe at ch 0.16–0.34 over every level's video — REMOVED; the headstock fade + notes carry
+  the cue) and the **moon-world atmosphere** (god-rays/horizon-haze-band/embers, all hardcoded
+  crimson) — now gated to the DEFAULT world only; themed levels show their video PURE.
+- **Alignment proof at pixel zoom** (`_overlay_proof.py` → lane chords composited on the art,
+  crops eyeballed): both guitars dead-on at nut/mid/bridge. **In-game screenshots** (downscaled
+  canvas+video composite via toDataURL — headless `preview_screenshot` times out; this works):
+  default = Crimson Chaos full-bleed in the moon world, no top band; Skully = her world
+  full-bleed, guitar centered + crisp, notes falling FROM Skully down the neck, zero floaters.
+  Art nit for the asset backlog: violet-gothic-5's headstock paints SIX tuner pegs (decorative;
+  the playable neck is 5-string clean; headstock sits in the top fade in-game). Zero console
+  errors. Bump ?v 113→114.
+
 ### v113 — THE 5-STRING GUITARS LAND: Crimson Chaos is the default · Skully re-skinned  ✅
 Asset commit `0698670` delivered both v111 orders (1080×1920, exactly 5 strings, guitar5 framing).
 - **Calibration kit built** (`assets/guitars/_measure_strings.py` + `_calibrate.py` + probes):
