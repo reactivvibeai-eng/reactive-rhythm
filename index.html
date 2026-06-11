@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=114" />
+<link rel="stylesheet" href="jukebox.css?v=115" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2272,6 +2272,27 @@
     opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta));
     background-size: 200% 100%; animation: mhEdge 5.5s linear infinite; }
   @keyframes mhEdge { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+  /* build18 ENTRANCE POLISH (user order): the hub tiles ARRIVE — staggered rise + settle each
+     time the hub opens. fill-mode BACKWARDS so the completed animation releases the cascade
+     (hover/focus transforms still win afterwards). Reduce-motion kills it. */
+  #menu-hub.active .mh-tile { animation: mhTileIn 0.5s cubic-bezier(0.18, 0.9, 0.26, 1) backwards; }
+  #menu-hub.active .mh-tile:nth-child(1) { animation-delay: 0.05s; }
+  #menu-hub.active .mh-tile:nth-child(2) { animation-delay: 0.11s; }
+  #menu-hub.active .mh-tile:nth-child(3) { animation-delay: 0.17s; }
+  #menu-hub.active .mh-tile:nth-child(4) { animation-delay: 0.23s; }
+  #menu-hub.active .mh-tile:nth-child(5) { animation-delay: 0.29s; }
+  #menu-hub.active .mh-tile:nth-child(6) { animation-delay: 0.35s; }
+  #menu-hub.active .mh-tile:nth-child(7) { animation-delay: 0.41s; }
+  @keyframes mhTileIn {
+    0%   { opacity: 0; transform: translateY(26px) scale(0.97); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  html.rr-reduce-motion #menu-hub.active .mh-tile { animation: none; }
+  @media (prefers-reduced-motion: reduce) { #menu-hub.active .mh-tile { animation: none; } }
+  /* the title screen's foreground lockup rises with the same language */
+  #start.active .start-fore { animation: mhTileIn 0.65s cubic-bezier(0.18, 0.9, 0.26, 1) 0.12s backwards; }
+  html.rr-reduce-motion #start.active .start-fore { animation: none; }
+  @media (prefers-reduced-motion: reduce) { #start.active .start-fore { animation: none; } }
   .mh-tile:hover, .mh-tile:focus-visible { transform: translateY(-5px) scale(1.012); border-color: var(--ta);
     box-shadow: 0 16px 42px rgba(0,0,0,0.55), 0 0 30px color-mix(in srgb, var(--ta) 42%, transparent);
     background:
@@ -3824,11 +3845,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=114"></script>
-<script src="game.js?v=114"></script>
-<script src="jukebox.js?v=114"></script>
-<script src="catalog.js?v=114"></script>
-<script src="multiplayer.js?v=114"></script>
+<script src="assets/fx/fx-player.js?v=115"></script>
+<script src="game.js?v=115"></script>
+<script src="jukebox.js?v=115"></script>
+<script src="catalog.js?v=115"></script>
+<script src="multiplayer.js?v=115"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop

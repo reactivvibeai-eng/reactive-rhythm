@@ -228,9 +228,23 @@
         const g2 = c.getContext('2d', { willReadFrequently: true });
         g2.drawImage(img, 0, 0);
         const id = g2.getImageData(0, 0, c.width, c.height); const d2 = id.data;
-        for (let i = 0; i < d2.length; i += 4) {
-          const m = Math.max(d2[i], d2[i + 1], d2[i + 2]);
-          d2[i + 3] = m >= 170 ? 255 : ((m * 3) >> 1);   // boosted luminance key (×1.5, capped)
+        // build18 (user: a combo effect showed as a RECTANGLE "cropped on both sides"): clip
+        // content that reaches a frame cell's border survives the key as a hard crop. FEATHER
+        // every cell's borders (~7% smoothstep ramp) so no sheet can ever show frame bounds.
+        const meta2 = player.manifest && player.manifest[nm];
+        const fw2 = (meta2 && meta2.frameW) || c.width, fh2 = (meta2 && meta2.frameH) || c.height;
+        const fpx = Math.max(4, Math.round(Math.min(fw2, fh2) * 0.07));
+        let p2 = 0;
+        for (let y2 = 0; y2 < c.height; y2++) {
+          const cy2 = y2 % fh2; const ey = Math.min(cy2, fh2 - 1 - cy2);
+          for (let x2 = 0; x2 < c.width; x2++, p2 += 4) {
+            const m = Math.max(d2[p2], d2[p2 + 1], d2[p2 + 2]);
+            let a2 = m >= 170 ? 255 : ((m * 3) >> 1);    // boosted luminance key (×1.5, capped)
+            const cx2 = x2 % fw2;
+            const ed = Math.min(cx2, fw2 - 1 - cx2, ey);
+            if (ed < fpx) { const f = ed / fpx; a2 = (a2 * f * f * (3 - 2 * f)) | 0; }
+            d2[p2 + 3] = a2;
+          }
         }
         g2.putImageData(id, 0, 0);
         c.__keyed = true;
@@ -1327,10 +1341,11 @@
     }
 
     showScreen('game');
-    // build10b: LEVEL-START CINEMATIC (custom-guitar levels) — the backdrop opens slightly zoomed
-    // and eases out (CSS .rr-cine) while the guitar MATERIALIZES along the highway during the
-    // countdown (engine-side print, see the projection draw). Presentation only.
-    if (_skinArtOn && !reduceMotion) {
+    // build10b/18: LEVEL-START CINEMATIC — the backdrop opens slightly zoomed and eases out
+    // (CSS .rr-cine) while the guitar MATERIALIZES along the highway during the countdown.
+    // build18 (user polish order): EVERY level gets the entrance now — the default included —
+    // and the catcher row IGNITES L→R the moment the print completes (see render's crossing).
+    if (!reduceMotion) {
       _skinBuildT = 0;
       try { const _gc = $('game'); _gc.classList.add('rr-cine'); setTimeout(() => { try { _gc.classList.remove('rr-cine'); } catch (e) {} }, 2900); } catch (e) {}
     } else { _skinBuildT = 1; }
@@ -2138,6 +2153,19 @@
       _fxLater(baseMs + s * 64, () => _spawnAt(name, pt.x, pt.y, 0.92 * pt.k, kk));
     }
   }
+  // build18: the board "comes online" — a quick L→R catcher ignition the moment the level-start
+  // print completes (response to the entrance finishing, anchored where play happens)
+  function _igniteCatchers() {
+    try {
+      if (!fx || reduceMotion || state !== 'playing') return;
+      const g = fretGeom();
+      const kk = (g.lw / 128) * FX_GLOBAL;
+      for (let i = 0; i < LANE_COUNT; i++) {
+        const x = g.nearX[i], y = g.nearY - g.lw * 0.32;
+        _fxLater(i * 55, () => _spawnAt('lane-pulse', x, y, 0.6, kk));
+      }
+    } catch (e) {}
+  }
   // streak milestone (every 25 / century) — the BOARD celebrates, radiating from the lane you hit
   function emitComboWave(originLane, tier, century) {
     try {
@@ -2157,12 +2185,10 @@
       // (b) STRING SURGE — the first milestone rides the hit lane; deeper streaks light every string
       if (tier >= 2) { for (let i = 0; i < LANE_COUNT; i++) emitStringSurge(i, 'lane-pulse', 120 + Math.abs(i - oL) * 40, kk, g); }
       else emitStringSurge(oL, 'lane-pulse', 110, kk, g);
-      // (c) deep streaks detonate MID-BOARD (on the neck — never at the screen edge)
-      if (tier >= 3 && !century) {
-        const mid = _lanePtPx(g, (LANE_COUNT / 2) | 0, 0.45);
-        _fxLater(170, () => _spawnAt('explosion', mid.x, mid.y, 0.95 * mid.k, kk));
-      }
-      // (d) CENTURY — gold fireworks in the SKY above the nut + a shockwave off the mid-board
+      // (build18 — user: "fire spinning in the center of the guitar didn't make sense": the
+      // mid-board detonations are GONE. Celebration energy lives only where it has a cause —
+      // the catcher row the player plays on, the strings it travels up, and the sky for centuries.)
+      // (c) CENTURY — gold fireworks in the SKY above the nut + an ECHO ripple across the row
       if (century) {
         const skyY = Math.max(ch * 0.05, g.farY - (g.nearY - g.farY) * 0.10);
         const xs = [0.34, 0.5, 0.66];
@@ -2170,8 +2196,10 @@
           const sx = g.gx + g.gw * xs[i], sy = skyY + (i === 1 ? -ch * 0.03 : ch * 0.015);
           _fxLater(140 + i * 170, () => _spawnAt('firework-gold', sx, sy, 1.15 + (i === 1 ? 0.25 : 0), kk));
         }
-        const mid = _lanePtPx(g, (LANE_COUNT / 2) | 0, 0.40);
-        _fxLater(120, () => _spawnAt('shockwave', mid.x, mid.y, 1.15 * mid.k, kk));
+        for (let i = 0; i < LANE_COUNT; i++) {
+          const x = g.nearX[i], y = g.nearY - g.lw * 0.40;
+          _fxLater(260 + Math.abs(i - oL) * 46, () => _spawnAt(burst, x, y, 1.05, kk));
+        }
       }
     } catch (e) {}
   }
@@ -2604,7 +2632,11 @@
   function render(dt, isPaused) {
     if (cw === 0) return;
     // build10b: advance the materialize cinematic (≈2s, finishes with the countdown)
-    if (!isPaused && _skinBuildT < 1) _skinBuildT = Math.min(1, _skinBuildT + dt / 2.0);
+    // build18: the instant the print completes, the catcher row IGNITES L→R (the board comes online)
+    if (!isPaused && _skinBuildT < 1) {
+      _skinBuildT = Math.min(1, _skinBuildT + dt / 2.0);
+      if (_skinBuildT >= 1) _igniteCatchers();
+    }
     const t = songTime();
     const approach = DIFFICULTY[difficulty].approach / userScroll;
     const sx = (Math.random() - 0.5) * cameraShake, sy = (Math.random() - 0.5) * cameraShake;
@@ -3529,9 +3561,9 @@
         // bridge (u<0) is left full-width. gh-only; standard takes the plain single drawImage below.
         const nY = gr.gy + ART.bridgeFY * gr.gh, fY = gr.gy + ART.nutFY * gr.gh;
         const cX = gr.gx + 0.5 * gr.gw, NS = 64, iw = activeGuitarImg.width, ih = activeGuitarImg.height;
-        // build12 MATERIALIZE (custom-guitar level start): the guitar prints nut→bridge behind an
-        // accent frontier while the backdrop zoom settles. bp eases 0→1 over ~2s; default = 1.
-        const bpX = (_skinArtOn && _skinBuildT < 1) ? (1 - Math.pow(1 - _skinBuildT, 3)) : 1;
+        // build12/18 MATERIALIZE (every level start): the guitar prints nut→bridge behind an
+        // accent frontier while the backdrop zoom settles. bp eases 0→1 over ~2s; 1 = built.
+        const bpX = (_skinBuildT < 1) ? (1 - Math.pow(1 - _skinBuildT, 3)) : 1;
         const uGate2 = 1 - bpX;
         // build13 DEPTH: contact-shadow pass FIRST (the guitar's blurred silhouette, slightly wider,
         // sliced with the same warp/gates) — then the art pass paints over its core, leaving the halo.

@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v115 — FX = pure responses (edge feather, no mid-board) · ENTRANCE polish  ✅
+The user's playtest sign-off pass ("they play great, they look good") + final FX/polish notes:
+- **The combo "rectangle cropped on both sides" (Skully):** sheet content reaching a frame cell's
+  border survives the luminance key as a hard crop. SYSTEMIC fix in the keyer: every cell's
+  borders get a ~7% smoothstep ALPHA FEATHER at load — no sheet can ever show frame bounds again
+  (verified: border alpha 0 on a keyed cell, interior intact). All 31 sheets, all layers.
+- **The "spinning fire in the center of the guitar":** the tier-3 mid-board explosion + century
+  mid-board shockwave — effects with no cause at that spot — are GONE. FX doctrine locked:
+  every effect is a RESPONSE at the interaction site — the catcher row (hits, ripples, fire),
+  the strings (surges, comets), the sky (century fireworks; now with a row ECHO ripple).
+- **ENTRANCE polish (user order):** the materialize cinematic + zoom-settle now runs on EVERY
+  level (the default included — buildT 0→1 verified) and the catcher row IGNITES L→R the moment
+  the print completes (`_igniteCatchers`, verified pulses at all five buttons). Hub tiles ARRIVE
+  with a staggered rise (50ms steps, fill-backwards so hover still wins); the title foreground
+  rises with the same language. All reduce-motion-gated. Wave audit post-change: combo-burst
+  row+echo, lane-pulse surges, sky fireworks, **zero explosion/shockwave instances**. Zero
+  console errors. Bump ?v 114→115.
+
 ### v114 — the REAL "weird line" fix · millimeter alignment proof · EYES-ON screenshots  ✅
 The user challenged readiness — rightly. Two deliverables:
 - **The line "towards the top of the guitar":** the v111 hairline removal targeted the wrong
