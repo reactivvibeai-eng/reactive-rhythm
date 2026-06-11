@@ -94,7 +94,15 @@ exposed by the full-bleed video) — removed. **USER DECREE: ALL guitar assets p
 strings** (Skully's paints 6 → re-render ordered); default level gets a **"Crimson Chaos" RYO
 guitar** — both orders w/ exact prompts/filenames in `ASSET_ORDERS_GUITARS.md` (user relays to
 the asset session; engine re-measures + wires on delivery, old files kept until verified).
-**NEXT:** user RE-PLAYTESTS v111 (Skully + the default level + combo FX — their verdict still gates
+**v112–v115 (sign-off arc):** intro audio delivered+wired (v112); 5-string guitars delivered →
+Crimson Chaos = DEFAULT, Skully = violet-gothic-5, lanes ride measured painted strings, calibration
+kit at assets/guitars/_calibrate.py (v113); real top-of-guitar line fixed (spawn band + themed
+atmosphere gate) + overlay-proof + eyes-on screenshots (v114); FX doctrine final — keyer edge
+feather (no frame-bound rectangles), NO mid-board detonations (row/strings/sky only), entrance
+polish: cinematic + L→R catcher ignition on EVERY level, staggered hub/title entrances (v115).
+**User verdict: "they play great, they look good" → after this polish, MOVE TO THE NEXT TASK**
+(their pick: level template lock-in → Bone Daddy/Melody polish; 2-device MP test; or ship track).
+**OLD NEXT (superseded):** user RE-PLAYTESTS v111 (Skully + the default level + combo FX — their verdict still gates
 the level template lock-in / any new level). Dial knobs ready: skin widthF (0.78) + laneSpread (1.16)
 in SKIN_GEOM/_applySkinGeom, backdrop fit cap (1.18) + feather (6%) + fill brightness (.86), fire
 tier/scale, wave timing/scales in emitComboWave, zoom (rrCineZoom 1.16), print speed (dt/2.0), scrim
