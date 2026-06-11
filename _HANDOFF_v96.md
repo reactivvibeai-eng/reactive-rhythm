@@ -81,7 +81,12 @@ error — observer now refits only on SRC changes + all style writes diff-guarde
 "random floating particles" were the THEME AURA loop + level-ambient drift embers (causeless,
 exposed by the v108 luminance key) — REMOVED; gameplay-anchored FX untouched. Verified live on
 frac-01: theme violet, zero floating loops, true-cover video, zero errors.
-**NEXT:** user RE-PLAYTESTS v110 (Skully + the default level + combo FX — their verdict still gates
+**v111:** the "weird line over the video" = the `.game-center` 1px chrome hairlines (dark-era UI,
+exposed by the full-bleed video) — removed. **USER DECREE: ALL guitar assets paint EXACTLY 5
+strings** (Skully's paints 6 → re-render ordered); default level gets a **"Crimson Chaos" RYO
+guitar** — both orders w/ exact prompts/filenames in `ASSET_ORDERS_GUITARS.md` (user relays to
+the asset session; engine re-measures + wires on delivery, old files kept until verified).
+**NEXT:** user RE-PLAYTESTS v111 (Skully + the default level + combo FX — their verdict still gates
 the level template lock-in / any new level). Dial knobs ready: skin widthF (0.78) + laneSpread (1.16)
 in SKIN_GEOM/_applySkinGeom, backdrop fit cap (1.18) + feather (6%) + fill brightness (.86), fire
 tier/scale, wave timing/scales in emitComboWave, zoom (rrCineZoom 1.16), print speed (dt/2.0), scrim

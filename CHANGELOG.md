@@ -1107,6 +1107,17 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v111 — the weird line over the video · 5-STRING ASSET DECREE · guitar re-render orders  ✅
+- **"A weird line over the video" (Skully):** the `.game-center::before/::after` 1px chrome
+  hairlines — invisible in the dark-column era, a stray artifact over the v110 full-bleed video.
+  REMOVED (verified: pseudo-element content none, zero errors).
+- **STANDING ASSET RULE (user decree): every guitar asset paints EXACTLY 5 STRINGS** — Skully's
+  art paints 6 ("just kills it") and will be RECREATED. Default Quick Play is getting a flagship
+  **"Crimson Chaos" RYO-style guitar**. Both ordered in **`ASSET_ORDERS_GUITARS.md`** (exact
+  files: `assets/guitars/violet-gothic-5.png`, `assets/guitars/crimson-chaos-ryo.png`; guitar5
+  framing spec ~0.56 aspect / neck-dominant / body sliver; engine re-measures on delivery).
+  Bump ?v 110→111.
+
 ### v110 — backdrop TRUE COVER · seam feather on the CONTENT box · causeless floaters killed  ✅
 The user rejected v109's backdrop ("still too small / cropped at the sides; Skully cropped at the
 top; random floating particle effects I don't understand"). Three fixes, verified live on frac-01:
