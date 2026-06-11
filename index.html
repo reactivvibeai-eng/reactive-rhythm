@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=108" />
+<link rel="stylesheet" href="jukebox.css?v=109" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -940,7 +940,9 @@
   #game.rr-cine #bg-video, #game.rr-cine #bg-image {
     animation: rrCineZoom 2.7s cubic-bezier(.2,.6,.2,1) both;
   }
-  @keyframes rrCineZoom { 0% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  /* build13: the cine zoom MULTIPLIES the smart-fit scale (--rr-bgfit) so the settle lands on the
+     fitted frame, not scale(1) — #bg-image has no fit var and falls back to 1 (unchanged). */
+  @keyframes rrCineZoom { 0% { transform: scale(calc(var(--rr-bgfit, 1) * 1.16)); } 100% { transform: scale(var(--rr-bgfit, 1)); } }
   html.rr-reduce-motion #game.rr-cine #bg-video, html.rr-reduce-motion #game.rr-cine #bg-image { animation: none; }
 
   /* ---- PER-LEVEL MECHANIC overlays (Bone Daddy booty-shake · Melody cat-paw). Pure visual, over the
@@ -1001,16 +1003,35 @@
     position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
     background: #0a0706;
   }
-  /* build12: the sharp layer shows the FULL frame (contain — no crop-zoom blur); the blurred cover
-     fill behind it paints the letterbox areas cinematically. */
+  /* build13 SMART-FIT (user playtest: contain read as a "cropped box", cover as "blown up"):
+     the sharp layer scales BETWEEN contain and cover — JS sets --rr-bgfit (1 = contain, capped
+     bleed toward cover) — and its edges FEATHER into the blurred fill so the frame has no hard
+     seam. Content biased slightly UP (42%): the guitar body owns the lower third anyway. */
   #bg-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: contain; z-index: 0; pointer-events: none;
+    object-fit: contain; object-position: 50% 42%; z-index: 0; pointer-events: none;
+    transform: scale(var(--rr-bgfit, 1)); transform-origin: 50% 42%;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%),
+      linear-gradient(180deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%),
+      linear-gradient(180deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+    mask-composite: intersect;
   }
+  /* the fill = the same world OUT OF FOCUS (not a dark letterbox) — brighter than build12, with a
+     slow Ken-Burns drift so the far plane lives (three planes: drifting blur → locked video → guitar). */
   #bg-video-fill {
     position: absolute; inset: -4%; width: 108%; height: 108%;
     object-fit: cover; z-index: 0; pointer-events: none;
-    filter: blur(26px) saturate(1.12) brightness(0.72);
+    filter: blur(30px) saturate(1.1) brightness(0.86);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #bg-video-fill { animation: rrBgDrift 38s ease-in-out infinite alternate; }
+  }
+  html.rr-reduce-motion #bg-video-fill { animation: none; }
+  @keyframes rrBgDrift {
+    0%   { transform: scale(1.02) translateY(-0.5%); }
+    100% { transform: scale(1.10) translateY(0.8%); }
   }
   /* Per-level static backdrop (level bgArt). Above the moon video, below the scrim. */
   #bg-image {
@@ -3813,11 +3834,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=108"></script>
-<script src="game.js?v=108"></script>
-<script src="jukebox.js?v=108"></script>
-<script src="catalog.js?v=108"></script>
-<script src="multiplayer.js?v=108"></script>
+<script src="assets/fx/fx-player.js?v=109"></script>
+<script src="game.js?v=109"></script>
+<script src="jukebox.js?v=109"></script>
+<script src="catalog.js?v=109"></script>
+<script src="multiplayer.js?v=109"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -4156,16 +4177,33 @@
       var vMain = $('bg-video'), vFill = $('bg-video-fill');
       if (!vMain || !vFill || !window.MutationObserver) return;
       if (/[?&]novideo=1/.test(location.search)) return;   // the diag flag owns the videos (review find)
+      // build13 SMART-FIT: scale the sharp layer BETWEEN contain and cover (bleed capped at 1.18×)
+      // — mild aspect mismatches go truly full-bleed; extreme ones (portrait loop on a wide window)
+      // bleed partway and the feathered edges melt into the blurred fill. Sets --rr-bgfit, which
+      // the base transform AND the rrCineZoom keyframes both multiply.
+      var fitBg = function () {
+        try {
+          var host = vMain.parentElement; if (!host) return;
+          var CW = host.clientWidth || 0, CH = host.clientHeight || 0;
+          var VW = vMain.videoWidth || 0, VH = vMain.videoHeight || 0;
+          if (!CW || !CH || !VW || !VH) { vMain.style.removeProperty('--rr-bgfit'); return; }
+          var contain = Math.min(CW / VW, CH / VH), cover = Math.max(CW / VW, CH / VH);
+          vMain.style.setProperty('--rr-bgfit', Math.min(cover / contain, 1.18).toFixed(4));
+        } catch (e) {}
+      };
       var sync = function () {
         try {
           if (document.documentElement.classList.contains('rr-perf-bg')) { try { vFill.pause(); } catch (e2) {} return; }
           var s = vMain.getAttribute('src') || '';
           if (vFill.getAttribute('src') !== s) { vFill.setAttribute('src', s); vFill.load(); vFill.style.display = ''; }
           vFill.style.visibility = vMain.style.visibility || '';
+          fitBg();   // src may have just swapped (level apply / intense combo) — refit
           var pr = vFill.play(); if (pr && pr.catch) pr.catch(function () {});
         } catch (e) {}
       };
       new MutationObserver(sync).observe(vMain, { attributes: true, attributeFilter: ['src', 'style'] });
+      vMain.addEventListener('loadedmetadata', fitBg);
+      window.addEventListener('resize', fitBg);
       vFill.onerror = function () { try { vFill.style.display = 'none'; } catch (e) {} };
       sync();
     })();
