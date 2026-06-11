@@ -2604,12 +2604,12 @@
     // build8b: themed ambient AURA — one subtle drifting loop behind the upper neck while a themed level
     // plays (Skully skull-flame / Bone Daddy ember-skull). Localized + low-alpha (not a full-screen wash).
     if (!isPaused && fx && !reduceMotion && !fxLite && state === 'playing') {
-      const _an = THEME_AURA[_fxTheme()];
-      if (_an && _fxHas(_an)) {
-        const _ax = (nearX[0] + nearX[LANE_COUNT - 1]) / 2, _ay = farY + (nearY - farY) * 0.22, _as = (lw * 4.2 / 128);
-        if (!_auraFx || !_auraFx.alive()) { _auraFx = _fxRide(_an, _ax, _ay, _as, 0.4); }
-        else { _auraFx.move(_ax, _ay); _auraFx.setScale(_as); }
-      } else if (_auraFx) { _auraFx.stop(); _auraFx = null; }
+      // build14: THEME AURA DISABLED (user, Skully playtest: "random floating particle effects
+      // which I don't understand") — a causeless looping flame drifting mid-air breaks the
+      // world-reacts-to-GAMEPLAY rule. It was invisible pre-v108 (black-box era); the luminance
+      // key exposed it. THEME_FX hit/perfect variants + gameplay-anchored FX are untouched.
+      // To re-enable for a future level: restore _fxRide(THEME_AURA[_fxTheme()], …) here.
+      if (_auraFx) { _auraFx.stop(); _auraFx = null; }
       // build8c: OD-READY cue — a chrome pulse ring on every catcher while star power is armed
       if (overdrive >= 1 && !odActive) {
         if (!_readyRings) { _readyRings = []; for (let i = 0; i < LANE_COUNT; i++) _readyRings.push(_fxRide('chrome-pulse-ring', nearX[i], nearY, (lw * 1.7 / 128), 0.5)); }
@@ -3658,20 +3658,8 @@
       ctx.fillStyle = fg; ctx.fillRect(0, ch * 0.62, cw, ch * 0.38);
       ctx.restore();
     }
-    // 2) drifting accent embers — build8: ~half the count and dimmer so they sparkle instead of fogging.
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const n = 4 + Math.floor(energy * 7 * levelAmbient);
-    for (let i = 0; i < n; i++) {
-      const seed = i * 91.7;
-      const x = (Math.sin(seed * 1.3) * 0.5 + 0.5) * cw;
-      const prog = ((t * (0.03 + (i % 4) * 0.01) + (seed % 1)) % 1);
-      const y = ch * (0.96 - prog * 0.78);
-      const sz = (0.6 + (i % 3) * 0.7) * (1 + energy * 0.8);
-      const a = (0.05 + inten * 0.16) * (1 - prog);
-      ctx.fillStyle = 'rgba(' + A + ',' + a.toFixed(3) + ')';
-      ctx.beginPath(); ctx.arc(x + Math.sin(t * 0.9 + i) * 7, y, sz, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.restore();
+    // 2) drifting accent embers — build14: REMOVED (user, Skully playtest: "random floating
+    // particle effects" — causeless drift reads as noise; the static fog band above stays).
   }
 
   // EQ bars on menu

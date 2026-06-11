@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=109" />
+<link rel="stylesheet" href="jukebox.css?v=110" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1003,27 +1003,24 @@
     position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
     background: #0a0706;
   }
-  /* build13 SMART-FIT (user playtest: contain read as a "cropped box", cover as "blown up"):
-     the sharp layer scales BETWEEN contain and cover — JS sets --rr-bgfit (1 = contain, capped
-     bleed toward cover) — and its edges FEATHER into the blurred fill so the frame has no hard
-     seam. Content biased slightly UP (42%): the guitar body owns the lower third anyway. */
+  /* build14 SMART-FIT v2 (user: "still too small / cropped at the sides — make it BIGGER"):
+     the sharp layer now goes to TRUE COVER whenever cover/contain ≤ 2.4 (zero bands — the common
+     case incl. the user's window), and only the pathological mismatch (portrait loop on a wide
+     monitor) is capped, where JS paints a FEATHER MASK aligned to the video's DRAWN CONTENT BOX
+     (the v109 mask spanned the element, so the actual letterbox seam was never feathered — the
+     user's screenshot caught it). Content biased UP (42%): the guitar owns the lower third. */
   #bg-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; object-position: 50% 42%; z-index: 0; pointer-events: none;
     transform: scale(var(--rr-bgfit, 1)); transform-origin: 50% 42%;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%),
-      linear-gradient(180deg, transparent 0, #000 6%, #000 94%, transparent 100%);
-    -webkit-mask-composite: source-in;
-    mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%),
-      linear-gradient(180deg, transparent 0, #000 6%, #000 94%, transparent 100%);
-    mask-composite: intersect;
   }
-  /* the fill = the same world OUT OF FOCUS (not a dark letterbox) — brighter than build12, with a
-     slow Ken-Burns drift so the far plane lives (three planes: drifting blur → locked video → guitar). */
+  /* the fill = the same world barely out of focus at near-full brightness — when the capped case
+     leaves margins, they read as a soft continuation of the SAME image, not a dark letterbox.
+     Slow Ken-Burns drift keeps the far plane alive (drifting fill → locked video → guitar). */
   #bg-video-fill {
     position: absolute; inset: -4%; width: 108%; height: 108%;
     object-fit: cover; z-index: 0; pointer-events: none;
-    filter: blur(30px) saturate(1.1) brightness(0.86);
+    filter: blur(14px) saturate(1.08) brightness(0.96);
   }
   @media (prefers-reduced-motion: no-preference) {
     #bg-video-fill { animation: rrBgDrift 38s ease-in-out infinite alternate; }
@@ -3834,11 +3831,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=109"></script>
-<script src="game.js?v=109"></script>
-<script src="jukebox.js?v=109"></script>
-<script src="catalog.js?v=109"></script>
-<script src="multiplayer.js?v=109"></script>
+<script src="assets/fx/fx-player.js?v=110"></script>
+<script src="game.js?v=110"></script>
+<script src="jukebox.js?v=110"></script>
+<script src="catalog.js?v=110"></script>
+<script src="multiplayer.js?v=110"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -4177,35 +4174,74 @@
       var vMain = $('bg-video'), vFill = $('bg-video-fill');
       if (!vMain || !vFill || !window.MutationObserver) return;
       if (/[?&]novideo=1/.test(location.search)) return;   // the diag flag owns the videos (review find)
-      // build13 SMART-FIT: scale the sharp layer BETWEEN contain and cover (bleed capped at 1.18×)
-      // — mild aspect mismatches go truly full-bleed; extreme ones (portrait loop on a wide window)
-      // bleed partway and the feathered edges melt into the blurred fill. Sets --rr-bgfit, which
-      // the base transform AND the rrCineZoom keyframes both multiply.
+      // build14 SMART-FIT v2 (user: "still too small — make it bigger"): TRUE COVER whenever
+      // cover/contain ≤ 2.4 (zero bands); beyond that, cap the zoom and paint a feather mask
+      // aligned to the video's DRAWN CONTENT BOX in element space (it scales WITH the transform,
+      // so the feather rides the real letterbox seam — the v109 element-edge mask never touched
+      // it). At true cover the mask is removed entirely (no vignette). --rr-bgfit is multiplied
+      // by the base transform AND the rrCineZoom keyframes.
+      var BG_BLEED_CAP = 2.4, BG_FEATHER = 0.10;
+      // ⚠ every style write below is DIFF-GUARDED and the observer only refits on SRC changes:
+      // fitBg's own style writes re-trigger a 'style' MutationObserver → sync → fitBg microtask
+      // storm that FREEZES the main thread (hit + fixed in build14 — no console error, just a
+      // dead renderer). Never call fitBg from a style-attribute mutation.
+      var setIf = function (prop, val) {
+        if (vMain.style.getPropertyValue(prop) !== val) {
+          if (val === '') vMain.style.removeProperty(prop); else vMain.style.setProperty(prop, val);
+        }
+      };
       var fitBg = function () {
         try {
           var host = vMain.parentElement; if (!host) return;
           var CW = host.clientWidth || 0, CH = host.clientHeight || 0;
           var VW = vMain.videoWidth || 0, VH = vMain.videoHeight || 0;
-          if (!CW || !CH || !VW || !VH) { vMain.style.removeProperty('--rr-bgfit'); return; }
+          if (!CW || !CH || !VW || !VH) {
+            setIf('--rr-bgfit', ''); setIf('-webkit-mask-image', ''); setIf('mask-image', '');
+            setIf('-webkit-mask-composite', ''); setIf('mask-composite', '');
+            return;
+          }
           var contain = Math.min(CW / VW, CH / VH), cover = Math.max(CW / VW, CH / VH);
-          vMain.style.setProperty('--rr-bgfit', Math.min(cover / contain, 1.18).toFixed(4));
+          var s = Math.min(cover / contain, BG_BLEED_CAP);
+          setIf('--rr-bgfit', s.toFixed(4));
+          if (s >= (cover / contain) - 0.001) {   // true cover → full bleed, no mask at all
+            setIf('-webkit-mask-image', ''); setIf('mask-image', '');
+            setIf('-webkit-mask-composite', ''); setIf('mask-composite', '');
+            return;
+          }
+          // capped: feather the CONTENT box edges (element space, pre-transform — scales with it)
+          var w0 = VW * contain, h0 = VH * contain;
+          var x0 = (CW - w0) / 2, y0 = (CH - h0) * 0.42;   // matches object-position 50% 42%
+          var f = Math.max(24, Math.min(w0, h0) * BG_FEATHER);
+          var gx = 'linear-gradient(90deg, transparent ' + (x0 - 1).toFixed(0) + 'px, rgb(0, 0, 0) ' + (x0 + f).toFixed(0) + 'px, rgb(0, 0, 0) ' + (x0 + w0 - f).toFixed(0) + 'px, transparent ' + (x0 + w0 + 1).toFixed(0) + 'px)';
+          var gy = 'linear-gradient(180deg, transparent ' + (y0 - 1).toFixed(0) + 'px, rgb(0, 0, 0) ' + (y0 + f).toFixed(0) + 'px, rgb(0, 0, 0) ' + (y0 + h0 - f).toFixed(0) + 'px, transparent ' + (y0 + h0 + 1).toFixed(0) + 'px)';
+          setIf('-webkit-mask-image', gx + ', ' + gy);
+          setIf('mask-image', gx + ', ' + gy);
+          setIf('-webkit-mask-composite', 'source-in');
+          setIf('mask-composite', 'intersect');
         } catch (e) {}
       };
-      var sync = function () {
+      var sync = function (refit) {
         try {
           if (document.documentElement.classList.contains('rr-perf-bg')) { try { vFill.pause(); } catch (e2) {} return; }
           var s = vMain.getAttribute('src') || '';
           if (vFill.getAttribute('src') !== s) { vFill.setAttribute('src', s); vFill.load(); vFill.style.display = ''; }
           vFill.style.visibility = vMain.style.visibility || '';
-          fitBg();   // src may have just swapped (level apply / intense combo) — refit
+          if (refit) fitBg();   // ONLY on src swaps (level apply / intense combo) — never on style
           var pr = vFill.play(); if (pr && pr.catch) pr.catch(function () {});
         } catch (e) {}
       };
-      new MutationObserver(sync).observe(vMain, { attributes: true, attributeFilter: ['src', 'style'] });
+      new MutationObserver(function (muts) {
+        var srcChanged = false;
+        for (var i = 0; i < muts.length; i++) { if (muts[i].attributeName === 'src') { srcChanged = true; break; } }
+        sync(srcChanged);
+      }).observe(vMain, { attributes: true, attributeFilter: ['src', 'style'] });
       vMain.addEventListener('loadedmetadata', fitBg);
-      window.addEventListener('resize', fitBg);
+      vMain.addEventListener('playing', fitBg);      // build14: belt-and-suspenders (cached video can
+      window.addEventListener('resize', fitBg);      // beat the listener attach — readyState race)
       vFill.onerror = function () { try { vFill.style.display = 'none'; } catch (e) {} };
-      sync();
+      try { window.__rrFitBg = fitBg; } catch (e) {}   // dev breadcrumb (strip at freeze)
+      sync(true);
+      if (vMain.readyState >= 1) fitBg();            // metadata already in → fit now (attach race)
     })();
   } catch (e) {}
   function applyLevelTheme(L) {
