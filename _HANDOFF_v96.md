@@ -72,7 +72,16 @@ the repo. Drop path when it lands: clips → `assets/fx/_src/` → `python build
 N --cols C --rows R [--loop]` → UNION-merge `manifest.json` (never overwrite; bomb-* names are
 engine-owned) → the engine auto-loads any manifest entry; wire new names into THEME_FX/_fxLayers/the
 UI MAP as fits. The engine agent (me) can tile + wire the moment files exist.
-**NEXT:** user RE-PLAYTESTS v109 (Skully + the default level + combo FX — their verdict still gates
+**v110 (the user's v109 verdicts — backdrop still boxed / Skully top-crop / floating particles):**
+bleed cap 2.4 → TRUE COVER on their window for BOTH videos (zero bands); the v109 feather masked
+the ELEMENT not the CONTENT box (never touched the seam) → mask now px-aligned to the drawn
+content rect; fill near-seamless (blur 14, brightness .96). ⚠ LIVELOCK lesson: fitBg's style
+writes re-fired the style MutationObserver → microtask storm → renderer FROZE with no console
+error — observer now refits only on SRC changes + all style writes diff-guarded (`setIf`). The
+"random floating particles" were the THEME AURA loop + level-ambient drift embers (causeless,
+exposed by the v108 luminance key) — REMOVED; gameplay-anchored FX untouched. Verified live on
+frac-01: theme violet, zero floating loops, true-cover video, zero errors.
+**NEXT:** user RE-PLAYTESTS v110 (Skully + the default level + combo FX — their verdict still gates
 the level template lock-in / any new level). Dial knobs ready: skin widthF (0.78) + laneSpread (1.16)
 in SKIN_GEOM/_applySkinGeom, backdrop fit cap (1.18) + feather (6%) + fill brightness (.86), fire
 tier/scale, wave timing/scales in emitComboWave, zoom (rrCineZoom 1.16), print speed (dt/2.0), scrim

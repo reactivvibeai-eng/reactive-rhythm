@@ -1107,6 +1107,27 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v110 — backdrop TRUE COVER · seam feather on the CONTENT box · causeless floaters killed  ✅
+The user rejected v109's backdrop ("still too small / cropped at the sides; Skully cropped at the
+top; random floating particle effects I don't understand"). Three fixes, verified live on frac-01:
+- **Bleed cap 1.18 → 2.4** — on the user's tall window the moon loop (portrait, ratio ~1.94) AND
+  Skully's 16:9 (~1.99) now go **TRUE COVER**: full-bleed, zero bands, mask removed. Only the
+  pathological portrait-on-widescreen case stays capped.
+- **v109's real mask bug:** the feather spanned the ELEMENT box — the video's interior letterbox
+  seam was never feathered (the user's eye caught what the computed-style probe missed). The mask
+  is now painted in px ALIGNED TO THE DRAWN CONTENT BOX (verified: stops 505/541/825/861 = the
+  moon column ±35px feather at 1366×768). Fill = near-seamless continuation (blur 14, brightness .96).
+- **MICROTASK LIVELOCK found + fixed:** fitBg's style writes re-triggered the src/style
+  MutationObserver → sync → fitBg forever — froze the renderer with NO console error (the
+  webkit/standard mask-composite aliases never reach a serialization fixpoint). Observer now
+  refits ONLY on src mutations + every style write is diff-guarded (`setIf`). Plus the metadata
+  race (cached video beats listener attach): refit at init when readyState≥1 + on 'playing'.
+- **The "random floating particles" = the THEME AURA** (skull-flame-violet looping causelessly
+  behind the neck — a black box pre-v108; the luminance key exposed it) **+ level-ambient drifting
+  embers — both REMOVED** (static fog band stays; all gameplay-anchored FX untouched).
+Verified: frac-01 live with theme violet and ZERO floating loops after 25 rendered frames;
+skully-loop true cover no mask; materialize completes; zero console errors. Bump ?v 109→110.
+
 ### v109 — backdrop SMART-FIT · FX become BOARD particles · skins shrink w/ engine-string lanes  ✅
 The user's v108 playtest, three verdicts, all shipped + self-playtested end-to-end:
 - **Backdrop composition ("contain = cropped box, cover = blown up"):** the sharp layer now scales
