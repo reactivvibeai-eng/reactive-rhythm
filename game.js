@@ -2228,6 +2228,17 @@
   // build10b: level-start cinematic progress — 0→1 while a custom guitar MATERIALIZES along the
   // highway (advanced in render; 1 = fully built; default guitar never builds).
   let _skinBuildT = 1;
+  // build22 (Melody): a tiny canvas paw print — pad ellipse + three toes pointing DOWN the
+  // highway (the cat walked toward the catchers). Cheap fills; used by the pink fret rows.
+  function _drawPaw(x, y, r, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.ellipse(x, y, r * 0.62, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.arc(x + i * r * 0.5, y + r * 0.62 + Math.abs(i) * r * 0.10, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   // build13 DEPTH: the guitar grounds against the (now brighter) backdrop via a CONTACT SHADOW —
   // its own blurred silhouette drawn behind it. Cached per image (rebuilt on skin swap); warm
   // near-black (#070403), never grey/blue. Skipped under fxLite.
@@ -2721,14 +2732,27 @@
     const noteX = (i, d) => { const u = P(d); return warpX(nearX[i] + (farX[i] - nearX[i]) * u, u); };
     const noteY = (d) => nearY + (farY - nearY) * P(d);
     // scrolling fret lines — the highway itself rushes toward you (the #1 speed/depth cue, GH-style)
+    // build22 (Melody): on the 'pink' theme the SAME moving rows render as PAW PRINTS stepping
+    // down the highway — her identity rides an element that already moves (doctrine: never add a
+    // new floater; re-theme what exists). Depth/speed cue preserved exactly.
     if (zFar > 1 && !reduceMotion && !fxLite) {
       const NF = 9, fretSpeed = 0.5;
+      const pawTheme = _fxTheme() === 'pink';
       for (let k = 0; k < NF; k++) {
         const dk = ((k / NF - t * fretSpeed) % 1 + 1) % 1;
         const yy = noteY(dk);
-        ctx.strokeStyle = 'rgba(255,96,72,' + (0.04 + 0.18 * (1 - P(dk))).toFixed(3) + ')';
-        ctx.lineWidth = 0.5 + 2 * depthScale(dk);
-        ctx.beginPath(); ctx.moveTo(noteX(0, dk), yy); ctx.lineTo(noteX(LANE_COUNT - 1, dk), yy); ctx.stroke();
+        if (pawTheme) {
+          const sD = depthScale(dk), aP = 0.06 + 0.20 * (1 - P(dk));
+          const xm = (noteX(1, dk) + noteX(LANE_COUNT - 2, dk)) / 2;
+          const spread = (noteX(LANE_COUNT - 2, dk) - noteX(1, dk)) * 0.30;
+          const side = (k % 2) ? 1 : -1;
+          _drawPaw(xm + side * spread, yy, 6.5 * sD + 1.6, 'rgba(255,95,162,' + aP.toFixed(3) + ')');
+          _drawPaw(xm - side * spread, yy + 7 * sD, 5.5 * sD + 1.4, 'rgba(255,95,162,' + (aP * 0.75).toFixed(3) + ')');
+        } else {
+          ctx.strokeStyle = 'rgba(255,96,72,' + (0.04 + 0.18 * (1 - P(dk))).toFixed(3) + ')';
+          ctx.lineWidth = 0.5 + 2 * depthScale(dk);
+          ctx.beginPath(); ctx.moveTo(noteX(0, dk), yy); ctx.lineTo(noteX(LANE_COUNT - 1, dk), yy); ctx.stroke();
+        }
       }
     }
 
