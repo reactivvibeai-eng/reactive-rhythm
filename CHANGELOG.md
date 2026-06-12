@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v124 — the black box dies: guitars become ALPHA CUTOUTS · alignment PROVEN IN-ENGINE  ✅
+Round-3 playtest fallout: the v123 5-string re-renders shipped as FULL-FRAME images with their
+baked dark backgrounds (the prompt literally asked for "same dark background" — original assets
+were transparent cutouts). The engine warped that whole rectangle onto the board → the user's
+"odd black box around his guitar", and the frame margins skewed the fit → strings drifting off
+the controls. Fix: **Higgsfield background-remover → true alpha cutouts**, trimmed to content
+(`_trim_remap.py` remaps every calibration fraction into the cutout frame), SKIN_GEOM updated
+(melody 1290×2036 / bone 1354×2048; bone keeps widthF 0.92). **Verification upgraded to
+IN-ENGINE proof:** serve.py is now THREADED (the single-thread server head-of-line-blocked the
+headless browser into a dead page) + a dev `/__cap` POST sink (canvas dataURL → file → Read; no
+more lossy base64 transcription — that bit us once this round). Launch.json now runs serve.py
+(was python -m http.server: no sink, no no-cache). Captured live catch-zone proofs both levels
+(`_cap_bd_catch2.jpg`, `_cap_ml_catch.jpg`): **all five catcher rings sit ON the five painted
+strings at the bridge**, lanes track the strings, zero black box, zero console errors.
+Headless gotchas logged: fresh preview viewport is 0×0 (resize first), the skin materialize
+cinematic needs ~260 manual ticks before geometry reads true. DEV-STRIP list grows: /__cap sink
++ serve_main.py. No new credit spend (bg-removal jobs were free).
+
 ### v123 — playtest round 2: BOTH character guitars go TRUE 5-STRING · the baron comes alive  ✅
 **Melody + Bone Daddy re-rendered with exactly five strings** (5-string decree — their art still
 painted six; the engine rode 5-of-6 leaving an orphan string). gpt_image_2 i2i at high (Bone's

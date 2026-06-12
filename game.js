@@ -527,17 +527,19 @@
     'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
-    'assets/guitars/bone-daddy.png':    { aspect: 1376 / 2048, nutFY: 0.130, bridgeFY: 0.780,
+    'assets/guitars/bone-daddy.png':    { aspect: 1354 / 2048, nutFY: 0.130, bridgeFY: 0.780,
       // build23: TRUE 5-STRING re-render (regen v2 — v1 kept 6; machine-verified 13 exactly-5 rows).
-      // Lines fit over 30 fretboard rows (residuals ≤3.3px), extrapolated to the saddle line.
+      // build24: ALPHA CUTOUT (the full-frame render's baked background painted a "black box"
+      // around the guitar) — keyed via Higgsfield bg-remover, trimmed to content, fractions remapped.
       widthF: 0.92,   // playtest: his guitar played too SMALL — notes were hard to read
-      nutXF:    [0.4508, 0.4692, 0.4852, 0.5076, 0.5309],
-      bridgeXF: [0.3970, 0.4434, 0.4856, 0.5380, 0.5993] },
-    'assets/guitars/melody-pink.png':   { aspect: 1376 / 2048, nutFY: 0.098, bridgeFY: 0.800,
+      nutXF:    [0.4478, 0.4665, 0.4827, 0.5055, 0.5292],
+      bridgeXF: [0.3931, 0.4403, 0.4832, 0.5364, 0.5987] },
+    'assets/guitars/melody-pink.png':   { aspect: 1290 / 2036, nutFY: 0.093, bridgeFY: 0.799,
       // build23: TRUE 5-STRING re-render (5-string decree; measurer confirmed exactly-5 rows).
-      // nut = peak-snapped; bridge = ruler-read at the saddles (the auto-snap caught the trem roller).
-      nutXF:    [0.4259, 0.4448, 0.4666, 0.4876, 0.5094],
-      bridgeXF: [0.3880, 0.4480, 0.5100, 0.5780, 0.6400] },
+      // build24: ALPHA CUTOUT (baked background read as a "black box" in-level) — keyed,
+      // trimmed to content, fractions remapped into the cutout frame.
+      nutXF:    [0.4419, 0.4621, 0.4853, 0.5077, 0.5310],
+      bridgeXF: [0.4015, 0.4655, 0.5316, 0.6041, 0.6703] },
     'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
       bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },
