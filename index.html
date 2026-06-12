@@ -1,8 +1,8 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Reactive Rhythm â€” ReactivVibe AI</title>
+<title>Reactive Rhythm — ReactivVibe AI</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -11,24 +11,24 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=120" />
+<link rel="stylesheet" href="jukebox.css?v=121" />
 <style>
   :root {
-    /* BRAND: black Â· crimson Â· chrome â€” strictly warm/neutral, NO blue/purple cast.
-       (the darks were blue-tinted before, so red glows blended to purple â€” fixed.) */
-    --bg: #0a0706;          /* warm near-black (Râ‰¥Gâ‰¥B) â€” no cool cast */
+    /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
+       (the darks were blue-tinted before, so red glows blended to purple — fixed.) */
+    --bg: #0a0706;          /* warm near-black (R≥G≥B) — no cool cast */
     --bg-2: #160c0b;        /* warm red-black */
     --ink: #f4eef0;
     --ink-dim: #8a7f7c;
     --chrome: #dad7d2;      /* true chrome: neutral-warm silver (was cool blue-gray) */
     --crimson: #ff1f2e;
     --cyan: #cbc7c2;        /* neutral silver accent (was cool blue-gray) */
-    --purple: #a3060f;      /* (mislabelled â€” this is deep crimson, kept) */
+    --purple: #a3060f;      /* (mislabelled — this is deep crimson, kept) */
     --green: #e0a93f;
     --amber: #e0a93f;
     --gold: #e0a93f;
     --red-deep: #a3060f;
-    --line: rgba(160, 40, 46, 0.32);     /* muted CRIMSON hairline â€” a light line over the
+    --line: rgba(160, 40, 46, 0.32);     /* muted CRIMSON hairline — a light line over the
                                             crimson bg-glow blended to pink/"purple", so the
                                             dividers are now red-family and can never read purple */
   }
@@ -85,7 +85,7 @@
     transition: opacity 0.35s ease;
   }
   .screen.active { opacity: 1; pointer-events: auto; }
-  /* polished entrance for the modal overlays (How-to / Levels / Career) â€” they used to pop in flat */
+  /* polished entrance for the modal overlays (How-to / Levels / Career) — they used to pop in flat */
   .screen.active .howto-card,
   .screen.active .levels-card,
   .screen.active .profile-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
@@ -322,7 +322,7 @@
   .diff-btn:hover { background: rgba(255,255,255,0.05); color: var(--ink); }
   .diff-btn.active { border-color: var(--crimson); color: var(--ink); background: rgba(255, 31, 46, 0.08); box-shadow: inset 0 0 0 1px rgba(255,31,46,0.4); }
   .diff-btn.active .lvl { color: var(--crimson); }
-  /* ============ ENVIRONMENT PICKER (build6) â€” choose a LEVEL/ENVIRONMENT for the picked song ============ */
+  /* ============ ENVIRONMENT PICKER (build6) — choose a LEVEL/ENVIRONMENT for the picked song ============ */
   .env-row { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px;
     scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
   .env-row::-webkit-scrollbar { height: 5px; }
@@ -342,7 +342,7 @@
     background-color: var(--ec-bg, #160c0b); display: grid; place-items: center; }
   .env-chip .ec-art .ec-ini { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 22px;
     color: color-mix(in srgb, var(--ec, #ff1f2e) 80%, #fff); text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
-  /* build8: RANDOM STAGE chip â€” show the icon whole (contain) + a hover roll, not cover-cropped */
+  /* build8: RANDOM STAGE chip — show the icon whole (contain) + a hover roll, not cover-cropped */
   .env-chip[data-env="__random"] .ec-art { background-size: contain; background-repeat: no-repeat; background-position: center;
     filter: drop-shadow(0 0 9px rgba(255,31,46,0.55)); }
   .env-chip[data-env="__random"]:hover .ec-art { animation: randRoll 0.6s cubic-bezier(.3,1.4,.4,1); }
@@ -410,7 +410,7 @@
     font-family: 'JetBrains Mono', monospace;
     position: relative; z-index: 1;
   }
-  /* legacy glyph (kept verbatim â€” current markup doesn't use it, but referenced defensively) */
+  /* legacy glyph (kept verbatim — current markup doesn't use it, but referenced defensively) */
   .loading-glyph {
     width: 120px; height: 120px;
     position: relative;
@@ -474,7 +474,7 @@
   @keyframes atom-chrome { to { transform: rotate(360deg); } }
 
   .atom-svg { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible; }
-  /* build8: optional raster atom core (assets/atom-loading.png) â€” sits centered over the SVG,
+  /* build8: optional raster atom core (assets/atom-loading.png) — sits centered over the SVG,
      spins slowly + pulses (the "energy core"). Self-heals: img is removed onerror, leaving the SVG. */
   .atom-img { position: absolute; left: 50%; top: 50%; z-index: 2; pointer-events: none;
     width: 46%; height: 46%; object-fit: contain;
@@ -501,7 +501,7 @@
     filter: drop-shadow(0 0 7px rgba(255,31,46,0.85)) drop-shadow(0 0 14px rgba(255,122,74,0.4));
   }
 
-  /* equalizer pulse â€” 5 ember/gold bars beneath the loader, "music is decoding" energy cue */
+  /* equalizer pulse — 5 ember/gold bars beneath the loader, "music is decoding" energy cue */
   .loading-eq { display: flex; align-items: flex-end; gap: 6px; height: 26px; margin-top: -8px; }
   .loading-eq i {
     width: 5px; height: 100%; border-radius: 3px;
@@ -571,7 +571,7 @@
   .ps-n { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,42,48,0.22); }
   .profile-grades-wrap { width: 100%; margin-top: 4px; }
   .pg-head { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
-  .pg-head::before { content: 'â—†'; font-size: 8px; color: var(--crimson); }
+  .pg-head::before { content: '◆'; font-size: 8px; color: var(--crimson); }
   .profile-grades { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
   .pg-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 4px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.02); }
   .pg-g { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 24px; line-height: 1; }
@@ -677,12 +677,12 @@
   html.rr-reduce-motion #rr-lvl-splash { backdrop-filter: none; }
   html.rr-reduce-motion #rr-lvl-splash.show .rs-card { animation: none; }
   html.rr-reduce-motion .rs-bar { display: none; }
-  /* ============ PER-LEVEL REACTIVE OVERLAY â€” flanking tarot cards (Skully: DEATH / THE WORLD) ============ */
+  /* ============ PER-LEVEL REACTIVE OVERLAY — flanking tarot cards (Skully: DEATH / THE WORLD) ============ */
   #rr-reactive { position: fixed; inset: 0; z-index: 55; pointer-events: none; display: none; }
   #rr-reactive.show { display: block; }
   /* Cards sit LOW, flanking the guitar bridge (closer in, clearly in view), and FILL UP like fate
      meters: DEATH charges with misses, THE WORLD charges with hits. */
-  /* build9: cards HUG THE GUITAR NECK (user spec) â€” left/top/size are JS-driven off the live lane
+  /* build9: cards HUG THE GUITAR NECK (user spec) — left/top/size are JS-driven off the live lane
      frame (RhythmGame.getLaneFrame), so they flank the neck itself on any screen/skin, not the screen
      edges. The vw values below are only the no-JS fallback. Fate meters: DEATH=misses, WORLD=hits. */
   .rc-card {
@@ -767,7 +767,7 @@
   .lbd-res-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-res-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); }
   @media (max-width: 560px) { .lbd-title { font-size: 36px; } .lbd-board .lb-row { grid-template-columns: 38px 1fr auto auto; gap: 10px; font-size: 12px; } }
-  /* OVERLAY FIT (ALL widths) â€” levels/leaderboard/profile/store cards can exceed the viewport (esp. the
+  /* OVERLAY FIT (ALL widths) — levels/leaderboard/profile/store cards can exceed the viewport (esp. the
      multi-tier level picker on desktop). The base .screen centers them so the TOP clips and can't scroll.
      Anchor to top + allow vertical scroll; margin:auto keeps short content centered. */
   #levels-screen.screen, #leaderboard-screen.screen, #profile-screen.screen, #store-screen.screen {
@@ -776,7 +776,7 @@
   #levels-screen .levels-card, #leaderboard-screen .lbd-card, #profile-screen .profile-card, #store-screen .store-card {
     margin: auto; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
   }
-  /* ---- STORE overlay (Sparks shop) â€” mirrors leaderboard overlay; brand crimson/ember/gold ---- */
+  /* ---- STORE overlay (Sparks shop) — mirrors leaderboard overlay; brand crimson/ember/gold ---- */
   .store-screen { z-index: 261; background: linear-gradient(rgba(10,7,9,0.50), rgba(10,7,9,0.80)), url('assets/store/store-bg.jpg') center/cover no-repeat fixed, radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.45), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
   .screen.active .store-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
   .store-card { width: min(720px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 30px 10px; text-align: center; }
@@ -823,7 +823,7 @@
   .store-buy.equip { background: linear-gradient(180deg, #ff2a38, #b3121f); color: #fff; border: none; box-shadow: 0 4px 14px rgba(255,31,46,0.35), inset 0 1px 0 rgba(255,255,255,0.22); }
   .store-buy.equip:hover, .store-buy.equip:focus-visible { box-shadow: 0 6px 20px rgba(255,31,46,0.5), inset 0 1px 0 rgba(255,255,255,0.3); }
   .store-buy.equipped { background: linear-gradient(180deg, rgba(224,169,63,0.18), rgba(224,169,63,0.10)); color: #e0a93f; border: 1px solid rgba(224,169,63,0.55); box-shadow: none; cursor: pointer; }
-  .store-buy.equipped::before { content: '\2713\00a0'; }   /* gold check âœ“ */
+  .store-buy.equipped::before { content: '\2713\00a0'; }   /* gold check ✓ */
   @media (max-width: 560px) { .store-title { font-size: 36px; } .store-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
@@ -864,15 +864,15 @@
   #game.rr-lvl-themed[data-rrtheme="chrome"] { --rr-lvl-accent: #dad7d2; }
   #game.rr-lvl-themed[data-rrtheme="crimson"]{ --rr-lvl-accent: #ff1f2e; }
   #game.rr-lvl-themed[data-rrtheme="violet"] { --rr-lvl-accent: #a64dff; }   /* per-level palette (gothic/necro/tarot); UI chrome stays crimson */
-  #game.rr-lvl-themed[data-rrtheme="bone"]   { --rr-lvl-accent: #ffac5e; }   /* Bone Daddy â€” charred bone + ember */
-  #game.rr-lvl-themed[data-rrtheme="pink"]   { --rr-lvl-accent: #ff5fa2; }   /* Melody â€” cat-pink (level palette; UI stays crimson) */
+  #game.rr-lvl-themed[data-rrtheme="bone"]   { --rr-lvl-accent: #ffac5e; }   /* Bone Daddy — charred bone + ember */
+  #game.rr-lvl-themed[data-rrtheme="pink"]   { --rr-lvl-accent: #ff5fa2; }   /* Melody — cat-pink (level palette; UI stays crimson) */
   /* per-level accent glow across the FULL backdrop (only when a level theme is active) */
   #game.rr-lvl-themed #game-bg .bg-accent { opacity: 0.14; }
   /* violet/gothic (Skully): the backdrop video is ALREADY violet, so the accent wash is kept very low
      to stay CRISP (not a muddy purple film over the whole screen). */
   #game.rr-lvl-themed[data-rrtheme="violet"] #game-bg .bg-accent { opacity: 0.10; }
   /* ====================================================================
-     PER-LEVEL IDENTITY â€” restyle the WHOLE gameplay screen to the level
+     PER-LEVEL IDENTITY — restyle the WHOLE gameplay screen to the level
      accent (--rr-lvl-accent, set by the [data-rrtheme=...] rules above).
      Scoped under #game.rr-lvl-themed so Quick Play (no theme) is
      byte-identical. UI chrome OUTSIDE #game is never touched. (build7)
@@ -904,23 +904,23 @@
   #game.rr-lvl-themed .hud-panel .brand-dot {
     background: var(--rr-acc); box-shadow: 0 0 12px var(--rr-acc-glow);
   }
-  /* meters: song-progress fill leans crimsonâ†’accent */
+  /* meters: song-progress fill leans crimson→accent */
   #game.rr-lvl-themed .song-progress > i {
     background: linear-gradient(90deg,
       color-mix(in srgb, var(--rr-acc) 55%, #b3121f),
       var(--rr-acc));
     box-shadow: 0 0 12px var(--rr-acc-glow), inset 0 1px 0 rgba(255,255,255,0.35);
   }
-  /* overdrive bar stays gold/ember (universal reward signal) â€” only its segmented track border tints */
+  /* overdrive bar stays gold/ember (universal reward signal) — only its segmented track border tints */
   #game.rr-lvl-themed .od-bar { border-color: var(--rr-acc-line); }
-  /* reality-stability fill carries an INLINE gradient (index.html ~line 2988) â†’ override to accentâ†’gold */
+  /* reality-stability fill carries an INLINE gradient (index.html ~line 2988) → override to accent→gold */
   #game.rr-lvl-themed #hud-stability {
     background: linear-gradient(90deg, var(--rr-acc), #e0a93f) !important;
   }
   /* judgment composition bar: perfect/miss segments lean to the themed cluster (great/good keep semantic gold/coral) */
   #game.rr-lvl-themed .judge-bar .perfect { background: color-mix(in srgb, var(--rr-acc) 30%, #dad7d2); }
   #game.rr-lvl-themed .judge-bar .miss    { background: var(--rr-acc); }
-  /* build22: CHARACTER MOTIF WATERMARKS â€” each level's identity sits IN the HUD panels (subtle,
+  /* build22: CHARACTER MOTIF WATERMARKS — each level's identity sits IN the HUD panels (subtle,
      low in the panel, never under text). bone = the baron's skull in antique gold; pink = a paw
      print in hot pink. Pure CSS data-SVGs; Quick Play untouched. */
   #game.rr-lvl-themed[data-rrtheme="bone"] .hud-panel {
@@ -938,7 +938,7 @@
     color: var(--rr-acc);
     text-shadow: 0 0 26px var(--rr-acc-glow);
   }
-  /* build8.1: KILL the themed scanline entirely â€” it was the "purple static haze" over the board.
+  /* build8.1: KILL the themed scanline entirely — it was the "purple static haze" over the board.
      Themed levels read crisp + clear; the backdrop video is the only color source. */
   #game.rr-lvl-themed.game-screen::after { background: none !important; opacity: 0 !important; }
   /* footer hint keycaps get an accent edge so the chrome below the board reads themed */
@@ -947,18 +947,18 @@
   #results-next.show { display: inline-flex; }
   #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
 
-  /* build10b: LEVEL-START CINEMATIC â€” the backdrop opens slightly zoomed-in and slowly settles while
+  /* build10b: LEVEL-START CINEMATIC — the backdrop opens slightly zoomed-in and slowly settles while
      the custom guitar materializes on the highway (engine-side print). Presentation only. */
   #game.rr-cine #game-bg { overflow: hidden; }
   #game.rr-cine #bg-video, #game.rr-cine #bg-image {
     animation: rrCineZoom 2.7s cubic-bezier(.2,.6,.2,1) both;
   }
   /* build13: the cine zoom MULTIPLIES the smart-fit scale (--rr-bgfit) so the settle lands on the
-     fitted frame, not scale(1) â€” #bg-image has no fit var and falls back to 1 (unchanged). */
+     fitted frame, not scale(1) — #bg-image has no fit var and falls back to 1 (unchanged). */
   @keyframes rrCineZoom { 0% { transform: scale(calc(var(--rr-bgfit, 1) * 1.16)); } 100% { transform: scale(var(--rr-bgfit, 1)); } }
   html.rr-reduce-motion #game.rr-cine #bg-video, html.rr-reduce-motion #game.rr-cine #bg-image { animation: none; }
 
-  /* ---- PER-LEVEL MECHANIC overlays (Bone Daddy booty-shake Â· Melody cat-paw). Pure visual, over the
+  /* ---- PER-LEVEL MECHANIC overlays (Bone Daddy booty-shake · Melody cat-paw). Pure visual, over the
         playfield, driven by RhythmLevelFx; reduceMotion disables the motion. ---- */
   .rr-mech { position: absolute; inset: 0; pointer-events: none; z-index: 6; overflow: hidden; }
   .rrm-booty { position: absolute; top: 1.5%; left: 50%; width: 124px; height: 124px; margin-left: -62px;
@@ -982,12 +982,12 @@
     30%  { transform: translateX(-280px) rotate(-8deg); opacity: 1; }
     60%  { transform: translateX(-235px) rotate(-3deg); opacity: 1; }
     100% { transform: translateX(0) rotate(10deg); opacity: 0; } }
-  /* build21: BONE DADDY's SKULL crowns the guitar â€” two-piece rig (cranium + jaw) over the note
+  /* build21: BONE DADDY's SKULL crowns the guitar — two-piece rig (cranium + jaw) over the note
      spawn so the notes read as spilling out from under him. Idle bob on a slow loop; the JAW
      CHATTERS on your hits (response, not decoration); eye sockets flare gold on milestones. */
   .rrm-skull { position: absolute; top: 0.5%; left: 50%; width: 150px; height: 211px; margin-left: -75px;
     animation: rrm-skull-bob 4.6s ease-in-out infinite; }
-  /* build21b: FULL-FRAME two-layer rig â€” both PNGs share the exact same canvas (registration is
+  /* build21b: FULL-FRAME two-layer rig — both PNGs share the exact same canvas (registration is
      free); the mandible layer rotates about the hinge line for the chatter. */
   .rrm-skull-cranium, .rrm-skull-jaw { position: absolute; inset: 0;
     background-size: contain; background-position: center top; background-repeat: no-repeat; }
@@ -1039,27 +1039,27 @@
     display: block;
     position: relative; z-index: 1; background: transparent;
   }
-  /* ===== FULL-BLEED LEVEL BACKDROP â€” #game-bg fills the ENTIRE game screen behind the 3-column HUD
+  /* ===== FULL-BLEED LEVEL BACKDROP — #game-bg fills the ENTIRE game screen behind the 3-column HUD
      grid (z:0). The per-level video/image cover edge-to-edge; the canvas (#hwy, z:1 in .game-center)
      composites its god-rays/embers ON TOP. Scrim/vignette + darker side bands keep HUD + neck readable. */
   #game-bg {
     position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
     background: #0a0706;
   }
-  /* build14 SMART-FIT v2 (user: "still too small / cropped at the sides â€” make it BIGGER"):
-     the sharp layer now goes to TRUE COVER whenever cover/contain â‰¤ 2.4 (zero bands â€” the common
+  /* build14 SMART-FIT v2 (user: "still too small / cropped at the sides — make it BIGGER"):
+     the sharp layer now goes to TRUE COVER whenever cover/contain ≤ 2.4 (zero bands — the common
      case incl. the user's window), and only the pathological mismatch (portrait loop on a wide
      monitor) is capped, where JS paints a FEATHER MASK aligned to the video's DRAWN CONTENT BOX
-     (the v109 mask spanned the element, so the actual letterbox seam was never feathered â€” the
+     (the v109 mask spanned the element, so the actual letterbox seam was never feathered — the
      user's screenshot caught it). Content biased UP (42%): the guitar owns the lower third. */
   #bg-video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; object-position: 50% 42%; z-index: 0; pointer-events: none;
     transform: scale(var(--rr-bgfit, 1)); transform-origin: 50% 42%;
   }
-  /* the fill = the same world barely out of focus at near-full brightness â€” when the capped case
+  /* the fill = the same world barely out of focus at near-full brightness — when the capped case
      leaves margins, they read as a soft continuation of the SAME image, not a dark letterbox.
-     Slow Ken-Burns drift keeps the far plane alive (drifting fill â†’ locked video â†’ guitar). */
+     Slow Ken-Burns drift keeps the far plane alive (drifting fill → locked video → guitar). */
   #bg-video-fill {
     position: absolute; inset: -4%; width: 108%; height: 108%;
     object-fit: cover; z-index: 0; pointer-events: none;
@@ -1079,14 +1079,14 @@
     background-size: cover; background-position: center; background-repeat: no-repeat;
     z-index: 1; pointer-events: none; display: none;
   }
-  /* Per-level accent glow â€” reads across the FULL screen; toggled by #game.rr-lvl-themed below. */
+  /* Per-level accent glow — reads across the FULL screen; toggled by #game.rr-lvl-themed below. */
   #game-bg .bg-accent {
     position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
     background: radial-gradient(ellipse at 50% 6%,
       color-mix(in srgb, var(--rr-lvl-accent, #ff1f2e) 16%, transparent), transparent 60%);
     mix-blend-mode: screen; transition: opacity 0.4s ease;
   }
-  /* SCRIM + VIGNETTE â€” darkens the art globally + stronger at the edges; warm-dark only. */
+  /* SCRIM + VIGNETTE — darkens the art globally + stronger at the edges; warm-dark only. */
   #game-bg::after {
     content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
     background:
@@ -1094,9 +1094,9 @@
       linear-gradient(180deg, rgba(10,7,6,0.42) 0%, rgba(10,7,6,0.18) 30%, rgba(10,7,6,0.30) 72%, rgba(10,7,6,0.62) 100%);
   }
   /* DARKER BANDS behind the side HUD columns so panels read as solid instruments over the art.
-     (build12: narrowed + lightened â€” they were eating the backdrop's "core details".)
+     (build12: narrowed + lightened — they were eating the backdrop's "core details".)
      (build19, user's marked screenshot: the gutters between the play zone and the HUD read as
-      DEAD STRIPS â€” lightened + narrowed again so the level's world flows to the HUD text.) */
+      DEAD STRIPS — lightened + narrowed again so the level's world flows to the HUD text.) */
   #game-bg::before {
     content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
     background:
@@ -1115,23 +1115,23 @@
       linear-gradient(180deg, rgba(10,7,6,0.42), rgba(10,7,6,0.80)); }
   #menu .lib { position: relative; z-index: 1; }
   html.rr-perf-bg #lib-bg-video { display: none !important; }
-  /* build8: cinematic MAIN-MENU hub backdrop â€” full-bleed warm loop behind the console
+  /* build8: cinematic MAIN-MENU hub backdrop — full-bleed warm loop behind the console
      (mirrors #lib-bg-video; perf/novideo-gated; self-heals if the mp4 is absent). Absolute within
-     #menu-hub (NOT fixed â€” inactive screens are opacity:0, which would hide a fixed descendant). */
+     #menu-hub (NOT fixed — inactive screens are opacity:0, which would hide a fixed descendant). */
   #menu-hub-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
     z-index: 0; opacity: 0.42; pointer-events: none; filter: saturate(1.05) contrast(1.04); }
   html.rr-perf-bg #menu-hub-video { display: none !important; }
   #menu-hub .mh-card { position: relative; z-index: 2; }
-  /* build9: RYO lives on the TITLE SCREEN as full-bleed key art (see .start-keyart) â€” the old hub
+  /* build9: RYO lives on the TITLE SCREEN as full-bleed key art (see .start-keyart) — the old hub
      cutout treatment (drop-shadowed opaque rect) read as pasted-on and was removed. */
   .game-center { position: relative; }
   /* build15: the chrome hairlines that framed the center strip are GONE (user, Skully playtest:
-     "a weird line over the video") â€” they were invisible against the dark-column era backdrop;
+     "a weird line over the video") — they were invisible against the dark-column era backdrop;
      with the v110 full-bleed video they read as a stray 1px artifact over the art. */
 
   /* ============ MOBILE GAME UI (hidden on desktop) ============ */
   .mhud { display: none; }
-  /* tap-zones stay live during gameplay on EVERY device â€” they only capture pointer
+  /* tap-zones stay live during gameplay on EVERY device — they only capture pointer
      input while the (otherwise transparent) game screen is active, so mouse-click,
      touch, and pen all play, alongside keyboard. */
   .tap-zones { display: block; }
@@ -1160,7 +1160,7 @@
   .mhud .m-acc-lab { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.25em; color: var(--ink-dim); text-transform: uppercase; }
   .mhud .m-right { display: flex; justify-content: flex-end; }
 
-  /* round pause button â€” top right, thumb-reachable */
+  /* round pause button — top right, thumb-reachable */
   .mpause {
     position: absolute;
     top: max(calc(env(safe-area-inset-top, 0px) + 10px), 26px);
@@ -1177,7 +1177,7 @@
   }
   .mpause svg { width: 16px; height: 16px; }
 
-  /* mobile song progress â€” hairline under the HUD bar */
+  /* mobile song progress — hairline under the HUD bar */
   .mhud .m-prog {
     grid-column: 1 / -1;
     height: 2px;
@@ -1223,7 +1223,7 @@
   .gauge.mult .gauge-lab { transform: rotate(180deg); }
   .od-key { color: var(--crimson); font-weight: 700; letter-spacing: 0.12em; }
 
-  /* HUD Overdrive readout â€” segmented + combo-driven + a categorical READY state (research-backed clarity) */
+  /* HUD Overdrive readout — segmented + combo-driven + a categorical READY state (research-backed clarity) */
   .od-bar { position: relative; background: rgba(8,4,8,0.6); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
   #hud-od-fill { display: block; height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #e0a93f, #ffd98a); box-shadow: 0 0 10px rgba(224,169,63,0.6); transition: width 0.2s ease; }
   .od-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 2px), rgba(8,4,8,0.95) calc(25% - 2px), rgba(8,4,8,0.95) 25%); }
@@ -1249,7 +1249,7 @@
   .tap-zone {
     position: absolute; top: 0; bottom: 0;
     border: none;
-    background: transparent;            /* invisible hit columns â€” no stray boxes on the playfield */
+    background: transparent;            /* invisible hit columns — no stray boxes on the playfield */
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
@@ -1272,7 +1272,7 @@
   .hud-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
   .hud-block { display: flex; flex-direction: column; gap: 9px; position: relative; }
-  /* anchor each panel's last block to the bottom â€” fills the height on purpose */
+  /* anchor each panel's last block to the bottom — fills the height on purpose */
   .hud-panel.left > .hud-block:last-child,
   .hud-panel.right > .hud-block:last-child { margin-top: auto; }
   .hud-block .label {
@@ -1304,7 +1304,7 @@
   .hud-block .sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); line-height: 1.55; }
   .hud-block .sub.bright { color: var(--chrome); letter-spacing: 0.04em; }
 
-  /* progress / stability / overdrive METERS â€” machined inset track + glossy energy fill (game-asset feel) */
+  /* progress / stability / overdrive METERS — machined inset track + glossy energy fill (game-asset feel) */
   .song-progress {
     height: 8px; border-radius: 5px;
     background: linear-gradient(180deg, rgba(0,0,0,0.5), rgba(24,10,10,0.3));
@@ -1318,14 +1318,14 @@
     box-shadow: 0 0 12px rgba(255,31,46,0.7), inset 0 1px 0 rgba(255,255,255,0.35);
     width: 0%; transition: width 0.12s linear;
   }
-  /* moving energy sheen across any filled meter â€” subtle "powered" motion, reads as game UI not a flat bar */
+  /* moving energy sheen across any filled meter — subtle "powered" motion, reads as game UI not a flat bar */
   .song-progress > i::after {
     content: ''; position: absolute; inset: 0; border-radius: 5px; pointer-events: none;
     background: linear-gradient(90deg, transparent 35%, rgba(255,255,255,0.16) 50%, transparent 65%);
     background-size: 55% 100%; background-repeat: no-repeat; animation: meterSheen 2.4s linear infinite;
   }
   @keyframes meterSheen { from { background-position: -55% 0; } to { background-position: 165% 0; } }
-  /* screen-space scanline texture on the game screen â€” faint "real game screen" feel (never blocks input) */
+  /* screen-space scanline texture on the game screen — faint "real game screen" feel (never blocks input) */
   .game-screen::after {
     content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 50;
     background: repeating-linear-gradient(0deg, rgba(150,35,35,0.045) 0, rgba(150,35,35,0.045) 1px, transparent 1px, transparent 3px);
@@ -1359,7 +1359,7 @@
   #judge-flash { font-family: 'Oxanium', sans-serif; font-weight: 800; letter-spacing: 0.02em; }
   #countdown { font-family: 'Oxanium', sans-serif; }
 
-  /* angular corner brackets framing each panel â€” the tactical-HUD motif (vs rounded web cards) */
+  /* angular corner brackets framing each panel — the tactical-HUD motif (vs rounded web cards) */
   .hud-panel::before, .hud-panel::after {
     content: ''; position: absolute; width: 16px; height: 16px; pointer-events: none;
     border: 2px solid rgba(255,42,48,0.5);
@@ -1386,7 +1386,7 @@
   .judge-flash.show {
     animation: jflash 0.55s cubic-bezier(.2,1.4,.3,1) forwards;
   }
-  /* early/late timing hint â€” sits just under the judgment popup; ember=early, chrome=late */
+  /* early/late timing hint — sits just under the judgment popup; ember=early, chrome=late */
   .timing-tick {
     position: absolute;
     left: 50%; top: calc(38% + 52px);
@@ -1428,7 +1428,7 @@
     line-height: 1;
     color: var(--ink);
     letter-spacing: -0.04em;
-    -webkit-text-stroke: 3px rgba(0,0,0,0.88); paint-order: stroke fill;   /* black outline â†’ readable over the busy guitar */
+    -webkit-text-stroke: 3px rgba(0,0,0,0.88); paint-order: stroke fill;   /* black outline → readable over the busy guitar */
     text-shadow: 0 0 30px rgba(255, 31, 46, 0.6), 0 2px 8px rgba(0,0,0,0.95);
   }
   .combo-display .lab {
@@ -1506,7 +1506,7 @@
     70% { transform: scale(1.12); }
     100% { transform: scale(1); }
   }
-  /* star rating (derived from accuracy) â€” pops in sequentially after the grade stamp */
+  /* star rating (derived from accuracy) — pops in sequentially after the grade stamp */
   .results-stars { display: flex; justify-content: center; gap: 10px; margin-top: 8px; }
   .results-stars .rstar { font-size: 30px; line-height: 1; color: rgba(224,218,214,0.15); }
   .results-stars .rstar.on { color: #e0a93f; text-shadow: 0 0 16px rgba(224,169,63,0.6); animation: starPop 0.4s cubic-bezier(.2,1.5,.3,1) both; }
@@ -1778,7 +1778,7 @@
   }
 
   /* ============================================================
-     MOBILE HOME â€” song browser (welcome page)
+     MOBILE HOME — song browser (welcome page)
      ============================================================ */
   .home {
     position: relative;
@@ -2015,7 +2015,7 @@
   .sheet-back:hover, .sheet-back:active { color: var(--ink); }
 
   /* ============================================================
-     START SCREEN â€” cinematic intro
+     START SCREEN — cinematic intro
      ============================================================ */
   .start-screen { padding: 0; overflow: hidden; background: #07060a; }
   .start-bg { position: absolute; inset: 0; overflow: hidden; z-index: 1; }
@@ -2027,7 +2027,7 @@
     pointer-events: none;
     mix-blend-mode: screen;     /* additive look over the warm backdrop */
   }
-  /* ignition flash overlay â€” a brief crimsonâ†’ember bloom synced to the title slam (CSS, GPU-cheap) */
+  /* ignition flash overlay — a brief crimson→ember bloom synced to the title slam (CSS, GPU-cheap) */
   .start-ignite-flash {
     position: absolute; left: 50%; top: 44%;
     transform: translate(-50%, -50%);
@@ -2071,8 +2071,8 @@
     0%,100% { opacity: 0.7; transform: translate(-50%,-50%) scale(1); }
     50% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); }
   }
-  /* build9: RYO key art â€” the full-bleed cinematic hero layer. Slow Ken-Burns drift (entrance settle
-     â†’ endless breathe), warm-graded. When it loads, the moon video below it is parked (battery). */
+  /* build9: RYO key art — the full-bleed cinematic hero layer. Slow Ken-Burns drift (entrance settle
+     → endless breathe), warm-graded. When it loads, the moon video below it is parked (battery). */
   .start-keyart {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; object-position: 50% 26%;
@@ -2085,7 +2085,7 @@
   @keyframes keyartDrift { 0% { transform: scale(1.015) translateY(0); } 100% { transform: scale(1.055) translateY(-0.6%); } }
   .start-bg.has-keyart #start-video { display: none; }   /* art owns the frame; video stays as the self-heal */
   html.rr-reduce-motion .start-keyart { animation: none; opacity: 1; transform: scale(1.02); }
-  /* warm color grade over the art (the render leans cool â€” brand darks are warm Râ‰¥Gâ‰¥B) */
+  /* warm color grade over the art (the render leans cool — brand darks are warm R≥G≥B) */
   .start-grade {
     position: absolute; inset: 0; z-index: 2; pointer-events: none;
     background:
@@ -2124,7 +2124,7 @@
   .start-atom { width: 22px; height: 22px; filter: drop-shadow(0 0 6px rgba(255,31,46,0.6)); animation: atomSpin 14s linear infinite; }
   @keyframes atomSpin { to { transform: rotate(360deg); } }
 
-  /* build9: the lockup sits in the LOWER THIRD (cinematic key-art layout) â€” the art breathes above,
+  /* build9: the lockup sits in the LOWER THIRD (cinematic key-art layout) — the art breathes above,
      the bottom scrim guarantees legibility. */
   .start-wordmark { margin-top: auto; text-align: center; }
   .rr-logo {
@@ -2136,7 +2136,7 @@
     text-shadow: 0 0 30px rgba(255,31,46,0.85), 0 0 14px rgba(255,31,46,0.7), 0 3px 0 #2a0206, 0 4px 10px rgba(0,0,0,0.7);
     animation: slam 0.7s cubic-bezier(.2,1.2,.3,1) 0.85s both, logoBreathe 4.6s ease-in-out 2.4s infinite;
   }
-  /* gold hairline under the title â€” the brand's "stage edge" */
+  /* gold hairline under the title — the brand's "stage edge" */
   .rr-logo::after {
     content: ''; display: block; width: min(320px, 46vw); height: 1px;
     margin: 18px auto 0;
@@ -2173,7 +2173,7 @@
 
   @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* build9: bottom META BAR â€” version (left) Â· copyright (right), a clean console-style strip */
+  /* build9: bottom META BAR — version (left) · copyright (right), a clean console-style strip */
   .start-meta {
     margin-top: 26px; width: min(1100px, 100%);
     display: flex; justify-content: space-between; align-items: center;
@@ -2207,7 +2207,7 @@
     .menu-right { border-left: none; border-top: 1px solid var(--line); padding-left: 0; padding-top: 22px; }
     .play-btn { width: 100%; justify-content: center; padding: 20px; font-size: 15px; }
 
-    /* GAME â†’ full-screen highway, overlays only */
+    /* GAME → full-screen highway, overlays only */
     .game-screen.active { display: block; }
     .game-center {
       position: absolute; inset: 0;
@@ -2251,7 +2251,7 @@
     /* mute button smaller, out of thumb path (gameplay only) */
     .mute-btn { width: 40px; height: 40px; right: 66px; top: max(calc(env(safe-area-inset-top, 0px) + 10px), 26px); bottom: auto; z-index: 60; }
     .mute-btn .lab { display: none; }
-    /* the floating mute is for gameplay â€” the menu has its own in the top bar */
+    /* the floating mute is for gameplay — the menu has its own in the top bar */
     .menu-screen.active ~ .mute-btn, .menu-screen.active .mute-btn { display: none; }
   }
   /* hide floating mute whenever the library menu is the active screen */
@@ -2293,7 +2293,7 @@
   .mh-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim);
     letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 18px; max-width: 540px; }
   .mh-grid { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  /* build8: living tiles â€” per-tile accent (--ta), a soft radial bloom that wakes on hover,
+  /* build8: living tiles — per-tile accent (--ta), a soft radial bloom that wakes on hover,
      a glass top-sheen, and an animated accent hairline along the top edge. Default --ta=crimson;
      each tile overrides it below so the grid reads as six distinct "instruments", not one flat slab. */
   .mh-tile { position: relative; display: flex; flex-direction: column; align-items: center;
@@ -2311,20 +2311,20 @@
       linear-gradient(180deg, rgba(255,255,255,0.07), transparent 26%),
       radial-gradient(90% 60% at 50% 118%, color-mix(in srgb, var(--ta) 32%, transparent), transparent 70%);
     opacity: 0.5; transition: opacity .18s ease; }
-  /* animated accent hairline across the top edge â€” subtle drift, brightens on hover */
+  /* animated accent hairline across the top edge — subtle drift, brightens on hover */
   .mh-tile::after { content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 2px; pointer-events: none;
     background: linear-gradient(90deg, transparent, var(--ta), transparent);
     opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta));
     background-size: 200% 100%; animation: mhEdge 5.5s linear infinite; }
   @keyframes mhEdge { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
-  /* build19: produced TITLE WORDMARK (self-healing slot) â€” hidden until the file loads; when it
+  /* build19: produced TITLE WORDMARK (self-healing slot) — hidden until the file loads; when it
      does, the art replaces the text title (H1 stays for screen readers). */
   .mh-logo { display: none; }
   .mh-logo.on { display: block; max-width: min(620px, 88%); height: auto; margin: 2px auto 6px;
     filter: drop-shadow(0 6px 22px rgba(255, 31, 46, 0.28)); }
   .mh-title.img-replaced { position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; margin: 0; padding: 0; }
-  /* build18 ENTRANCE POLISH (user order): the hub tiles ARRIVE â€” staggered rise + settle each
+  /* build18 ENTRANCE POLISH (user order): the hub tiles ARRIVE — staggered rise + settle each
      time the hub opens. fill-mode BACKWARDS so the completed animation releases the cascade
      (hover/focus transforms still win afterwards). Reduce-motion kills it. */
   #menu-hub.active .mh-tile { animation: mhTileIn 0.5s cubic-bezier(0.18, 0.9, 0.26, 1) backwards; }
@@ -2365,16 +2365,33 @@
   .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 10.5px;
     letter-spacing: 0.06em; color: var(--ink-dim); text-transform: uppercase; }
   /* per-tile accent identity (the six instruments). IDs match the markup. */
-  #mh-campaign    { --ta: var(--crimson); }   /* hero path â€” crimson */
-  #mh-quickplay   { --ta: #ff7a4a; }          /* ember â€” fast/play */
-  #mh-multiplayer { --ta: #e0a93f; }          /* gold â€” versus */
-  #mh-store       { --ta: #e0a93f; }          /* gold â€” currency */
-  #mh-leaderboard { --ta: #dad7d2; }          /* chrome â€” ranks */
-  #mh-profile     { --ta: var(--crimson); }   /* crimson â€” your career */
+  #mh-campaign    { --ta: var(--crimson); }   /* hero path — crimson */
+  #mh-quickplay   { --ta: #ff7a4a; }          /* ember — fast/play */
+  #mh-multiplayer { --ta: #e0a93f; }          /* gold — versus */
+  #mh-store       { --ta: #e0a93f; }          /* gold — currency */
+  #mh-leaderboard { --ta: #dad7d2; }          /* chrome — ranks */
+  #mh-profile     { --ta: var(--crimson); }   /* crimson — your career */
   .mh-tile.primary::before { opacity: 0.7; }
   /* reduced-motion / fxLite: freeze the drifting edge + sheen to a calm static state */
   html.rr-reduce-motion .mh-tile::after { animation: none; opacity: 0.45; }
   body.rr-fx-lite .mh-tile::after { animation: none; }
+  /* ===== hub tile KEY ART (build10, assets/hub/) — JS applies .has-art only when the
+     file actually loads (self-healing). Art rides a z-0 child span under the z-1 labels;
+     the generic SVG icon hides because the painting IS the icon. */
+  .mh-art { position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden;
+    background-size: cover; background-position: center 30%; opacity: 0;
+    transition: opacity .5s ease, transform .25s cubic-bezier(.2,.8,.2,1); }
+  .mh-tile.has-art .mh-art { opacity: 1; }
+  .mh-art::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,6,7,0.22) 0%, rgba(10,6,7,0.04) 36%, rgba(8,5,6,0.58) 72%, rgba(6,4,5,0.88) 100%); }
+  .mh-tile.has-art { justify-content: flex-end; gap: 3px; padding-bottom: 15px; min-height: 168px; }
+  .mh-tile.has-art .mh-ico { display: none; }
+  .mh-tile.has-art .mh-t { text-shadow: 0 2px 14px rgba(0,0,0,0.9), 0 0 24px color-mix(in srgb, var(--ta) 28%, transparent); }
+  .mh-tile.has-art .mh-d { color: #ddd2cd; text-shadow: 0 1px 8px rgba(0,0,0,0.92); }
+  .mh-tile.has-art:hover .mh-art, .mh-tile.has-art:focus-visible .mh-art { transform: scale(1.045); }
+  html.rr-reduce-motion .mh-tile.has-art:hover .mh-art { transform: none; }
+  @media (max-width: 760px) { .mh-tile.has-art { min-height: 138px; } }
+
   .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold);
     border: 1px solid rgba(224,169,63,0.45); border-radius: 999px; padding: 3px 8px; }
@@ -2398,7 +2415,7 @@
   .mp-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: 12px; padding: 16px; text-align: center; }
   .multiplayer-screen.active .mp-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
-  /* ===== MULTIPLAYER (versus) â€” open-lobby steps (namespaced .mpx-*; in-game #mp-opp) ===== */
+  /* ===== MULTIPLAYER (versus) — open-lobby steps (namespaced .mpx-*; in-game #mp-opp) ===== */
   .mp-card .mpx-step { display: block; width: 100%; }
   .mp-card .mpx-step[hidden] { display: none; }
   .mpx-youbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; text-align: left;
@@ -2488,7 +2505,7 @@
   html.rr-reduce-motion #mp-opp .mo-bar > span { transition: none; }
   html.rr-reduce-motion .mpx-challenge:hover { transform: none; }
 
-  /* ===== ROOM SYSTEM (build8): lobby action bar Â· room cards Â· waiting room ===== */
+  /* ===== ROOM SYSTEM (build8): lobby action bar · room cards · waiting room ===== */
   .mpx-actionbar { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 14px; }
   .mpx-actionbar .mpx-act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
     padding: 12px 14px; border-radius: 13px; cursor: pointer; text-align: left;
@@ -2501,7 +2518,7 @@
   .mpx-actionbar .mpx-act.accent .a-t { color: #fff; }
   .mpx-actionbar .mpx-act.full { grid-column: 1 / -1; }
   .mpx-actionbar .mpx-act[aria-busy="true"] { opacity: .75; pointer-events: none; }
-  .mpx-actionbar .mpx-act[aria-busy="true"] .a-d::after { content: ' â€¦'; }
+  .mpx-actionbar .mpx-act[aria-busy="true"] .a-d::after { content: ' …'; }
 
   .mpx-rooms-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 10px; }
   .mpx-rooms-head .rh-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 16px; color: var(--ink, #f3eceb); }
@@ -2552,7 +2569,7 @@
   html.rr-reduce-motion .mpx-actionbar .mpx-act:hover { transform: none; }
   @media (max-width: 760px) { .mpx-actionbar { grid-template-columns: 1fr; } }
 
-  /* ===== TOURNAMENT (build9): entrant grid Â· live board Â· bracket strip Â· champion ===== */
+  /* ===== TOURNAMENT (build9): entrant grid · live board · bracket strip · champion ===== */
   .mpx-actionbar .mpx-act.gold { background: linear-gradient(180deg, rgba(224,169,63,0.16), rgba(224,169,63,0.04)); border-color: rgba(224,169,63,0.42); }
   .mpx-actionbar .mpx-act.gold .a-t { color: #ffe9bd; }
   .mpx-tour-chip { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.16em; padding: 3px 9px; border-radius: 999px; }
@@ -2627,13 +2644,13 @@
   }
 
   /* ============================================================
-     DESKTOP â€” frame the playfield (stop the HUD stranding at edges)
+     DESKTOP — frame the playfield (stop the HUD stranding at edges)
      A capped central highway strip is flanked by the HUD panels,
      with ambient blood-moon gutters filling wide monitors.
      ============================================================ */
   @media (min-width: 901px) {
     /* Portrait playfield sized to the guitar (vh-based, so the guitar fills it with
-       no dead space beside it), HUD panels fill the sides â€” no empty gutters. */
+       no dead space beside it), HUD panels fill the sides — no empty gutters. */
     .game-screen.active {
       grid-template-columns: minmax(300px, 1fr) min(66vh, 54vw) minmax(300px, 1fr);
     }
@@ -2645,9 +2662,9 @@
   }
 
   /* ============================================================
-     BETA GATE â€” private-beta access-code overlay.
+     BETA GATE — private-beta access-code overlay.
      Fails OPEN: bypassed on localhost + when the backend is silent,
-     so it never blocks the game. Brand: black Â· crimson Â· chrome.
+     so it never blocks the game. Brand: black · crimson · chrome.
      ============================================================ */
   #beta-gate {
     position: fixed; inset: 0; z-index: 100000;
@@ -2712,8 +2729,8 @@
   <div class="bg-card">
     <div class="bg-kicker">Private Beta</div>
     <div class="bg-title">Reactive <b>Rhythm</b></div>
-    <div class="bg-sub">Your music â€” as a playable game. Enter your access code to step on stage.</div>
-    <div class="bg-checking">Checking accessâ€¦<div class="bg-spin"></div></div>
+    <div class="bg-sub">Your music — as a playable game. Enter your access code to step on stage.</div>
+    <div class="bg-checking">Checking access…<div class="bg-spin"></div></div>
     <form id="bg-form" autocomplete="off">
       <input id="bg-code" type="text" inputmode="text" maxlength="40" placeholder="ACCESS CODE" aria-label="Beta access code" spellcheck="false" autocapitalize="characters" />
       <button id="bg-submit" type="submit">Unlock</button>
@@ -2725,13 +2742,13 @@
 <div id="app">
 
   <!-- ============================================================
-       START SCREEN â€” cinematic intro (first thing players see)
+       START SCREEN — cinematic intro (first thing players see)
        ============================================================ -->
   <div class="screen start-screen active" id="start" data-screen-label="start">
     <div class="start-bg" id="start-bg">
       <video id="start-video" src="assets/moon-loop.mp4" autoplay loop muted playsinline preload="auto"></video>
-      <!-- build9: RYO key art IS the title screen â€” full-bleed cinematic hero (Ken Burns drift, warm
-           grade, fire FX dancing over it). Self-heals: missing art â†’ the moon-video composition. -->
+      <!-- build9: RYO key art IS the title screen — full-bleed cinematic hero (Ken Burns drift, warm
+           grade, fire FX dancing over it). Self-heals: missing art → the moon-video composition. -->
       <img class="start-keyart" id="start-keyart" src="assets/ryo/ryo-hero.png" alt="" aria-hidden="true"
            onload="this.parentNode.classList.add('has-keyart')" onerror="this.remove()" />
       <div class="start-glow"></div>
@@ -2749,25 +2766,25 @@
       </div>
       <div class="start-wordmark">
         <h1 class="rr-logo" data-text="REACTIVE RHYTHM">REACTIVE<br/>RHYTHM</h1>
-        <div class="start-tagline">ANIME RHYTHM Â· AI RADIO</div>
+        <div class="start-tagline">ANIME RHYTHM · AI RADIO</div>
       </div>
       <div class="start-tap" id="start-tap">
         <span class="tap-ring"></span>
-        <span class="tap-label">PRESS ENTER Â· TAP TO BEGIN</span>
+        <span class="tap-label">PRESS ENTER · TAP TO BEGIN</span>
       </div>
       <div class="start-meta">
-        <div class="rr-version" id="rr-version" aria-label="build version">vâ€¦</div>
-        <span class="start-copy">Â© REACTIVVIBE Â· CLOSED BETA</span>
+        <div class="rr-version" id="rr-version" aria-label="build version">v…</div>
+        <span class="start-copy">© REACTIVVIBE · CLOSED BETA</span>
       </div>
     </div>
   </div>
 
-  <!-- build8: first-run RYO intro (assets/ryo/ryo-intro.mp4) â€” skippable, shows once via localStorage.
-       Self-heals: absent/erroring/slow video â†’ dismisses straight to the hub. -->
+  <!-- build8: first-run RYO intro (assets/ryo/ryo-intro.mp4) — skippable, shows once via localStorage.
+       Self-heals: absent/erroring/slow video → dismisses straight to the hub. -->
   <div class="screen ryo-intro-screen" id="ryo-intro" aria-hidden="true">
     <video id="ryo-intro-video" muted playsinline preload="auto" src="assets/ryo/ryo-intro.mp4"></video>
     <div class="ryo-intro-scrim"></div>
-    <button class="ryo-intro-skip" id="ryo-intro-skip" type="button">SKIP â€º</button>
+    <button class="ryo-intro-skip" id="ryo-intro-skip" type="button">SKIP ›</button>
   </div>
   <script>
     /* Stamp the start screen with the live build version (from game.js?v=NN) + host, so a screenshot
@@ -2779,7 +2796,7 @@
           var m = s && (s.getAttribute('src') || '').match(/[?&]v=(\d+)/);
           var host = location.hostname || (location.protocol === 'file:' ? 'file' : 'local');
           var el = document.getElementById('rr-version');
-          if (el) el.textContent = (m ? ('v' + m[1]) : 'v?') + ' Â· ' + host;
+          if (el) el.textContent = (m ? ('v' + m[1]) : 'v?') + ' · ' + host;
         } catch (e) {}
       }
       if (document.readyState !== 'loading') stamp(); else document.addEventListener('DOMContentLoaded', stamp);
@@ -2787,21 +2804,21 @@
   </script>
 
   <!-- ============================================================
-       MAIN MENU HUB â€” guided console (START â†’ here â†’ a path â†’ PLAY)
+       MAIN MENU HUB — guided console (START → here → a path → PLAY)
        ============================================================ -->
   <div class="screen menu-hub" id="menu-hub" data-screen-label="main-menu">
     <video id="menu-hub-video" autoplay loop muted playsinline preload="auto" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'"></video>
     <div class="mh-card">
       <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
       <div class="mh-pre">MAIN MENU</div>
-      <!-- build19: produced TITLE WORDMARK slot (user order â€” crimson moon / chaos energy / anime,
-           order in ASSET_ORDERS_GUITARS.md). Self-heals: file absent â†’ text title stays; file
-           present â†’ the art replaces the text (H1 kept visually-hidden for a11y). -->
+      <!-- build19: produced TITLE WORDMARK slot (user order — crimson moon / chaos energy / anime,
+           order in ASSET_ORDERS_GUITARS.md). Self-heals: file absent → text title stays; file
+           present → the art replaces the text (H1 kept visually-hidden for a11y). -->
       <img class="mh-logo" id="mh-logo" src="assets/title-wordmark.png" alt=""
            onload="this.classList.add('on'); var t = document.querySelector('#menu-hub .mh-title'); if (t) t.classList.add('img-replaced');"
            onerror="this.style.display='none'" />
       <h1 class="mh-title">REACTIVE RHYTHM</h1>
-      <p class="mh-sub">Choose your path. Every mode runs the same neck â€” pick how you want to play.</p>
+      <p class="mh-sub">Choose your path. Every mode runs the same neck — pick how you want to play.</p>
       <div class="mh-grid" id="mh-grid">
         <button class="mh-tile primary" id="mh-campaign" type="button">
           <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg></span>
@@ -2834,12 +2851,12 @@
           <span class="mh-d">Your career</span>
         </button>
       </div>
-      <button class="mh-skip" id="mh-skip" type="button">Skip to library â†’</button>
+      <button class="mh-skip" id="mh-skip" type="button">Skip to library →</button>
     </div>
   </div>
 
   <!-- ============================================================
-       MULTIPLAYER â€” placeholder entry screen (the multiplayer package fills this)
+       MULTIPLAYER — placeholder entry screen (the multiplayer package fills this)
        ============================================================ -->
   <div class="screen multiplayer-screen" id="multiplayer-screen" data-screen-label="multiplayer">
     <button class="hub-back" id="mp-back" type="button" aria-label="Back to main menu">
@@ -2847,24 +2864,24 @@
       Back
     </button>
     <div class="mp-card">
-      <div class="mh-pre">// VERSUS Â· LIVE LOBBY</div>
+      <div class="mh-pre">// VERSUS · LIVE LOBBY</div>
       <h2 class="mp-title">MULTIPLAYER</h2>
 
       <!-- STEP: LOBBY (everyone currently online) -->
       <div class="mpx-step mpx-step-lobby">
-        <p class="mp-sub">Jump into a room, get auto-matched, or challenge anyone online â€” live head-to-head on the same track.</p>
+        <p class="mp-sub">Jump into a room, get auto-matched, or challenge anyone online — live head-to-head on the same track.</p>
         <div class="mpx-actionbar" id="mpx-actionbar">
           <button class="mpx-act accent" id="mpx-act-quick" type="button">
-            <span class="a-t">âš¡ Quick Match</span><span class="a-d">Auto-pair a random rival</span>
+            <span class="a-t">⚡ Quick Match</span><span class="a-d">Auto-pair a random rival</span>
           </button>
           <button class="mpx-act" id="mpx-act-open" type="button">
-            <span class="a-t">ï¼‹ Open a Room</span><span class="a-d">Host Â· public or private</span>
+            <span class="a-t">+ Open a Room</span><span class="a-d">Host · public or private</span>
           </button>
           <button class="mpx-act" id="mpx-act-browse" type="button">
-            <span class="a-t">ðŸœ¨ Browse <span id="mpx-act-browse-n"></span></span><span class="a-d">Rooms &amp; brackets Â· join or spectate</span>
+            <span class="a-t">🜨 Browse <span id="mpx-act-browse-n"></span></span><span class="a-d">Rooms &amp; brackets · join or spectate</span>
           </button>
           <button class="mpx-act gold" id="mpx-act-tour" type="button">
-            <span class="a-t">ðŸ† Tournament</span><span class="a-d">Bracket Â· 5â€“10 players Â· last one standing</span>
+            <span class="a-t">🏆 Tournament</span><span class="a-d">Bracket · 5–10 players · last one standing</span>
           </button>
         </div>
         <div class="mpx-youbar">
@@ -2873,19 +2890,19 @@
           <span class="mpx-badge host" id="mpx-you-host" hidden>HOST</span>
           <span class="mpx-you-tag">that's you</span>
         </div>
-        <div class="mpx-rosterhead"><span id="mpx-roster-count">0 online</span><span class="mpx-live-dot">â— LIVE</span></div>
+        <div class="mpx-rosterhead"><span id="mpx-roster-count">0 online</span><span class="mpx-live-dot">● LIVE</span></div>
         <div class="mpx-roster" id="mpx-roster"></div>
-        <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one else is online right now. Keep this open â€” challengers appear here live.</p>
+        <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one else is online right now. Keep this open — challengers appear here live.</p>
         <div class="mpx-banner" id="mpx-lobby-msg" hidden></div>
       </div>
 
-      <!-- STEP: ROOMS (browse/open/wait) â€” build8 -->
+      <!-- STEP: ROOMS (browse/open/wait) — build8 -->
       <div class="mpx-step mpx-step-rooms" hidden>
         <!-- mode A: room browser -->
         <div id="mpx-rooms-browse">
           <div class="mpx-rooms-head">
             <span class="rh-t">OPEN ROOMS</span>
-            <button class="rh-refresh" id="mpx-rooms-refresh" type="button">â†» REFRESH</button>
+            <button class="rh-refresh" id="mpx-rooms-refresh" type="button">↻ REFRESH</button>
           </div>
           <div class="mpx-roomlist" id="mpx-roomlist"></div>
           <p class="mpx-rooms-empty" id="mpx-rooms-empty" hidden>No open rooms right now. Open one and others can join live.</p>
@@ -2910,18 +2927,18 @@
         <div class="mpx-banner" id="mpx-rooms-msg" hidden></div>
       </div>
 
-      <!-- STEP: TOURNAMENT (bracket waiting room + live board + champion) â€” build9 -->
+      <!-- STEP: TOURNAMENT (bracket waiting room + live board + champion) — build9 -->
       <div class="mpx-step mpx-step-tour" hidden>
         <div class="mpx-rooms-head">
-          <span class="rh-t">ðŸ† <span id="mpx-tour-name">TOURNAMENT</span></span>
+          <span class="rh-t">🏆 <span id="mpx-tour-name">TOURNAMENT</span></span>
           <span class="mpx-tour-chip" id="mpx-tour-chip" data-state="open">FILLING</span>
         </div>
         <div class="mpx-tour-grid" id="mpx-tour-grid"></div>
         <div id="mpx-tour-setup">
           <div class="mpx-tour-trackrow">
-            <span class="mpx-pick-art" id="mpx-tour-art">â™ª</span>
-            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-tour-t">Rolling a trackâ€¦</span><span class="mpx-pick-a" id="mpx-tour-a">â€”</span></span>
-            <button class="rh-refresh" id="mpx-tour-roll" type="button" hidden>ðŸŽ² REROLL</button>
+            <span class="mpx-pick-art" id="mpx-tour-art">♪</span>
+            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-tour-t">Rolling a track…</span><span class="mpx-pick-a" id="mpx-tour-a">—</span></span>
+            <button class="rh-refresh" id="mpx-tour-roll" type="button" hidden>🎲 REROLL</button>
           </div>
           <div class="mpx-diff set-seg" id="mpx-tdiff" style="margin-top:8px;">
             <button data-diff="easy">Drift</button>
@@ -2930,7 +2947,7 @@
           </div>
           <div class="mpx-readyrow" style="margin-top:10px;">
             <button class="ghost-btn primary" id="mpx-tour-start" disabled hidden>START BRACKET</button>
-            <div class="mpx-readystate" id="mpx-tour-state">Waiting for players â€” best with 5â€“10.</div>
+            <div class="mpx-readystate" id="mpx-tour-state">Waiting for players — best with 5–10.</div>
           </div>
         </div>
         <div id="mpx-tour-live" hidden>
@@ -2939,8 +2956,8 @@
           <div class="mpx-tour-bracket" id="mpx-tour-bracket"></div>
         </div>
         <div class="mpx-tour-champ" id="mpx-tour-champ" hidden>
-          <div class="tc-crown">ðŸ‘‘</div>
-          <div class="tc-name" id="mpx-tour-champ-name">â€”</div>
+          <div class="tc-crown">👑</div>
+          <div class="tc-name" id="mpx-tour-champ-name">—</div>
           <div class="tc-sub" id="mpx-tour-champ-sub">BRACKET CHAMPION</div>
         </div>
         <button class="ghost-btn" id="mpx-tour-leave" style="margin-top:14px;">LEAVE TOURNAMENT</button>
@@ -2957,14 +2974,14 @@
         <div class="mpx-vsbar">
           <span class="mpx-dot you" id="mpx-dot-you">YOU</span>
           <span class="mpx-vs">VS</span>
-          <span class="mpx-dot opp" id="mpx-dot-opp" data-state="waiting">WAITINGâ€¦</span>
+          <span class="mpx-dot opp" id="mpx-dot-opp" data-state="waiting">WAITING…</span>
         </div>
         <div class="mpx-songpick">
           <div class="mpx-pick-head">TRACK</div>
           <button class="mpx-pick" id="mpx-pick" aria-label="Choose a track">
-            <span class="mpx-pick-art" id="mpx-pick-art">â™ª</span>
-            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-pick-t">Host picks a track</span><span class="mpx-pick-a" id="mpx-pick-a">â€”</span></span>
-            <span class="mpx-pick-chev" id="mpx-pick-chev">â€º</span>
+            <span class="mpx-pick-art" id="mpx-pick-art">♪</span>
+            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-pick-t">Host picks a track</span><span class="mpx-pick-a" id="mpx-pick-a">—</span></span>
+            <span class="mpx-pick-chev" id="mpx-pick-chev">›</span>
           </button>
           <div class="mpx-diff set-seg" id="mpx-diff">
             <button data-diff="easy">Drift</button>
@@ -2972,7 +2989,7 @@
             <button data-diff="hard">Fracture</button>
           </div>
           <div class="mpx-picker" id="mpx-picker" hidden>
-            <input class="mpx-search" id="mpx-search" type="text" placeholder="Search a trackâ€¦" autocomplete="off" spellcheck="false" />
+            <input class="mpx-search" id="mpx-search" type="text" placeholder="Search a track…" autocomplete="off" spellcheck="false" />
             <div class="mpx-results" id="mpx-results"></div>
           </div>
         </div>
@@ -2984,10 +3001,10 @@
         <div class="mpx-banner" id="mpx-setup-msg" hidden></div>
       </div>
 
-      <!-- STEP: GO (both ready â†’ syncing) -->
+      <!-- STEP: GO (both ready → syncing) -->
       <div class="mpx-step mpx-step-go" hidden>
         <div class="mpx-go-num" id="mpx-go-num">GET READY</div>
-        <p class="mp-sub">Syncing both decksâ€¦</p>
+        <p class="mp-sub">Syncing both decks…</p>
       </div>
 
       <!-- STEP: WINNER -->
@@ -2997,13 +3014,13 @@
           <div class="mpx-sc you">
             <div class="mpx-sc-who">YOU</div>
             <div class="mpx-sc-score" id="mpx-sc-you">0</div>
-            <div class="mpx-sc-meta" id="mpx-sc-you-meta">â€”</div>
+            <div class="mpx-sc-meta" id="mpx-sc-you-meta">—</div>
           </div>
           <div class="mpx-sc-vs">VS</div>
           <div class="mpx-sc opp">
             <div class="mpx-sc-who" id="mpx-sc-opp-who">OPPONENT</div>
             <div class="mpx-sc-score" id="mpx-sc-opp">0</div>
-            <div class="mpx-sc-meta" id="mpx-sc-opp-meta">â€”</div>
+            <div class="mpx-sc-meta" id="mpx-sc-opp-meta">—</div>
           </div>
         </div>
         <div class="pause-actions" style="margin-top:18px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
@@ -3034,8 +3051,8 @@
         </div>
         <div class="lib-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
-          <input id="lib-search-input" type="search" placeholder="Search your library â€” title or artistâ€¦" autocomplete="off" spellcheck="false" />
-          <button class="lib-search-x" id="lib-search-clear" aria-label="Clear search" hidden>âœ•</button>
+          <input id="lib-search-input" type="search" placeholder="Search your library — title or artist…" autocomplete="off" spellcheck="false" />
+          <button class="lib-search-x" id="lib-search-clear" aria-label="Clear search" hidden>✕</button>
         </div>
         <div class="lib-actions">
           <button class="icon-btn" id="lib-refresh-btn" aria-label="Refresh catalog">
@@ -3057,7 +3074,7 @@
           <div class="rr-idwrap" id="rr-idwrap">
             <button class="rr-sparks" id="rr-sparks" data-state="guest" aria-label="Sparks balance" title="Sparks balance">
               <svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>
-              <span class="spk-val" id="rr-sparks-val">â€”</span>
+              <span class="spk-val" id="rr-sparks-val">—</span>
               <span class="spk-label">Sparks</span>
             </button>
             <button class="rr-id" id="rr-id" data-state="guest" aria-label="Sign in">
@@ -3094,12 +3111,12 @@
         </div>
         <div class="jukebox" id="jukebox">
           <div class="jb-stage" id="jb-stage"></div>
-          <button class="jb-nav prev" id="jb-prev" aria-label="Previous song">â€¹</button>
-          <button class="jb-nav next" id="jb-next" aria-label="Next song">â€º</button>
+          <button class="jb-nav prev" id="jb-prev" aria-label="Previous song">‹</button>
+          <button class="jb-nav next" id="jb-next" aria-label="Next song">›</button>
         </div>
         <div class="jb-eq" id="jb-eq"><canvas class="jb-wave" id="jb-wave"></canvas></div>
         <div class="jb-meta">
-          <div class="jb-title" id="jb-title">Scanning the radioâ€¦</div>
+          <div class="jb-title" id="jb-title">Scanning the radio…</div>
           <div class="jb-artist" id="jb-artist"></div>
           <div class="jb-tags" id="jb-tags"></div>
           <div class="jb-pos" id="jb-pos"></div>
@@ -3113,14 +3130,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
             All Songs<span id="jb-allcount"></span>
           </button>
-          <button class="jb-play" id="jb-play">Play <span style="font-size:13px;">â–¸</span></button>
+          <button class="jb-play" id="jb-play">Play <span style="font-size:13px;">▸</span></button>
         </div>
       </section>
 
       <!-- ===== BROWSE (genres + artists) ===== -->
       <section class="lib-view" id="view-browse">
         <div class="view-head">
-          <button class="view-back" id="browse-back" aria-label="Back">â†</button>
+          <button class="view-back" id="browse-back" aria-label="Back">←</button>
           <h2>Browse</h2>
         </div>
         <div class="browse-scroll">
@@ -3128,14 +3145,14 @@
           <div class="genre-grid" id="genre-grid"></div>
           <div class="browse-h">Artists</div>
           <div class="artist-grid" id="artist-grid"></div>
-          <button class="credits-link" id="open-credits">View Artist Credits â†’</button>
+          <button class="credits-link" id="open-credits">View Artist Credits →</button>
         </div>
       </section>
 
-      <!-- ===== CREDITS (artists â†’ tracks + packs) ===== -->
+      <!-- ===== CREDITS (artists → tracks + packs) ===== -->
       <section class="lib-view" id="view-credits">
         <div class="view-head">
-          <button class="view-back" id="credits-back" aria-label="Back">â†</button>
+          <button class="view-back" id="credits-back" aria-label="Back">←</button>
           <h2>Credits</h2>
           <span class="vh-count" id="credits-count"></span>
         </div>
@@ -3145,7 +3162,7 @@
       <!-- ===== SONGS (searchable list) ===== -->
       <section class="lib-view" id="view-songs">
         <div class="view-head">
-          <button class="view-back" id="songs-back" aria-label="Back">â†</button>
+          <button class="view-back" id="songs-back" aria-label="Back">←</button>
           <h2 id="songs-title">All Songs</h2>
           <span class="vh-count"><span id="songs-count">0</span> tracks</span>
         </div>
@@ -3155,7 +3172,7 @@
             <option value="featured">Featured</option>
             <option value="new">Newest</option>
             <option value="hot">Most played</option>
-            <option value="az">Aâ€“Z</option>
+            <option value="az">A–Z</option>
             <option value="bpm">BPM</option>
           </select>
         </div>
@@ -3166,17 +3183,17 @@
   </div>
 
   <!-- ============================================================
-       SONG SHEET (difficulty + play) â€” slides up over home
+       SONG SHEET (difficulty + play) — slides up over home
        ============================================================ -->
   <div class="song-sheet" id="song-sheet">
     <div class="sheet-scrim" id="sheet-scrim"></div>
     <div class="sheet">
       <div class="sheet-grip"></div>
       <div class="sheet-head">
-        <div class="sheet-art" id="sheet-art"><span id="sheet-art-fallback">â™ª</span></div>
+        <div class="sheet-art" id="sheet-art"><span id="sheet-art-fallback">♪</span></div>
         <div class="sheet-head-text">
-          <div class="sheet-title" id="sheet-title">â€”</div>
-          <div class="sheet-artist" id="sheet-artist">â€”</div>
+          <div class="sheet-title" id="sheet-title">—</div>
+          <div class="sheet-artist" id="sheet-artist">—</div>
           <div class="sheet-meta" id="sheet-meta"></div>
         </div>
       </div>
@@ -3208,10 +3225,10 @@
       <div class="sheet-foot">
         <button class="play-btn" id="play-btn">
           <span>Initiate the Signal</span>
-          <span class="arrow">â†³</span>
+          <span class="arrow">↳</span>
         </button>
         <div class="sheet-hint" id="sheet-hint">Tap the four lanes as glyphs cross the line</div>
-        <button class="sheet-back" id="sheet-back">â† Back to songs</button>
+        <button class="sheet-back" id="sheet-back">← Back to songs</button>
       </div>
     </div>
   </div>
@@ -3235,7 +3252,7 @@
 
       <div class="calib-readout">
         <div class="calib-cell"><span class="l">Taps</span><span class="n" id="calib-count">0 / 12</span></div>
-        <div class="calib-cell"><span class="l">Measured Offset</span><span class="n cyan" id="calib-measured">â€” ms</span></div>
+        <div class="calib-cell"><span class="l">Measured Offset</span><span class="n cyan" id="calib-measured">— ms</span></div>
       </div>
 
       <div class="calib-manual">
@@ -3265,7 +3282,7 @@
     .set-seg button.active { border-color: var(--crimson); color: var(--ink); background: rgba(255,42,48,0.12); }
     .set-status { flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--chrome); text-align: right; }
     .set-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); margin-top: 12px; letter-spacing: 0.04em; line-height: 1.5; }
-    /* settings can get tall â€” let the panel scroll on short screens */
+    /* settings can get tall — let the panel scroll on short screens */
     #settings-screen .calib-wrap { max-height: 92vh; overflow-y: auto; padding: 4px 8px; }
     #settings-screen .calib-wrap::-webkit-scrollbar { width: 5px; }
     #settings-screen .calib-wrap::-webkit-scrollbar-thumb { background: rgba(224,218,214,0.2); border-radius: 3px; }
@@ -3303,7 +3320,7 @@
   <div class="screen howto-screen" id="howto-screen">
     <div class="howto-card">
       <div class="howto-title">HOW TO PLAY</div>
-      <p class="howto-sub">Notes ride down the strings â€” hit the lane key the instant a note reaches the bridge.<br>Keys&nbsp; <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></p>
+      <p class="howto-sub">Notes ride down the strings — hit the lane key the instant a note reaches the bridge.<br>Keys&nbsp; <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></p>
       <div class="howto-grid">
         <div class="howto-item">
           <div class="howto-ico"><img src="assets/note-normal.png" alt=""></div>
@@ -3311,33 +3328,33 @@
         </div>
         <div class="howto-item">
           <div class="howto-ico ho-hold"><i></i></div>
-          <div class="howto-txt"><b>HOLD</b><span>A long beam â€” press and <em>hold</em> through it.</span></div>
+          <div class="howto-txt"><b>HOLD</b><span>A long beam — press and <em>hold</em> through it.</span></div>
         </div>
         <div class="howto-item">
           <div class="howto-ico ho-chord"><img src="assets/note-normal.png" alt=""><img src="assets/note-normal.png" alt=""></div>
-          <div class="howto-txt"><b>CHORD</b><span>Two notes at once â€” press both keys together.</span></div>
+          <div class="howto-txt"><b>CHORD</b><span>Two notes at once — press both keys together.</span></div>
         </div>
         <div class="howto-item">
-          <div class="howto-ico ho-bomb">âœ•</div>
-          <div class="howto-txt"><b>BOMB</b><span>Do <em>not</em> hit â€” let the âœ• pass by.</span></div>
+          <div class="howto-ico ho-bomb">✕</div>
+          <div class="howto-txt"><b>BOMB</b><span>Do <em>not</em> hit — let the ✕ pass by.</span></div>
         </div>
         <div class="howto-item">
           <div class="howto-ico"><img src="assets/note-star.png" alt=""></div>
           <div class="howto-txt"><b>STAR</b><span>Gold notes charge your <em>Overdrive</em> meter fast.</span></div>
         </div>
         <div class="howto-item">
-          <div class="howto-ico ho-od">ðŸ”¥</div>
+          <div class="howto-ico ho-od">🔥</div>
           <div class="howto-txt"><b>OVERDRIVE</b><span>Meter full? Hit <kbd>SPACE</kbd> for a score-multiplier surge.</span></div>
         </div>
       </div>
       <p class="howto-sub" style="margin-top:6px;">New here? <b style="color:var(--chrome);">Calibrate your timing</b> first so hits land exactly on the beat.</p>
-      <button class="ghost-btn" id="howto-calibrate" style="min-width:240px;">âŠ¹ CALIBRATE MY TIMING</button>
-      <button class="ghost-btn primary" id="howto-close">GOT IT â€” LETâ€™S PLAY</button>
+      <button class="ghost-btn" id="howto-calibrate" style="min-width:240px;">⊹ CALIBRATE MY TIMING</button>
+      <button class="ghost-btn primary" id="howto-close">GOT IT — LET'S PLAY</button>
     </div>
   </div>
 
   <!-- ============================================================
-       CAREER / CONTROLLER PROFILE â€” localStorage-backed progression
+       CAREER / CONTROLLER PROFILE — localStorage-backed progression
        ============================================================ -->
   <div class="screen profile-screen" id="profile-screen">
     <div class="profile-card">
@@ -3349,7 +3366,7 @@
         <div class="pg-head">GRADE DISTRIBUTION</div>
         <div class="profile-grades" id="profile-grades"></div>
       </div>
-      <p class="profile-empty" id="profile-empty">No runs logged yet â€” finish a track and your career starts filling in here.</p>
+      <p class="profile-empty" id="profile-empty">No runs logged yet — finish a track and your career starts filling in here.</p>
       <div class="pause-actions" style="margin-top:18px;">
         <button class="ghost-btn" id="profile-reset">RESET CAREER</button>
         <button class="ghost-btn primary" id="profile-close">DONE</button>
@@ -3358,13 +3375,13 @@
   </div>
 
   <!-- ============================================================
-       LEVELS â€” tiered Level Select (Warm-Up / Pulse / Fracture)
+       LEVELS — tiered Level Select (Warm-Up / Pulse / Fracture)
        ============================================================ -->
   <div class="screen levels-screen" id="levels-screen">
     <div class="levels-card">
       <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// CAMPAIGN</div>
       <h2 class="levels-title">LEVELS</h2>
-      <p class="levels-sub">Climb the tiers â€” each level is a track to clear. Free-play any song from the library anytime.</p>
+      <p class="levels-sub">Climb the tiers — each level is a track to clear. Free-play any song from the library anytime.</p>
       <div class="lv-hero" id="levels-hero" hidden></div>
       <div class="levels-body" id="levels-body"></div>
       <button class="ghost-btn primary" id="levels-close" style="margin-top:20px;min-width:200px;">DONE</button>
@@ -3372,7 +3389,7 @@
   </div>
 
   <!-- ============================================================
-       LEADERBOARD â€” global + per-song boards (reads RhythmCatalog.fetchLeaderboard;
+       LEADERBOARD — global + per-song boards (reads RhythmCatalog.fetchLeaderboard;
        falls back to local rr_career / rr_scores; "live when accounts connect" state)
        ============================================================ -->
   <div class="screen leaderboard-screen" id="leaderboard-screen">
@@ -3387,9 +3404,9 @@
       <!-- per-song header (track name + difficulty filter); hidden on Global tab -->
       <div class="lbd-songbar" id="lbd-songbar" hidden>
         <button class="lbd-pick" id="lbd-pick" aria-label="Choose a track">
-          <span class="lbd-pick-art" id="lbd-pick-art">â™ª</span>
+          <span class="lbd-pick-art" id="lbd-pick-art">♪</span>
           <span class="lbd-pick-txt"><span class="lbd-pick-t" id="lbd-pick-t">Choose a track</span><span class="lbd-pick-a" id="lbd-pick-a">tap to pick</span></span>
-          <span class="lbd-pick-chev">â€º</span>
+          <span class="lbd-pick-chev">›</span>
         </button>
         <div class="lbd-diff set-seg" id="lbd-diff">
           <button data-diff="" class="active">All</button>
@@ -3401,11 +3418,11 @@
 
       <div class="lbd-banner" id="lbd-banner" hidden></div>
       <div class="lbd-board" id="lbd-board"></div>
-      <p class="lbd-empty" id="lbd-empty" hidden>No scores yet â€” finish a run and you'll appear here.</p>
+      <p class="lbd-empty" id="lbd-empty" hidden>No scores yet — finish a run and you'll appear here.</p>
 
-      <!-- inline track picker (compact, searchable) â€” toggled by #lbd-pick -->
+      <!-- inline track picker (compact, searchable) — toggled by #lbd-pick -->
       <div class="lbd-picker" id="lbd-picker" hidden>
-        <input class="lbd-search" id="lbd-search" type="text" placeholder="Search a trackâ€¦" autocomplete="off" spellcheck="false" />
+        <input class="lbd-search" id="lbd-search" type="text" placeholder="Search a track…" autocomplete="off" spellcheck="false" />
         <div class="lbd-results" id="lbd-results"></div>
       </div>
 
@@ -3414,7 +3431,7 @@
   </div>
 
   <!-- ============================================================
-       STORE â€” Sparks shop (GET /store grid Â· POST /sparks/spend Â· Get Sparks deep-link)
+       STORE — Sparks shop (GET /store grid · POST /sparks/spend · Get Sparks deep-link)
        Mirrors the leaderboard overlay. Pack->content gating is backend-pending
        (Lovable adds meta.linked_pack_id); for now this shows + spends + flips Owned.
        ============================================================ -->
@@ -3425,7 +3442,7 @@
       <div class="store-balrow">
         <div class="store-bal" id="store-bal" data-state="guest">
           <svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>
-          <span class="store-bal-val" id="store-bal-val">â€”</span>
+          <span class="store-bal-val" id="store-bal-val">—</span>
           <span class="store-bal-label">Sparks</span>
         </div>
         <button class="store-getmore" id="store-getmore">
@@ -3435,7 +3452,7 @@
       </div>
       <div class="store-banner" id="store-banner" hidden></div>
       <div class="store-grid" id="store-grid"></div>
-      <p class="store-empty" id="store-empty" hidden>The shop is restocking â€” check back soon.</p>
+      <p class="store-empty" id="store-empty" hidden>The shop is restocking — check back soon.</p>
       <button class="ghost-btn primary" id="store-close" style="margin-top:18px;min-width:200px;">DONE</button>
     </div>
   </div>
@@ -3448,7 +3465,7 @@
       <div class="set-row">
         <span class="set-l">Note Speed</span>
         <input type="range" id="set-scroll" min="0.6" max="1.8" step="0.05" value="1" aria-label="Note speed" />
-        <span class="set-v" id="set-scroll-v">1.0Ã—</span>
+        <span class="set-v" id="set-scroll-v">1.0×</span>
       </div>
       <div class="set-row">
         <span class="set-l">Music Volume</span>
@@ -3519,13 +3536,13 @@
       <div class="set-row">
         <span class="set-l">Lane Mode</span>
         <div class="set-seg" id="set-lanemode">
-          <button data-lanemode="standard" class="active">6-Lane Â· Keys</button>
-          <button data-lanemode="gh">5-String Â· Guitar</button>
+          <button data-lanemode="standard" class="active">6-Lane · Keys</button>
+          <button data-lanemode="gh">5-String · Guitar</button>
         </div>
       </div>
       <div class="set-row">
         <span class="set-l">Inputs</span>
-        <span class="set-status" id="set-inputs">Touch Â· Keyboard (A S D Â· J K L)</span>
+        <span class="set-status" id="set-inputs">Touch · Keyboard (A S D · J K L)</span>
       </div>
 
       <div class="set-row col">
@@ -3534,7 +3551,7 @@
           <button class="set-mini" id="set-keys-reset">Reset</button>
         </div>
         <div class="set-keys" id="set-keys"></div>
-        <span class="set-note" style="margin-top:0;">Tap a key, then press the new one. Lanes 1â€“6, left â†’ right.</span>
+        <span class="set-note" style="margin-top:0;">Tap a key, then press the new one. Lanes 1–6, left → right.</span>
       </div>
 
       <div class="set-row col">
@@ -3559,7 +3576,7 @@
         <div class="set-test-pips" id="set-test-pips" style="display:none;">
           <span></span><span></span><span></span><span></span><span></span><span></span>
         </div>
-        <span class="set-note" style="margin-top:0;">Press any key, controller button, or MIDI note â€” the matching lane lights up.</span>
+        <span class="set-note" style="margin-top:0;">Press any key, controller button, or MIDI note — the matching lane lights up.</span>
       </div>
 
       <div class="pause-actions" style="margin-top:20px;">
@@ -3622,11 +3639,11 @@
        GAME SCREEN
        ============================================================ -->
   <div class="screen game-screen" id="game">
-    <!-- FULL-BLEED LEVEL BACKDROP â€” first child of #game so it paints BEHIND both HUD panels + the
+    <!-- FULL-BLEED LEVEL BACKDROP — first child of #game so it paints BEHIND both HUD panels + the
          center. #bg-video/#bg-image are driven by id from applyLevelTheme (404 self-heal + poster intact);
          the transparent canvas (#hwy) composites its god-rays/embers ON TOP of this. -->
     <div id="game-bg" aria-hidden="true">
-      <!-- build12: blurred COVER fill behind the sharp CONTAIN layer â€” the full video frame shows
+      <!-- build12: blurred COVER fill behind the sharp CONTAIN layer — the full video frame shows
            (no crop-zoom blur = the user's "too blown up / missing core details" fix), edges filled
            cinematically. Src mirrors #bg-video automatically. -->
       <video id="bg-video-fill" autoplay loop muted playsinline preload="auto" aria-hidden="true"></video>
@@ -3660,7 +3677,7 @@
 
       <div class="hud-block">
         <span class="label">Track</span>
-        <span class="sub bright" id="hud-track">Lunar Waves â€” Kunning Klash</span>
+        <span class="sub bright" id="hud-track">Lunar Waves — Kunning Klash</span>
         <div class="song-progress"><i id="hud-progress"></i></div>
         <span class="sub" id="hud-time">0:00 / 0:00</span>
       </div>
@@ -3696,11 +3713,11 @@
         <div class="gauge-lab">MULTIPLIER</div>
       </div>
       <div class="gauge od" id="od-gauge">
-        <button class="gauge-badge flame" id="od-flame" aria-label="Overdrive â€” press Space when charged" title="Press Space to unleash Overdrive when charged">
+        <button class="gauge-badge flame" id="od-flame" aria-label="Overdrive — press Space when charged" title="Press Space to unleash Overdrive when charged">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-1 5-2 6.5C8.5 10.5 8 12 9 13c.6.6.5-1 1.5-2 .8 2 2.5 2.5 2.5 4.5a2.5 2.5 0 1 1-5 0c0-.5.1-1 .3-1.4C7 15 6 16.5 6 18.5 6 21 8.7 23 12 23s6-2 6-4.8c0-4.2-3.5-5.7-3.5-9C14.5 6 13.5 3.5 12 2z"></path></svg>
         </button>
         <div class="gauge-track"><i id="od-fill"></i></div>
-        <div class="gauge-lab">OVERDRIVE Â· <span class="od-key">SPACE</span></div>
+        <div class="gauge-lab">OVERDRIVE · <span class="od-key">SPACE</span></div>
       </div>
 
       <!-- mobile pause button -->
@@ -3758,11 +3775,11 @@
       </div>
 
       <div class="hud-block" id="hud-od-block">
-        <span class="label">Overdrive <span class="od-hint">Â· builds with your combo</span></span>
+        <span class="label">Overdrive <span class="od-hint">· builds with your combo</span></span>
         <div class="song-progress od-bar" style="height: 9px;">
           <i id="hud-od-fill"></i>
         </div>
-        <span class="sub" id="hud-od-text">CHARGING Â· 0%</span>
+        <span class="sub" id="hud-od-text">CHARGING · 0%</span>
       </div>
 
       <div class="hud-block">
@@ -3770,18 +3787,18 @@
         <div class="song-progress" style="height: 8px;">
           <i id="hud-stability" style="background: linear-gradient(90deg, var(--crimson), var(--green)); width: 100%;"></i>
         </div>
-        <span class="sub" id="stability-text">STABLE Â· 100%</span>
+        <span class="sub" id="stability-text">STABLE · 100%</span>
       </div>
 
       <div class="hud-block">
         <span class="label">Vibe Channel</span>
         <span class="sub bright">// SIGNAL CONTROLLER</span>
-        <span class="sub" id="hud-diff">PULSE â€” Normal</span>
+        <span class="sub" id="hud-diff">PULSE — Normal</span>
       </div>
     </div>
 
     <div class="footer-hint">
-      <span id="footer-keys"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span> Â· <kbd>ESC</kbd> PAUSE Â· <kbd>SPACE</kbd> OVERDRIVE
+      <span id="footer-keys"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd></span> · <kbd>ESC</kbd> PAUSE · <kbd>SPACE</kbd> OVERDRIVE
     </div>
   </div>
 
@@ -3799,7 +3816,7 @@
     <div class="results-wrap">
       <div class="brand-row">
         <span class="brand-dot"></span>
-        <span class="brand-name">REACTIVVIBE.AI Â· SESSION COMPLETE</span>
+        <span class="brand-name">REACTIVVIBE.AI · SESSION COMPLETE</span>
         <span class="signal-id" id="results-track">LUNAR WAVES // PULSE</span>
       </div>
       <div class="pre-title" style="margin-top: 32px; font-family: 'JetBrains Mono'; font-size: 12px; letter-spacing: 0.4em; color: var(--cyan);">// SIGNAL STABILIZED</div>
@@ -3835,13 +3852,13 @@
 
       <div class="pause-actions" style="margin-top: 40px;">
         <button class="ghost-btn primary" id="results-replay">PLAY AGAIN</button>
-        <button class="ghost-btn gold" id="results-next">NEXT LEVEL â–¶</button>
+        <button class="ghost-btn gold" id="results-next">NEXT LEVEL ▶</button>
         <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
         <button class="ghost-btn" id="results-career">CAREER</button>
         <button class="ghost-btn" id="results-share">COPY SCORE</button>
       </div>
       <div class="results-keys" style="margin-top:14px;">
-        <kbd>ENTER</kbd> Play again Â· <kbd>ESC</kbd> Menu
+        <kbd>ENTER</kbd> Play again · <kbd>ESC</kbd> Menu
       </div>
     </div>
   </div>
@@ -3869,7 +3886,7 @@
 </template>
 
 <button class="mute-btn" id="mute-btn" aria-label="Mute audio" title="Mute (M)">
-  <span class="lab" id="mute-lab">MUTE Â· M</span>
+  <span class="lab" id="mute-lab">MUTE · M</span>
   <svg id="mute-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
     <path d="M15.54 8.46a5 5 0 010 7.07"></path>
@@ -3883,8 +3900,8 @@
 </button>
 
 <!-- ===========================================================================
-     CONFIG â€” set these when embedding at /play on reactivvibeai.com.
-     SUPABASE_KEY is the publishable (anon) key â€” safe to ship client-side.
+     CONFIG — set these when embedding at /play on reactivvibeai.com.
+     SUPABASE_KEY is the publishable (anon) key — safe to ship client-side.
      Leave SUPABASE_KEY empty for demo/offline use of the bundled track.
      =========================================================================== -->
 <script>
@@ -3898,7 +3915,7 @@
   };
 </script>
 
-<!-- ===== BETA GATE logic â€” server-authoritative, FAILS OPEN (never blocks the game if the backend is down/absent) ===== -->
+<!-- ===== BETA GATE logic — server-authoritative, FAILS OPEN (never blocks the game if the backend is down/absent) ===== -->
 <script>
 (function () {
   var gate = document.getElementById('beta-gate');
@@ -3948,13 +3965,13 @@
   }
 
   // ---- decide: bypass (dev / cached / backend-absent) or enforce the gate ----
-  if (isLocal || !STATUS_URL) { reveal(); return; }     // dev or unconfigured â†’ open
+  if (isLocal || !STATUS_URL) { reveal(); return; }     // dev or unconfigured → open
   if (cached()) { reveal(); return; }                    // already unlocked on this device
 
   fetchT(STATUS_URL, { headers: authHeaders(), credentials: 'omit' }, 5000)
     .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
     .then(function (d) { if (d && d.access) { remember(); reveal(); } else { showForm(); } })
-    .catch(function () { reveal(); });                   // backend down/absent/error â†’ FAIL OPEN
+    .catch(function () { reveal(); });                   // backend down/absent/error → FAIL OPEN
 
   // ---- redeem a code ----
   if (form) form.addEventListener('submit', function (e) {
@@ -3962,21 +3979,21 @@
     var code = (input.value || '').trim();
     if (!code) { try { input.focus(); } catch (x) {} return; }
     msg.className = 'bg-msg'; msg.textContent = '';
-    var label = submit.textContent; submit.disabled = true; submit.textContent = 'Unlockingâ€¦';
+    var label = submit.textContent; submit.disabled = true; submit.textContent = 'Unlocking…';
     function done(cls, text) { msg.className = 'bg-msg ' + cls; msg.textContent = text; submit.disabled = false; submit.textContent = label; }
     fetchT(REDEEM_URL, { method: 'POST', headers: authHeaders(), credentials: 'omit', body: JSON.stringify({ code: code }) }, 8000)
       .then(function (r) { return r.json().catch(function () { return {}; }); })
       .then(function (d) {
-        if (d && d.ok) { msg.className = 'bg-msg ok'; msg.textContent = "You're in. Loadingâ€¦"; remember(); setTimeout(reveal, 500); return; }
-        var map = { invalid: "That code isn't valid â€” double-check and try again.", expired: 'This code has expired.', used_up: 'This code has been fully used.', login_required: 'Please sign in on reactivvibe.com first, then reopen /play.' };
+        if (d && d.ok) { msg.className = 'bg-msg ok'; msg.textContent = "You're in. Loading…"; remember(); setTimeout(reveal, 500); return; }
+        var map = { invalid: "That code isn't valid — double-check and try again.", expired: 'This code has expired.', used_up: 'This code has been fully used.', login_required: 'Please sign in on reactivvibe.com first, then reopen /play.' };
         done('err', map[(d && d.error)] || "That code didn't work. Try again.");
       })
-      .catch(function () { done('err', "Couldn't reach the server â€” check your connection and try again."); });
+      .catch(function () { done('err', "Couldn't reach the server — check your connection and try again."); });
   });
 })();
 </script>
 
-<!-- global error guard â€” capture uncaught errors/rejections so beta bugs are debuggable (not silent) -->
+<!-- global error guard — capture uncaught errors/rejections so beta bugs are debuggable (not silent) -->
 <script>
 (function () {
   var KEY = 'rr_errlog';
@@ -4000,15 +4017,36 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=120"></script>
-<script src="game.js?v=120"></script>
-<script src="jukebox.js?v=120"></script>
-<script src="catalog.js?v=120"></script>
-<script src="multiplayer.js?v=120"></script>
+<script src="assets/fx/fx-player.js?v=121"></script>
+<script src="game.js?v=121"></script>
+<script src="jukebox.js?v=121"></script>
+<script src="catalog.js?v=121"></script>
+<script src="multiplayer.js?v=121"></script>
+<script>
+/* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
+   only when the file really loads; missing art = the tile keeps its build8 living look. */
+(function () {
+  var map = { 'mh-campaign': 'campaign', 'mh-quickplay': 'quickplay', 'mh-multiplayer': 'multiplayer',
+              'mh-store': 'store', 'mh-leaderboard': 'leaderboard', 'mh-profile': 'profile' };
+  Object.keys(map).forEach(function (id) {
+    var btn = document.getElementById(id); if (!btn) return;
+    var src = 'assets/hub/' + map[id] + '.jpg';
+    var probe = new Image();
+    probe.onload = function () {
+      var s = document.createElement('span');
+      s.className = 'mh-art'; s.setAttribute('aria-hidden', 'true');
+      s.style.backgroundImage = 'url("' + src + '")';
+      btn.insertBefore(s, btn.firstChild);
+      setTimeout(function () { btn.classList.add('has-art'); }, 0);
+    };
+    probe.src = src;
+  });
+})();
+</script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
-     (the canvas atmosphere still renders). If FPS jumps from 30 â†’ 60 with this on,
+     (the canvas atmosphere still renders). If FPS jumps from 30 → 60 with this on,
      the DOM <video> compositing is the frame-rate cap and we replace it with a
      canvas/static backdrop. Safe to delete this block to ship.
      =========================================================================== -->
@@ -4027,10 +4065,10 @@
 </script>
 
 <!-- ===========================================================================
-     DEV FPS METER (test build) â€” independent rAF meter showing the REAL frame rate
+     DEV FPS METER (test build) — independent rAF meter showing the REAL frame rate
      the browser is delivering (includes GPU compositing, not just JS draw time).
      Top-left pill, color-coded. Press the ` (backtick) key to hide/show.
-     HIDDEN BY DEFAULT â€” add ?fps=1 to the URL to show it. Beta testers never see our telemetry.
+     HIDDEN BY DEFAULT — add ?fps=1 to the URL to show it. Beta testers never see our telemetry.
      Safe to delete this whole block before public launch.
      =========================================================================== -->
 <script>
@@ -4039,7 +4077,7 @@
   var el = document.createElement('div');
   el.id = 'fps-meter';
   el.style.cssText = 'position:fixed;top:6px;left:6px;z-index:99999;font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.2;padding:5px 9px;background:rgba(10,7,6,0.82);border:1px solid rgba(255,31,46,0.5);border-radius:7px;color:#dad7d2;letter-spacing:0.04em;pointer-events:none;white-space:nowrap;';
-  el.textContent = 'FPS â€¦';
+  el.textContent = 'FPS …';
   document.body.appendChild(el);
   try { if (/[?&]fps=0/.test(location.search)) el.style.display = 'none'; } catch (e) {}
 
@@ -4052,7 +4090,7 @@
     if (now - lastShow >= 500) {
       var fps = acc > 0 ? Math.round(frames / (acc / 1000)) : 0;
       var dpr = Math.min(2, window.devicePixelRatio || 1);
-      el.textContent = 'FPS ' + fps + '  Â·  worst ' + worst.toFixed(0) + 'ms  Â·  ' + dpr + 'x';
+      el.textContent = 'FPS ' + fps + '  ·  worst ' + worst.toFixed(0) + 'ms  ·  ' + dpr + 'x';
       el.style.color = fps >= 55 ? '#36d07a' : fps >= 40 ? '#e0a93f' : '#ff4d4d';
       el.style.borderColor = el.style.color;
       frames = 0; acc = 0; worst = 0; lastShow = now;
@@ -4092,7 +4130,7 @@
     var rk = $('profile-rank'); if (rk) rk.textContent = rankTitle(c);
     var cells = [
       ['Lifetime Score', fmt(c.score)], ['Runs', fmt(c.runs)], ['Songs Played', fmt(distinct)],
-      ['Best Combo', fmt(c.bestCombo) + 'Ã—'], ['Accuracy', acc.toFixed(1) + '%'], ['Full Combos', fmt(c.fullCombos)]
+      ['Best Combo', fmt(c.bestCombo) + '×'], ['Accuracy', acc.toFixed(1) + '%'], ['Full Combos', fmt(c.fullCombos)]
     ];
     var st = $('profile-stats');
     if (st) st.innerHTML = cells.map(function (p) { return '<div class="ps-cell"><span class="ps-l">' + p[0] + '</span><span class="ps-n">' + p[1] + '</span></div>'; }).join('');
@@ -4121,13 +4159,13 @@
 })();
 </script>
 
-<!-- LEVELS â€” tiered Level Select (reads RhythmCatalog.allTracks + getBest, launches via launchTrack) -->
+<!-- LEVELS — tiered Level Select (reads RhythmCatalog.allTracks + getBest, launches via launchTrack) -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var screen = $('levels-screen'); if (!screen) return;
   // ============================================================
-  //  LEVEL-DESIGN SYSTEM (authorable levels) â€” additive over the stride picker.
+  //  LEVEL-DESIGN SYSTEM (authorable levels) — additive over the stride picker.
   //  Edit AUTHORED below to design real levels. Tier slots without an authored
   //  entry fall back to the deterministic rr_levelmap stride pick (unchanged).
   //  Modifiers (speed/mirror/failOn) are OFF unless LEVELDESIGN_MODS is true.
@@ -4136,27 +4174,27 @@
   var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1, bone:1, pink:1 };   // violet=gothic, bone=Bone Daddy, pink=Melody (per-level palettes; UI stays crimson)
   var AUTHORED = [
     // ====================================================================
-    //  LEVEL SCHEMA â€” edit / add entries to co-design the campaign. Each obj
+    //  LEVEL SCHEMA — edit / add entries to co-design the campaign. Each obj
     //  is one authored card (rendered before the stride fillers in its tier).
     //  id    (req) unique string        stable key (rr_levelprog + unlock chain)
     //  tier  (req) easy|medium|hard      which tier band
     //  title (req) string                card + splash title
-    //  song  (req) {stride:N}|{trackId:"..."}|{demo:true}   â˜… pin a real song: {trackId:"<id>"}
+    //  song  (req) {stride:N}|{trackId:"..."}|{demo:true}   ★ pin a real song: {trackId:"<id>"}
     //  theme (opt) crimson|ember|gold|chrome|violet         per-level accent + splash palette (violet=gothic)
-    //  cover (opt) 'assets/levels/x.jpg' key art on card + splash (missing â†’ title initial)
-    //  bgArt (opt) backdrop poster Â· bgVideo (opt) backdrop loop (404 â†’ moon)
-    //  guitarSkin (opt) 'assets/guitars/x.png' per-level guitar art (MUST match the active profile's silhouette+strings; 404â†’default)
+    //  cover (opt) 'assets/levels/x.jpg' key art on card + splash (missing → title initial)
+    //  bgArt (opt) backdrop poster · bgVideo (opt) backdrop loop (404 → moon)
+    //  guitarSkin (opt) 'assets/guitars/x.png' per-level guitar art (MUST match the active profile's silhouette+strings; 404→default)
     //  mods  (opt) {speed,mirror,failOn} applied only if LEVELDESIGN_MODS=true (off)
-    //  boss  (opt) true Â· unlock (opt) {stars:N, entitlement:{item_type,item_id}}
+    //  boss  (opt) true · unlock (opt) {stars:N, entitlement:{item_type,item_id}}
     // ====================================================================
-    // ---- TIER I Â· WARM-UP (easy) ----
+    // ---- TIER I · WARM-UP (easy) ----
     { id:'warm-01', tier:'easy', title:'First Light',  song:{ stride:0 },  theme:'gold',
       cover:'assets/levels/warmup-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:0 } },
     { id:'warm-02', tier:'easy', title:'Steady Hands', song:{ stride:1 },  theme:'gold',
       cover:'assets/levels/steadyhands-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
     { id:'warm-03', tier:'easy', title:'Ember Drift',  song:{ stride:2 },  theme:'ember',
       cover:'assets/levels/emberdrift-cover.jpg', bgArt:'assets/levels/warmup-bg.jpg', unlock:{ stars:1 } },
-    // ---- TIER II Â· PULSE (medium) ----
+    // ---- TIER II · PULSE (medium) ----
     { id:'pulse-01', tier:'medium', title:'Heartbeat', song:{ stride:6 },  theme:'crimson',
       cover:'assets/levels/heartbeat-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.0 }, unlock:{ stars:1 } },
     { id:'pulse-02', tier:'medium', title:'Overdrive', song:{ stride:7 },  theme:'ember',
@@ -4164,23 +4202,23 @@
       mods:{ speed:1.1 }, unlock:{ stars:1 } },
     { id:'pulse-03', tier:'medium', title:'Chrome Veins', song:{ stride:8 }, theme:'chrome',
       cover:'assets/levels/chromeveins-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.1 }, unlock:{ stars:1 } },
-    // BONE DADDY showcase â€” booty-shake party (creator character). theme 'bone' (ember/bone); bone-daddy guitar + bone-shatter FX.
-    // build21: the GRAVEYARD pack (user-approved 4K cathedral world, formula-locked) â€” looping
+    // BONE DADDY showcase — booty-shake party (creator character). theme 'bone' (ember/bone); bone-daddy guitar + bone-shatter FX.
+    // build21: the GRAVEYARD pack (user-approved 4K cathedral world, formula-locked) — looping
     // 1080p ambient bgVideo + 4K-derived bgArt fallback; the skull-crown mechanic replaces the
     // booty bounce once its art lands (rig already coded; type 'skull' + art/jaw fields).
     { id:'bone-daddy', tier:'medium', title:'Get Busy', song:{ trackId:'30acfdb4-8c85-4e1a-b43d-c91587dcba16' }, theme:'bone',
       cover:'assets/levels/bonedaddy-cover.jpg', bgArt:'assets/levels/bonedaddy-bg2.jpg',
       bgVideo:'assets/levels/bonedaddy-loop.mp4',
       guitarSkin:'assets/guitars/bone-daddy.png',
-      reactiveCards:{ miss:'assets/levels/bonedaddy-card-tomb.png', hit:'assets/levels/bonedaddy-card-chalice.png' },   // build22: HIS fate-pair â€” the tombstone cracks on misses, the chalice fills on hits
-      mechanic:{ type:'skull', art:'assets/levels/bonedaddy-skull.png', jaw:'assets/levels/bonedaddy-skull-jaw.png' },   // the baron's skull crowns the spawn â€” jaw chatters on hits, eyes flare on milestones
+      reactiveCards:{ miss:'assets/levels/bonedaddy-card-tomb.png', hit:'assets/levels/bonedaddy-card-chalice.png' },   // build22: HIS fate-pair — the tombstone cracks on misses, the chalice fills on hits
+      mechanic:{ type:'skull', art:'assets/levels/bonedaddy-skull.png', jaw:'assets/levels/bonedaddy-skull-jaw.png' },   // the baron's skull crowns the spawn — jaw chatters on hits, eyes flare on milestones
       mods:{ speed:1.08 }, unlock:{ stars:1 } },
-    // ---- TIER III Â· FRACTURE (hard) ----
+    // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
-      intenseVideo:'assets/levels/skully-intense.mp4',   // build8: combo-spike backdrop (404 â†’ self-heals to skully-loop.mp4)
+      intenseVideo:'assets/levels/skully-intense.mp4',   // build8: combo-spike backdrop (404 → self-heals to skully-loop.mp4)
       reactiveCards:{ hit:'assets/levels/card-world.jpg', miss:'assets/levels/card-death.jpg' },
-      guitarSkin:'assets/guitars/violet-gothic-5.png',   // build16: TRUE 5-STRING re-render (asset commit 0698670; lanes ride her measured painted strings; 404 â†’ default)
+      guitarSkin:'assets/guitars/violet-gothic-5.png',   // build16: TRUE 5-STRING re-render (asset commit 0698670; lanes ride her measured painted strings; 404 → default)
       mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },   // SKULLY showcase level (Lil' Clay Skullyrae)
     { id:'frac-02', tier:'hard', title:'Hollow Choir', song:{ stride:14 }, theme:'violet',
       cover:'assets/levels/hollowchoir-cover.jpg', bgArt:'assets/levels/fracture-bg.jpg',
@@ -4189,10 +4227,10 @@
       cover:'assets/levels/necromancer.jpg', bgArt:'assets/levels/boss-bg.jpg', bgVideo:'assets/levels/boss-loop.mp4', boss:true,
       mods:{ speed:1.2, failOn:true },
       unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'boss_neon' } } },
-    // MELODY â€” purchasable BOSS (creator character). theme 'pink'; melody-pink guitar + cat-paw mechanic + pink FX.
-    // build22: MELODY's kawaii-punk room pack â€” looping ambient bgVideo (her cat lounging) + the
+    // MELODY — purchasable BOSS (creator character). theme 'pink'; melody-pink guitar + cat-paw mechanic + pink FX.
+    // build22: MELODY's kawaii-punk room pack — looping ambient bgVideo (her cat lounging) + the
     // CAT-CHAOS intense clip on combo milestones (the gag is a REWARD, not wallpaper) + her
-    // fate-pair (sad knocked-over plushie â†” heart jar filling) + paw fret-rows (engine, 'pink').
+    // fate-pair (sad knocked-over plushie ↔ heart jar filling) + paw fret-rows (engine, 'pink').
     { id:'melody-boss', tier:'hard', title:'Highway Lover', song:{ trackId:'7424b4a5-27e5-4b78-aad2-ac5ded73c20b' }, theme:'pink', boss:true,
       cover:'assets/levels/melody-cover.jpg', bgArt:'assets/levels/melody-bg2.jpg',
       bgVideo:'assets/levels/melody-loop.mp4',
@@ -4289,7 +4327,7 @@
       var dur = reduce ? 900 : 1600;
       el.style.setProperty('--rs-accent', accent);
       el.style.setProperty('--rs-dur', dur + 'ms');
-      $('rs-tier').textContent = (L.boss ? 'BOSS Â· ' : '') + tierLabelFor(L.tier);
+      $('rs-tier').textContent = (L.boss ? 'BOSS · ' : '') + tierLabelFor(L.tier);
       $('rs-title').textContent = L.title || (track && track.title) || 'Level';
       var artist = track ? (track.artist_name || track.artist_credit_name || '') : '';
       $('rs-sub').textContent = artist || (track && track.title) || 'Get ready';
@@ -4323,7 +4361,7 @@
   var _activeLevel = null;
   function launchLevel(L, ready) {
     if (!L) return;
-    var track = levelTrack(L, ready); if (!track) { try { window.RhythmGame.showToast('This levelâ€™s track isnâ€™t ready yet'); } catch (e) {} return; }
+    var track = levelTrack(L, ready); if (!track) { try { window.RhythmGame.showToast('This level's track isn't ready yet'); } catch (e) {} return; }
     _activeLevel = L;
     try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
@@ -4347,23 +4385,23 @@
   }
   var _bgSaved = null;
   // build12: keep the blurred COVER fill (#bg-video-fill) mirrored to the sharp CONTAIN layer
-  // (#bg-video) â€” src + visibility â€” so EVERY existing path (theme apply, intense combo swap,
+  // (#bg-video) — src + visibility — so EVERY existing path (theme apply, intense combo swap,
   // clear/restore) drives both without changes. Fill self-heals (hides) on error.
   try {
     (function () {
       var vMain = $('bg-video'), vFill = $('bg-video-fill');
       if (!vMain || !vFill || !window.MutationObserver) return;
       if (/[?&]novideo=1/.test(location.search)) return;   // the diag flag owns the videos (review find)
-      // build14 SMART-FIT v2 (user: "still too small â€” make it bigger"): TRUE COVER whenever
-      // cover/contain â‰¤ 2.4 (zero bands); beyond that, cap the zoom and paint a feather mask
+      // build14 SMART-FIT v2 (user: "still too small — make it bigger"): TRUE COVER whenever
+      // cover/contain ≤ 2.4 (zero bands); beyond that, cap the zoom and paint a feather mask
       // aligned to the video's DRAWN CONTENT BOX in element space (it scales WITH the transform,
-      // so the feather rides the real letterbox seam â€” the v109 element-edge mask never touched
+      // so the feather rides the real letterbox seam — the v109 element-edge mask never touched
       // it). At true cover the mask is removed entirely (no vignette). --rr-bgfit is multiplied
       // by the base transform AND the rrCineZoom keyframes.
       var BG_BLEED_CAP = 2.4, BG_FEATHER = 0.10;
-      // âš  every style write below is DIFF-GUARDED and the observer only refits on SRC changes:
-      // fitBg's own style writes re-trigger a 'style' MutationObserver â†’ sync â†’ fitBg microtask
-      // storm that FREEZES the main thread (hit + fixed in build14 â€” no console error, just a
+      // ⚠ every style write below is DIFF-GUARDED and the observer only refits on SRC changes:
+      // fitBg's own style writes re-trigger a 'style' MutationObserver → sync → fitBg microtask
+      // storm that FREEZES the main thread (hit + fixed in build14 — no console error, just a
       // dead renderer). Never call fitBg from a style-attribute mutation.
       var setIf = function (prop, val) {
         if (vMain.style.getPropertyValue(prop) !== val) {
@@ -4383,12 +4421,12 @@
           var contain = Math.min(CW / VW, CH / VH), cover = Math.max(CW / VW, CH / VH);
           var s = Math.min(cover / contain, BG_BLEED_CAP);
           setIf('--rr-bgfit', s.toFixed(4));
-          if (s >= (cover / contain) - 0.001) {   // true cover â†’ full bleed, no mask at all
+          if (s >= (cover / contain) - 0.001) {   // true cover → full bleed, no mask at all
             setIf('-webkit-mask-image', ''); setIf('mask-image', '');
             setIf('-webkit-mask-composite', ''); setIf('mask-composite', '');
             return;
           }
-          // capped: feather the CONTENT box edges (element space, pre-transform â€” scales with it)
+          // capped: feather the CONTENT box edges (element space, pre-transform — scales with it)
           var w0 = VW * contain, h0 = VH * contain;
           var x0 = (CW - w0) / 2, y0 = (CH - h0) * 0.42;   // matches object-position 50% 42%
           var f = Math.max(24, Math.min(w0, h0) * BG_FEATHER);
@@ -4406,7 +4444,7 @@
           var s = vMain.getAttribute('src') || '';
           if (vFill.getAttribute('src') !== s) { vFill.setAttribute('src', s); vFill.load(); vFill.style.display = ''; }
           vFill.style.visibility = vMain.style.visibility || '';
-          if (refit) fitBg();   // ONLY on src swaps (level apply / intense combo) â€” never on style
+          if (refit) fitBg();   // ONLY on src swaps (level apply / intense combo) — never on style
           var pr = vFill.play(); if (pr && pr.catch) pr.catch(function () {});
         } catch (e) {}
       };
@@ -4417,11 +4455,11 @@
       }).observe(vMain, { attributes: true, attributeFilter: ['src', 'style'] });
       vMain.addEventListener('loadedmetadata', fitBg);
       vMain.addEventListener('playing', fitBg);      // build14: belt-and-suspenders (cached video can
-      window.addEventListener('resize', fitBg);      // beat the listener attach â€” readyState race)
+      window.addEventListener('resize', fitBg);      // beat the listener attach — readyState race)
       vFill.onerror = function () { try { vFill.style.display = 'none'; } catch (e) {} };
       try { window.__rrFitBg = fitBg; } catch (e) {}   // dev breadcrumb (strip at freeze)
       sync(true);
-      if (vMain.readyState >= 1) fitBg();            // metadata already in â†’ fit now (attach race)
+      if (vMain.readyState >= 1) fitBg();            // metadata already in → fit now (attach race)
     })();
   } catch (e) {}
   function applyLevelTheme(L) {
@@ -4440,9 +4478,9 @@
       g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme');
       try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
     }
-    // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin â†’ equipped/default.
+    // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin → equipped/default.
     try { if (window.RhythmGame && window.RhythmGame.setGuitarSkin) window.RhythmGame.setGuitarSkin(L && L.guitarSkin ? L.guitarSkin : null); } catch (e) {}
-    // build8: per-level GEM TINT â€” recolor the note marbles to the level accent (e.g. Skully violet).
+    // build8: per-level GEM TINT — recolor the note marbles to the level accent (e.g. Skully violet).
     try {
       if (window.RhythmGame && window.RhythmGame.setLevelGemTint) {
         var _gemHex = (L && L.theme && LV_THEMES[L.theme]) ? ({ crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff', bone:'#ffac5e', pink:'#ff5fa2' })[L.theme] : null;
@@ -4492,8 +4530,8 @@
     card.style.setProperty('--fill', v.toFixed(3));
     card.classList.toggle('charged', v >= 0.55);
   }
-  // build9: cards HUG THE GUITAR NECK â€” anchored off the live lane frame (page coords), re-asserted on
-  // resize + a slow tick (the canvas resizes between loadingâ†’game; lanes are otherwise invariant).
+  // build9: cards HUG THE GUITAR NECK — anchored off the live lane frame (page coords), re-asserted on
+  // resize + a slow tick (the canvas resizes between loading→game; lanes are otherwise invariant).
   var _rcPosT = 0;
   function placeReactiveCards() {
     try {
@@ -4501,7 +4539,7 @@
       var f = (window.RhythmGame && window.RhythmGame.getLaneFrame) ? window.RhythmGame.getLaneFrame() : null;
       if (!f) return;
       var d = $('rc-death'), w = $('rc-world');
-      // the VISIBLE arm: in gh cover-fit the nut row sits above the screen â€” clamp the band to the
+      // the VISIBLE arm: in gh cover-fit the nut row sits above the screen — clamp the band to the
       // canvas top so the cards flank what the player actually sees of the neck.
       var neckTopPage = Math.max(8, f.y + Math.max(0, f.farY));
       var neckBotPage = f.y + f.nearY;
@@ -4524,7 +4562,7 @@
     } catch (e) {}
   }
   try { window.addEventListener('resize', placeReactiveCards); } catch (e) {}
-  // ---- PER-LEVEL MECHANIC overlay (Bone Daddy booty-shake Â· Melody cat-paw). Self-owned DOM over the
+  // ---- PER-LEVEL MECHANIC overlay (Bone Daddy booty-shake · Melody cat-paw). Self-owned DOM over the
   // playfield, driven by the RhythmLevelFx hit/combo signals. Pure visual; reduceMotion kills the motion. ----
   var _mechEl = null;
   function hideMechanic() { if (_mechEl) { try { _mechEl.remove(); } catch (e) {} _mechEl = null; } }
@@ -4539,7 +4577,7 @@
     if (m.type === 'booty') el.innerHTML = '<div class="rrm-booty"' + artCss + '></div>';
     else if (m.type === 'paw') el.innerHTML = '<div class="rrm-paw"' + artCss + '></div>';
     else if (m.type === 'skull') {
-      // build21: Bone Daddy's two-piece skull rig â€” cranium + jaw layers + an eye-flare overlay.
+      // build21: Bone Daddy's two-piece skull rig — cranium + jaw layers + an eye-flare overlay.
       // Self-heals: missing art = empty backgrounds (invisible), zero errors.
       var jawCss = m.jaw ? (" style=\"background-image:url('" + String(m.jaw).replace(/['\\]/g, '') + "')\"") : '';
       el.innerHTML = '<div class="rrm-skull">' +
@@ -4566,7 +4604,7 @@
     var hasCards = !!(L && L.reactiveCards);
     var mech = (L && L.mechanic) ? buildMechanic(L.mechanic) : null;
     if (!hasCards && !mech) { hideReactive(); return; }
-    var deathFill = 0, worldFill = 0;   // fate meters â€” closures persist across the run
+    var deathFill = 0, worldFill = 0;   // fate meters — closures persist across the run
     if (hasCards) {
       var el = ensureReactive();
       var d = $('rc-death'), w = $('rc-world');
@@ -4575,12 +4613,12 @@
       el.classList.add('show');
       setFill(d, 0); setFill(w, 0);
       // build9: pin the cards beside the guitar neck now + keep them pinned (canvas resizes on
-      // loadingâ†’game; a slow tick is cheap and bullet-proof vs missed layout events)
+      // loading→game; a slow tick is cheap and bullet-proof vs missed layout events)
       placeReactiveCards();
       if (_rcPosT) clearInterval(_rcPosT);
       _rcPosT = setInterval(placeReactiveCards, 600);
     } else if (_rcEl) { _rcEl.classList.remove('show'); }
-    var _intenseSrc = L.intenseVideo || null;   // build8: a more-intense backdrop for combo spikes (Skully). null â†’ no swap.
+    var _intenseSrc = L.intenseVideo || null;   // build8: a more-intense backdrop for combo spikes (Skully). null → no swap.
     var _intenseOn = false, _intenseT = null;
     function _intenseRevert() {
       if (!_intenseOn) return; _intenseOn = false;
@@ -4616,7 +4654,7 @@
         if (hasCards) { deathFill = Math.min(1, deathFill + 0.07); worldFill = Math.max(0, worldFill - 0.03); setFill($('rc-death'), deathFill); setFill($('rc-world'), worldFill); flashCard($('rc-death')); }
         if (mech && mech.onMiss) { try { mech.onMiss(lane); } catch (e) {} }
       },
-      // combo milestone / overdrive â†’ kick the intense backdrop (Skully) + a big mechanic beat.
+      // combo milestone / overdrive → kick the intense backdrop (Skully) + a big mechanic beat.
       onCombo: function (combo, big) { _intenseKick(); if (mech && mech.onCombo) { try { mech.onCombo(combo, big); } catch (e) {} } }
     };
   }
@@ -4659,9 +4697,9 @@
   var LIVE = DEV || CAMPAIGN_PUBLIC;
   var DEV_UNLOCK_ALL = DEV;   // in dev (?dev=1) every level is unlocked so we can jump straight to any one to test
   var TIERS = [
-    { n: 'TIER I Â· WARM-UP',    d: 'easy'   },
-    { n: 'TIER II Â· PULSE',     d: 'medium' },
-    { n: 'TIER III Â· FRACTURE', d: 'hard'   }
+    { n: 'TIER I · WARM-UP',    d: 'easy'   },
+    { n: 'TIER II · PULSE',     d: 'medium' },
+    { n: 'TIER III · FRACTURE', d: 'hard'   }
   ];
   var PER = 6, TOTAL = TIERS.length * PER;
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
@@ -4700,10 +4738,10 @@
     var unlocked = LIVE && (idx === 0 || DEV_UNLOCK_ALL || starsFor(tracks[idx - 1], tierOf(idx - 1).d) >= 1);
     return { stars: st, unlocked: unlocked };
   }
-  function starRow(n) { var h = ''; for (var i = 0; i < 3; i++) h += '<span class="lv-star' + (i < n ? ' on' : '') + '">â˜…</span>'; return '<div class="lv-stars">' + h + '</div>'; }
-  // deterministic warm cover tone per slot (no artwork â†’ branded initial, not a placeholder glyph)
+  function starRow(n) { var h = ''; for (var i = 0; i < 3; i++) h += '<span class="lv-star' + (i < n ? ' on' : '') + '">★</span>'; return '<div class="lv-stars">' + h + '</div>'; }
+  // deterministic warm cover tone per slot (no artwork → branded initial, not a placeholder glyph)
   var LV_TONES = [['#2a0a10','#120407'],['#33120a','#160806'],['#2d0b14','#10060a'],['#3a1208','#180a06'],['#250a12','#0f0608'],['#321008','#170805']];
-  function initialOf(t) { var s = (t && (t.title || '')).trim(); return esc(s ? s.charAt(0).toUpperCase() : 'â™ª'); }
+  function initialOf(t) { var s = (t && (t.title || '')).trim(); return esc(s ? s.charAt(0).toUpperCase() : '♪'); }
   function artHTML(t, idx) {
     if (t && t.artwork_url) return '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + initialOf(t) + '</span>\'">';
     return '<span class="lv-initial">' + initialOf(t) + '</span>';
@@ -4713,13 +4751,13 @@
   function build() {
     var body = $('levels-body'); if (!body) return;
     var tracks = levelTracks();
-    if (!tracks.length) { body.innerHTML = '<div class="levels-empty">Levels load from your library â€” give it a moment, then reopen.</div>'; return; }
+    if (!tracks.length) { body.innerHTML = '<div class="levels-empty">Levels load from your library — give it a moment, then reopen.</div>'; return; }
     var totalStars = 0; for (var a = 0; a < tracks.length; a++) totalStars += lvState(a, tracks).stars;
     var possible = TOTAL * 3, nextIdx = -1;
     for (var b = 0; b < tracks.length; b++) { var s0 = lvState(b, tracks); if (s0.unlocked && s0.stars === 0) { nextIdx = b; break; } }
     var html = '<div class="lv-progress"><div class="lv-prog-bar"><span style="width:' + Math.round(totalStars / possible * 100) + '%"></span></div>'
-      + '<div class="lv-prog-txt">â˜… ' + totalStars + ' / ' + possible + (DEV ? ' Â· DEV' : '') + '</div>'
-      + (DEV ? '<button class="lv-devbtn" id="lv-unlockall">' + (DEV_UNLOCK_ALL ? 'â†© progression' : 'âš¿ unlock all') + '</button>' : '') + '</div>';
+      + '<div class="lv-prog-txt">★ ' + totalStars + ' / ' + possible + (DEV ? ' · DEV' : '') + '</div>'
+      + (DEV ? '<button class="lv-devbtn" id="lv-unlockall">' + (DEV_UNLOCK_ALL ? '↩ progression' : '⚿ unlock all') + '</button>' : '') + '</div>';
     // hero header band: ring + rank + overall pct
     var hero = $('levels-hero');
     if (hero) {
@@ -4732,16 +4770,16 @@
         + '<div style="position:absolute;inset:6px;border-radius:50%;background:#0a0706;display:grid;place-items:center;text-align:center;">'
         + '<div class="lv-ring-num">' + totalStars + '</div><div class="lv-ring-of">/ ' + possible + '</div></div></div>'
         + '<div class="lv-hero-text"><div class="lv-hero-rank">' + rank + '</div>'
-        + '<div class="lv-hero-sub">' + (LIVE ? 'Campaign progress' : 'Preview â€” unlocks at release') + ' Â· <span class="lv-hero-pct">' + pct + '%</span> complete</div></div>';
+        + '<div class="lv-hero-sub">' + (LIVE ? 'Campaign progress' : 'Preview — unlocks at release') + ' · <span class="lv-hero-pct">' + pct + '%</span> complete</div></div>';
     }
-    if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release â€” free-play any song from the library anytime</div>';
+    if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release — free-play any song from the library anytime</div>';
     var flatAuthored = []; for (var fi = 0; fi < TIERS.length; fi++) { var at = authoredByTier(TIERS[fi].d); for (var aj = 0; aj < at.length; aj++) flatAuthored.push(at[aj]); }
     var ready = rcReady();
     for (var ti = 0; ti < TIERS.length; ti++) {
       var tier = TIERS[ti];
       var authoredHere = authoredByTier(tier.d);
       var ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars;   // stride star tally (unchanged display)
-      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-bar"><span style="width:' + Math.round(ts / (PER * 3) * 100) + '%"></span></span><span class="t-stars">â˜… ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
+      html += '<div class="lv-tier"><div class="lv-tier-head"><span class="t-n">' + tier.n + '</span><span class="t-d ' + tier.d + '">' + tier.d + '</span><span class="t-line"></span><span class="t-bar"><span style="width:' + Math.round(ts / (PER * 3) * 100) + '%"></span></span><span class="t-stars">★ ' + ts + '/' + (PER * 3) + '</span></div><div class="lv-grid">';
       // ---- authored cards (rendered first) ----
       for (var ai = 0; ai < authoredHere.length; ai++) {
         var L = authoredHere[ai], lt = levelTrack(L, ready);
@@ -4755,7 +4793,7 @@
         var art = L.cover
           ? ('<img src="' + esc(L.cover) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + esc((L.title || 'L').charAt(0).toUpperCase()) + '</span>\'">')
           : artHTML(lt, ai);
-        var corner = !unlocked ? '<span class="lv-lock">ðŸ”’</span>' : '';
+        var corner = !unlocked ? '<span class="lv-lock">🔒</span>' : '';
         var modBits = '';
         if (LEVELDESIGN_MODS && L.mods) { if (L.mods.speed && L.mods.speed !== 1) modBits += '<span class="lv-mod">' + (L.mods.speed > 1 ? 'fast' : 'slow') + '</span>'; if (L.mods.mirror) modBits += '<span class="lv-mod">mirror</span>'; if (L.mods.failOn) modBits += '<span class="lv-mod">no-fail-off</span>'; }
         var cls = 'lv-card authored' + (L.boss ? ' boss' : '') + (unlocked ? '' : ' locked') + (stN > 0 ? ' cleared' : '');
@@ -4775,8 +4813,8 @@
         var idx = ti * PER + i, t = tracks[idx], num = idx + 1, st = lvState(idx, tracks);
         var hasArt2 = !!(t && t.artwork_url);
         var art2 = artHTML(t, idx);
-        var corner2 = !st.unlocked ? '<span class="lv-lock">ðŸ”’</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
-        var nextGlyph = (st.unlocked && idx === nextIdx) ? '<span class="lv-next-glyph" aria-hidden="true">â–¶</span>' : '';
+        var corner2 = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
+        var nextGlyph = (st.unlocked && idx === nextIdx) ? '<span class="lv-next-glyph" aria-hidden="true">▶</span>' : '';
         var cls2 = 'lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + (st.stars > 0 ? ' cleared' : '');
         html += '<button class="' + cls2 + '" data-idx="' + idx + '">' +
           '<div class="lv-art' + (hasArt2 ? '' : ' has-initial') + '" style="' + (hasArt2 ? '' : toneStyle(idx)) + '">' + art2 + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner2 + nextGlyph + '</div>' +
@@ -4787,7 +4825,7 @@
     }
     body.innerHTML = html;
     var ua = $('lv-unlockall'); if (ua) ua.addEventListener('click', function () { DEV_UNLOCK_ALL = !DEV_UNLOCK_ALL; build(); });
-    // arrow-key roving focus: â† â†’ â†‘ â†“ move between cards, Enter/Space activates (cards are <button>)
+    // arrow-key roving focus: ← → ↑ ↓ move between cards, Enter/Space activates (cards are <button>)
     body.onkeydown = function (e) {
       if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].indexOf(e.key) < 0) return;
       var list = Array.prototype.slice.call(body.querySelectorAll('.lv-card'));
@@ -4812,7 +4850,7 @@
           var flat = []; for (var fk = 0; fk < TIERS.length; fk++) { var atk = authoredByTier(TIERS[fk].d); for (var ak = 0; ak < atk.length; ak++) flat.push(atk[ak]); }
           if (!authoredUnlocked(L, readyForClick, flat, flat.indexOf(L))) {
             var paidLocked = L.unlock && L.unlock.entitlement && !ownsEntitlement(L.unlock.entitlement) && !DEV;
-            try { window.RhythmGame.showToast(paidLocked ? 'Unlock this level in the Store' : (LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release â€” free-play any song anytime')); } catch (e) {}
+            try { window.RhythmGame.showToast(paidLocked ? 'Unlock this level in the Store' : (LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release — free-play any song anytime')); } catch (e) {}
             return;
           }
           launchLevel(L, readyForClick);
@@ -4821,7 +4859,7 @@
         // ---- stride card branch (UNCHANGED) ----
         var idx = +this.getAttribute('data-idx'), t = tracks[idx]; if (!t) return;
         if (!lvState(idx, tracks).unlocked) {
-          try { window.RhythmGame.showToast(LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release â€” free-play any song anytime'); } catch (e) {}
+          try { window.RhythmGame.showToast(LIVE ? 'Clear the previous level to unlock this one' : 'Campaign unlocks at release — free-play any song anytime'); } catch (e) {}
           return;
         }
         close();
@@ -4835,7 +4873,7 @@
   var ob = $('levels-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('levels-close'); if (cb) cb.addEventListener('click', close);
   // public hooks ------------------------------------------------------------
-  // RhythmLibrary.openLevels() â€” open the picker programmatically (e.g. results "NEXT LEVEL")
+  // RhythmLibrary.openLevels() — open the picker programmatically (e.g. results "NEXT LEVEL")
   try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openLevels = open; } catch (e) {}
   // ---- Level-DESIGN public hooks (additive) ----
   try {
@@ -4866,7 +4904,7 @@
         id: L.id, name: L.title, tier: L.tier, theme: L.theme || 'crimson',
         accent: ENV_ACCENT_HEX[L.theme] || '#ff1f2e',
         cover: L.cover || '', bgArt: L.bgArt || '', bgVideo: L.bgVideo || '',
-        guitarSkin: L.guitarSkin || '',                 // build8: carry per-level guitar onto the env path (was dropped â†’ skin never fired)
+        guitarSkin: L.guitarSkin || '',                 // build8: carry per-level guitar onto the env path (was dropped → skin never fired)
         intenseVideo: L.intenseVideo || '',             // build8: carry the combo-spike backdrop onto the env path
         reactiveCards: L.reactiveCards || null, mechanic: L.mechanic || null, boss: !!L.boss,
         paid: !!(L.unlock && L.unlock.entitlement)
@@ -4927,7 +4965,7 @@
       if (_activeLevel) { e.stopImmediatePropagation(); window.RhythmLibrary.retryLevel(); }
     }, true);
   })();
-  // RhythmCatalog.campaignProgress() â€” read campaign totals (for HUD / results badges)
+  // RhythmCatalog.campaignProgress() — read campaign totals (for HUD / results badges)
   try {
     if (window.RhythmCatalog) window.RhythmCatalog.campaignProgress = function () {
       var tracks = levelTracks(); if (!tracks.length) return { stars: 0, possible: TOTAL * 3, pct: 0, nextIdx: -1, live: LIVE };
@@ -4944,7 +4982,7 @@
 })();
 </script>
 
-<!-- LEADERBOARD â€” global + per-song boards (reads RhythmCatalog.fetchLeaderboard / getCareer / getBest) -->
+<!-- LEADERBOARD — global + per-song boards (reads RhythmCatalog.fetchLeaderboard / getCareer / getBest) -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -4967,10 +5005,10 @@
     return rows.map(function (r) {
       var mine = youName && (r.display_name || '') === youName;
       return '<div class="lb-row' + (mine || r.you ? ' you' : '') + '">' +
-        '<span class="lb-rank">#' + (r.rank || 'â€“') + '</span>' +
+        '<span class="lb-rank">#' + (r.rank || '–') + '</span>' +
         '<span class="lb-name">' + esc(r.display_name || 'anon') + '</span>' +
         '<span class="lb-score">' + fmt(r.score) + '</span>' +
-        '<span class="lb-acc">' + (r.accuracy != null ? (r.accuracy * 100).toFixed(1) + '%' : 'â€”') + '</span>' +
+        '<span class="lb-acc">' + (r.accuracy != null ? (r.accuracy * 100).toFixed(1) + '%' : '—') + '</span>' +
       '</div>';
     }).join('');
   }
@@ -4979,11 +5017,11 @@
   // ---- GLOBAL board: live aggregate if backend offers it, else local career row ----
   function renderGlobal() {
     var board = $('lbd-board'), empty = $('lbd-empty');
-    var head = '<div class="lb-head">All-time Â· Top players</div>';
+    var head = '<div class="lb-head">All-time · Top players</div>';
     var c = (RC() && RC().getCareer) ? RC().getCareer() : null;
     var fetchG = RC() && RC().fetchGlobalLeaderboard;
     if (fetchG) {
-      board.innerHTML = head + '<div class="lbd-empty">Loadingâ€¦</div>'; empty.hidden = true;
+      board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
       Promise.resolve(fetchG({ limit: 20 })).then(function (res) {
         if (tab !== 'global') return;
         if (res && res.rows && res.rows.length) {
@@ -5010,7 +5048,7 @@
   function setPick(t) {
     pickTrack = t || null;
     var art = $('lbd-pick-art'), tt = $('lbd-pick-t'), aa = $('lbd-pick-a');
-    if (!t) { art.textContent = 'â™ª'; tt.textContent = 'Choose a track'; aa.textContent = 'tap to pick'; return; }
+    if (!t) { art.textContent = '♪'; tt.textContent = 'Choose a track'; aa.textContent = 'tap to pick'; return; }
     if (t.artwork_url) { art.innerHTML = '<img src="' + esc(t.artwork_url) + '" alt="" onerror="this.parentNode.textContent=\'' + esc(initial(t.title)) + '\'">'; }
     else { art.textContent = initial(t.title); }
     tt.textContent = t.title || 'Untitled';
@@ -5024,10 +5062,10 @@
       empty.textContent = 'Pick a track to see its leaderboard.'; empty.hidden = false;
       return;
     }
-    var head = '<div class="lb-head">' + esc(pickTrack.title || '') + (diff ? ' Â· ' + diff : '') + '</div>';
+    var head = '<div class="lb-head">' + esc(pickTrack.title || '') + (diff ? ' · ' + diff : '') + '</div>';
     var fetchL = RC() && RC().fetchLeaderboard;
     if (fetchL) {
-      board.innerHTML = head + '<div class="lbd-empty">Loadingâ€¦</div>'; empty.hidden = true;
+      board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
       Promise.resolve(fetchL(pickTrack.id, { difficulty: diff, limit: 20 })).then(function (res) {
         if (tab !== 'song') return;
         if (res && res.rows && res.rows.length) {
@@ -5044,7 +5082,7 @@
     var board = $('lbd-board'), empty = $('lbd-empty');
     banner(DORMANT);
     var best = (RC() && RC().getBest) ? RC().getBest(pickTrack.id) : null;
-    if (!best) { board.innerHTML = head; empty.textContent = 'No score on this track yet â€” play it to set the pace.'; empty.hidden = false; return; }
+    if (!best) { board.innerHTML = head; empty.textContent = 'No score on this track yet — play it to set the pace.'; empty.hidden = false; return; }
     empty.hidden = true;
     var rows = [{ rank: 1, display_name: 'You', score: best.score, accuracy: best.accuracy, you: true }];
     board.innerHTML = head + rowsHtml(rows, null);
@@ -5119,7 +5157,7 @@
 })();
 </script>
 
-<!-- STORE â€” Sparks shop overlay (reads RhythmCatalog.getStore / getEntitlements / spendSparks) -->
+<!-- STORE — Sparks shop overlay (reads RhythmCatalog.getStore / getEntitlements / spendSparks) -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -5133,7 +5171,7 @@
   var SITE_SPARKS = 'https://reactivvibeai.com/live?sparks=open';
 
   // ---- Client-side item-art fallback: used ONLY when the backend sends no meta.art_url. Drop a 1:1
-  // jpg at assets/store/<id>.jpg and it appears (missing â†’ initial-letter tile via the <img onerror>). ----
+  // jpg at assets/store/<id>.jpg and it appears (missing → initial-letter tile via the <img onerror>). ----
   var STORE_ART = {
     // skins (covers on disk: assets/store/skin-*.jpg)
     violet_gothic: 'assets/store/skin-violet-gothic.jpg',
@@ -5149,7 +5187,7 @@
     // legacy (back-compat if backend still sends it)
     starter_pack:  'assets/store/starter_pack.jpg'
   };
-  // SKIN item_id â†’ the in-game guitar PNG to equip (on disk: assets/guitars/*.png). Backend may also send meta.skin_url.
+  // SKIN item_id → the in-game guitar PNG to equip (on disk: assets/guitars/*.png). Backend may also send meta.skin_url.
   var SKIN_GUITAR = {
     violet_gothic: 'assets/guitars/violet-gothic-5.png',   // build16: the 5-string re-render
     crimson_chrome:'assets/guitars/crimson-chrome.png',
@@ -5205,10 +5243,10 @@
   function blurb(it) {
     if (it.meta && it.meta.description) return String(it.meta.description);
     var t = String(it.item_type || '').toLowerCase();
-    if (t === 'skin') return 'Guitar skin â€” equip to play';
-    if (t === 'level' || t === 'boss') return 'Premium level â€” unlocks in Levels';
+    if (t === 'skin') return 'Guitar skin — equip to play';
+    if (t === 'level' || t === 'boss') return 'Premium level — unlocks in Levels';
     if (t === 'theme' || t === 'addon') return 'Visual theme';
-    if (t === 'pack') return 'Track pack â€” unlocks on link';
+    if (t === 'pack') return 'Track pack — unlocks on link';
     return '';
   }
   function ownKey(it) { return String(it.item_type) + ':' + String(it.item_id); }
@@ -5220,7 +5258,7 @@
   }
   function setBalance(n) {
     balance = n | 0;
-    var v = $('store-bal-val'); if (v) v.textContent = signedIn ? fmt(balance) : 'â€”';
+    var v = $('store-bal-val'); if (v) v.textContent = signedIn ? fmt(balance) : '—';
     var bal = $('store-bal'); if (bal) bal.setAttribute('data-state', signedIn ? 'on' : 'guest');
     try { if (window.__rrSparksRefresh) window.__rrSparksRefresh(); } catch (e) {}
   }
@@ -5296,7 +5334,7 @@
   async function buy(btn) {
     if (busy) return; busy = true;
     var type = btn.getAttribute('data-type'), id = btn.getAttribute('data-id');
-    btn.classList.add('is-busy'); btn.setAttribute('disabled', ''); var label = btn.textContent; btn.textContent = 'â€¦';
+    btn.classList.add('is-busy'); btn.setAttribute('disabled', ''); var label = btn.textContent; btn.textContent = '…';
     var C = RC();
     if (!C || !C.spendSparks) { busy = false; btn.classList.remove('is-busy'); btn.removeAttribute('disabled'); btn.textContent = label; toast('Store unavailable'); return; }
     var res = await C.spendSparks(type, id);
@@ -5314,10 +5352,10 @@
     }
     btn.classList.remove('is-busy'); btn.removeAttribute('disabled'); btn.textContent = label;
     var err = res && res.error;
-    if (err === 'insufficient_sparks') { toGetMore(btn); toast('Not enough Sparks â€” top up to unlock'); }
-    else if (err === 'price_mismatch') { toast('Prices updated â€” refreshing'); load(); }
+    if (err === 'insufficient_sparks') { toGetMore(btn); toast('Not enough Sparks — top up to unlock'); }
+    else if (err === 'price_mismatch') { toast('Prices updated — refreshing'); load(); }
     else if (err === 'not-authed') { toast('Sign in to spend Sparks'); openSite('https://reactivvibeai.com'); }
-    else { toast('Purchase failed â€” try again'); }
+    else { toast('Purchase failed — try again'); }
   }
 
   async function refreshEntitlements() {
@@ -5332,7 +5370,7 @@
 
   async function load() {
     var grid = $('store-grid'), empty = $('store-empty');
-    grid.innerHTML = '<div class="store-empty" style="grid-column:1/-1">Loading shopâ€¦</div>'; empty.hidden = true;
+    grid.innerHTML = '<div class="store-empty" style="grid-column:1/-1">Loading shop…</div>'; empty.hidden = true;
     var C = RC();
     if (!C || !C.getStore) { items = []; signedIn = false; setBalance(0); render(); return; }
     try {
@@ -5377,7 +5415,7 @@
 })();
 </script>
 
-<!-- Sparks + identity shell â€” reads RhythmCatalog.getUser / getSparks / onAuthChange (UI only, no spend) -->
+<!-- Sparks + identity shell — reads RhythmCatalog.getUser / getSparks / onAuthChange (UI only, no spend) -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -5398,7 +5436,7 @@
     if (nameEl) nameEl.textContent = '';
     if (avatar) avatar.innerHTML = '';
     chip.setAttribute('data-state', 'guest');
-    if (val) val.textContent = 'â€”';
+    if (val) val.textContent = '—';
   }
 
   function setSignedIn(user, sparks) {
@@ -5501,7 +5539,7 @@
     }
     function center() { return { x: cv.width * 0.5, y: cv.height * 0.44 }; }
 
-    // crimsonâ†’emberâ†’chrome palette, picked by spark "heat"
+    // crimson→ember→chrome palette, picked by spark "heat"
     function sparkColor(heat, a) {
       if (heat > 0.86) return 'rgba(218,215,210,' + a + ')';   // chrome-white core flecks
       if (heat > 0.6)  return 'rgba(255,122,74,'  + a + ')';   // ember #ff7a4a
@@ -5553,7 +5591,7 @@
       cx.clearRect(0, 0, cv.width, cv.height);
       cx.globalCompositeOperation = 'lighter';
 
-      // ignition core: bright at tâ‰ˆ0, blooms then fades by ~1.2s
+      // ignition core: bright at t≈0, blooms then fades by ~1.2s
       var ci = t < 1.3 ? Math.max(0, 1 - Math.abs(t - 0.35) / 0.95) : 0;
       if (ci > 0) {
         var cr = base * (0.06 + 0.30 * Math.min(1, t / 0.5));
@@ -5578,7 +5616,7 @@
         cx.beginPath(); cx.arc(c.x, c.y, rad * 0.93, 0, 6.2832); cx.stroke();
       }
 
-      // radial spark burst â€” trails outward, drifts up into the flame field as it ages
+      // radial spark burst — trails outward, drifts up into the flame field as it ages
       for (var i = sparks.length - 1; i >= 0; i--) {
         var p = sparks[i]; p.age += dt;
         if (p.age >= p.life) { sparks.splice(i, 1); continue; }
@@ -5620,7 +5658,7 @@
     return { stop: stop, replay: replay, isReducedMotion: reduce };
   })();
   window.RhythmIntro = RhythmIntro;
-  // dev flag: ?intro=replay re-runs the ignition (test-only â€” strip with other ?flags before launch)
+  // dev flag: ?intro=replay re-runs the ignition (test-only — strip with other ?flags before launch)
   try { if (/[?&]intro=replay/.test(location.search)) RhythmIntro.replay(); } catch (e) {}
 
   // animated crimson flames rising behind the mascot
@@ -5695,7 +5733,7 @@
     dismissed = true;
     flamesRunning = false;           // stop the flame loop once we leave the start screen
     try { RhythmIntro && RhythmIntro.stop(); } catch (e) {}   // halt the supernova ignition too
-    // build10: the IGNITION moment â€” clear the title ambience, slam a shockwave+explosion over the
+    // build10: the IGNITION moment — clear the title ambience, slam a shockwave+explosion over the
     // lockup, and hit the FX pack's bass (the _src clip audio). This is a user gesture by definition.
     try {
       if (window.RhythmUiFx) {
@@ -5721,9 +5759,9 @@
   }
   // tap / click anywhere on the start screen (lets game.js audio-unlock fire too)
   start.addEventListener('pointerdown', enter);
-  // build9: console-style key start â€” ENTER / SPACE begin. CAPTURE phase + stopImmediatePropagation so
+  // build9: console-style key start — ENTER / SPACE begin. CAPTURE phase + stopImmediatePropagation so
   // the engine's menu-state Enter shortcut (play-btn) can't also fire while the title screen is up
-  // (including during the 600ms leave transition â€” keys are swallowed, not re-entered).
+  // (including during the 600ms leave transition — keys are swallowed, not re-entered).
   window.addEventListener('keydown', function (e) {
     if (!start.classList.contains('active')) return;
     if (e.key === 'Enter' || e.code === 'Space' || e.key === ' ') {
@@ -5752,7 +5790,7 @@
     setTimeout(syncIcon, 300);
   })();
 
-  // Enter / Space on desktop â€” capture + stop so it doesn't reach the game's menu handler
+  // Enter / Space on desktop — capture + stop so it doesn't reach the game's menu handler
   window.addEventListener('keydown', function (e) {
     if (!dismissed && start.classList.contains('active') && (e.key === 'Enter' || e.code === 'Space')) {
       e.preventDefault(); e.stopImmediatePropagation();
@@ -5761,7 +5799,7 @@
   }, true);
 })();
 </script>
-<!-- ENVIRONMENT PICKER controller (build6) â€” choose a LEVEL/ENVIRONMENT for the picked song -->
+<!-- ENVIRONMENT PICKER controller (build6) — choose a LEVEL/ENVIRONMENT for the picked song -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -5801,13 +5839,13 @@
     if (e.accent) b.style.setProperty('--ec', e.accent);
     var artBg = e.cover ? ("background-image:url('" + e.cover.replace(/'/g, '') + "');") : '';
     var ini = (e.name || '?').trim().charAt(0).toUpperCase();
-    var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS Â· ' : '') + (e.theme || '').toUpperCase());
+    var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
     b.innerHTML =
       '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + ini + '</span>') +
-        (e.locked ? '<span class="ec-lock">ðŸ”’</span>' : '') + '</div>' +
+        (e.locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
       '<div class="ec-body"><div class="ec-name">' + escAttr(e.name) + '</div><div class="ec-tag">' + escAttr(tag) + '</div></div>';
     b.addEventListener('click', function () {
-      if (e.locked) { setHint('Unlock â€œ' + e.name + 'â€ in the Store, or play it in the Campaign.'); return; }
+      if (e.locked) { setHint('Unlock "' + e.name + '" in the Store, or play it in the Campaign.'); return; }
       select(e.id);
     });
     return b;
@@ -5832,9 +5870,9 @@
     var L = window.RhythmLevels, e = (L && L.envById) ? L.envById(id) : null;
     var sheet = $('song-sheet');
     if (sheet) sheet.style.setProperty('--sheet-accent', (e && e.accent) || '#ff1f2e');
-    if (e && e.isRandom) setHint('Surprise me â€” a random stage every play.');
-    else if (e && !e.isDefault) setHint('Play this song in the â€œ' + e.name + 'â€ environment' + (e.reactiveCards ? ' (reactive cards).' : (e.mechanic ? ' (live mechanic).' : '.')));
-    else setHint('Standard arena â€” no level theme.');
+    if (e && e.isRandom) setHint('Surprise me — a random stage every play.');
+    else if (e && !e.isDefault) setHint('Play this song in the "' + e.name + '" environment' + (e.reactiveCards ? ' (reactive cards).' : (e.mechanic ? ' (live mechanic).' : '.')));
+    else setHint('Standard arena — no level theme.');
     if (chosen && chosen.scrollIntoView) { try { chosen.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (x) {} }
   }
   var sheet = $('song-sheet');
@@ -5846,9 +5884,9 @@
   try { window.RhythmEnvPicker = { rebuild: rebuild, select: select, selected: function () { return selectedEnvId; } }; } catch (e) {}
 })();
 </script>
-<!-- build10: UI FX LAYER â€” the 31-effect flipbook pack (+ the _src clips' BASS AUDIO) on the MENU
+<!-- build10: UI FX LAYER — the 31-effect flipbook pack (+ the _src clips' BASS AUDIO) on the MENU
      layer: title ambience, button-press bursts, the title-ENTER impact. Pure presentation; gameplay
-     FX stay on the in-game layer. reduceMotion â†’ inert visuals; mute/sfx settings gate the audio. -->
+     FX stay on the in-game layer. reduceMotion → inert visuals; mute/sfx settings gate the audio. -->
 <script>
 (function () {
   if (!window.FxPlayer) return;
@@ -5883,7 +5921,7 @@
     if (cv && Math.abs(cv.width - innerWidth * dpr) > 2) size();   // lazy re-size (boot-order/viewport drift)
     var meta = p.manifest[name] || {};
     var h = p.play(name, x, y, { scale: (meta.scale != null ? meta.scale : 1) * (scale || 1) * Math.min(1.7, Math.min(innerWidth, innerHeight) / 620), alpha: alpha != null ? alpha : 1, loop: !!lp });
-    // build12: button presses SNAP â€” start one-shots at their measured peak frame (table shared from game.js)
+    // build12: button presses SNAP — start one-shots at their measured peak frame (table shared from game.js)
     try {
       var tim = window.RhythmFxTim && window.RhythmFxTim[name];
       if (tim && !lp && !meta.loop && tim.pk > 1) {
@@ -5955,7 +5993,7 @@
   }, true);
 })();
 </script>
-<!-- MAIN MENU HUB router â€” fronts the existing screens with a guided centered console + back-nav -->
+<!-- MAIN MENU HUB router — fronts the existing screens with a guided centered console + back-nav -->
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -5998,7 +6036,7 @@
     if (overlayOpen) return;
     if (menu.classList.contains('active') || (mp && mp.classList.contains('active'))) { showHub(); }
   });
-  // build8: first-run RYO intro â€” wrap showHub so the FIRST time we'd show the hub, we play
+  // build8: first-run RYO intro — wrap showHub so the FIRST time we'd show the hub, we play
   // ryo-intro.mp4 first (skippable, once). Self-heals to going straight to the hub.
   (function () {
     var SEEN = 'rr_ryo_intro_seen';
@@ -6006,14 +6044,14 @@
     var reduce = false;
     try { reduce = document.documentElement.classList.contains('rr-reduce-motion') ||
       (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
-    // build8b: RYO is THE startup intro â€” plays on EVERY app load (user directive), skippable. The
+    // build8b: RYO is THE startup intro — plays on EVERY app load (user directive), skippable. The
     // in-session `done` flag (below) still prevents a re-play on later in-session hub navigations, so it
     // fires once per page load, not on every back-to-menu. ?ryo=off disables it (dev convenience).
     var alreadySeen = false;
     try { if (/[?&]ryo=off/.test(location.search)) alreadySeen = true; } catch (e) {}
-    if (!introEl || !vid || alreadySeen || reduce) return;   // missing overlay / disabled / reduced-motion â†’ straight to hub
+    if (!introEl || !vid || alreadySeen || reduce) return;   // missing overlay / disabled / reduced-motion → straight to hub
 
-    // build15 INTRO AUDIO â€” the asset agent delivered the intro WITH its audio track
+    // build15 INTRO AUDIO — the asset agent delivered the intro WITH its audio track
     // (binary-verified: 'soun' handler + 'mp4a' atoms present). The proven WebAudio path stays
     // (the <video> remains muted; Chrome's unmute-after-gesture was unreliable): we decode the
     // mp4's OWN audio track and play it gesture-started + synced to the video clock. The old
@@ -6024,7 +6062,7 @@
       fetch('assets/ryo/ryo-intro.mp4').then(function (r) { return r.arrayBuffer(); })
         .then(function (ab) { iraw = ab; }).catch(function () {});
     } catch (e) {}
-    function introAudioFallback() {   // mp4 audio undecodable in this browser â†’ lunar-waves bed
+    function introAudioFallback() {   // mp4 audio undecodable in this browser → lunar-waves bed
       try {
         fetch('assets/lunar-waves.mp3').then(function (r) { return r.arrayBuffer(); }).then(function (ab2) {
           if (!iac) return;
@@ -6047,7 +6085,7 @@
         isrc = iac.createBufferSource(); isrc.buffer = ibuf;
         var ig = iac.createGain();
         ig.gain.setValueAtTime(0.0001, iac.currentTime);
-        ig.gain.exponentialRampToValueAtTime(0.9, iac.currentTime + 0.35);   // the REAL soundtrack â€” full voice, fast fade-in
+        ig.gain.exponentialRampToValueAtTime(0.9, iac.currentTime + 0.35);   // the REAL soundtrack — full voice, fast fade-in
         isrc.connect(ig); ig.connect(iac.destination);
         isrc.__gain = ig;
         isrc.start(0, Math.max(0, vid.currentTime || 0));
@@ -6079,7 +6117,7 @@
       try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
       introEl.classList.add('active'); introEl.setAttribute('aria-hidden', 'false');
       // build12: the intro's SOUND rides WEBAUDIO (decoded once, started inside this same gesture and
-      // synced to the video clock) â€” Chrome's unmute-after-gesture was unreliable (the user heard the
+      // synced to the video clock) — Chrome's unmute-after-gesture was unreliable (the user heard the
       // audio only at the very end). The <video> stays muted; audio comes from the buffer.
       try { vid.muted = true; } catch (e) {}
       var p; try { p = vid.play(); } catch (e) { p = null; }

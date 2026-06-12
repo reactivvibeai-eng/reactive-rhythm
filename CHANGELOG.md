@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v121 — HUB TILES BECOME GAME ASSETS + UTF-8 corruption repaired  ✅
+The six menu-hub tiles now wear **formula-locked key art** (gpt_image_2, drafts → composition
+locked via image-to-image → high finals; `assets/hub/*.jpg`, 1024×688 ≈140KB each): Campaign =
+the molten tier-climb to the blood moon; Quick Play = a chrome-crimson guitar mid power-chord;
+Multiplayer = crimson-vs-gold guitars crossed like dueling blades; Store = the golden pick over
+a spark-gem hoard; Leaderboards = the winged chrome trophy; Profile = the horned legend before
+the stadium. Art rides a new z-0 `.mh-art` layer under the labels with a bottom scrim (labels
+stay crisp); the generic SVG icon hides when art lands — the painting IS the icon; hover zooms
+the art slightly. **Self-healing loader**: tiles only dress when the file actually loads.
+**INCIDENT + REPAIR:** the v120 `?v` bump (PowerShell `Get-Content`/`Set-Content` on BOM-less
+UTF-8 — PS 5.1 misreads as cp1252) double-encoded every non-ASCII glyph in index.html (em-dashes,
+·, ✕, ⚡, ▶, 🔥 → mojibake on screen). Repaired with ftfy + targeted reverse-transform for
+◆⚡▸▶⚠; byte-audited: zero mojibake markers, legacy lines byte-match the clean v119 blob, full
+non-ASCII inventory is sane. **Rule: never rewrite game files with PowerShell — bump `?v` via
+python or the Edit tool.** Spend: 27cr exactly as quoted (6 drafts 3 + 6 finals 24, zero regens);
+balance 112/412 Ultra. Verified headless: 6/6 tiles `has-art`, icons hidden, labels visible,
+clean glyph rendering, zero console errors. Bump ?v 120→121.
+
 ### v120 — TOURNAMENT BRACKETS (5–10 players) + the lobby actually comes ALIVE  ✅
 The headline multiplayer order: **single-elimination tournaments**. New 🏆 action in the MP lobby →
 named bracket, up to 10 seats (starts at 3+, copy steers 5–10). ONE `rr-tour-<id>` channel with
