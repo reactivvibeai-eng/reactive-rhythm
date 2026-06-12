@@ -1,4 +1,34 @@
-# GUITAR ASSET ORDERS (v111) — relay to the asset session
+# ASSET ORDERS + THE STYLE CONTRACT — relay to the asset session
+
+## §0 — THE STYLE FORMULA (USER-APPROVED 2026-06-12 — BYTE-IDENTICAL LAW)
+Every asset generation prompt for this game — any model, any session, any agent — embeds this
+paragraph VERBATIM (no paraphrasing, no shortening, single-asset regens included):
+
+> high-gloss cinematic anime-metal concept art with photoreal materials — polished chrome,
+> lacquered black wood, molten magma glow; aggressive angular silhouettes with sharp spikes and
+> horns, fully rendered, no cartoon outlines; world in warm blacks and deep crimson with
+> ember-orange glow, play elements in bright chrome and hot crimson that pop against the dark,
+> rewards in warm gold; moody blood-moon concert atmosphere lit by hot crimson rim light; high
+> contrast, clean readable silhouettes, consistent front-facing stage-view perspective
+
+**STYLE TOKEN** (for length-limited fields only; same source of truth):
+`cinematic anime-metal, warm black + crimson + chrome palette, ember glow, blood-moon rim light`
+
+Rules riding the formula (from the Higgsfield stylization contract, .agents/skills + game bundle):
+- **Per-level accents OVERRIDE only the accent hue** (Skully violet #a64dff, Bone Daddy bone,
+  Melody pink) in the per-asset description — the formula itself never changes.
+- **Transparency = KEY COLOR, never black**: generate on solid bright magenta #FF00FF (green
+  #00FF00 if the asset is pink/magenta-ish; blue #0000FF if both clash), then key out —
+  including ENCLOSED key-colored regions (the donut-hole rule).
+- **Model routing**: gpt_image_2 for typography/UI/design/anything with text (low quality ~0.5cr
+  for drafts, high 4cr for finals); nano_banana_2/pro for characters + detailed art (1–1.5cr).
+- **Regen budget: 2 attempts per asset**, then take the best and compensate in code.
+- **Contact-sheet check before approval**: paste new assets side-by-side at relative scale and
+  EYEBALL coherence vs the existing pack.
+- **Cost discipline**: preflight get_cost before paid calls; batches >5cr get quoted to the user
+  first.
+
+## GUITAR ASSET ORDERS (v111) — relay to the asset session
 
 > **STANDING RULE (user decree 2026-06-11): EVERY guitar asset paints EXACTLY 5 STRINGS.**
 > The game is 5-lane; 6-string art "kills it" (the user's words after the Skully playtest).
