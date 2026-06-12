@@ -1107,6 +1107,28 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v120 — TOURNAMENT BRACKETS (5–10 players) + the lobby actually comes ALIVE  ✅
+The headline multiplayer order: **single-elimination tournaments**. New 🏆 action in the MP lobby →
+named bracket, up to 10 seats (starts at 3+, copy steers 5–10). ONE `rr-tour-<id>` channel with
+self-receiving broadcasts (host + entrants run identical handlers): host rolls a random ready track
+(🎲 reroll + difficulty seg), START shuffles seeds and broadcasts round 1 with a synced `atMs` —
+**everyone alive plays the SAME track simultaneously**, the bracket decides who you're scored
+against. Live duel board (ticks ~3/s), rival side-panel in-game, byes auto-advance, winners roll
+into the next round on a fresh random track (7s intermission), final round labeled THE FINAL,
+champion gets the gold 👑 banner + full bracket-strip recap. Forfeits: leavers stub `score:-1`
+(instant on graceful leave, 45s lag window after a pair's first final otherwise). Eliminated
+players stay as spectators of the board. Tournament cards advertise in Browse (BRACKET/LIVE/FULL).
+**Foundation fix (critical): native Supabase presence NEVER syncs on this project** (track() acks
+"ok", zero sync events — verified live) — so the lobby roster, rooms, and matches were silently
+dead. Replaced ALL presence with a **soft-presence layer over broadcast** (hb every 10s + instant
+hello-back + bye on leave + 75s expiry — survives background-tab timer clamping). The roster now
+shows real players ("1 online" verified live). Guards: round-token on onSongEnd (stale
+registrations can't bank bogus finals), first-report-wins finals, Enter-key primary actions
+(tour start / ready / rematch). E2E verified against LIVE Supabase with 4 synthetic protocol
+clients: full 5-seat bracket (R1 2 duels + bye → R2 → THE FINAL → champion BOT-ACE), real engine
+launch mid-bracket (75s of actual play), then a 4-seat forfeit cup (walkout → -1 → survivor
+advances → champion). Zero console errors. Bump ?v 119→120.
+
 ### v119 — MELODY'S ROOM lives · both levels finished + e2e verified  ✅
 Completes the two-level order ("get down all the way up to Melody's level"). **Melody's world**:
 4K kawaii-punk collector's room (gpt_image_2, image-to-image from the approved draft — neon heart
