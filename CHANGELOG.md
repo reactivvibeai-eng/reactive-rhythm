@@ -1107,6 +1107,25 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v119 — MELODY'S ROOM lives · both levels finished + e2e verified  ✅
+Completes the two-level order ("get down all the way up to Melody's level"). **Melody's world**:
+4K kawaii-punk collector's room (gpt_image_2, image-to-image from the approved draft — neon heart
+sign, plushie wall, city window), **8s 1080p ambient loop** (start+end pinned, seam 5.5/px PASS)
++ **melody-intense.mp4** — the cat-chaos GAG clip (seam 2.6/px PASS, mid-frame verified: cat
+scrambling through flying plushies). The gag is the REWARD: `RhythmLevelFx.onCombo` milestone
+swaps the backdrop to the intense clip then eases back to the calm loop ~5.2s later (verified
+swap + revert headless). **Fate-pairs for BOTH levels** (440w keyed cards): Bone Daddy tombstone
+(miss/death meter) + golden chalice (hit/world meter); Melody torn plush (miss) + heart jar
+(hit). Melody's cards arrived on GREEN — `_key_card.py` now auto-detects the key color from
+corners (magenta/green/blue) + despills. **Paw fret-rows**: in the pink theme the fret lines
+render as alternating cat-paw prints marching down the highway (`_drawPaw`, depth-scaled).
+**HUD character watermarks**: a faint theme motif (bone skull / pink paw data-SVG) inside the
+HUD panel per `data-rrtheme`. E2E verified headless BOTH levels: launch → theme → video
+true-cover+playing → cards on meters → watermark → jaw-chatter / paw-mech → intense swap+revert
+→ zero console errors. Spend: Melody pack ~166cr (the two 1080p clips are 72cr each; round-1
+nsfw/failed jobs confirmed NOT charged) on top of Bone Daddy's ~96cr — two-level arc ~273cr off
+the 412 start, balance now 139 (Ultra). Bump ?v 118→119.
+
 ### v118 — BONE DADDY'S GRAVEYARD lives  ✅
 The first level built under the full pipeline (formula → drafts → user-approved comp → 4K final →
 pinned-loop video → rig): **4K cathedral world** (gpt_image_2, image-to-image from the approved
