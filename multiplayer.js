@@ -1441,7 +1441,7 @@
     if (!tour.id) return;
     var link = location.origin + location.pathname + '?mpjoin=' + tour.id;
     var btn = $('mpx-tour-invite');
-    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ LINK COPIED — SEND IT' : '🔗 COPY INVITE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '🔗 COPY INVITE LINK'; }, 2600); }
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ LINK COPIED — SEND IT' : 'COPY INVITE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = 'COPY INVITE LINK'; }, 2600); }
     try { navigator.clipboard.writeText(link).then(function () { flash(true); }, function () { window.prompt('Copy the invite link:', link); }); }
     catch (e) { window.prompt('Copy the invite link:', link); }
   });

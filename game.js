@@ -527,12 +527,17 @@
     'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
-    'assets/guitars/bone-daddy.png':    { aspect: 904 / 1314, nutFY: 0.105, bridgeFY: 0.775,
-      nutXF:    [0.4893, 0.4902, 0.5064, 0.5119, 0.5206, 0.5302],
-      bridgeXF: [0.3823, 0.4381, 0.4820, 0.5264, 0.5710, 0.6155] },
-    'assets/guitars/melody-pink.png':   { aspect: 904 / 1477, nutFY: 0.095, bridgeFY: 0.80,
-      nutXF:    [0.4380, 0.4569, 0.4865, 0.5072, 0.5270, 0.5432],
-      bridgeXF: [0.3132, 0.3924, 0.4558, 0.5246, 0.5982, 0.6787] },
+    'assets/guitars/bone-daddy.png':    { aspect: 1376 / 2048, nutFY: 0.130, bridgeFY: 0.780,
+      // build23: TRUE 5-STRING re-render (regen v2 — v1 kept 6; machine-verified 13 exactly-5 rows).
+      // Lines fit over 30 fretboard rows (residuals ≤3.3px), extrapolated to the saddle line.
+      widthF: 0.92,   // playtest: his guitar played too SMALL — notes were hard to read
+      nutXF:    [0.4508, 0.4692, 0.4852, 0.5076, 0.5309],
+      bridgeXF: [0.3970, 0.4434, 0.4856, 0.5380, 0.5993] },
+    'assets/guitars/melody-pink.png':   { aspect: 1376 / 2048, nutFY: 0.098, bridgeFY: 0.800,
+      // build23: TRUE 5-STRING re-render (5-string decree; measurer confirmed exactly-5 rows).
+      // nut = peak-snapped; bridge = ruler-read at the saddles (the auto-snap caught the trem roller).
+      nutXF:    [0.4259, 0.4448, 0.4666, 0.4876, 0.5094],
+      bridgeXF: [0.3880, 0.4480, 0.5100, 0.5780, 0.6400] },
     'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
       bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },

@@ -1107,6 +1107,25 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v123 — playtest round 2: BOTH character guitars go TRUE 5-STRING · the baron comes alive  ✅
+**Melody + Bone Daddy re-rendered with exactly five strings** (5-string decree — their art still
+painted six; the engine rode 5-of-6 leaving an orphan string). gpt_image_2 i2i at high (Bone's
+first take kept 6 — regen with the count led structurally passed: the measurer found 13
+exactly-5-peak rows; Melody 9). Calibration: fretboard-only least-squares lines (residuals
+≤3.3px over 30 rows) + ruler-read saddle endpoints, proof-overlay verified at nut/mid/bridge
+(`_proof_ml5b_*`, `_proof_bd5b_*`). Art ships at 1376×2048; SKIN_GEOM updated with true-5 arrays;
+**bone-daddy `widthF` 0.78→0.92** (his guitar played too small — notes were hard to read).
+**The skull LIVES:** 172px (was 150), deeper idle float + sway, eye sockets smolder on a slow
+loop (never fully asleep), hit = harder jaw chatter (12°) + a cranium counter-nod, milestone =
+whole-skull POP + double chatter + gold flare. **Tournament buttons branded** (`.rh-refresh`
+was scoped to the rooms header — SEARCH/REROLL/INVITE rendered as naked native buttons; now a
+global branded mini-button, emoji stripped). **Browse backdrop video REMOVED** (user verdict —
+read as a floating photo at library scale; clean dark room + warm vignette stays). Verified
+live: both env launches play (bone theme + skull anims rrm-bob/smolder/jaw/nod/pop firing;
+pink theme + paw mech), buttons computed-styled, lib video gone, zero console errors.
+Spend ~21cr (2 uploads free, 3 high i2i renders incl. 1 regen + the v122 batch's 9cr already
+logged separately → this round's guitars 12cr). Bump ?v 122→123.
+
 ### v122 — playtest feedback round: tournaments get a REAL setup · levels system resurrected  ✅
 Direct response to the user's first MP-era playtest. **CRITICAL FIX FIRST:** the v121 ftfy repair
 had a second bite — its default `uncurl_quotes` flattened curly apostrophes inside JS strings
