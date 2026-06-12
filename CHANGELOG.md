@@ -1107,6 +1107,28 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v116 — energy gets the BOARD's shape · guitar-anchored fade · title wordmark slot  ✅
+The user's marked Skully screenshot + two design notes, all shipped + probe-verified:
+- **The "red rectangle glow with visible edges":** EVERY additive board-energy layer (combo heat
+  bands/wash, the milestone/OD SCAN sweep, the OD-active wash) painted full-width rects — their
+  straight bounds landed mid-video. All three now clip to the shared **NECK TRAPEZOID**
+  (`_neckClipPath` — warped outer lanes, nut→bridge + a lane skirt). PROBE: outside-trapezoid
+  max alpha during full OD dropped **179 → 20** (noise floor). The chase also caught that the
+  scan + OD wash — not just the combo layer — were rectangle offenders.
+- **"Top of the guitar should fade toward the background":** the headstock fade was
+  SCREEN-anchored (top 22% of the viewport) — on tall windows the shrunk skin starts ~480px down
+  and floated unfaded. Now **GUITAR-anchored** (art top → just past the nut). PROBE at the
+  user's window shape: alpha ≤46 at the guitar top vs 255 below the nut.
+- **The floating multiplier flame ring (default level):** multiplier-up/gradeup-flare centered
+  flares REMOVED — a tier climb is now a small **ripple across the catcher row** from the hit
+  lane (verified: string-ripple ×row at the x3 climb) + the comet up that string.
+- **Level fog** → bottom-center radial (the full-width rect ended in straight seams at the canvas
+  bounds); **side HUD darkening bands** lightened + narrowed (the gutters read as world, not dead
+  strips); **TITLE WORDMARK slot** wired in the hub (self-healing `assets/title-wordmark.png`,
+  text title stays until the art lands + stays for a11y after) — order in ASSET_ORDERS_GUITARS.md
+  §3 (crimson blood-moon / chaos energy / anime / music-driven). Zero console errors.
+  Bump ?v 115→116.
+
 ### v115 — FX = pure responses (edge feather, no mid-board) · ENTRANCE polish  ✅
 The user's playtest sign-off pass ("they play great, they look good") + final FX/polish notes:
 - **The combo "rectangle cropped on both sides" (Skully):** sheet content reaching a frame cell's

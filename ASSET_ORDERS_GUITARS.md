@@ -35,6 +35,18 @@ dark fretboard. Brand: black · crimson · ember #ff7a4a · chrome. NO blue/purp
 This replaces the plain default guitar for Quick Play — it should feel like the game's
 flagship instrument (match guitar5.png's anatomy so it drops into the same fit).
 
+## ORDER 3 — TITLE WORDMARK: "REACTIVE RHYTHM" (delivered slot is already wired)
+**File: `assets/title-wordmark.png`** — transparent PNG, horizontal lockup, ~1600×440
+(displayed at ≤620px wide — keep it legible when small).
+Prompt: "REACTIVE RHYTHM" video-game TITLE LOGO / wordmark, anime metal aesthetic, bold angular
+letterforms with chrome edges, **crimson #ff1f2e blood-moon rising behind the text**, chaotic
+crimson energy — cracked magma veins, lightning arcs, ember sparks bleeding off the letters —
+subtle music identity woven in (a waveform pulse or tremolo strings forming an underline),
+black-transparent background, warm darks only, NO blue/purple. It must read instantly at
+600px wide; the moon + chaos energy frame the words, never bury them.
+The game's menu has a SELF-HEALING slot: drop the file in and the plain text title is replaced
+automatically (nothing else needed).
+
 ## After delivery (engine side — I do this, automatically on the next pass)
 1. Pixel string-tracking measurement → SKIN_GEOM entry (nutXF/bridgeXF at nutFY/bridgeFY).
 2. Skully level swaps `guitarSkin` to the new file; Crimson Chaos wired as the default-level art.

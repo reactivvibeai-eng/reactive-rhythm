@@ -1906,12 +1906,21 @@
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
     const mult = Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier);
     score += JUDGE[kind].score * mult;
-    if (mult > lastMult) {   // build13: the tier flare lifts off the button + a comet surges up the string
+    if (mult > lastMult) {
+      // build19 (user screenshot: a big flame ring floating on the body "just looks out of place"):
+      // the centered multiplier flare is GONE. A tier climb now reads at the play site — a quick
+      // small RIPPLE across the catcher row spreading from the lane you hit + a comet up that
+      // string. (Sustained heat is already the fire-loop state; big moments belong to centuries.)
       try {
-        const _gM = fretGeom(), _kM = (_gM.lw / 128) * FX_GLOBAL;
-        emitFx('multup', 'x' + mult, lane, _gM.nearX[lane], _gM.nearY - _gM.lw * 0.78);
-        if (!fxLite && !reduceMotion) emitStringSurge(lane, 'note-comet', 40, _kM, _gM);
-      } catch (e) { emitFx('multup', 'x' + mult, lane); }
+        if (!reduceMotion && fx) {
+          const _gM = fretGeom(), _kM = (_gM.lw / 128) * FX_GLOBAL;
+          for (let _i = 0; _i < LANE_COUNT; _i++) {
+            const _x = _gM.nearX[_i], _y = _gM.nearY - _gM.lw * 0.36;
+            _fxLater(Math.abs(_i - lane) * 40, () => _spawnAt('string-ripple', _x, _y, 0.55 + 0.08 * mult, _kM));
+          }
+          if (!fxLite) emitStringSurge(lane, 'note-comet', 40, _kM, _gM);
+        }
+      } catch (e) {}
     }
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
@@ -3455,6 +3464,23 @@
   // VISUAL-ONLY: the lively combo-reactive energy layer. Drawn from render() AFTER the strings (so it's
   // visible over the guitar image) but under the catchers/notes. Brightness/speed/warmth scale with the
   // REAL multiplier tier (curMult), 1x → cap. Profile-aware (guitarRect/fretGeom → standard AND gh).
+  // build19: the NECK TRAPEZOID clip — the ONE shared shape for every additive "board energy"
+  // layer (combo heat, scan sweep, OD wash). Painted as full-width rects, their straight bounds
+  // landed mid-video once backdrops went full-bleed (the user's marked screenshot: "red rectangle
+  // glow… I can see the edges"). Energy now has the BOARD's shape — never a buffer edge.
+  function _neckClipPath(fg) {
+    const warp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
+    const cx0 = fg.gx + 0.5 * fg.gw;
+    const wxp = (x, u) => warp > 0 ? cx0 + (x - cx0) * (1 - warp * Math.max(0, u)) : x;
+    const padN = fg.lw * 1.05, padF = fg.lw * 0.45;
+    const p = new Path2D();
+    p.moveTo(wxp(fg.nearX[0], 0) - padN, Math.min(ch, fg.nearY + fg.lw * 1.6));
+    p.lineTo(wxp(fg.farX[0], 1) - padF, fg.farY);
+    p.lineTo(wxp(fg.farX[LANE_COUNT - 1], 1) + padF, fg.farY);
+    p.lineTo(wxp(fg.nearX[LANE_COUNT - 1], 0) + padN, Math.min(ch, fg.nearY + fg.lw * 1.6));
+    p.closePath();
+    return p;
+  }
   function drawComboEnergy(t, fg) {
     if (state !== 'playing') return;
     if (reduceMotion || fxLite) return;
@@ -3467,6 +3493,7 @@
     const inten = Math.max(tierF, Math.min(1, combo / 60));
     const warm = Math.round(110 + tierF * 90);
     ctx.save();
+    ctx.clip(_neckClipPath(fg));
     ctx.globalCompositeOperation = 'lighter';
     const bands = 2 + Math.round(tierF * 2);
     for (let b = 0; b < bands; b++) {
@@ -3488,16 +3515,8 @@
       wash.addColorStop(1, 'rgba(255,120,80,0)');
       ctx.fillStyle = wash; ctx.fillRect(gr.gx, fg.farY, gr.gw, fg.nearY - fg.farY);
     }
-    if (inten > 0.15) {
-      const rimA = (0.05 + 0.25 * inten).toFixed(3);
-      const rw = Math.max(6, gr.gw * 0.06);
-      const lg = ctx.createLinearGradient(gr.gx, 0, gr.gx + rw, 0);
-      lg.addColorStop(0, 'rgba(255,40,46,' + rimA + ')'); lg.addColorStop(1, 'rgba(255,40,46,0)');
-      ctx.fillStyle = lg; ctx.fillRect(gr.gx, gr.gy, rw, gr.gh);
-      const rg = ctx.createLinearGradient(gr.gx + gr.gw, 0, gr.gx + gr.gw - rw, 0);
-      rg.addColorStop(0, 'rgba(255,40,46,' + rimA + ')'); rg.addColorStop(1, 'rgba(255,40,46,0)');
-      ctx.fillStyle = rg; ctx.fillRect(gr.gx + gr.gw - rw, gr.gy, rw, gr.gh);
-    }
+    // (build19: the straight rim strips at the rect edges are GONE — the strings' own heat glow
+    // carries the edge energy; vertical crimson bars floating on the video read as UI bugs.)
     ctx.restore();
   }
   function drawCathedralBg(t) {
@@ -3628,11 +3647,14 @@
         }
         ctx.drawImage(activeGuitarImg, gr.gx, gr.gy, gr.gw, gr.gh);
       }
-      // fade the headstock (top of the guitar) into the moon so the neck top doesn't hard-cut
+      // fade the headstock (top of the guitar) into the backdrop so the neck top doesn't hard-cut.
+      // build19 (user: "shouldn't the top of the guitar fade out toward the background?"): the fade
+      // was SCREEN-anchored (top 22% of the viewport) — on tall windows the SHRUNK skin starts
+      // hundreds of px below it and the headstock floated unfaded on the video. Now GUITAR-anchored:
+      // dissolve from the art's top edge to just past the NUT, at every fit and window shape.
       ctx.save(); ctx.globalCompositeOperation = 'destination-out';
-      // gh cover-fit crops the headstock off-screen → fade the top of the SCREEN into the moon (neck dissolves at the top edge)
-      const coverFit = (ART.fit === 'cover');
-      const fadeTop = coverFit ? -4 : gr.gy, fadeBot = coverFit ? ch * 0.22 : (gr.gy + gr.gh * 0.20);
+      const fadeTop = Math.max(-4, gr.gy - 6);
+      const fadeBot = Math.max(fadeTop + 48, gr.gy + (ART.nutFY + 0.05) * gr.gh);
       const nf = ctx.createLinearGradient(0, fadeTop, 0, fadeBot);
       nf.addColorStop(0, 'rgba(0,0,0,1)'); nf.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = nf; ctx.fillRect(0, fadeTop - 4, cw, (fadeBot - fadeTop) + 8); ctx.restore();
@@ -3646,7 +3668,8 @@
         const sweepY = fg.nearY + (fg.farY - fg.nearY) * prog;
         const bandH = gr.gh * 0.14;
         const a = Math.sin(prog * Math.PI) * (0.30 + 0.10 * Math.min(3, scanTier));
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.save(); ctx.clip(_neckClipPath(fg));   // build19: the sweep rides the BOARD, not a full-width rect
+        ctx.globalCompositeOperation = 'lighter';
         const sg = ctx.createLinearGradient(0, sweepY - bandH, 0, sweepY + bandH);
         sg.addColorStop(0, 'rgba(255,138,43,0)');
         sg.addColorStop(0.5, 'rgba(255,180,90,' + a.toFixed(3) + ')');
@@ -3661,7 +3684,8 @@
       if (odActive) {
         const ph = t * 1.4, beat = 0.5 + 0.5 * Math.sin(t * 8);
         const cg = Math.round(110 + 70 * Math.sin(ph)), cb = Math.round(50 + 30 * Math.sin(ph + 1.2));
-        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.save(); ctx.clip(_neckClipPath(fretGeom()));   // build19: star power tints the HIGHWAY (GH), not a rect
+        ctx.globalCompositeOperation = 'lighter';
         const owash = ctx.createLinearGradient(0, gr.gy + gr.gh * 0.3, 0, gr.gy + gr.gh);
         const aa = (0.05 + 0.06 * beat).toFixed(3);
         owash.addColorStop(0, 'rgba(255,' + cg + ',' + cb + ',0)');
@@ -3701,12 +3725,15 @@
     const inten = Math.max(bgPulse, energy * 0.85) * levelAmbient;
     // 1) low accent fog rising off the bottom third (cheap, big-read color)
     //    build8: greatly reduced — was washing the board purple. Floor lowered, ceiling halved.
+    //    build19: now a bottom-center RADIAL — the old full-width rect ended in straight vertical
+    //    seams at the canvas bounds, visible over the full-bleed video ("cropped on the sides").
     {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      const fg = ctx.createLinearGradient(0, ch, 0, ch * 0.62);
-      fg.addColorStop(0, 'rgba(' + A + ',' + (0.018 + inten * 0.045).toFixed(3) + ')');
+      const fr = Math.max(cw * 0.62, ch * 0.5);
+      const fg = ctx.createRadialGradient(cw / 2, ch * 1.04, 0, cw / 2, ch * 1.04, fr);
+      fg.addColorStop(0, 'rgba(' + A + ',' + (0.022 + inten * 0.05).toFixed(3) + ')');
       fg.addColorStop(1, 'rgba(' + A + ',0)');
-      ctx.fillStyle = fg; ctx.fillRect(0, ch * 0.62, cw, ch * 0.38);
+      ctx.fillStyle = fg; ctx.beginPath(); ctx.arc(cw / 2, ch * 1.04, fr, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
     // 2) drifting accent embers — build14: REMOVED (user, Skully playtest: "random floating

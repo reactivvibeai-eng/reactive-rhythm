@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=115" />
+<link rel="stylesheet" href="jukebox.css?v=116" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1051,12 +1051,14 @@
       linear-gradient(180deg, rgba(10,7,6,0.42) 0%, rgba(10,7,6,0.18) 30%, rgba(10,7,6,0.30) 72%, rgba(10,7,6,0.62) 100%);
   }
   /* DARKER BANDS behind the side HUD columns so panels read as solid instruments over the art.
-     (build12: narrowed + lightened — they were eating the backdrop's "core details".) */
+     (build12: narrowed + lightened — they were eating the backdrop's "core details".)
+     (build19, user's marked screenshot: the gutters between the play zone and the HUD read as
+      DEAD STRIPS — lightened + narrowed again so the level's world flows to the HUD text.) */
   #game-bg::before {
     content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
     background:
-      linear-gradient(90deg, rgba(10,7,6,0.80) 0px, rgba(10,7,6,0.58) 150px, rgba(10,7,6,0.0) 270px),
-      linear-gradient(270deg, rgba(10,7,6,0.80) 0px, rgba(10,7,6,0.58) 150px, rgba(10,7,6,0.0) 270px);
+      linear-gradient(90deg, rgba(10,7,6,0.60) 0px, rgba(10,7,6,0.36) 110px, rgba(10,7,6,0.0) 205px),
+      linear-gradient(270deg, rgba(10,7,6,0.60) 0px, rgba(10,7,6,0.36) 110px, rgba(10,7,6,0.0) 205px);
   }
   /* Performance background: hide the moon VIDEO so its compositing can't cap the FPS. */
   html.rr-perf-bg #bg-video, html.rr-perf-bg #bg-video-fill, html.rr-perf-bg #start-video { display: none !important; }
@@ -2272,6 +2274,13 @@
     opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta));
     background-size: 200% 100%; animation: mhEdge 5.5s linear infinite; }
   @keyframes mhEdge { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+  /* build19: produced TITLE WORDMARK (self-healing slot) — hidden until the file loads; when it
+     does, the art replaces the text title (H1 stays for screen readers). */
+  .mh-logo { display: none; }
+  .mh-logo.on { display: block; max-width: min(620px, 88%); height: auto; margin: 2px auto 6px;
+    filter: drop-shadow(0 6px 22px rgba(255, 31, 46, 0.28)); }
+  .mh-title.img-replaced { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; margin: 0; padding: 0; }
   /* build18 ENTRANCE POLISH (user order): the hub tiles ARRIVE — staggered rise + settle each
      time the hub opens. fill-mode BACKWARDS so the completed animation releases the cascade
      (hover/focus transforms still win afterwards). Reduce-motion kills it. */
@@ -2685,6 +2694,12 @@
     <div class="mh-card">
       <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
       <div class="mh-pre">MAIN MENU</div>
+      <!-- build19: produced TITLE WORDMARK slot (user order — crimson moon / chaos energy / anime,
+           order in ASSET_ORDERS_GUITARS.md). Self-heals: file absent → text title stays; file
+           present → the art replaces the text (H1 kept visually-hidden for a11y). -->
+      <img class="mh-logo" id="mh-logo" src="assets/title-wordmark.png" alt=""
+           onload="this.classList.add('on'); var t = document.querySelector('#menu-hub .mh-title'); if (t) t.classList.add('img-replaced');"
+           onerror="this.style.display='none'" />
       <h1 class="mh-title">REACTIVE RHYTHM</h1>
       <p class="mh-sub">Choose your path. Every mode runs the same neck — pick how you want to play.</p>
       <div class="mh-grid" id="mh-grid">
@@ -3845,11 +3860,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=115"></script>
-<script src="game.js?v=115"></script>
-<script src="jukebox.js?v=115"></script>
-<script src="catalog.js?v=115"></script>
-<script src="multiplayer.js?v=115"></script>
+<script src="assets/fx/fx-player.js?v=116"></script>
+<script src="game.js?v=116"></script>
+<script src="jukebox.js?v=116"></script>
+<script src="catalog.js?v=116"></script>
+<script src="multiplayer.js?v=116"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
