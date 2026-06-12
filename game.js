@@ -1706,9 +1706,12 @@
       // build13: star power LAUNCHES — comets race up every string as it ignites
       if (!fxLite && !reduceMotion) { const _k = (_g.lw / 128) * FX_GLOBAL; for (let _i = 0; _i < LANE_COUNT; _i++) emitStringSurge(_i, 'note-comet', 60 + _i * 24, _k, _g); }
     } catch (e) {}
-    // build8b: sustained star-power AURA over the board for the whole overdrive (stopped when it expires)
-    try { if (_odAura) { _odAura.stop(); _odAura = null; } const _g2 = fretGeom();
-      _odAura = _fxRide('overdrive-aura', (_g2.nearX[0] + _g2.nearX[LANE_COUNT - 1]) / 2, _g2.nearY - _g2.lw * 1.2, (_g2.lw * 6 / 128), 0.6); } catch (e) {}
+    // build20 (the user circled it twice — "that flame effect doesn't fit"): the sustained
+    // overdrive-aura loop sat as a SPINNING FIREBALL at the center of the catcher row for the
+    // whole OD — a causeless centered blob, the exact doctrine violation. REMOVED. Star power
+    // is carried by the activation comets, the burning strings/wash, the catcher fire at high
+    // mult, the HUD flame, and note-comet trails — all anchored to play elements.
+    try { if (_odAura) { _odAura.stop(); _odAura = null; } } catch (e) {}
     bgPulse = 1; cameraShake = 10;
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
@@ -3464,59 +3467,124 @@
   // VISUAL-ONLY: the lively combo-reactive energy layer. Drawn from render() AFTER the strings (so it's
   // visible over the guitar image) but under the catchers/notes. Brightness/speed/warmth scale with the
   // REAL multiplier tier (curMult), 1x → cap. Profile-aware (guitarRect/fretGeom → standard AND gh).
-  // build19: the NECK TRAPEZOID clip — the ONE shared shape for every additive "board energy"
-  // layer (combo heat, scan sweep, OD wash). Painted as full-width rects, their straight bounds
-  // landed mid-video once backdrops went full-bleed (the user's marked screenshot: "red rectangle
-  // glow… I can see the edges"). Energy now has the BOARD's shape — never a buffer edge.
-  function _neckClipPath(fg) {
+  // build20 (the user marked the v116 clip's SEAMS along the neck edges): a clip is a hard
+  // boundary — LIGHT NEEDS FALLOFF, never edges. ALL board energy (combo heat, the milestone/OD
+  // scan sweep, the OD-active wash) now paints into a small OFFSCREEN, gets FEATHERED toward the
+  // trapezoid edges + both ends (destination-out is safe there — only energy pixels exist), and
+  // composites additively. Alphas are toned DOWN too: the column was outshouting the world.
+  function _neckGeom(fg) {
     const warp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0));
     const cx0 = fg.gx + 0.5 * fg.gw;
     const wxp = (x, u) => warp > 0 ? cx0 + (x - cx0) * (1 - warp * Math.max(0, u)) : x;
     const padN = fg.lw * 1.05, padF = fg.lw * 0.45;
-    const p = new Path2D();
-    p.moveTo(wxp(fg.nearX[0], 0) - padN, Math.min(ch, fg.nearY + fg.lw * 1.6));
-    p.lineTo(wxp(fg.farX[0], 1) - padF, fg.farY);
-    p.lineTo(wxp(fg.farX[LANE_COUNT - 1], 1) + padF, fg.farY);
-    p.lineTo(wxp(fg.nearX[LANE_COUNT - 1], 0) + padN, Math.min(ch, fg.nearY + fg.lw * 1.6));
-    p.closePath();
-    return p;
+    return {
+      yN: Math.min(ch, fg.nearY + fg.lw * 1.6), yF: fg.farY,
+      xLN: wxp(fg.nearX[0], 0) - padN, xLF: wxp(fg.farX[0], 1) - padF,
+      xRN: wxp(fg.nearX[LANE_COUNT - 1], 0) + padN, xRF: wxp(fg.farX[LANE_COUNT - 1], 1) + padF,
+    };
   }
+  let _enCv = null, _enCx = null;
   function drawComboEnergy(t, fg) {
     if (state !== 'playing') return;
     if (reduceMotion || fxLite) return;
     if (!activeGuitarImg || !activeGuitarImg._ready) return;
-    const gr = guitarRect();
     const mult = curMult();
     const capN = (timingProf().comboCap || 3) + 1;
     const tierF = Math.max(0, Math.min(1, (mult - 1) / Math.max(1, capN - 1)));
-    if (mult < 2 && combo < 8) return;
+    const comboOn = !(mult < 2 && combo < 8);
+    const scanOn = scanT > 0;
+    if (!comboOn && !scanOn && !odActive) return;
+    const gr = guitarRect();
+    const ng = _neckGeom(fg);
+    const x0 = Math.floor(Math.min(ng.xLN, ng.xLF)) - 2, x1 = Math.ceil(Math.max(ng.xRN, ng.xRF)) + 2;
+    const y0 = Math.floor(ng.yF) - 2, y1 = Math.ceil(ng.yN) + 2;
+    const W2 = Math.max(8, x1 - x0), H2 = Math.max(8, y1 - y0);
+    if (!_enCv || _enCv.width !== W2 || _enCv.height !== H2) {
+      _enCv = document.createElement('canvas'); _enCv.width = W2; _enCv.height = H2;
+      _enCx = _enCv.getContext('2d');
+    }
+    const ox = _enCx;
+    ox.setTransform(1, 0, 0, 1, -x0, -y0);
+    ox.clearRect(x0, y0, W2, H2);
     const inten = Math.max(tierF, Math.min(1, combo / 60));
     const warm = Math.round(110 + tierF * 90);
-    ctx.save();
-    ctx.clip(_neckClipPath(fg));
-    ctx.globalCompositeOperation = 'lighter';
-    const bands = 2 + Math.round(tierF * 2);
-    for (let b = 0; b < bands; b++) {
-      const ph = (t * (0.16 + tierF * 0.34) + b / bands) % 1;
-      const by = gr.gy + gr.gh * (0.14 + ph * 0.84), bh = gr.gh * (0.12 + tierF * 0.05);
-      const a = (0.10 + 0.30 * inten) * Math.sin(ph * Math.PI);
-      if (a <= 0.003) continue;
-      const eg = ctx.createLinearGradient(0, by - bh, 0, by + bh);
-      eg.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
-      eg.addColorStop(0.5, 'rgba(255,' + warm + ',72,' + a.toFixed(3) + ')');
-      eg.addColorStop(1, 'rgba(255,90,60,0)');
-      ctx.fillStyle = eg; ctx.fillRect(gr.gx, by - bh, gr.gw, bh * 2);
+    // 1) combo heat — moving bands + a low nut→catcher wash (toned down)
+    if (comboOn) {
+      const bands = 2 + Math.round(tierF * 2);
+      for (let b = 0; b < bands; b++) {
+        const ph = (t * (0.16 + tierF * 0.34) + b / bands) % 1;
+        const by = gr.gy + gr.gh * (0.14 + ph * 0.84), bh = gr.gh * (0.12 + tierF * 0.05);
+        const a = (0.08 + 0.22 * inten) * Math.sin(ph * Math.PI);
+        if (a > 0.003) {
+          const eg = ox.createLinearGradient(0, by - bh, 0, by + bh);
+          eg.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
+          eg.addColorStop(0.5, 'rgba(255,' + warm + ',72,' + a.toFixed(3) + ')');
+          eg.addColorStop(1, 'rgba(255,90,60,0)');
+          ox.fillStyle = eg; ox.fillRect(x0, by - bh, W2, bh * 2);
+        }
+      }
+      if (inten > 0.02) {
+        const wash = ox.createLinearGradient(0, ng.yF, 0, fg.nearY);
+        const wa = (0.028 + 0.085 * inten).toFixed(3);
+        wash.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
+        wash.addColorStop(0.55, 'rgba(255,' + warm + ',72,' + wa + ')');
+        wash.addColorStop(1, 'rgba(255,120,80,0)');
+        ox.fillStyle = wash; ox.fillRect(x0, ng.yF, W2, fg.nearY - ng.yF);
+      }
     }
-    if (inten > 0.02) {
-      const wash = ctx.createLinearGradient(0, fg.farY, 0, fg.nearY);
-      const wa = (0.04 + 0.12 * inten).toFixed(3);
-      wash.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
-      wash.addColorStop(0.55, 'rgba(255,' + warm + ',72,' + wa + ')');
-      wash.addColorStop(1, 'rgba(255,120,80,0)');
-      ctx.fillStyle = wash; ctx.fillRect(gr.gx, fg.farY, gr.gw, fg.nearY - fg.farY);
+    // 2) the milestone/OD SCAN sweep (moved here from the guitar draw — same soft shape)
+    if (scanOn) {
+      const prog = Math.max(0, Math.min(1, 1 - scanT / scanDur));
+      const sweepY = fg.nearY + (ng.yF - fg.nearY) * prog;
+      const bandH = gr.gh * 0.14;
+      const a = Math.sin(prog * Math.PI) * (0.26 + 0.09 * Math.min(3, scanTier));
+      const sg = ox.createLinearGradient(0, sweepY - bandH, 0, sweepY + bandH);
+      sg.addColorStop(0, 'rgba(255,138,43,0)');
+      sg.addColorStop(0.5, 'rgba(255,180,90,' + a.toFixed(3) + ')');
+      sg.addColorStop(1, 'rgba(255,60,60,0)');
+      ox.fillStyle = sg; ox.fillRect(x0, sweepY - bandH, W2, bandH * 2);
+      ox.globalAlpha = Math.min(1, a * 1.5); ox.fillStyle = 'rgba(255,224,150,0.9)';
+      ox.fillRect(x0, sweepY - 1.5, W2, 3);
+      ox.globalAlpha = 1;
     }
-    // (build19: the straight rim strips at the rect edges are GONE — the strings' own heat glow
-    // carries the edge energy; vertical crimson bars floating on the video read as UI bugs.)
+    // 3) OD ACTIVE — the color-cycling wash (moved here; toned down)
+    if (odActive) {
+      const ph = t * 1.4, beat = 0.5 + 0.5 * Math.sin(t * 8);
+      const cg = Math.round(110 + 70 * Math.sin(ph)), cb = Math.round(50 + 30 * Math.sin(ph + 1.2));
+      const owash = ox.createLinearGradient(0, gr.gy + gr.gh * 0.3, 0, gr.gy + gr.gh);
+      const aa = (0.035 + 0.045 * beat).toFixed(3);
+      owash.addColorStop(0, 'rgba(255,' + cg + ',' + cb + ',0)');
+      owash.addColorStop(0.7, 'rgba(255,' + cg + ',' + cb + ',' + aa + ')');
+      owash.addColorStop(1, 'rgba(255,' + cg + ',' + cb + ',0)');
+      ox.fillStyle = owash; ox.fillRect(x0, y0, W2, H2);
+    }
+    // FEATHER: erase everything outside the trapezoid + a smooth lw·1.35 falloff inward along
+    // both edges, then melt both ENDS — the glow breathes out of existence, no boundary anywhere.
+    ox.globalCompositeOperation = 'destination-out';
+    const f = fg.lw * 1.35, S = 14;
+    for (let s = 0; s < S; s++) {
+      const ya = ng.yF + (ng.yN - ng.yF) * (s / S), yb = ng.yF + (ng.yN - ng.yF) * ((s + 1) / S);
+      const sm = (s + 0.5) / S;                            // 0 at the nut end → 1 at the skirt end
+      const exL = ng.xLF + (ng.xLN - ng.xLF) * sm, exR = ng.xRF + (ng.xRN - ng.xRF) * sm;
+      if (exL - f > x0) ox.fillRect(x0, ya, (exL - f) - x0, yb - ya + 0.5);
+      const gl = ox.createLinearGradient(exL - f, 0, exL, 0);
+      gl.addColorStop(0, 'rgba(0,0,0,1)'); gl.addColorStop(1, 'rgba(0,0,0,0)');
+      ox.fillStyle = gl; ox.fillRect(exL - f, ya, f, yb - ya + 0.5);
+      if (x1 > exR + f) ox.fillRect(exR + f, ya, x1 - (exR + f), yb - ya + 0.5);
+      const gr2 = ox.createLinearGradient(exR, 0, exR + f, 0);
+      gr2.addColorStop(0, 'rgba(0,0,0,0)'); gr2.addColorStop(1, 'rgba(0,0,0,1)');
+      ox.fillStyle = gr2; ox.fillRect(exR, ya, f, yb - ya + 0.5);
+    }
+    const capT = ox.createLinearGradient(0, ng.yF, 0, ng.yF + fg.lw * 1.2);
+    capT.addColorStop(0, 'rgba(0,0,0,1)'); capT.addColorStop(1, 'rgba(0,0,0,0)');
+    ox.fillStyle = capT; ox.fillRect(x0, ng.yF, W2, fg.lw * 1.2);
+    const capB = ox.createLinearGradient(0, ng.yN - fg.lw * 0.9, 0, ng.yN);
+    capB.addColorStop(0, 'rgba(0,0,0,0)'); capB.addColorStop(1, 'rgba(0,0,0,1)');
+    ox.fillStyle = capB; ox.fillRect(x0, ng.yN - fg.lw * 0.9, W2, fg.lw * 0.9);
+    ox.globalCompositeOperation = 'source-over';
+    // composite the finished, edge-less energy onto the scene
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(_enCv, x0, y0);
     ctx.restore();
   }
   function drawCathedralBg(t) {
@@ -3661,39 +3729,8 @@
       // build17: the static "spawn band" glow is GONE (user: "a weird line towards the top of the
       // guitar" — a hardcoded-crimson full-width stripe at ch 0.16–0.34 over every level's video).
       // The headstock fade + the notes themselves already communicate where notes emerge.
-      // OVERDRIVE / combo SCAN — an additive amber→crimson band sweeps up the guitar (GH Star-Power wash)
-      if (scanT > 0) {
-        const fg = fretGeom();
-        const prog = Math.max(0, Math.min(1, 1 - scanT / scanDur));   // 0 (catcher) → 1 (nut)
-        const sweepY = fg.nearY + (fg.farY - fg.nearY) * prog;
-        const bandH = gr.gh * 0.14;
-        const a = Math.sin(prog * Math.PI) * (0.30 + 0.10 * Math.min(3, scanTier));
-        ctx.save(); ctx.clip(_neckClipPath(fg));   // build19: the sweep rides the BOARD, not a full-width rect
-        ctx.globalCompositeOperation = 'lighter';
-        const sg = ctx.createLinearGradient(0, sweepY - bandH, 0, sweepY + bandH);
-        sg.addColorStop(0, 'rgba(255,138,43,0)');
-        sg.addColorStop(0.5, 'rgba(255,180,90,' + a.toFixed(3) + ')');
-        sg.addColorStop(1, 'rgba(255,60,60,0)');
-        ctx.fillStyle = sg; ctx.fillRect(gr.gx, sweepY - bandH, gr.gw, bandH * 2);
-        ctx.globalAlpha = Math.min(1, a * 1.5); ctx.fillStyle = 'rgba(255,224,150,0.9)';
-        ctx.fillRect(gr.gx, sweepY - 1.5, gr.gw, 3);
-        ctx.restore();
-      }
-      // OVERDRIVE ACTIVE: a living, COLOR-CYCLING energy wash over the board (amber↔crimson, beat-pulsed)
-      // so boost feels alive and varied — not a static yellow line. Additive; brand-warm (no blue).
-      if (odActive) {
-        const ph = t * 1.4, beat = 0.5 + 0.5 * Math.sin(t * 8);
-        const cg = Math.round(110 + 70 * Math.sin(ph)), cb = Math.round(50 + 30 * Math.sin(ph + 1.2));
-        ctx.save(); ctx.clip(_neckClipPath(fretGeom()));   // build19: star power tints the HIGHWAY (GH), not a rect
-        ctx.globalCompositeOperation = 'lighter';
-        const owash = ctx.createLinearGradient(0, gr.gy + gr.gh * 0.3, 0, gr.gy + gr.gh);
-        const aa = (0.05 + 0.06 * beat).toFixed(3);
-        owash.addColorStop(0, 'rgba(255,' + cg + ',' + cb + ',0)');
-        owash.addColorStop(0.7, 'rgba(255,' + cg + ',' + cb + ',' + aa + ')');
-        owash.addColorStop(1, 'rgba(255,' + cg + ',' + cb + ',0)');
-        ctx.fillStyle = owash; ctx.fillRect(gr.gx, gr.gy + gr.gh * 0.3, gr.gw, gr.gh * 0.7);
-        ctx.restore();
-      }
+      // build20: the SCAN sweep + OD-active wash moved into drawComboEnergy() — ALL board energy
+      // now shares one soft-edged offscreen layer (feathered falloff, no clip seams).
       // COMBO-REACTIVE energy texture moved to render() (drawn over the neck, above the guitar image
       // but under the bright catchers/notes) so it's actually visible — see drawComboEnergy().
     }

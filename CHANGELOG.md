@@ -1107,6 +1107,27 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v117 — LIGHT HAS FALLOFF, NOT BOUNDARIES · OD swirl dead · the REAL wordmark  ✅
+The user marked the v116 clip's SEAMS along the neck + circled the center swirl again. Root
+lessons internalized (memory updated):
+- **Soft-falloff energy layer:** a clip is a hard boundary — ALL board energy (combo heat, scan
+  sweep, OD wash) now paints into one small OFFSCREEN, feathered lw·1.35 along both trapezoid
+  edges + melted at both ends (destination-out is safe there), then composited additively.
+  Alphas toned down (the column outshouted the world). PROBE: max 3px-step across the old
+  boundary with OD blazing = **1** (v116's clip showed a wall; smooth ramp now). The probe chase
+  also identified the full-canvas miss-flash as a measurement confound (uniform, edgeless — by
+  design) → edge defects are verified by STEP/derivative, not absolute alpha.
+- **The circled "flame that doesn't fit" = the overdrive-aura LOOP** (a fireball spinning at the
+  catcher-row center for the entire OD — also the earlier default-level "spinning fire" sighting).
+  Spawn REMOVED; star power reads through activation comets, burning strings/wash, catcher fire,
+  the HUD flame.
+- **Title wordmark, properly this time:** `npx skills add higgsfield-ai/skills` installed (the
+  playbook: **gpt_image_2 is the default for typography/design**; nano-banana is for characters —
+  my first roll used the wrong model). Regenerated with gpt_image_2, single-line lockup chosen
+  (G2 stacked variant kept on disk for the title screen), flood-fill keyed to transparency,
+  EYEBALL-VERIFIED (spelling, moon, waveform, clean cutout) + numeric brand audit. Live in the
+  hub slot. Zero console errors. Bump ?v 116→117.
+
 ### v116 — energy gets the BOARD's shape · guitar-anchored fade · title wordmark slot  ✅
 The user's marked Skully screenshot + two design notes, all shipped + probe-verified:
 - **The "red rectangle glow with visible edges":** EVERY additive board-energy layer (combo heat
