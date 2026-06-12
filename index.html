@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=117" />
+<link rel="stylesheet" href="jukebox.css?v=118" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -969,6 +969,36 @@
     30%  { transform: translateX(-280px) rotate(-8deg); opacity: 1; }
     60%  { transform: translateX(-235px) rotate(-3deg); opacity: 1; }
     100% { transform: translateX(0) rotate(10deg); opacity: 0; } }
+  /* build21: BONE DADDY's SKULL crowns the guitar — two-piece rig (cranium + jaw) over the note
+     spawn so the notes read as spilling out from under him. Idle bob on a slow loop; the JAW
+     CHATTERS on your hits (response, not decoration); eye sockets flare gold on milestones. */
+  .rrm-skull { position: absolute; top: 0.5%; left: 50%; width: 150px; height: 211px; margin-left: -75px;
+    animation: rrm-skull-bob 4.6s ease-in-out infinite; }
+  /* build21b: FULL-FRAME two-layer rig — both PNGs share the exact same canvas (registration is
+     free); the mandible layer rotates about the hinge line for the chatter. */
+  .rrm-skull-cranium, .rrm-skull-jaw { position: absolute; inset: 0;
+    background-size: contain; background-position: center top; background-repeat: no-repeat; }
+  .rrm-skull-cranium { z-index: 2; filter: drop-shadow(0 10px 26px rgba(224,169,63,0.40)); }
+  .rrm-skull-jaw { z-index: 1; transform-origin: 50% 62%;
+    filter: drop-shadow(0 8px 18px rgba(224,169,63,0.30)); }
+  .rrm-skull.hit .rrm-skull-jaw { animation: rrm-jaw 0.22s ease; }
+  .rrm-skull.big .rrm-skull-jaw { animation: rrm-jaw 0.46s ease 2; }
+  .rrm-skull-eyes { position: absolute; top: 50%; left: 12%; right: 12%; height: 17%; z-index: 3;
+    background: radial-gradient(ellipse 20% 46% at 33% 50%, rgba(224,169,63,0.0), transparent 70%),
+      radial-gradient(ellipse 20% 46% at 64% 50%, rgba(224,169,63,0.0), transparent 70%);
+    opacity: 0; mix-blend-mode: screen; }
+  .rrm-skull.big .rrm-skull-eyes { animation: rrm-eyes 0.9s ease; }
+  @keyframes rrm-skull-bob {
+    0%, 100% { transform: translateY(0) rotate(-0.6deg); }
+    50%      { transform: translateY(7px) rotate(0.6deg); } }
+  @keyframes rrm-jaw {
+    0%   { transform: rotate(0); }
+    35%  { transform: rotate(7deg) translateY(7px); }
+    100% { transform: rotate(0); } }
+  @keyframes rrm-eyes {
+    0%   { opacity: 0; background: radial-gradient(ellipse 22% 42% at 32% 50%, rgba(224,169,63,0.9), transparent 70%), radial-gradient(ellipse 22% 42% at 68% 50%, rgba(224,169,63,0.9), transparent 70%); }
+    45%  { opacity: 1; background: radial-gradient(ellipse 26% 50% at 32% 50%, rgba(255,210,110,0.95), transparent 72%), radial-gradient(ellipse 26% 50% at 68% 50%, rgba(255,210,110,0.95), transparent 72%); }
+    100% { opacity: 0; background: radial-gradient(ellipse 22% 42% at 32% 50%, rgba(224,169,63,0.9), transparent 70%), radial-gradient(ellipse 22% 42% at 68% 50%, rgba(224,169,63,0.9), transparent 70%); } }
   html.rr-reduce-motion .rr-mech * { animation: none !important; }
 
   /* ============ COUNTDOWN ============ */
@@ -3860,11 +3890,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=117"></script>
-<script src="game.js?v=117"></script>
-<script src="jukebox.js?v=117"></script>
-<script src="catalog.js?v=117"></script>
-<script src="multiplayer.js?v=117"></script>
+<script src="assets/fx/fx-player.js?v=118"></script>
+<script src="game.js?v=118"></script>
+<script src="jukebox.js?v=118"></script>
+<script src="catalog.js?v=118"></script>
+<script src="multiplayer.js?v=118"></script>
 
 <!-- ===========================================================================
      DIAG (test build): add ?novideo=1 to the URL to disable the moon VIDEO backdrop
@@ -4025,10 +4055,14 @@
     { id:'pulse-03', tier:'medium', title:'Chrome Veins', song:{ stride:8 }, theme:'chrome',
       cover:'assets/levels/chromeveins-cover.jpg', bgArt:'assets/levels/pulse-bg.jpg', mods:{ speed:1.1 }, unlock:{ stars:1 } },
     // BONE DADDY showcase — booty-shake party (creator character). theme 'bone' (ember/bone); bone-daddy guitar + bone-shatter FX.
+    // build21: the GRAVEYARD pack (user-approved 4K cathedral world, formula-locked) — looping
+    // 1080p ambient bgVideo + 4K-derived bgArt fallback; the skull-crown mechanic replaces the
+    // booty bounce once its art lands (rig already coded; type 'skull' + art/jaw fields).
     { id:'bone-daddy', tier:'medium', title:'Get Busy', song:{ trackId:'30acfdb4-8c85-4e1a-b43d-c91587dcba16' }, theme:'bone',
-      cover:'assets/levels/bonedaddy-cover.jpg', bgArt:'assets/levels/bonedaddy-bg.jpg',
+      cover:'assets/levels/bonedaddy-cover.jpg', bgArt:'assets/levels/bonedaddy-bg2.jpg',
+      bgVideo:'assets/levels/bonedaddy-loop.mp4',
       guitarSkin:'assets/guitars/bone-daddy.png',
-      mechanic:{ type:'booty', art:'assets/levels/bonedaddy-cover.jpg' },   // Bone Daddy bounces at the top; notes drop from him
+      mechanic:{ type:'skull', art:'assets/levels/bonedaddy-skull.png', jaw:'assets/levels/bonedaddy-skull-jaw.png' },   // the baron's skull crowns the spawn — jaw chatters on hits, eyes flare on milestones
       mods:{ speed:1.08 }, unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
@@ -4387,11 +4421,24 @@
     var artCss = m.art ? (" style=\"background-image:url('" + String(m.art).replace(/['\\]/g, '') + "')\"") : '';
     if (m.type === 'booty') el.innerHTML = '<div class="rrm-booty"' + artCss + '></div>';
     else if (m.type === 'paw') el.innerHTML = '<div class="rrm-paw"' + artCss + '></div>';
+    else if (m.type === 'skull') {
+      // build21: Bone Daddy's two-piece skull rig — cranium + jaw layers + an eye-flare overlay.
+      // Self-heals: missing art = empty backgrounds (invisible), zero errors.
+      var jawCss = m.jaw ? (" style=\"background-image:url('" + String(m.jaw).replace(/['\\]/g, '') + "')\"") : '';
+      el.innerHTML = '<div class="rrm-skull">' +
+        '<div class="rrm-skull-cranium"' + artCss + '></div>' +
+        '<div class="rrm-skull-jaw"' + jawCss + '></div>' +
+        '<div class="rrm-skull-eyes"></div></div>';
+    }
     else return null;
     host.appendChild(el); _mechEl = el;
     var node = el.firstChild;
     function bump(cls) { if (!node) return; node.classList.remove('hit', 'big', 'swipe'); void node.offsetWidth; node.classList.add(cls); }
     if (m.type === 'booty') {
+      return { onHit: function () { bump('hit'); }, onMiss: function () {}, onCombo: function (combo, big) { bump(big ? 'big' : 'hit'); } };
+    }
+    if (m.type === 'skull') {
+      // jaw chatters on every hit; milestones double-chatter + flare the eye sockets gold
       return { onHit: function () { bump('hit'); }, onMiss: function () {}, onCombo: function (combo, big) { bump(big ? 'big' : 'hit'); } };
     }
     // paw: bat across the catcher on each hit (lane stored for optional per-lane styling)

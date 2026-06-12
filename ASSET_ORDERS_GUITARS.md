@@ -29,6 +29,11 @@ Rules riding the formula (from the Higgsfield stylization contract, .agents/skil
   EYEBALL coherence vs the existing pack.
 - **Cost discipline**: preflight get_cost before paid calls; batches >5cr get quoted to the user
   first.
+- **RESOLUTION STANDARD (user decree 2026-06-12: "as good as it can possibly be")**: 1k = drafts
+  for composition picks ONLY; **finals = gpt_image_2 4K/high (12cr)** via image-to-image from the
+  approved draft (locks composition); **videos = 1080p** (seedance std; 8s ambient ≈ 72cr);
+  **perfect loops = pin start_image AND end_image to the same approved still** (frame A = frame B
+  by construction; _make_loop qa verifies, crossfade only as fallback).
 
 ## GUITAR ASSET ORDERS (v111) — relay to the asset session
 

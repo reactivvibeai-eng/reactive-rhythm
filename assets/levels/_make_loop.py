@@ -20,14 +20,18 @@ def duration(path):
     return float(json.loads(r.stdout)['format']['duration'])
 
 def grab(path, when, out):
-    run(['ffmpeg', '-y', '-ss', str(when), '-i', path, '-frames:v', '1', out])
+    run(['ffmpeg', '-y', '-ss', str(when), '-i', path, '-frames:v', '1', '-update', '1', out])
+
+def grab_last(path, out):
+    # -sseof seeks from EOF (reliable; a plain -ss near the end can land past the last frame)
+    run(['ffmpeg', '-y', '-sseof', '-0.25', '-i', path, '-frames:v', '1', '-update', '1', out])
 
 def qa(path):
     d = duration(path)
     t = tempfile.mkdtemp()
     a, b = os.path.join(t, 'a.png'), os.path.join(t, 'b.png')
     grab(path, 0, a)
-    grab(path, max(0, d - 0.05), b)
+    grab_last(path, b)
     ia, ib = Image.open(a).convert('RGB'), Image.open(b).convert('RGB')
     ia = ia.resize((160, 90)); ib = ib.resize((160, 90))
     pa, pb = ia.load(), ib.load()
