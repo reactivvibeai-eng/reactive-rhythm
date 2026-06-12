@@ -1107,6 +1107,20 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v118 — BONE DADDY'S GRAVEYARD lives  ✅
+The first level built under the full pipeline (formula → drafts → user-approved comp → 4K final →
+pinned-loop video → rig): **4K cathedral world** (gpt_image_2, image-to-image from the approved
+draft — blood moon over the rose window, staircase aligned with the guitar neck, fog-clean lower
+third), **8s 1080p ambient loop** (seedance, start+end frames PINNED to the still — seam QA
+4.8/px PASS; mid-frame verified no morph), **two-piece SKULL-CROWN rig** (gpt_image_2 keyed on
+magenta, split at the teeth gap: cranium + mandible full-frame layers; jaw CHATTERS on every hit,
+double-chatter + gold eye-socket flare on milestones, slow idle bob; self-healing). Level wired:
+bgVideo + 4K-derived bgArt fallback, mechanic 'skull'. E2E verified: launch → bone theme →
+cinematic completes → video true-cover + plays → rig classes fire on hit/milestone → zero console
+errors. New tools: assets/levels/_make_loop.py (loop QA/crossfade/stitch), _skull_rig.py.
+Spend: ~96cr (drafts 4 + 4K 12 + loop 72 + skull 1 + dead nano drafts 3 — nano now banned).
+Remaining for his level: fate-pair (tombstone/chalice) + themed HUD dressing. Bump ?v 117→118.
+
 ### v117 — LIGHT HAS FALLOFF, NOT BOUNDARIES · OD swirl dead · the REAL wordmark  ✅
 The user marked the v116 clip's SEAMS along the neck + circled the center swirl again. Root
 lessons internalized (memory updated):
