@@ -20,8 +20,10 @@ Rules riding the formula (from the Higgsfield stylization contract, .agents/skil
 - **Transparency = KEY COLOR, never black**: generate on solid bright magenta #FF00FF (green
   #00FF00 if the asset is pink/magenta-ish; blue #0000FF if both clash), then key out —
   including ENCLOSED key-colored regions (the donut-hole rule).
-- **Model routing**: gpt_image_2 for typography/UI/design/anything with text (low quality ~0.5cr
-  for drafts, high 4cr for finals); nano_banana_2/pro for characters + detailed art (1–1.5cr).
+- **Model routing — USER DECREE 2026-06-12: ALL images are generated with `gpt_image_2`. ONLY
+  gpt_image_2.** The user explicitly disapproves of nano-banana output; the Higgsfield playbook's
+  nano-banana routing is OVERRIDDEN for this project. (gpt_image_2: low ~0.5cr drafts, high 4cr
+  finals.) Nano-banana may be used only if the user explicitly asks for it.
 - **Regen budget: 2 attempts per asset**, then take the best and compensate in code.
 - **Contact-sheet check before approval**: paste new assets side-by-side at relative scale and
   EYEBALL coherence vs the existing pack.
