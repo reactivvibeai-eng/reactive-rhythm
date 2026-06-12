@@ -99,8 +99,11 @@
   function nullTour() {
     return { id: null, name: null, isHost: false, hostId: null, ch: null, members: {}, state: 'open',
       round: 0, alive: [], pairs: [], byes: [], sel: null, finals: {}, settled: {}, _settleT: {},
-      rival: null, meIn: false, history: [], champ: null };
+      rival: null, meIn: false, history: [], champ: null,
+      envId: '__random', envName: 'Random' };   // build11: the STAGE the bracket is fought on (host's pick)
   }
+  var _pendingTourJoin = null;   // build11: ?mpjoin=<tid> deep link — join once the lobby is up
+  try { var _mj = location.search.match(/[?&]mpjoin=(t[a-z0-9]+)/); if (_mj) _pendingTourJoin = _mj[1]; } catch (e) {}
 
   // ===================== SOFT PRESENCE (build9 foundation fix) =====================
   // VERIFIED against the live project: Realtime BROADCAST round-trips fine, but native
@@ -228,6 +231,14 @@
     lobbyCh.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         lobbySP.start();
+        // build11: invite deep-link — ask hosts to re-advertise, then join the target bracket
+        if (_pendingTourJoin) {
+          try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+          banner('mpx-lobby-msg', 'Joining the bracket you were invited to…');
+          setTimeout(function () {   // meta never came (host gone or slow) → join the channel directly
+            if (_pendingTourJoin && !tour.id) { var tid = _pendingTourJoin; _pendingTourJoin = null; joinTourDirect(tid); }
+          }, 5000);
+        }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         banner('mpx-lobby-msg', 'Could not reach the live lobby. Check your connection and reopen.');
       }
@@ -892,6 +903,7 @@
   }
   function closeTour(silent) {
     if (tour.id && tour.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'tour-gone', payload: { tid: tour.id } }); } catch (e) {} }
+    try { if (tour.id && window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // build11: drop the bracket's stage theme
     stopTourTick();
     Object.keys(tour._settleT).forEach(function (k) { clearTimeout(tour._settleT[k]); });
     try { if (tourSP) tourSP.stop(); if (tour.ch) supa.removeChannel(tour.ch); } catch (e) {}
@@ -953,13 +965,95 @@
       sel = { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: tourDiff(), demo: (t.id === 'demo') };
     }
     if (!sel) sel = { trackId: 'demo', title: 'Lunar Waves', artist: 'ReactivVibe', art: null, difficulty: tourDiff(), demo: true };
-    tour.ch.send({ type: 'broadcast', event: 't-track', payload: { sel: sel } });
+    tour.sel = sel; broadcastTourTrack();
   }
   function tourDiff() {
     var d = screen.querySelector('#mpx-tdiff button.active');
     return (d && d.getAttribute('data-diff')) || 'medium';
   }
-  function onTourTrack(p) { if (p && p.sel) { tour.sel = p.sel; paintTourRoom(); } }
+  function broadcastTourTrack() {
+    if (!tour.ch) return;
+    try { tour.ch.send({ type: 'broadcast', event: 't-track', payload: { sel: tour.sel, envId: tour.envId, envName: tour.envName } }); } catch (e) {}
+  }
+  function onTourTrack(p) {
+    if (!p) return;
+    if (p.sel) tour.sel = p.sel;
+    if (p.envId) { tour.envId = p.envId; tour.envName = p.envName || ''; }
+    buildTourEnvRow(); paintTourRoom();
+  }
+
+  // ---- build11: full-library SEARCH picker for the bracket (host) ----
+  function tourRenderPicker(q) {
+    var box = $('mpx-tour-results'); if (!box) return;
+    var RC = window.RhythmCatalog;
+    var all = (RC && RC.allTracks) ? RC.allTracks() : [];
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t); });
+    q = (q || '').toLowerCase();
+    var rows = all.filter(function (t) {
+      if (!q) return true;
+      return (t.title || '').toLowerCase().indexOf(q) >= 0 || (t.artist_credit_name || t.artist_name || '').toLowerCase().indexOf(q) >= 0;
+    }).slice(0, 40);
+    box.innerHTML = rows.map(function (t, i) {
+      return '<div class="mpx-result" data-i="' + i + '"><div><div class="r-t">' + esc(t.title || 'Untitled') + '</div><div class="r-a">' + esc(t.artist_credit_name || t.artist_name || '') + '</div></div></div>';
+    }).join('') || '<div class="mpx-result"><div class="r-a">No tracks found.</div></div>';
+    [].forEach.call(box.querySelectorAll('.mpx-result[data-i]'), function (el) {
+      el.addEventListener('click', function () {
+        var t = rows[+el.getAttribute('data-i')]; if (!t) return;
+        tour.sel = { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: tourDiff(), demo: (t.id === 'demo') };
+        var pk = $('mpx-tour-picker'); if (pk) pk.hidden = true;
+        broadcastTourTrack(); paintTourRoom();
+      });
+    });
+  }
+
+  // ---- build11: STAGE (environment) chips for the bracket (host picks; everyone sees) ----
+  function tourEnvList() {
+    try { if (window.RhythmLevels && window.RhythmLevels.environments) return window.RhythmLevels.environments(); } catch (e) {}
+    return null;
+  }
+  function buildTourEnvRow() {
+    var rowEl = $('mpx-tour-env'), head = $('mpx-tour-envhead'); if (!rowEl) return;
+    var list = tourEnvList();
+    var show = !!list && tour.isHost && tour.state === 'open';
+    if (head) head.hidden = !list;
+    rowEl.hidden = !list;
+    if (!list) return;
+    var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
+    rowEl.innerHTML = '';
+    list.forEach(function (e) {
+      var locked = !!(e.paid && !dev);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'env-chip' + (e.id === tour.envId ? ' sel' : '') + (locked ? ' locked' : '');
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', e.id === tour.envId ? 'true' : 'false');
+      if (e.accent) b.style.setProperty('--ec', e.accent);
+      var ini = (e.name || '?').trim().charAt(0).toUpperCase();
+      var artBg = e.cover ? ("background-image:url('" + safeUrl(e.cover) + "');") : '';
+      var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'ARENA' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
+      b.innerHTML = '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + esc(ini) + '</span>') + (locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
+        '<div class="ec-body"><div class="ec-name">' + esc(e.name) + '</div><div class="ec-tag">' + esc(tag) + '</div></div>';
+      if (show && !locked) b.addEventListener('click', function () {
+        tour.envId = e.id; tour.envName = e.isRandom ? 'Random' : e.name;
+        broadcastTourTrack(); buildTourEnvRow();
+      });
+      else b.disabled = true;
+      rowEl.appendChild(b);
+    });
+  }
+  // host resolves the concrete stage each round (Random → a fresh roll every round, same for ALL duelists)
+  function hostResolveEnv() {
+    if (!tour.envId || tour.envId === '__default') return null;
+    var list = tourEnvList(); if (!list) return null;
+    if (tour.envId === '__random') {
+      var pool = list.filter(function (e) { return !e.isDefault && !e.isRandom; });
+      if (!pool.length) return null;
+      var e = pool[Math.floor(Math.random() * pool.length)];
+      return { id: e.id, name: e.name };
+    }
+    var hit = null; list.forEach(function (e) { if (e.id === tour.envId) hit = e; });
+    return hit ? { id: hit.id, name: hit.name } : null;
+  }
 
   // ---- host: start + run rounds ----
   function buildPairs(alive) {
@@ -978,7 +1072,9 @@
   function hostBeginRound(n, alive, sel) {
     var pb = buildPairs(alive);
     tour.ch.send({ type: 'broadcast', event: 't-round', payload: {
-      n: n, alive: alive, pairs: pb.pairs, byes: pb.byes, sel: sel, atMs: Date.now() + 2600 } });
+      n: n, alive: alive, pairs: pb.pairs, byes: pb.byes, sel: sel,
+      env: hostResolveEnv(),                       // build11: the STAGE this round is fought on (null = arena)
+      atMs: Date.now() + 2600 } });
   }
   function hostNextTrack() {
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
@@ -1003,7 +1099,12 @@
     screen.classList.add('active'); activeNow = true; step('tour');   // pull everyone back from results/winner views
     if (myPair) {
       oppMeta = tourSeat(tour.rival);
-      banner('mpx-tour-msg', 'ROUND ' + p.n + ' — you vs ' + tourName(tour.rival) + '. Launching…');
+      banner('mpx-tour-msg', 'ROUND ' + p.n + ' — you vs ' + tourName(tour.rival) + (p.env ? ' · stage: ' + p.env.name : '') + '. Launching…');
+      // build11: fight on the host-broadcast STAGE (same level theme for every duelist)
+      try {
+        var RL = window.RhythmLevels;
+        if (RL) { if (p.env && p.env.id) RL.applyEnvironment(p.env.id); else RL.clearEnvironment(); }
+      } catch (e) {}
       // round-token guard: onSongEnd registrations are one-shot but only consumed when a song
       // ENDS — a leftover registration from an aborted round must not bank a bogus final later.
       var tok = tour.id + ':' + p.n;
@@ -1135,8 +1236,11 @@
     var champ = $('mpx-tour-champ'); if (champ) champ.hidden = true;
     var setup = $('mpx-tour-setup'); if (setup) setup.hidden = false;
     var roll = $('mpx-tour-roll'); if (roll) roll.hidden = !tour.isHost;
+    var sch = $('mpx-tour-search-toggle'); if (sch) sch.hidden = !tour.isHost;   // build11
+    var pk = $('mpx-tour-picker'); if (pk) pk.hidden = true;
     var st = $('mpx-tour-start'); if (st) st.hidden = !tour.isHost;
     var diff = $('mpx-tdiff'); if (diff) [].forEach.call(diff.children, function (b) { b.disabled = !tour.isHost; });
+    buildTourEnvRow();   // build11: stage chips (host interactive; guests see the pick)
     banner('mpx-tour-msg', '');
     paintTourRoom();
   }
@@ -1159,7 +1263,7 @@
     }
     var t = $('mpx-tour-t'), a = $('mpx-tour-a'), art = $('mpx-tour-art');
     if (t) t.textContent = tour.sel ? tour.sel.title : 'Rolling a track…';
-    if (a) a.textContent = tour.sel ? (tour.sel.artist || '—') : '—';
+    if (a) a.textContent = (tour.sel ? (tour.sel.artist || '—') : '—') + (tour.envName ? '  ·  stage: ' + tour.envName : '');
     if (art) {
       if (tour.sel && tour.sel.art) { art.style.backgroundImage = 'url("' + safeUrl(tour.sel.art) + '")'; art.textContent = ''; }
       else { art.style.backgroundImage = ''; art.textContent = '♪'; }
@@ -1230,7 +1334,18 @@
     if (!p || !p.tid) return;
     if (p.hostId === ME.id) return;
     toursDir[p.tid] = p; toursDir[p.tid].at = Date.now();
+    // build11: invite deep-link target found → join it
+    if (_pendingTourJoin && p.tid === _pendingTourJoin && !tour.id) { _pendingTourJoin = null; joinTour(p.tid); }
+    // late meta for a direct-joined bracket → learn the real name/host
+    if (tour.id === p.tid && !tour.isHost) { tour.name = p.name || tour.name; tour.hostId = p.hostId || tour.hostId; paintTourRoom(); var nm = $('mpx-tour-name'); if (nm) nm.textContent = (tour.name || 'TOURNAMENT').toUpperCase(); }
     renderRooms(); updateBrowseCount();
+  }
+  function joinTourDirect(tid) {   // build11: join by id only (invite link; no directory meta yet)
+    if (!supa || !lobbyCh || tour.id) return;
+    tour = nullTour(); tour.id = tid; tour.name = 'BRACKET'; tour.isHost = false; tour.hostId = null;
+    joinTourChannel(tid);
+    reannounce(); enterTourRoom();
+    banner('mpx-tour-msg', 'Joined via invite — waiting for the bracket…');
   }
   function reconcileToursFromPresence() {
     Object.keys(toursDir).forEach(function (tid) {
@@ -1314,6 +1429,22 @@
   wire('mpx-tour-roll', 'click', rollTrack);
   wire('mpx-tour-start', 'click', startTour);
   wire('mpx-tour-leave', 'click', leaveTourBtn);
+  // build11: library search picker + invite link
+  wire('mpx-tour-search-toggle', 'click', function () {
+    if (!tour.isHost || tour.state !== 'open') return;
+    var p = $('mpx-tour-picker'); if (!p) return;
+    p.hidden = !p.hidden;
+    if (!p.hidden) { tourRenderPicker(''); var q = $('mpx-tour-q'); if (q) { q.value = ''; q.focus(); } }
+  });
+  wire('mpx-tour-q', 'input', function () { tourRenderPicker(this.value); });
+  wire('mpx-tour-invite', 'click', function () {
+    if (!tour.id) return;
+    var link = location.origin + location.pathname + '?mpjoin=' + tour.id;
+    var btn = $('mpx-tour-invite');
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ LINK COPIED — SEND IT' : '🔗 COPY INVITE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '🔗 COPY INVITE LINK'; }, 2600); }
+    try { navigator.clipboard.writeText(link).then(function () { flash(true); }, function () { window.prompt('Copy the invite link:', link); }); }
+    catch (e) { window.prompt('Copy the invite link:', link); }
+  });
   wire('mpx-tdiff', 'click', function (e) {
     var b = e.target.closest('button'); if (!b || !tour.isHost || tour.state !== 'open') return;
     [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
@@ -1354,6 +1485,8 @@
     mo.observe(screen, { attributes: true, attributeFilter: ['class'] });
   } catch (e) {}
   if (screen.classList.contains('active')) { activeNow = true; onActivated(); }
+  // build11: invite deep-link — surface the multiplayer screen shortly after boot so the join flows
+  if (_pendingTourJoin) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
 
   // public hook
   window.RhythmMP = { open: open, close: leaveAll, isLive: function () { return matchLive || tour.state === 'live'; } };

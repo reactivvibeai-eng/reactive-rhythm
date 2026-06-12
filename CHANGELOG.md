@@ -1107,6 +1107,27 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v122 — playtest feedback round: tournaments get a REAL setup · levels system resurrected  ✅
+Direct response to the user's first MP-era playtest. **CRITICAL FIX FIRST:** the v121 ftfy repair
+had a second bite — its default `uncurl_quotes` flattened curly apostrophes inside JS strings
+(`'…level's track…'`) → SyntaxError silently killed the LEVELS inline script: Campaign tile dead,
+levels screen empty, env picker reduced to one "Default" chip, `RhythmLevels` unexported, and the
+transparent #menu let the ENGINE's backdrop bleed through ("photo hanging in the background").
+Repaired: 4 curly-quote lines restored byte-exact from the clean v119 blob; **every inline
+`<script>` block now node-checked** (`assets/levels/_fix_quotes.py`); audit: all 6 hub tiles
+route, 13 environments, 18 level cards, zero console errors. Opaque base coats on #menu +
+#menu-hub + an edge-feather mask on the library video — no hard frames, no bleed-through, ever.
+**Tournament setup, rebuilt:** 🔍 **library search picker** (whole catalog, title/artist, tap to
+lock — verified live: 27 hits for "love", pick syncs to everyone); host picks the **STAGE** the
+bracket is fought on (env chips: Random rolls a fresh level EVERY round host-side so all duelists
+match; fixed pick rides every t-round; entrants auto-apply the level theme before launch);
+🔗 **COPY INVITE LINK** — `?mpjoin=<id>` deep link auto-opens multiplayer, pings the lobby, joins
+the bracket (5s direct-join fallback if the directory meta is slow). **MP screen dressed:** the
+flat maroon lobby became the VERSUS ROOM — full-bleed backstage key art (crimson vs gold trophy
+podiums, blood-moon stage through the bay; edges vignette to black) under a glass panel, plus a
+drip-metal **MULTIPLAYER wordmark** (screen-blended; `// //` header dupe fixed). Assets ~9cr
+(2 drafts + 2 high finals), gpt_image_2. Bump ?v 121→122.
+
 ### v121 — HUB TILES BECOME GAME ASSETS + UTF-8 corruption repaired  ✅
 The six menu-hub tiles now wear **formula-locked key art** (gpt_image_2, drafts → composition
 locked via image-to-image → high finals; `assets/hub/*.jpg`, 1024×688 ≈140KB each): Campaign =
