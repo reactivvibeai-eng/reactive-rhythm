@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=134" />
+<link rel="stylesheet" href="jukebox.css?v=135" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2299,8 +2299,12 @@
     /* the floating mute is for gameplay — the menu has its own in the top bar */
     .menu-screen.active ~ .mute-btn, .menu-screen.active .mute-btn { display: none; }
   }
-  /* hide floating mute whenever the library menu is the active screen */
-  body:has(.menu-screen.active) .mute-btn, body:has(.menu-hub.active) .mute-btn { display: none; }
+  /* hide the floating gameplay mute on the menu / hub / multiplayer screens (those have their own mute).
+     build35 (audit): was body:has(...) — :has() silently no-ops in the desktop app's older Chromium (the
+     SAME trap as the moon bleed). The .mute-btn is a BODY child while the screens live in #app (cousins,
+     not siblings), so NO pure-CSS universal selector reaches it — a tiny read-only observer toggles this
+     class on <html> instead (see the floating-mute script near the hub router). */
+  html.rr-hide-fmute .mute-btn { display: none !important; }
   /* ============ build8: FIRST-RUN RYO INTRO ============ */
   .ryo-intro-screen { z-index: 300; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
   .ryo-intro-screen.active { opacity: 1; pointer-events: auto; }
@@ -4114,11 +4118,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=134"></script>
-<script src="game.js?v=134"></script>
-<script src="jukebox.js?v=134"></script>
-<script src="catalog.js?v=134"></script>
-<script src="multiplayer.js?v=134"></script>
+<script src="assets/fx/fx-player.js?v=135"></script>
+<script src="game.js?v=135"></script>
+<script src="jukebox.js?v=135"></script>
+<script src="catalog.js?v=135"></script>
+<script src="multiplayer.js?v=135"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -6088,6 +6092,24 @@
       if (hit) { burstAt(hit, MAP[i][1], MAP[i][2]); if (MAP[i][3]) boom('shockwave', MAP[i][3], 520); break; }
     }
   }, true);
+})();
+</script>
+<!-- build35 (audit): floating gameplay-mute visibility. .mute-btn is a <body> child but the screens
+     live in #app, so no pure-CSS selector universally hides it on menu/hub/MP (the old body:has() gate
+     no-ops in the desktop app's older Chromium). A read-only MutationObserver toggles html.rr-hide-fmute
+     when any of those screens is active (writes only to <html>, never to the observed nodes → no loop). -->
+<script>
+(function () {
+  var HIDE_ON = ['menu', 'menu-hub', 'multiplayer-screen'];
+  function sync() {
+    var hide = HIDE_ON.some(function (id) { var el = document.getElementById(id); return el && el.classList.contains('active'); });
+    document.documentElement.classList.toggle('rr-hide-fmute', hide);
+  }
+  try {
+    var obs = new MutationObserver(sync);
+    document.querySelectorAll('.screen').forEach(function (s) { obs.observe(s, { attributes: true, attributeFilter: ['class'] }); });
+  } catch (e) {}
+  sync();
 })();
 </script>
 <!-- MAIN MENU HUB router — fronts the existing screens with a guided centered console + back-nav -->

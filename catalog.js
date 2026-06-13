@@ -504,7 +504,8 @@
     ['easy', 'medium', 'hard'].forEach(d => { const r = s[trackId + '|' + d]; if (r && (!best || r.score > best.score)) best = Object.assign({ difficulty: d }, r); });
     if (best) return best;
     const t = catalogTracks.find(x => x.id === trackId);
-    return (t && t._mockBest) || null;
+    // build35 (audit P1): never surface a FABRICATED mock grade/score on LIVE data — only in mock/preview.
+    return ((!catalogLive && t && t._mockBest) || null);
   }
   function saveBest(trackId, res) {
     if (!trackId || !res) return;
@@ -922,10 +923,10 @@
     if (trackId && API_BASE) {
       try {
         const t = await api('/track/' + trackId, { auth: true });
-        openSheet({
-          id: t.id, title: t.title, artist_name: t.artist_name, genre: t.genre,
-          bpm: t.chart && t.chart.bpm, duration_seconds: t.duration_seconds, artwork_url: t.artwork_url,
-        });
+        // build35 (audit P0): pass the FULL /track/:id object. The old cherry-pick dropped
+        // chart_status/has_chart/audio_url/wav_url/stream_url, so trackReady() failed and every shared
+        // /play?trackId=<uuid> link dead-ended (Play disabled, or fell back to the demo track).
+        openSheet(Object.assign({}, t));
       } catch (e) { console.warn('deep-link track load failed', e); }
     }
   }

@@ -706,7 +706,9 @@
     if (muted || !missBuffer) return;
     try {
       const ac = getAC();
-      const g = ac.createGain(); g.gain.value = 0.5;
+      // build35 (audit P1): scale the miss squelch by the Hit-Sound mixer (was a hardcoded 0.5 ≈ 10×
+      // a hit at the default level, and it ignored the Settings slider). ~1.6× a perfect hit, capped.
+      const g = ac.createGain(); g.gain.value = Math.min(0.5, SFX_LEVEL * 1.6);
       const s = ac.createBufferSource(); s.buffer = missBuffer;
       s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
     } catch (e) {}
@@ -1355,6 +1357,10 @@
   }
 
   async function beginPlay() {
+    // build35 (audit P1): make (re)launch idempotent — stop any in-flight run FIRST so a second
+    // play() / double-tap / future MP click can't spawn a SECOND self-perpetuating rAF + scoring loop
+    // (double scoring + overlapping audio). stopGame() cancels the live rafId and stops the player.
+    stopGame();
     // (re)build session — fresh play_token + player each attempt (live anti-cheat)
     session = await provider();
     beats = session.beats || [];
@@ -1435,7 +1441,11 @@
 
   async function endGame() {
     stopGame();
-    const total = notes.length;
+    // build35 (audit P0): EXCLUDE bombs from the scored-note total. Bombs are dodged (hit='avoided'),
+    // never counted in perfect/great/good — counting them in `total` deflated accuracy/grade (a clean
+    // Medium/Hard dodge-all run read ~96%, suppressing S / 100% / full-combo) AND over-reported
+    // notes_total to the server. One honest count drives accFrac, notes_total, and full_combo.
+    const total = notes.filter(n => n.type !== 'bomb').length;
     const hit = counts.perfect + counts.great + counts.good;
     const accFrac = total > 0
       ? (counts.perfect * 1.0 + counts.great * 0.85 + counts.good * 0.5) / total : 0;
@@ -1812,6 +1822,10 @@
   });
   // safety: if the window loses focus mid-hold, a keyup may never arrive — release all
   window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing') { try { pauseGame(); } catch (e) {} } });
+  // build35 (audit): some embedded / WebView Chromium builds don't emit window 'blur' on tab-switch or
+  // minimize — mirror the release+auto-pause on document visibilitychange so a backgrounded song never
+  // keeps playing. (Same older-engine reality that the :has → :not fix addressed.)
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing') { try { pauseGame(); } catch (e) {} } } });
 
   // ---------- MIDI + GAMEPAD INPUT (desktop instruments & controllers) ----------
   // One responsive codebase: phones use touch tap-zones; desktop adds keyboard,

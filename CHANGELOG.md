@@ -1107,6 +1107,35 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v135 — end-to-end AUDIT fixes: 2 P0 + 3 P1 + 2 hardening (9-agent review)  ✅
+A 9-agent parallel audit (flow/compat · levels · campaign · multiplayer · catalog · engine · persistence ·
+resilience → synthesis) found and we fixed the verified, high-value, low-risk items (each confirmed by
+pattern against this build, NOT by the agents' stale line numbers — some agents read an old checkpoint):
+- **P0 — deep-link dead-end (catalog.js):** `/play?trackId=<uuid>` cherry-picked 7 fields into openSheet,
+  DROPPING chart_status/audio_url/etc → trackReady() failed and every shared song link opened a disabled/
+  demo sheet. Now passes the full /track object. (The canonical share/embed path for the /play deploy.)
+- **P0 — bomb-deflated accuracy (game.js endGame):** `total = notes.length` counted bombs (which are
+  dodged, never scored), so a clean Medium/Hard run read ~96% — S / 100% / full-combo were impossible,
+  and inflated notes_total was persisted + submitted to the server. Now `total` excludes bombs
+  (`notes.filter(n=>n.type!=='bomb')`). Verified: demo chart = 335 notes incl. 12 bombs → honest 323.
+- **P1 — re-entrancy (game.js beginPlay):** a 2nd play()/double-tap could spawn a 2nd perpetual rAF+scoring
+  loop (double scoring, audio overlap). beginPlay() now `stopGame()`s first — idempotent launch.
+- **P1 — miss SFX (game.js):** the squelch was a hardcoded 0.5 (~10× a hit, ignored the Hit-Sound slider).
+  Now `Math.min(0.5, SFX_LEVEL*1.6)` — scales with the mixer, ~1.6× a hit, capped.
+- **P1 — fake mock grade (catalog.js getBest):** `_mockBest` could surface a fabricated S/score on LIVE
+  data; now gated behind `!catalogLive`.
+- **Hardening — 2nd :has() trap (index.html):** the floating gameplay-mute used `body:has(.menu-screen.active)`
+  to hide on menu/hub — the SAME construct that no-ops in the desktop app's older Chromium, so it bled onto
+  the library there. .mute-btn is a <body> child while screens live in #app (cousins, no CSS selector spans
+  that), so a read-only MutationObserver now toggles `html.rr-hide-fmute`. Verified in-engine: mute hidden
+  on library/hub/MP, shown in gameplay.
+- **Hardening — backgrounded audio (game.js):** added a `visibilitychange` companion to the window-`blur`
+  auto-pause (some embedded Chromium builds don't fire `blur` on tab-switch/minimize).
+node --check clean on all JS, zero console errors. DEFERRED (reported to user): hold-sustain score-ceiling
+(needs backend coordination), analyzeBeats zero-beat synthetic-grid fallback (needs-effort), beta-gate
+posture (user decision), and a focused RE-AUDIT of campaign/levels/multiplayer (those agents referenced a
+stale tree — findings unverified). Bump ?v 134→135.
+
 ### v134 — kill the engine-moon bleed UNIVERSALLY (:has → :not) — the real "moon stuck at top" root cause  ✅
 After v133 swapped the browse bg to the moonless ember loop, the user STILL saw a moon at the top WITH
 the embers visible — proving the moon was a SEPARATE element bleeding through (not the browse video).
