@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=127" />
+<link rel="stylesheet" href="jukebox.css?v=128" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4082,11 +4082,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=127"></script>
-<script src="game.js?v=127"></script>
-<script src="jukebox.js?v=127"></script>
-<script src="catalog.js?v=127"></script>
-<script src="multiplayer.js?v=127"></script>
+<script src="assets/fx/fx-player.js?v=128"></script>
+<script src="game.js?v=128"></script>
+<script src="jukebox.js?v=128"></script>
+<script src="catalog.js?v=128"></script>
+<script src="multiplayer.js?v=128"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4545,11 +4545,11 @@
     }
     // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin → equipped/default.
     try { if (window.RhythmGame && window.RhythmGame.setGuitarSkin) window.RhythmGame.setGuitarSkin(L && L.guitarSkin ? L.guitarSkin : null); } catch (e) {}
-    // build8: per-level GEM TINT — recolor the note marbles to the level accent (e.g. Skully violet).
+    // build28: per-level GEM TINT DISABLED (playtest) — recoloring notes to the level theme made them blend
+    // into the guitar (pink-on-pink etc.). Notes are now the fixed bright per-lane gem; never theme-tinted.
     try {
       if (window.RhythmGame && window.RhythmGame.setLevelGemTint) {
-        var _gemHex = (L && L.theme && LV_THEMES[L.theme]) ? ({ crimson:'#ff1f2e', ember:'#ff7a4a', gold:'#e0a93f', chrome:'#dad7d2', violet:'#a64dff', bone:'#ffac5e', pink:'#ff5fa2' })[L.theme] : null;
-        window.RhythmGame.setLevelGemTint((_gemHex && _gemHex !== '#ff1f2e') ? _gemHex : null);
+        window.RhythmGame.setLevelGemTint(null);
       }
     } catch (e) {}
     var v = $('bg-video'), bi = $('bg-image');

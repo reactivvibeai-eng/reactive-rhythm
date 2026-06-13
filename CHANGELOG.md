@@ -1107,6 +1107,27 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v128 — READABILITY: GH-grade high-contrast notes + clean vector catchers (no more black box)  ✅
+Playtest: the falling marbles were nearly invisible (pink-on-pink on Melody, bone-on-bone on Bone,
+blend-into-dark on Skully) and the catcher buttons read as a "black box" on bright guitars. A
+multi-agent workflow (GH/Clone Hero research + code diagnosis) proved both share one root: the play
+elements were dark or theme-matched instead of bright + contrasting. Fix (all free canvas-code; also
+REMOVES 3 PNG deps):
+- **Notes → bright per-lane faceted GEMS.** Routed drawNote through the (previously unused) buildGem()
+  — saturated gh lane color (green/red/yellow/chrome/orange) + white inner core + white rim + lane
+  glow — and ADDED a warm near-black OUTER RING so the gem pops on BRIGHT guitars too (white core
+  handles dark guitars). Sized ~1.55× the lane width (clearly readable). Cached per-lane in
+  gfx.gems[] (rebuilt on resize). Star = gold buildStar; bomb unchanged (dark = negative cue).
+- **Killed the theme gem-tint** (`_gemTintFor` returns null + setLevelGemTint(null) in index.html) —
+  the recolor-to-theme was the pink-on-pink bug. Notes are NEVER the guitar color now.
+- **Catcher → clean vector component.** Rewrote drawCatcher: deleted the dark ring-red.png blit (the
+  "black box"); now a translucent lane-tinted well (guitar shows THROUGH) + thin dark inner ring +
+  crisp chrome rim + additive lane glow + white-cored hit flash. Removed ring-red/white/gold.png loads.
+**Verified in-engine all 3 levels (captures `_cap_v128_*`):** Melody green gem + clean catchers; Bone
+yellow gem + clean catchers; Skully orange gem + clean catchers — every note pops against its guitar,
+zero black box, per-lane colors distinct, zero console errors. Per-level note SHAPE (e.g. Melody paws)
+deferred — contrast was the requirement. Zero credits. Bump ?v 127→128.
+
 ### v127 — BESPOKE THEMED GUITARS, done right (built to the template, verified on-strings)  ✅
 With the v126 standard + gate in place, re-rendered Melody's and Bone Daddy's guitars the CORRECT
 way (user chose bespoke over standardizing). Method that finally worked: image-to-image FROM the

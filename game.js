@@ -276,9 +276,7 @@
   let activeGuitarImg = guitarImg;                     // swapped by the active lane profile
   const noteImg = loadImg('assets/note-normal.png');
   const noteStarImg = loadImg('assets/note-star.png');
-  const ringRed = loadImg('assets/ring-red.png');
-  const ringWhite = loadImg('assets/ring-white.png');
-  const ringGold = loadImg('assets/ring-gold.png');
+  // build28: ring-red/white/gold.png loads removed — drawCatcher is now fully canvas-drawn (no dark-box sprite).
   function resize() {
     const rect = canvas.parentElement.getBoundingClientRect();
     cw = Math.floor(rect.width); ch = Math.floor(rect.height);
@@ -1243,7 +1241,11 @@
     return c;
   }
   function _gemTintFor(kind) {
-    if (!levelGemHex) return null;
+    // build28: theme gem-tint DISABLED — recoloring the note to the level theme made notes blend into the
+    // guitar (pink-on-pink etc.). Notes are now the fixed bright per-lane gem (drawNote uses gfx.gems). Kept
+    // the function + setter so the levels API stays intact, but it never tints now (the contract is locked).
+    return null;
+    if (!levelGemHex) return null;   // eslint-disable-line no-unreachable
     let entry = _gemTintCache[levelGemHex];
     if (!entry) entry = _gemTintCache[levelGemHex] = { normal: undefined, star: undefined };
     const slot = (kind === 'star') ? 'star' : 'normal';
@@ -3194,8 +3196,12 @@
     const cg = x.createRadialGradient(cx, cy - r * 0.18, 0, cx, cy, r * 0.9);
     cg.addColorStop(0, 'rgba(255,255,255,0.6)'); cg.addColorStop(0.5, 'rgba(' + light + ',0.16)'); cg.addColorStop(1, 'rgba(' + light + ',0)');
     x.fillStyle = cg; hexPathOn(x, cx, cy, r, 0.94); x.fill();
-    // crisp rim
-    hexPathOn(x, cx, cy, r, 0.94); x.lineWidth = Math.max(1.4, base * 0.04); x.strokeStyle = 'rgba(255,255,255,0.92)'; x.stroke();
+    // build28 (playtest readability): DARK OUTER RING (GH contrast cue). The white core + lane glow make the
+    // gem pop on DARK guitars (Skully); this warm near-black ring makes it pop on BRIGHT guitars (Melody pink /
+    // Bone bone). Drawn thick UNDER the white rim so it peeks out as a dark outline on both sides → background-proof.
+    hexPathOn(x, cx, cy, r, 0.94); x.lineWidth = Math.max(2.4, base * 0.11); x.strokeStyle = 'rgba(18,7,7,0.88)'; x.stroke();
+    // crisp white rim (on top of the dark ring)
+    hexPathOn(x, cx, cy, r, 0.94); x.lineWidth = Math.max(1.4, base * 0.045); x.strokeStyle = 'rgba(255,255,255,0.95)'; x.stroke();
     // specular dot
     x.fillStyle = 'rgba(255,255,255,0.95)'; x.beginPath(); x.ellipse(cx - r * 0.28, cy - r * 0.36, r * 0.16, r * 0.09, -0.5, 0, Math.PI * 2); x.fill();
     return { c: c, S: S };
@@ -3217,7 +3223,13 @@
 
   function buildGameSprites(lw) {
     const base = Math.round(Math.min(lw * 0.92, 82));
-    gfx = { lw: lw, base: base, sphere: buildSphere(base, false), sphereHot: buildSphere(base, true) };
+    // build28: cache the BRIGHT per-lane faceted gems (GH-style: lane color + white core + dark ring + glow)
+    // and the gold surge star. These are the high-contrast notes that pop on ANY guitar (replacing the dark
+    // obsidian sphere + the blend-into-guitar theme tint). Rebuilt on resize/profile change; LANE_COLORS is
+    // live by here (buildGameSprites runs from the draw loop, after applyLaneProfile set the gh palette).
+    const gems = []; for (let l = 0; l < LANE_COUNT; l++) gems.push(buildGem(base, l));
+    gfx = { lw: lw, base: base, sphere: buildSphere(base, false), sphereHot: buildSphere(base, true),
+            gems: gems, star: buildStar(base) };
   }
 
   // glossy obsidian note-sphere (black, crimson rim-light + bright specular) like the photo
@@ -3243,18 +3255,42 @@
   // glowing fret-catcher ring (the "button") at the bottom of a string.
   // `press` (0..1) pushes the button DOWN into the bridge and squashes it, like a
   // real fret button being struck; `pulse` lights it up.
+  // build28 (playtest: the old ring-red.png catcher read as a "black box" on bright guitars): the catcher is
+  // now drawn ENTIRELY in canvas as a clean, lane-colored component that pops on ANY guitar — a TRANSLUCENT
+  // lane-tinted well (the guitar shows through, no opaque box), a thin dark inner ring for separation on bright
+  // art, a crisp chrome rim (the clean game-component edge), an additive lane glow, and a white-cored hit flash
+  // on press. Keeps the squash + push-down press feel. No ring sprites.
   function drawCatcher(x, y, r, color, pulse, breathe, press) {
     press = press || 0;
     const sc = 1 - press * 0.16;              // squash on press
-    const w = r * 2.6 * sc, h = w * 0.6;
+    const rw = r * 1.3 * sc, rh = rw * 0.6;   // ellipse radii (perspective-squashed)
     const dy = press * r * 0.75;              // push down into the bridge
-    const lit = (color.c === '#e0a93f') ? ringGold : ringWhite;
     const glow = Math.max(pulse, press);
+    const rgb = color.rgb, hex = color.c;
     ctx.save(); ctx.translate(x, y + dy);
-    if (ringRed._ready) ctx.drawImage(ringRed, -w / 2, -h / 2, w, h);
-    if (glow > 0.02 && lit._ready) {
-      ctx.save(); ctx.globalAlpha = Math.min(1, glow * 1.25); ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(lit, -w / 2, -h / 2, w, h); ctx.restore();
+    // translucent lane-tinted body — guitar shows THROUGH (never an opaque dark box)
+    const bg = ctx.createRadialGradient(0, -rh * 0.2, 0, 0, 0, rw);
+    bg.addColorStop(0, 'rgba(' + rgb + ',0.34)'); bg.addColorStop(0.7, 'rgba(' + rgb + ',0.15)'); bg.addColorStop(1, 'rgba(' + rgb + ',0.05)');
+    ctx.beginPath(); ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
+    // thin dark inner ring — separation on BRIGHT guitars
+    ctx.beginPath(); ctx.ellipse(0, 0, rw * 0.86, rh * 0.86, 0, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1, r * 0.05); ctx.strokeStyle = 'rgba(18,7,7,0.7)'; ctx.stroke();
+    // crisp chrome rim — the clean edge that reads on ANY background
+    ctx.beginPath(); ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1.5, r * 0.14); ctx.strokeStyle = 'rgba(236,231,227,0.92)'; ctx.stroke();
+    // additive lane-color glow ring (grows with pulse/press)
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.beginPath(); ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(1.5, r * 0.16); ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.42 + 0.5 * glow).toFixed(2) + ')';
+    ctx.shadowColor = hex; ctx.shadowBlur = r * (0.5 + 1.4 * glow); ctx.stroke();
+    ctx.restore();
+    // white-cored hit flash on press/pulse
+    if (glow > 0.04) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, glow);
+      const fg = ctx.createRadialGradient(0, 0, 0, 0, 0, rw * 0.95);
+      fg.addColorStop(0, 'rgba(255,255,255,0.9)'); fg.addColorStop(0.45, 'rgba(' + rgb + ',0.5)'); fg.addColorStop(1, 'rgba(' + rgb + ',0)');
+      ctx.beginPath(); ctx.ellipse(0, 0, rw * 0.95, rh * 0.95, 0, 0, Math.PI * 2); ctx.fillStyle = fg; ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -3340,13 +3376,18 @@
   }
 
   function drawNote(cx, y, w, note) {
-    const img = note.type === 'star' ? noteStarImg : noteImg;
-    let S = w * 1.3;
-    if (note.type === 'accent') S *= 1.12;
-    const tinted = _gemTintFor(note.type);   // build8: violet (etc.) gem when a level sets a gem tint; null otherwise
-    if (tinted) ctx.drawImage(tinted, cx - S / 2, y - S / 2, S, S);
-    else if (img && img._ready) ctx.drawImage(img, cx - S / 2, y - S / 2, S, S);
-    else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
+    // build28 (playtest: notes were invisible — pink-on-pink / bone-on-bone / dark-on-dark): notes are now the
+    // BRIGHT per-lane faceted gem (lane color + white core + dark ring + glow) so they pop on ANY guitar; the
+    // gold star for surge notes. The level theme NO LONGER recolors the note body (that was the blend bug).
+    const gem = gfx && (note.type === 'star' ? gfx.star : (gfx.gems && gfx.gems[note.lane]));
+    // target on-screen gem diameter ≈ 1.55× the lane note width (clearly readable); the cached canvas holds the
+    // gem within S=base*~2.7 of padding/glow, so scale the whole canvas by (S/base) to land the gem at that size.
+    let GEM_K = 1.55;
+    if (note.type === 'accent') GEM_K *= 1.12;
+    if (gem && gfx.base) {
+      const Sd = w * GEM_K * (gem.S / gfx.base);
+      ctx.drawImage(gem.c, cx - Sd / 2, y - Sd / 2, Sd, Sd);
+    } else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
     // HOPO "flow" cue — a thin ember ring (openNotes flag only; .hopo is never set unless the flag built it).
     if (note.hopo && !note.judged) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
