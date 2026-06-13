@@ -1107,6 +1107,21 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v133 — browse bg: swap the moon clip for the moonless EMBER loop (the "moon hanging at top" was the VIDEO)  ✅
+Playtest: "the video background looks good but that moon image is still hanging at the top — remove it."
+DIAGNOSIS (in-engine, eyes on the actual video frames): the moon was NOT engine bleed — verified
+`#bg-video` computes `display:none` and `#game` is `opacity:0` on the menu, so the engine moon can't
+paint. The moon was `browse-loop.mp4`'s OWN content: that clip is a blood-moon LANDSCAPE dominated by a
+giant moon disc at the top-center (captured the frame to confirm). It's central, so no object-position
+reframing removes it. FIX: point `#menu-bg-video` at **`assets/levels/menu-loop.mp4`** instead — the
+hub's warm EMBER loop (rising sparks + crimson cloud bands + light rays, MOONLESS), captured and
+confirmed. Keeps a cinematic, on-brand (warm black/crimson/ember), full-bleed `object-fit:cover` video
+background — just with no moon. (This was the design agent's original recommendation; browse-loop was an
+override that reintroduced the very moon the user was trying to kill.) Verified in-engine @1920×1010:
+`#menu-bg-video` src=menu-loop.mp4, readyState 4, full-bleed 1920×1010 cover, menu opacity:1, engine
+`#bg-video` display:none, 7 coverflow cards intact; composite (`_cap_v133_browse_menuloop`) shows a warm
+moonless ember field darkening toward the buttons. Bump ?v 132→133.
+
 ### v132 — HOTFIX: v130's #menu z-index swallowed the START-screen tap  ✅
 Playtest: on the title screen, "PRESS ENTER · TAP TO BEGIN" no longer responded to a click. CAUSE:
 v130 added `z-index: 5` to `#menu` (belt-and-suspenders vs the crossfade bleed). That made the inactive

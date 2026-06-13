@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=132" />
+<link rel="stylesheet" href="jukebox.css?v=133" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3121,11 +3121,14 @@
        MENU SCREEN
        ============================================================ -->
   <div class="screen menu-screen" id="menu">
-    <!-- build30: the browse backdrop is a DELIBERATE full-bleed video (assets/levels/browse-loop.mp4,
-         landscape 16:9, object-fit:cover = fills the whole page, NOT the old top-anchored masked banner
-         that read as a "floating photo" in build23). The warm .lib-bg-scrim vignette rides ABOVE it for
-         legibility; self-heals (onerror) to the clean dark room; perf- and ?novideo-gated. -->
-    <video id="menu-bg-video" autoplay loop muted playsinline preload="auto" src="assets/levels/browse-loop.mp4" onerror="this.style.display='none'"></video>
+    <!-- build33: full-bleed atmospheric video backdrop for the library. Uses assets/levels/menu-loop.mp4
+         (the hub's warm EMBER loop — rising sparks + crimson cloud + light rays, NO moon) rather than
+         browse-loop.mp4: that clip is dominated by a giant blood-moon disc at the top-center which the
+         user kept reading as "a moon image hanging at the top" no matter the framing (it can't be cropped
+         out — it's central). menu-loop is moonless, on-brand, landscape 16:9, object-fit:cover = fills the
+         whole page; the warm .lib-bg-scrim vignette rides ABOVE it for legibility; self-heals (onerror)
+         to the clean dark room; perf- and ?novideo-gated. -->
+    <video id="menu-bg-video" autoplay loop muted playsinline preload="auto" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'"></video>
     <div class="lib-bg-scrim"></div>
     <div class="lib">
       <button class="hub-back" id="menu-back" type="button" aria-label="Back to main menu">
@@ -4106,11 +4109,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=132"></script>
-<script src="game.js?v=132"></script>
-<script src="jukebox.js?v=132"></script>
-<script src="catalog.js?v=132"></script>
-<script src="multiplayer.js?v=132"></script>
+<script src="assets/fx/fx-player.js?v=133"></script>
+<script src="game.js?v=133"></script>
+<script src="jukebox.js?v=133"></script>
+<script src="catalog.js?v=133"></script>
+<script src="multiplayer.js?v=133"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
