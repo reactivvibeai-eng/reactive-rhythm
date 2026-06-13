@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=133" />
+<link rel="stylesheet" href="jukebox.css?v=134" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1130,9 +1130,14 @@
      proper full-bleed video background"): a true object-fit:cover loop that fills the WHOLE page
      (no top-anchored banner) + the warm .lib-bg-scrim vignette above it for legibility + the
      opaque base coat below + the engine moon HARD-HIDDEN whenever the library is active. */
-  /* Kill the engine-moon bleed-through on the browse page (incl. during the game->menu crossfade):
-     hide #bg-video the INSTANT #menu is active, on ANY code path, via :has — not opacity-transitioned. */
-  html:has(#menu.active) #bg-video, html:has(#menu.active) #bg-video-fill { display: none !important; }
+  /* build34: the gameplay/title MOON backdrop (moon-loop.mp4) must NEVER appear on the browse page or
+     any non-gameplay screen — that was the persistent "moon image stuck at the top". The earlier :has()
+     gate silently NO-OPS in older embedded browser engines (it needs Chromium 105+), which is why the
+     moon survived there. Use :not() (universal support, no transition/opacity dependency): hide the
+     ENGINE moon whenever #game is not the active screen, and the TITLE moon whenever #start is not active.
+     #game.active (gameplay) / #start.active (title) still show their backdrop normally. */
+  #game:not(.active) #bg-video, #game:not(.active) #bg-video-fill { display: none !important; }
+  #start:not(.active) #start-video { display: none !important; }
   /* Leave #menu's base .screen positioning UNTOUCHED (position:absolute; inset:0; z-index:auto).
      The engine moon is killed by the :has rule above (display:none) — NOT by stacking — so #menu needs
      NO z-index. A z-index here makes #menu a stacking context that lifts its whole INACTIVE subtree
@@ -4109,11 +4114,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=133"></script>
-<script src="game.js?v=133"></script>
-<script src="jukebox.js?v=133"></script>
-<script src="catalog.js?v=133"></script>
-<script src="multiplayer.js?v=133"></script>
+<script src="assets/fx/fx-player.js?v=134"></script>
+<script src="game.js?v=134"></script>
+<script src="jukebox.js?v=134"></script>
+<script src="catalog.js?v=134"></script>
+<script src="multiplayer.js?v=134"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

@@ -1107,6 +1107,21 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v134 — kill the engine-moon bleed UNIVERSALLY (:has → :not) — the real "moon stuck at top" root cause  ✅
+After v133 swapped the browse bg to the moonless ember loop, the user STILL saw a moon at the top WITH
+the embers visible — proving the moon was a SEPARATE element bleeding through (not the browse video).
+ROOT CAUSE: the engine backdrop #bg-video (moon-loop.mp4, in #game) was showing on the browse page, and
+the v130 hide rule used `:has(#menu.active)` — which SILENTLY NO-OPS in the user's desktop-app browser
+engine (`:has()` requires Chromium 105+; older embedded Chromium/WebView2 ignores the whole rule, so the
+moon was never hidden there). My preview's modern Chromium supported :has, so I never reproduced it. FIX:
+replace the :has gate with `:not()` (universal support since CSS3 ~2011, no transition/opacity dependency):
+`#game:not(.active) #bg-video, #bg-video-fill { display:none !important }` + `#start:not(.active)
+#start-video { display:none !important }`. This hides EVERY moon-loop.mp4 source (engine + title) on any
+non-gameplay screen, in ALL browser engines. Verified in-engine: on both the start screen and the library,
+#bg-video/#bg-video-fill/#start-video all compute display:none; gameplay still shows its backdrop (rule
+only fires when #game/#start lack .active). SYSTEMIC NOTE: `:has()` is now banned for load-bearing gates
+on this project — the desktop app runs an older engine. Bump ?v 133→134.
+
 ### v133 — browse bg: swap the moon clip for the moonless EMBER loop (the "moon hanging at top" was the VIDEO)  ✅
 Playtest: "the video background looks good but that moon image is still hanging at the top — remove it."
 DIAGNOSIS (in-engine, eyes on the actual video frames): the moon was NOT engine bleed — verified
