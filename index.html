@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=129" />
+<link rel="stylesheet" href="jukebox.css?v=130" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1122,18 +1122,32 @@
   /* Performance background: hide the moon VIDEO so its compositing can't cap the FPS. */
   html.rr-perf-bg #bg-video, html.rr-perf-bg #bg-video-fill, html.rr-perf-bg #start-video { display: none !important; }
   html.rr-perf-bg #game-bg { background: radial-gradient(ellipse at 50% 0%, #160c0b, #0a0706 70%); }
-  /* Browse-section video backdrop (build7): full-bleed blood-moon loop behind the library/coverflow,
-     with a warm scrim so the coverflow + text stay legible. Perf/novideo-gated; self-heals if absent. */
-  /* build11: the menu screen must be OPAQUE — without a base coat the ENGINE's backdrop video
-     bleeds through, reading as "a photo hanging in the background".
-     build23: the lib backdrop VIDEO is removed entirely (user verdict) — the library is a clean
-     dark room; the scrim keeps a soft warm vignette so it isn't a flat void. */
-  #menu { background: #0a0706; }
-  #menu .lib-bg-scrim { position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  /* build30: the browse/library (#menu) owns a DELIBERATE full-bleed VIDEO background.
+     History: build11 made #menu opaque because a TRANSPARENT menu let the ENGINE backdrop
+     (#bg-video, moon-loop.mp4 in #game) bleed through — "a photo hanging in the background".
+     build23 removed the old lib video because, contained/masked at library scale, it read as a
+     "floating photo". The fix now (user: "looks like an image hanging at the top — make it a
+     proper full-bleed video background"): a true object-fit:cover loop that fills the WHOLE page
+     (no top-anchored banner) + the warm .lib-bg-scrim vignette above it for legibility + the
+     opaque base coat below + the engine moon HARD-HIDDEN whenever the library is active. */
+  /* Kill the engine-moon bleed-through on the browse page (incl. during the game->menu crossfade):
+     hide #bg-video the INSTANT #menu is active, on ANY code path, via :has — not opacity-transitioned. */
+  html:has(#menu.active) #bg-video, html:has(#menu.active) #bg-video-fill { display: none !important; }
+  #menu { background: #0a0706; position: relative; z-index: 5; }
+  /* full-bleed feathered video backdrop for the library — mirrors the proven #menu-hub-video recipe
+     (object-fit:cover, opacity, warm filter, perf/novideo-gated, self-heal onerror). Centered cover so
+     it never reads as a top-anchored banner; background:#0a0706 so any non-painting state = dark room. */
+  #menu-bg-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    object-position: 50% 50%; z-index: 0; pointer-events: none; opacity: 0.5;
+    filter: saturate(1.05) contrast(1.04); background: #0a0706; }
+  html.rr-perf-bg #menu-bg-video { display: none !important; }
+  /* warm legibility scrim, now layered ABOVE the video (z:1): feathers the frame (no hard edge) and
+     darkens toward the bottom so the coverflow / search / tabs / buttons stay readable. */
+  #menu .lib-bg-scrim { position: absolute; inset: 0; z-index: 1; pointer-events: none;
     background: radial-gradient(ellipse at 50% 20%, rgba(120,12,20,0.20), transparent 62%),
       radial-gradient(ellipse at 50% 110%, rgba(255,31,46,0.07), transparent 58%),
-      linear-gradient(180deg, rgba(10,7,6,0.42), rgba(10,7,6,0.80)); }
-  #menu .lib { position: relative; z-index: 1; }
+      linear-gradient(180deg, rgba(10,7,6,0.40), rgba(10,7,6,0.82)); }
+  #menu .lib { position: relative; z-index: 2; }
   /* build8: cinematic MAIN-MENU hub backdrop — full-bleed warm loop behind the console
      (mirrors #lib-bg-video; perf/novideo-gated; self-heals if the mp4 is absent). Absolute within
      #menu-hub (NOT fixed — inactive screens are opacity:0, which would hide a fixed descendant). */
@@ -3100,8 +3114,11 @@
        MENU SCREEN
        ============================================================ -->
   <div class="screen menu-screen" id="menu">
-    <!-- build23 (playtest verdict): the browse backdrop video is GONE — at library scale it read
-         as "an image floating in the background" no matter how it was masked. Clean dark room. -->
+    <!-- build30: the browse backdrop is a DELIBERATE full-bleed video (assets/levels/browse-loop.mp4,
+         landscape 16:9, object-fit:cover = fills the whole page, NOT the old top-anchored masked banner
+         that read as a "floating photo" in build23). The warm .lib-bg-scrim vignette rides ABOVE it for
+         legibility; self-heals (onerror) to the clean dark room; perf- and ?novideo-gated. -->
+    <video id="menu-bg-video" autoplay loop muted playsinline preload="auto" src="assets/levels/browse-loop.mp4" onerror="this.style.display='none'"></video>
     <div class="lib-bg-scrim"></div>
     <div class="lib">
       <button class="hub-back" id="menu-back" type="button" aria-label="Back to main menu">
@@ -4082,11 +4099,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=129"></script>
-<script src="game.js?v=129"></script>
-<script src="jukebox.js?v=129"></script>
-<script src="catalog.js?v=129"></script>
-<script src="multiplayer.js?v=129"></script>
+<script src="assets/fx/fx-player.js?v=130"></script>
+<script src="game.js?v=130"></script>
+<script src="jukebox.js?v=130"></script>
+<script src="catalog.js?v=130"></script>
+<script src="multiplayer.js?v=130"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4119,7 +4136,7 @@
 (function () {
   try {
     if (/[?&]novideo=1/.test(location.search)) {
-      document.querySelectorAll('#bg-video, #bg-video-fill, #start-video, #lib-bg-video, #menu-hub-video').forEach(function (v) {
+      document.querySelectorAll('#bg-video, #bg-video-fill, #start-video, #lib-bg-video, #menu-hub-video, #menu-bg-video').forEach(function (v) {
         try { v.pause(); } catch (e) {}
         v.removeAttribute('autoplay');
         v.style.setProperty('display', 'none', 'important');

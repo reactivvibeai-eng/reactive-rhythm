@@ -1107,6 +1107,34 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v130 — BROWSE PAGE gets a real full-bleed VIDEO background (kills the "moon hanging at the top")  ✅
+Playtest: the browse/library page "looked like an image hanging at the top" instead of a proper game
+background. A multi-agent workflow (investigate → design → adversarial review) diagnosed the real cause:
+the library (`#menu`) had NO background of its own (build23 removed it as a "floating photo"), so the
+ENGINE moon backdrop (`#bg-video`, the PORTRAIT `moon-loop.mp4` inside the sibling `#game`) bled through —
+its moon sits high in the frame and the scrim darkens the bottom, so only the top moon survived = "photo
+hanging at the top." It's a stacking/transition defect: `#game` is later in DOM at equal z-index, so it
+composites over the still-translucent `#menu` during the game→menu crossfade (and at rest in some builds).
+**Fix (index.html only, no engine edit):**
+- **Deliberate full-bleed video:** a new `#menu-bg-video` as the first child of `#menu`, using the
+  purpose-built **`assets/levels/browse-loop.mp4`** (landscape 1280×720, a full blood-moon LANDSCAPE —
+  moon + clouds + mountain horizon + embers, not a lone disc). `object-fit:cover; object-position:50% 50%`
+  fills the WHOLE page edge-to-edge (no top-anchored banner); opacity 0.5 + warm `saturate/contrast` filter,
+  mirroring the proven `#menu-hub-video` recipe. `background:#0a0706` on the element so any non-painting
+  state degrades to the dark room.
+- **Engine moon hard-hidden on the library, instantly, on any path:** pure-CSS
+  `html:has(#menu.active) #bg-video, #bg-video-fill { display:none !important }` — fires the moment `#menu`
+  is active (not opacity-transitioned), so the engine moon can't bleed through even mid-crossfade. `#menu`
+  also lifted `z-index:5` above `#game` (belt-and-suspenders).
+- **Legibility + no hard edge:** the existing `.lib-bg-scrim` warm vignette now layers ABOVE the video
+  (z:1; bottom darken 0.80→0.82) so the coverflow/search/tabs/buttons stay readable and every edge feathers.
+- **Gated + self-heal:** perf gate `html.rr-perf-bg #menu-bg-video { display:none }`, added to the
+  `?novideo` list, and `onerror="this.style.display='none'"` falls back to the clean dark room (no flat void).
+Kept the build11 opaque base coat (`#menu{background:#0a0706}`). Verified in-engine: engine `#bg-video`
+computes `display:none` when the menu is active; `browse-loop.mp4` loads (1280×720, readyState 4) and the
+faithful background composite (`_cap_v130_browse_bg`) reads as a full-bleed cinematic blood-moon scene
+filling the page, darkening toward the buttons — not a hanging photo; zero console errors. Bump ?v 129→130.
+
 ### v129 — 3D MARBLE notes (glossy spheres rolling at you) + lane-colored comet trails  ✅
 Playtest: contrast was right but the notes read as FLAT faceted hexagons — the user wants 3D MARBLES
 rolling down at the player ("that's what makes it easily playable"). A multi-agent workflow (genre
