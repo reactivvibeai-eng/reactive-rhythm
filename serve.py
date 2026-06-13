@@ -6,9 +6,15 @@ fetches the latest files on a normal refresh (no hard-refresh needed). Test buil
 """
 import http.server
 import socketserver
+import os
 
 PORT = 8787
 HOST = "127.0.0.1"  # localhost only — never exposes the project to the network
+
+# Always serve THIS script's folder (the project root), regardless of the launcher's
+# working directory — a headless-preview launcher may start us from a git worktree, which
+# would otherwise serve a stale checkout. Pin to __file__'s dir so the latest build is served.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
