@@ -538,9 +538,17 @@
     'assets/guitars/violet-gothic.png': { verified: true, aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
-    // build26: REMOVED bone-daddy.png + melody-pink.png entries — they were flat front-on bass PHOTOS
-    // (0 and 5 clean string rows; near-parallel strings, no receding neck). Architecturally unfixable;
-    // the levels now fall back to the canonical surface until proper template-framed guitars exist.
+    // build27: BESPOKE re-renders to the receding-neck TEMPLATE (i2i from crimson-chaos-ryo, body
+    // restyled per theme, strings kept clean). Measurement gate PASSED: melody = 56 clean exactly-5
+    // rows (res 1.78px), bone = 111 (res 5.08px) — vs the old bass photos' 5 and 0. Bridge spans
+    // 0.289/0.283 ≈ crimson's 0.294 → comfortable + aligned, no widening. Overlay-proof confirms
+    // catchers ride the painted strings nut→bridge.
+    'assets/guitars/melody-pink.png':   { verified: true, aspect: 1504 / 2668, nutFY: 0.160, bridgeFY: 0.810,
+      nutXF:    [0.4601, 0.4834, 0.5073, 0.5326, 0.5565],
+      bridgeXF: [0.3477, 0.4182, 0.4934, 0.5672, 0.6363] },
+    'assets/guitars/bone-daddy.png':    { verified: true, aspect: 1504 / 2650, nutFY: 0.160, bridgeFY: 0.810,
+      nutXF:    [0.4608, 0.4820, 0.5066, 0.5326, 0.5572],
+      bridgeXF: [0.3544, 0.4249, 0.4953, 0.5672, 0.6370] },
     'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
       bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },

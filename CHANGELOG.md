@@ -1107,6 +1107,22 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v127 — BESPOKE THEMED GUITARS, done right (built to the template, verified on-strings)  ✅
+With the v126 standard + gate in place, re-rendered Melody's and Bone Daddy's guitars the CORRECT
+way (user chose bespoke over standardizing). Method that finally worked: image-to-image FROM the
+proven crimson-chaos-ryo template (so the new art INHERITS the receding neck + body-at-bottom +
+wide 5-string fan), restyling ONLY the body — Melody = candy-pink kawaii (bows, paws, hearts, atom
+emblem), Bone Daddy = pink crushed-velvet with a white ribcage, gold skulls/chains/dollar charms.
+NEVER off the old bass photos (that was the whole failure). Pipeline: 4 low drafts (confirm framing)
+→ 2 high finals → Higgsfield bg-removal → trim → **measurement gate PASSED**: Melody 56 clean
+exactly-5 rows (res 1.78px), Bone 111 (res 5.08px) — vs the bass photos' 5 and 0 — → _calibrate.py
+→ overlay-proof (catchers on strings nut→bridge) → SKIN_GEOM `verified:true`. Old bass photos kept
+as `_bassphoto_*.png`. **Verified in-engine, both levels:** the new pink guitars drive the surface
+(their own measured nutXF, not the fallback), catchers sit exactly on the 5 painted strings at the
+bridge (captures `_cap_v127_mel_catch.jpg`, `_cap_v127_bone_catch.jpg`), span 200/197px ≈ Crimson's
+203, receding neck + faded top, zero console errors. Spend: ~10cr (4 low drafts + 2 high finals;
+bg-removal free) → balance 77/412. Bump ?v 126→127.
+
 ### v126 — THE STANDARD: one verified play surface · the strings-on-guitar illusion guaranteed  ✅
 Multi-agent investigation (workflow) found the real root cause with measured proof: melody-pink.png
 and bone-daddy.png are flat front-on bass PHOTOS — string-measurement finds 0 clean 5-string rows on
