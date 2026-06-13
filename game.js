@@ -2942,21 +2942,27 @@
         ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
         ctx.restore();
       }
-      // crimson comet trail streaming up the string behind the sphere (approaching only)
+      // build29: lane-colored comet trail streaming up the string behind the MARBLE (approaching only) — matches
+      // the ball's lane color so the streak reads as that ball's motion, with a hot-white core speed-line on top.
       if (!held) {
-        const dTail = Math.min(1.04, d + 0.2);
+        const dTail = Math.min(1.10, d + 0.24);
         const tx = noteX(n.lane, dTail), ty = noteY(dTail);
-        const rgb = n.type === 'star' ? '255,150,60' : '255,40,46';
+        const rgb = n.type === 'star' ? '255,150,60' : LANE_COLORS[n.lane].rgb;
         const grad = ctx.createLinearGradient(nx, ny, tx, ty);
-        grad.addColorStop(0, 'rgba(' + rgb + ',' + (0.5 * sc) + ')');
-        grad.addColorStop(0.5, 'rgba(' + rgb + ',' + (0.18 * sc) + ')');
+        grad.addColorStop(0, 'rgba(' + rgb + ',' + (0.42 * sc).toFixed(3) + ')');
+        grad.addColorStop(0.5, 'rgba(' + rgb + ',' + (0.15 * sc).toFixed(3) + ')');
         grad.addColorStop(1, 'rgba(' + rgb + ',0)');
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = lw * 0.46 * sc * 0.7;
         ctx.lineCap = 'round';
+        // wide lane-colored glow tapering up the lane
+        ctx.strokeStyle = grad; ctx.lineWidth = lw * 0.46 * sc * 0.78;
         ctx.shadowColor = 'rgba(' + rgb + ',0.7)'; ctx.shadowBlur = 8 * sc;
+        ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(tx, ty); ctx.stroke();
+        // thin hot-white core — the speed-line that reinforces the ball rushing the player
+        const wgrad = ctx.createLinearGradient(nx, ny, tx, ty);
+        wgrad.addColorStop(0, 'rgba(255,255,255,' + (0.38 * sc).toFixed(3) + ')'); wgrad.addColorStop(0.6, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = wgrad; ctx.lineWidth = Math.max(1, lw * 0.11 * sc); ctx.shadowBlur = 5 * sc;
         ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(tx, ty); ctx.stroke();
         ctx.restore();
       }
@@ -3227,9 +3233,8 @@
     // and the gold surge star. These are the high-contrast notes that pop on ANY guitar (replacing the dark
     // obsidian sphere + the blend-into-guitar theme tint). Rebuilt on resize/profile change; LANE_COLORS is
     // live by here (buildGameSprites runs from the draw loop, after applyLaneProfile set the gh palette).
-    const gems = []; for (let l = 0; l < LANE_COUNT; l++) gems.push(buildGem(base, l));
-    gfx = { lw: lw, base: base, sphere: buildSphere(base, false), sphereHot: buildSphere(base, true),
-            gems: gems, star: buildStar(base) };
+    const gems = []; for (let l = 0; l < LANE_COUNT; l++) gems.push(buildMarble(base, l));   // build29: 3D marbles (was flat buildGem hexagons)
+    gfx = { lw: lw, base: base, gems: gems, star: buildStar(base) };
   }
 
   // glossy obsidian note-sphere (black, crimson rim-light + bright specular) like the photo
@@ -3249,6 +3254,46 @@
     // soft + sharp specular highlight (upper-left)
     x.fillStyle = 'rgba(255,255,255,0.3)'; x.beginPath(); x.ellipse(cx - r * 0.3, cy - r * 0.36, r * 0.34, r * 0.22, -0.5, 0, Math.PI * 2); x.fill();
     x.fillStyle = 'rgba(255,255,255,0.95)'; x.beginPath(); x.ellipse(cx - r * 0.34, cy - r * 0.4, r * 0.16, r * 0.1, -0.5, 0, Math.PI * 2); x.fill();
+    return { c: c, S: S };
+  }
+
+  // build29 (playtest: "make them look like 3D MARBLES rolling down at us"): a glossy lane-colored MARBLE.
+  // The flat faceted hexagon (buildGem) is replaced by a shaded SPHERE — the layers that sell "3D ball" are
+  // the off-center specular hotspot (key light upper-left), the dark terminator + reflected-light rim, and a
+  // contact shadow; the warm near-black outer ring keeps it readable on BRIGHT guitars and the white core/rim
+  // on DARK guitars (background-proof). Per-lane color from LANE_COLORS. pad matches buildGem so drawNote's
+  // sizing lands it identically; it grows on approach via the existing depthScale. (researched, GH-grade.)
+  function buildMarble(base, lane) {
+    const rgb = LANE_COLORS[lane].rgb;
+    const litCap = rgbScale(rgb, 2.1), litMid = rgbScale(rgb, 1.5), shadowCore = rgbScale(rgb, 0.30),
+          reflRim = rgbScale(rgb, 0.48), light = rgbScale(rgb, 1.65);
+    const r = base / 2, pad = Math.ceil(base * 0.85), S = base + pad * 2, cx = S / 2, cy = S / 2;
+    const c = document.createElement('canvas'); c.width = S; c.height = S; const x = c.getContext('2d');
+    // (0) soft contact shadow beneath the ball — grounds it as a real object
+    x.save(); x.fillStyle = 'rgba(0,0,0,0.38)'; x.shadowColor = 'rgba(0,0,0,0.5)'; x.shadowBlur = base * 0.25;
+    x.beginPath(); x.ellipse(cx, cy + r * 0.82, r * 1.05, r * 0.32, 0, 0, Math.PI * 2); x.fill(); x.restore();
+    // (1) spherical body — offset radial gradient (lit cap upper-left → true color → shadow core → reflected rim) + lane glow
+    x.save(); x.shadowColor = 'rgb(' + rgb + ')'; x.shadowBlur = base * 0.7;
+    const g = x.createRadialGradient(cx - r * 0.34, cy - r * 0.40, r * 0.06, cx, cy, r * 1.02);
+    g.addColorStop(0.00, 'rgb(' + litCap + ')'); g.addColorStop(0.30, 'rgb(' + litMid + ')');
+    g.addColorStop(0.62, 'rgb(' + rgb + ')'); g.addColorStop(0.86, 'rgb(' + shadowCore + ')'); g.addColorStop(1.00, 'rgb(' + reflRim + ')');
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore();
+    // (2) deepen the terminator (bottom-right falls into shadow) — clipped to the ball
+    x.save(); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.clip();
+    const tg = x.createRadialGradient(cx + r * 0.42, cy + r * 0.48, r * 0.08, cx + r * 0.28, cy + r * 0.34, r * 1.25);
+    tg.addColorStop(0, 'rgba(0,0,0,0.45)'); tg.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = tg; x.fillRect(0, 0, S, S); x.restore();
+    // (3) fresnel reflected-light rim along the lower-right (additive)
+    x.save(); x.globalCompositeOperation = 'lighter'; x.lineWidth = Math.max(1.3, base * 0.05);
+    x.strokeStyle = 'rgba(' + light + ',0.7)'; x.shadowColor = 'rgb(' + rgb + ')'; x.shadowBlur = base * 0.12;
+    x.beginPath(); x.arc(cx, cy, r * 0.94, Math.PI * 0.06, Math.PI * 0.94); x.stroke(); x.restore();
+    // (4) warm near-black OUTER RING — pops on BRIGHT guitars
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.lineWidth = Math.max(2.4, base * 0.11); x.strokeStyle = 'rgba(18,7,7,0.85)'; x.stroke();
+    // (5) thin white top rim
+    x.beginPath(); x.arc(cx, cy, r * 0.93, Math.PI * 1.04, Math.PI * 1.96); x.lineWidth = Math.max(1, base * 0.03); x.strokeStyle = 'rgba(255,255,255,0.55)'; x.stroke();
+    // (6) two-stage specular hotspot (upper-left) — the #1 "this is a 3D ball" cue
+    x.fillStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.ellipse(cx - r * 0.30, cy - r * 0.36, r * 0.30, r * 0.20, -0.5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.98)'; x.beginPath(); x.ellipse(cx - r * 0.32, cy - r * 0.38, r * 0.13, r * 0.085, -0.5, 0, Math.PI * 2); x.fill();
     return { c: c, S: S };
   }
 

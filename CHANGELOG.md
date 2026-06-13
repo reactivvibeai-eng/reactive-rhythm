@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v129 — 3D MARBLE notes (glossy spheres rolling at you) + lane-colored comet trails  ✅
+Playtest: contrast was right but the notes read as FLAT faceted hexagons — the user wants 3D MARBLES
+rolling down at the player ("that's what makes it easily playable"). A multi-agent workflow (genre
+research + code diagnosis + asset-approach incl. a Blender connectivity probe) settled it: **procedural
+canvas** beats pre-rendered (Blender is offline; raster sprites mip-blur under the 1/z rescale across
+the 20–90px note travel; canvas recolors free for all 5 lanes). New `buildMarble(base, lane)` replaces
+the flat hexagon: a glossy lane-colored SPHERE with the full 3D stack in draw order — contact shadow
+(grounds it), offset radial body (lit cap → true color → shadow core → reflected-light rim), deepened
+terminator (bottom-right falls to shadow), fresnel reflected rim, the warm near-black OUTER RING
+(pops on BRIGHT guitars), thin white top rim, and a two-stage white SPECULAR hotspot upper-left (the
+#1 "this is a 3D ball" cue). gfx.gems[] now build via buildMarble (was buildGem); dead sphere/sphereHot
+dropped. The "rolling at you" read = fixed upper-left specular + the existing depthScale grow-on-approach.
+**Trail upgraded** (the actually-shipping inline trail, game.js ~2945): recolored from hardcoded crimson
+to the note's LANE color + a hot-white core speed-line, so the comet matches its marble. Verified
+in-engine: Melody red+yellow marbles, Bone Daddy red/yellow/orange marbles in a row — all read as
+glossy 3D spheres with specular + terminator + lane comet trails, pop on pink/bone, distinct lane
+colors, zero console errors (captures `_cap_v129_*`). Zero credits. Bump ?v 128→129.
+
 ### v128 — READABILITY: GH-grade high-contrast notes + clean vector catchers (no more black box)  ✅
 Playtest: the falling marbles were nearly invisible (pink-on-pink on Melody, bone-on-bone on Bone,
 blend-into-dark on Skully) and the catcher buttons read as a "black box" on bright guitars. A
