@@ -1167,6 +1167,32 @@
         lastBeat = t;
       }
     }
+    // build35 (audit): GUARANTEE a playable chart. Onset detection finds nothing on quiet/ambient/
+    // low-RMS tracks (fixed energy floor), so a track marked "ready" (decodable audio_url) could throw
+    // "No beats in chart" and bounce to the menu — breaking the "no dead taps, ever" promise. If the
+    // detected onsets are too sparse, fall back to an evenly-spaced synthetic grid (tempo estimated from
+    // whatever WAS found, else ~120 BPM) so every decodable track always charts.
+    const duration = buf.duration || (data.length / sr);
+    const MIN_BEATS = Math.max(8, Math.floor(duration * 0.4));
+    if (out.length < MIN_BEATS) {
+      let spacing = 0.5;   // ~120 BPM default
+      if (out.length >= 4) {
+        const gaps = [];
+        for (let i = 1; i < out.length; i++) gaps.push(out[i].t - out[i - 1].t);
+        gaps.sort((a, b) => a - b);
+        const med = gaps[Math.floor(gaps.length / 2)];
+        if (med > 0.15 && med < 1.2) spacing = Math.max(0.3, Math.min(0.6, med));
+      }
+      const grid = [];
+      for (let t = 0.6; t < duration - 0.4; t += spacing) {
+        grid.push({ t: Math.round(t * 1000) / 1000, strength: (grid.length % 4 === 0) ? 1.6 : 1.0 });
+      }
+      if (grid.length > out.length) {
+        try { console.warn('[rr] analyzeBeats: sparse onsets (' + out.length + ') — synthetic ' + spacing.toFixed(2) + 's grid (' + grid.length + ' beats) so the track still plays'); } catch (e) {}
+        setLoading('Mapping note glyphs', 92);
+        return grid;
+      }
+    }
     setLoading('Mapping note glyphs', 92);
     return out;
   }
