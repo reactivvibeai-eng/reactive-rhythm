@@ -1107,6 +1107,26 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v125 — PLAYABILITY: every level now plays like the default Crimson highway  ✅
+Playtest verdict: the character levels were "extremely difficult… items coming down are too small…
+hard to hit the keys," and "doesn't feel the same as the default Crimson level." Measured the root
+cause in-engine: note/lane/catcher size (`lw`) = skin bridge-span × guitar draw-width, and BOTH
+were shrunk on skins → notes rendered ~40% smaller than default. Two culprits killed:
+1. **`skinWF` shrink removed** — skins now draw FULL-BLEED like the default (the build13 0.78/0.92
+   shrink was the "guitar is smaller"; it scaled the whole playfield down with it).
+2. **Comfort floor in `fretGeom`** — if a skin's painted strings cluster tighter than the default
+   gh highway's span, the playable fan is widened (both ends, about their centers, shape preserved)
+   up to the default's comfortable span. Note size derives from the floored span → always readable.
+   Also dropped skin warp 0.34→0.20 (matches default; far notes no longer bunch).
+**Verified in-engine via fxPt lane-position probes (594px canvas):** default Crimson = 203px catcher
+span / 51px lane step (reference). Bone Daddy was 112px/28px → **now 203px/51px**. Melody was
+124px/31px → **now 209px/52px**. All three levels now identical note size, lane spacing, catcher
+spacing, travel + readability. Catch-zone captures confirm big bright well-spread catchers
+(`_cap_bd_*`, `_cap_ml_v125_*`); zero console errors. The string-cluster tradeoff: on the tightest
+art (bone) the functional lanes now sit slightly wider than the painted gold strings — playability
+wins per the explicit directive; the bright functional strings/catchers are what the player reads.
+Bump ?v 124→125.
+
 ### v124 — the black box dies: guitars become ALPHA CUTOUTS · alignment PROVEN IN-ENGINE  ✅
 Round-3 playtest fallout: the v123 5-string re-renders shipped as FULL-FRAME images with their
 baked dark backgrounds (the prompt literally asked for "same dark background" — original assets

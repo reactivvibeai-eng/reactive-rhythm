@@ -413,6 +413,26 @@
       const vanishX = r.gx + 0.5 * r.gw;
       for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
     }
+    // build25 COMFORT FLOOR (playtest fix): the default Crimson highway is the gold standard for feel.
+    // If an active skin's painted strings cluster TIGHTER than that comfortable span, widen the whole
+    // playable fan (both ends, about their centers — string order/shape preserved) up to the floor, so
+    // notes + catchers are at least as large and well-spread as the default on EVERY level. The default
+    // gh profile (no skin) never enters this branch → byte-identical.
+    if (_skinArtOn) {
+      const REF_ASPECT = 0.5625, REF_SPAN_F = 0.2936;          // gh default (crimson-chaos-ryo) reference
+      const refGw = (cw / ch > REF_ASPECT) ? cw : ch * REF_ASPECT;
+      const floorSpan = REF_SPAN_F * refGw;
+      const curSpan = Math.abs(nearX[LANE_COUNT - 1] - nearX[0]);
+      if (curSpan > 1 && curSpan < floorSpan) {
+        const k = floorSpan / curSpan;
+        const cN = (nearX[0] + nearX[LANE_COUNT - 1]) / 2;
+        const cF = (farX[0] + farX[LANE_COUNT - 1]) / 2;
+        for (let i = 0; i < LANE_COUNT; i++) {
+          nearX[i] = cN + (nearX[i] - cN) * k;
+          farX[i] = cF + (farX[i] - cF) * k;
+        }
+      }
+    }
     // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform).
     // With a skin active, use the OUTER-span average — note/catcher sizes stay uniform even when the
     // skin's painted interior fan is irregular. (Default path untouched → byte-identical.)
@@ -614,8 +634,13 @@
       ART.nutXF = fan(nut); ART.bridgeXF = fan(brg);
     }
     ART.fit = 'cover'; ART.bottomAnchor = g.bottomAnchor || 0.93;
-    ART.skinWF = g.widthF != null ? g.widthF : 0.78;   // build13: skin draw width (fraction of the panel)
-    ART.warp = Math.max((p && p.warp) || 0, g.warp != null ? g.warp : 0.34);
+    // build25 (PLAYTEST: themed levels played cramped + hard to read vs the default Crimson level):
+    // a skin draws FULL-BLEED like the default — the build13 skinWF shrink (0.78/0.92) was making
+    // the guitar (and therefore the lanes + notes) ~40% smaller, the root of "items too small / hard
+    // to hit". The playable fan is floored to the default's comfortable span in fretGeom(), so every
+    // level now feels like Crimson regardless of how tightly the skin's painted strings cluster.
+    ART.skinWF = 0;
+    ART.warp = (p && p.warp) || 0.2;   // match the default highway's neck-recede (was 0.34 → far notes bunched, hurt readability)
     // ART.persp stays the profile's — the note depth/vertigo feel is identical on every guitar.
     _skinArtOn = true;
   }
