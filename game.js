@@ -413,32 +413,15 @@
       const vanishX = r.gx + 0.5 * r.gw;
       for (let i = 0; i < LANE_COUNT; i++) farX[i] += (vanishX - farX[i]) * cv;
     }
-    // build25 COMFORT FLOOR (playtest fix): the default Crimson highway is the gold standard for feel.
-    // If an active skin's painted strings cluster TIGHTER than that comfortable span, widen the whole
-    // playable fan (both ends, about their centers — string order/shape preserved) up to the floor, so
-    // notes + catchers are at least as large and well-spread as the default on EVERY level. The default
-    // gh profile (no skin) never enters this branch → byte-identical.
-    if (_skinArtOn) {
-      const REF_ASPECT = 0.5625, REF_SPAN_F = 0.2936;          // gh default (crimson-chaos-ryo) reference
-      const refGw = (cw / ch > REF_ASPECT) ? cw : ch * REF_ASPECT;
-      const floorSpan = REF_SPAN_F * refGw;
-      const curSpan = Math.abs(nearX[LANE_COUNT - 1] - nearX[0]);
-      if (curSpan > 1 && curSpan < floorSpan) {
-        const k = floorSpan / curSpan;
-        const cN = (nearX[0] + nearX[LANE_COUNT - 1]) / 2;
-        const cF = (farX[0] + farX[LANE_COUNT - 1]) / 2;
-        for (let i = 0; i < LANE_COUNT; i++) {
-          nearX[i] = cN + (nearX[i] - cN) * k;
-          farX[i] = cF + (farX[i] - cF) * k;
-        }
-      }
-    }
-    // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform).
-    // With a skin active, use the OUTER-span average — note/catcher sizes stay uniform even when the
-    // skin's painted interior fan is irregular. (Default path untouched → byte-identical.)
-    const lw = _skinArtOn
-      ? Math.abs(nearX[LANE_COUNT - 1] - nearX[0]) / Math.max(1, LANE_COUNT - 1)
-      : (Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072));
+    // build26 (playtest: the v125 COMFORT FLOOR is DELETED). It widened a skin's lane fan to a fixed
+    // "comfortable" span, which DETACHED the lanes/catchers from the painted strings (Bone Daddy k≈1.43
+    // → catchers flung ±63px onto the body). The correct contract is restored: lanes ride the active
+    // surface's MEASURED strings EXACTLY, and a skin is only allowed to drive the surface if its art
+    // actually passes string-measurement (the gate in _applySkinGeom) — otherwise it falls back to the
+    // canonical crimson geometry. So alignment is guaranteed and note size stays the proven default.
+    // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform) — ONE formula
+    // for every level (default + skin), so note/catcher size is identical to the working Crimson highway.
+    const lw = Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072);
     return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
   }
 
@@ -535,31 +518,29 @@
   // least-squares line per string → evaluated at nutFY/bridgeFY; method validated against
   // guitar5.png's hand calibration to ≤0.003). 6-entry arrays = the art paints 6 strings; the
   // resampler subsets the most centered 5 for the gh profile.
+  // build26 STANDARDIZATION DECREE (playtest): a guitar may only become the play SURFACE if it is
+  // VERIFIED to ride the 5 lanes — exactly-5 measured strings, framed to the receding-neck template
+  // (aspect ≈0.5625), with a comfortable bridge fan (string-measurement passes _measure_strings.py
+  // with ≥8 clean exactly-5 rows). `verified: true` marks the known-good set. ANY skin without it
+  // (incl. the old flat bass-photo guitars melody-pink/bone-daddy — 0 and 5 clean rows, unfixable)
+  // is REJECTED at _applySkinImg and the level falls back to the canonical crimson surface, so the
+  // lanes/catchers can never again detach from the painted strings. This is the single contract for
+  // ALL current + future levels.
   const SKIN_GEOM = {
     // build16: TRUE-5-STRING deliveries (asset commit 0698670; string-tracking + peak snap via
     // assets/guitars/_calibrate.py) — exactly-5 arrays ride the painted strings (no fan).
-    'assets/guitars/violet-gothic-5.png': { aspect: 1080 / 1920, nutFY: 0.105, bridgeFY: 0.795,
+    'assets/guitars/violet-gothic-5.png': { verified: true, aspect: 1080 / 1920, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4565, 0.4742, 0.4981, 0.5222, 0.5398],
-      bridgeXF: [0.3380, 0.4093, 0.4843, 0.5565, 0.6333] },
-    'assets/guitars/crimson-chaos-ryo.png': { aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
+      bridgeXF: [0.3380, 0.4093, 0.4843, 0.5565, 0.6333] },   // 57 clean 5-string rows — Skully; proven themed surface
+    'assets/guitars/crimson-chaos-ryo.png': { verified: true, aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
       nutXF:    [0.4620, 0.4833, 0.5065, 0.5296, 0.5528],
-      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380] },
-    'assets/guitars/violet-gothic.png': { aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
+      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380] },   // 64 clean rows — THE canonical default
+    'assets/guitars/violet-gothic.png': { verified: true, aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
-    'assets/guitars/bone-daddy.png':    { aspect: 1354 / 2048, nutFY: 0.130, bridgeFY: 0.780,
-      // build23: TRUE 5-STRING re-render (regen v2 — v1 kept 6; machine-verified 13 exactly-5 rows).
-      // build24: ALPHA CUTOUT (the full-frame render's baked background painted a "black box"
-      // around the guitar) — keyed via Higgsfield bg-remover, trimmed to content, fractions remapped.
-      widthF: 0.92,   // playtest: his guitar played too SMALL — notes were hard to read
-      nutXF:    [0.4478, 0.4665, 0.4827, 0.5055, 0.5292],
-      bridgeXF: [0.3931, 0.4403, 0.4832, 0.5364, 0.5987] },
-    'assets/guitars/melody-pink.png':   { aspect: 1290 / 2036, nutFY: 0.093, bridgeFY: 0.799,
-      // build23: TRUE 5-STRING re-render (5-string decree; measurer confirmed exactly-5 rows).
-      // build24: ALPHA CUTOUT (baked background read as a "black box" in-level) — keyed,
-      // trimmed to content, fractions remapped into the cutout frame.
-      nutXF:    [0.4419, 0.4621, 0.4853, 0.5077, 0.5310],
-      bridgeXF: [0.4015, 0.4655, 0.5316, 0.6041, 0.6703] },
+    // build26: REMOVED bone-daddy.png + melody-pink.png entries — they were flat front-on bass PHOTOS
+    // (0 and 5 clean string rows; near-parallel strings, no receding neck). Architecturally unfixable;
+    // the levels now fall back to the canonical surface until proper template-framed guitars exist.
     'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
       bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },
@@ -644,8 +625,16 @@
     // ART.persp stays the profile's — the note depth/vertigo feel is identical on every guitar.
     _skinArtOn = true;
   }
+  // build26: a skin is only allowed to drive the play surface if it is VERIFIED (see SKIN_GEOM).
+  function _skinVerified(src) { return !!(src && SKIN_GEOM[src] && SKIN_GEOM[src].verified); }
   function _applySkinImg(src) {
-    if (!src) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); return; }
+    // STANDARD GATE: falsy OR unverified art → canonical crimson surface (image + lanes). This is what
+    // guarantees the strings-on-guitar illusion on EVERY level: only template-framed, measurement-passing
+    // guitars are ever drawn as the playable neck; flat/narrow art can never detach the lanes again.
+    if (!src || !_skinVerified(src)) {
+      if (src && !_skinVerified(src)) { try { console.warn('[rr] guitar skin not verified for play surface, using canonical:', src); } catch (e) {} }
+      activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); return;
+    }
     const im = new Image(); im._ready = false;
     im.onload = () => { im._ready = true; };
     im.onerror = () => { if (activeGuitarImg === im) { activeGuitarImg = _profileDefaultImg(); _applySkinGeom(null); } };  // self-heal: missing skin → profile default img + geom

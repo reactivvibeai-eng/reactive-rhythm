@@ -1107,6 +1107,25 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v126 — THE STANDARD: one verified play surface · the strings-on-guitar illusion guaranteed  ✅
+Multi-agent investigation (workflow) found the real root cause with measured proof: melody-pink.png
+and bone-daddy.png are flat front-on bass PHOTOS — string-measurement finds 0 clean 5-string rows on
+Bone, 5 on Melody, vs 64 on Crimson and 57 on Skully's violet-gothic-5. Near-parallel strings, no
+receding neck, no fade → you physically cannot ride 5 fanning lanes on them, and the v125 comfort
+floor (k≈1.43 on Bone) flung the catchers ±63px onto the body. **The fix is a STANDARD, not another
+patch:** (1) DELETED the v125 comfort floor + the skin lw hack — note/catcher size is now the ONE
+proven Crimson formula on every level; (2) a **verification gate** in `_applySkinImg`: a guitar may
+only become the play surface if its SKIN_GEOM entry is `verified: true` (template-framed, exactly-5
+measured strings — crimson-chaos-ryo, violet-gothic-5, violet-gothic). Any other art (incl. the bass
+photos) is rejected and the level falls back to the canonical surface — image AND lanes — so the
+lanes/catchers can NEVER detach from the painted strings again, on any current or future level.
+Removed the broken bone/melody SKIN_GEOM entries. **Verified in-engine:** Bone Daddy + Melody now
+fall back to the proven public-demo guitar (guitar5) — `nutXF` = canonical crimson fractions, 203px
+span / 51px step (identical to Crimson), catchers sitting exactly on the 5 painted strings at the
+bridge, receding neck + faded top (capture `_cap_v126_bone_catch.jpg`), zero console errors. Levels
+stay themed via world backdrop + reactive cards + mechanic + accent. NEXT (user's call): optional
+themed pink guitars re-rendered to the template. Bump ?v 125→126.
+
 ### v125 — PLAYABILITY: every level now plays like the default Crimson highway  ✅
 Playtest verdict: the character levels were "extremely difficult… items coming down are too small…
 hard to hit the keys," and "doesn't feel the same as the default Crimson level." Measured the root
