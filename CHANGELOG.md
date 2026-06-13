@@ -1107,6 +1107,21 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v132 — HOTFIX: v130's #menu z-index swallowed the START-screen tap  ✅
+Playtest: on the title screen, "PRESS ENTER · TAP TO BEGIN" no longer responded to a click. CAUSE:
+v130 added `z-index: 5` to `#menu` (belt-and-suspenders vs the crossfade bleed). That made the inactive
+`#menu` a stacking context lifted ABOVE the active `#start`; and although `#menu` itself is
+`pointer-events:none` when inactive, its descendants `#view-jukebox` / `#jukebox` compute
+`pointer-events:auto` — so those invisible library elements sat on top of the title and intercepted the
+tap (`start`'s `pointerdown` listener never fired; Enter/Space still worked, which is why it seemed
+"dead to clicks"). FIX: remove the `z-index` entirely — it was never needed, since the engine moon is
+hidden by the `:has(#menu.active) #bg-video { display:none }` rule, not by stacking. `#menu` returns to
+the base `.screen` stacking (`z-index:auto`). Verified in-engine: `#menu` z-index auto; elementFromPoint
+over the title/tap/logo (6 points) all hit `#start`; a dispatched `pointerdown` on the tap ring dismisses
+`#start` and advances to the RYO intro; and the BROWSE page is unchanged (full-viewport 1400×860 menu +
+full-bleed `object-fit:cover` video, engine `#bg-video` display:none, 778px coverflow grid, 7 cover cards,
+tabs + Play visible). Zero console errors. Bump ?v 131→132.
+
 ### v131 — HOTFIX: v130 broke the browse layout (coverflow vanished)  ✅
 Playtest of v130: the browse page went blank — the coverflow/tabs/buttons disappeared and the video
 showed only as a thin crop at the top. CAUSE: v130's `#menu { … position: relative; z-index: 5 }`

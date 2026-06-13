@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=131" />
+<link rel="stylesheet" href="jukebox.css?v=132" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1133,10 +1133,14 @@
   /* Kill the engine-moon bleed-through on the browse page (incl. during the game->menu crossfade):
      hide #bg-video the INSTANT #menu is active, on ANY code path, via :has — not opacity-transitioned. */
   html:has(#menu.active) #bg-video, html:has(#menu.active) #bg-video-fill { display: none !important; }
-  /* z-index lifts #menu above the sibling #game (belt-and-suspenders vs the crossfade bleed); position
-     stays ABSOLUTE from the base .screen rule (inset:0 = full-viewport) — do NOT override it to relative,
-     that collapses the screen to content height and breaks the coverflow layout. Mirrors #menu-hub. */
-  #menu { background: #0a0706; z-index: 5; }
+  /* Leave #menu's base .screen positioning UNTOUCHED (position:absolute; inset:0; z-index:auto).
+     The engine moon is killed by the :has rule above (display:none) — NOT by stacking — so #menu needs
+     NO z-index. A z-index here makes #menu a stacking context that lifts its whole INACTIVE subtree
+     above #start; since #view-jukebox/#jukebox compute pointer-events:auto, they then swallow the
+     "TAP TO BEGIN" click on the start screen. Verified: with z-index:auto, elementFromPoint over the
+     title/tap area hits #start (not the library). Do NOT add position:relative either (collapses the
+     screen to content height — breaks the coverflow). */
+  #menu { background: #0a0706; }
   /* full-bleed feathered video backdrop for the library — mirrors the proven #menu-hub-video recipe
      (object-fit:cover, opacity, warm filter, perf/novideo-gated, self-heal onerror). Centered cover so
      it never reads as a top-anchored banner; background:#0a0706 so any non-painting state = dark room. */
@@ -4102,11 +4106,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=131"></script>
-<script src="game.js?v=131"></script>
-<script src="jukebox.js?v=131"></script>
-<script src="catalog.js?v=131"></script>
-<script src="multiplayer.js?v=131"></script>
+<script src="assets/fx/fx-player.js?v=132"></script>
+<script src="game.js?v=132"></script>
+<script src="jukebox.js?v=132"></script>
+<script src="catalog.js?v=132"></script>
+<script src="multiplayer.js?v=132"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
