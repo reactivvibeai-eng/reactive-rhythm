@@ -1107,6 +1107,20 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v131 — HOTFIX: v130 broke the browse layout (coverflow vanished)  ✅
+Playtest of v130: the browse page went blank — the coverflow/tabs/buttons disappeared and the video
+showed only as a thin crop at the top. CAUSE: v130's `#menu { … position: relative; z-index: 5 }`
+**overrode** the base `.screen { position: absolute; inset: 0 }` rule (an ID selector beats the class),
+so `inset:0` stopped sizing the screen → `#menu` collapsed to content height, the library content
+collapsed with it, and `#menu-bg-video` (height:100% of a collapsed parent) became a top strip. FIX:
+drop the `position: relative` override — keep only `z-index: 5` (z-index works on the position:absolute
+that `.screen` already provides; this mirrors how the sibling `#menu-hub` adds its own z-index without
+touching position). Verified in-engine at 1400×860: `#menu` + `#menu-bg-video` both full-viewport
+(1400×860), the video plays full-bleed (`object-fit:cover`, currentTime advancing, readyState 4),
+`#view-jukebox` is a full 778px grid, 7 coverflow cards on-screen, tabs / "Ice cold" title / Browse·All
+Songs·Play buttons all visible, engine `#bg-video` display:none, zero console errors (`_cap_v131_*`).
+Bump ?v 130→131.
+
 ### v130 — BROWSE PAGE gets a real full-bleed VIDEO background (kills the "moon hanging at the top")  ✅
 Playtest: the browse/library page "looked like an image hanging at the top" instead of a proper game
 background. A multi-agent workflow (investigate → design → adversarial review) diagnosed the real cause:
