@@ -1,0 +1,1004 @@
+{
+ "clips": [
+  {
+   "id": "6ba0fe9f-442e-4b7e-91a2-97a12474bbc0",
+   "prompt": "Cinematic anime HERO INTRO that starts exactly on this frame. The character RYO ignites: crimson and ember-orange flames erupt and swirl upward around him, his red eyes flare bright, the glowing GOLD atom sigil behind him spins and flares with light, embers and sparks stream upward, his fox tail flicks. The camera slowly pushes IN on him. The motion builds for the first ~4.5 seconds, then SETTLES into a held, almost-still dramatic hero pose for the final ~1.5 seconds \u2014 a clean ending hold for a cut to the game menu. Keep RYO's design identical to the start frame. No camera shake, no text, no watermark, no characters added. Black, crimson #ff1f2e, ember orange #ff7a4a, gold #e0a93f palette \u2014 no blue, no purple.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_070822_6ba0fe9f-442e-4b7e-91a2-97a12474bbc0.mp4",
+   "dur": 6,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "BG"
+  },
+  {
+   "id": "e268843c-0f07-454e-87e3-b5a93f5edd60",
+   "prompt": "A celebratory party confetti burst in the exact center of the frame against a pure solid black background. Many small distinct individual confetti pieces \u2014 tiny rectangles and paper bits in crimson-red, gold, and chrome-white \u2014 shoot upward and outward then flutter and fall, with a few small sparkles. Distinct separate scattered confetti pieces spread across the frame. This is NOT a starburst, NOT a flower, NOT a firework, NOT a solid ring \u2014 only scattered individual confetti pieces. Perfectly centered spread, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no people, no other objects. Clean particle VFX game asset, high contrast. Fully bursts, peaks, and falls and fades within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063821_e268843c-0f07-454e-87e3-b5a93f5edd60.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "f9f51c4c-4b1b-4fe2-848b-8d874cb78c6a",
+   "prompt": "A violent, chaotic, destructive explosion erupting in the exact center of the frame against a pure solid black background. An irregular billowing fireball of dark blood-red and black smoke detonates with flying jagged shrapnel, debris, and crimson sparks blasting outward in a turbulent asymmetric blast, then collapsing into dark smoke and fading. Dangerous, aggressive, messy. This is NOT symmetric, NOT a flower, NOT a mandala, NOT a kaleidoscope pattern \u2014 it is a rough chaotic detonation. Perfectly centered, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no people, no other objects. Cinematic particle VFX game asset, high contrast. Fully detonates, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063817_f9f51c4c-4b1b-4fe2-848b-8d874cb78c6a.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "2c884ad1-1364-498e-b944-d7a26a04a8c7",
+   "prompt": "A miss impact: brighter sharp grey-white crack shards and crimson-red embers bursting outward with a quick dark smoke puff that dissipates, punchy and clearly visible but still gritty and muted in overall tone. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063219_2c884ad1-1364-498e-b944-d7a26a04a8c7.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "f5b9689e-cfa1-481f-8503-97493f655ed0",
+   "prompt": "A golden firework: a single firework shell bursting into a large gold and ember spray of glittering sparks that arc outward and twinkle out, celebratory. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063135_f5b9689e-cfa1-481f-8503-97493f655ed0.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "a2c7a132-0c27-45bd-881c-e2da14eef2a1",
+   "prompt": "A celebratory confetti burst: a spray of crimson-red, gold, and chrome-white confetti pieces and sparks shooting upward and outward then drifting down, festive. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063100_a2c7a132-0c27-45bd-881c-e2da14eef2a1.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "7ac706a8-590a-4d7c-8095-4f4ab97ce70f",
+   "prompt": "A soft cute paw-print poof: a gentle puff of pink and white sparkly dust forming a soft rounded shape then dissipating, playful and adorable. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063043_7ac706a8-590a-4d7c-8095-4f4ab97ce70f.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "316a5ae2-661e-4614-9146-eea4c092ab0e",
+   "prompt": "A cute heart pop: a soft glowing pink heart-shaped burst of light with little sparkles popping outward then fading, sweet and wholesome. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063015_316a5ae2-661e-4614-9146-eea4c092ab0e.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "b6f3cd6e-2cd2-4ed5-b5de-458230e3f41b",
+   "prompt": "A cute musical sparkle burst: soft pink and magenta glittering sparkles and tiny twinkling star particles bursting outward playfully then fading, sweet and musical. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062941_b6f3cd6e-2cd2-4ed5-b5de-458230e3f41b.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "eb7d4a75-933f-4f77-adb2-f5e77b7741bb",
+   "prompt": "A violet soul burst: a ghostly violet and magenta spectral energy explosion with wispy soul tendrils and sparks radiating outward then fading. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062919_eb7d4a75-933f-4f77-adb2-f5e77b7741bb.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "7add39a1-1a7e-4829-9f84-b738fa17d50d",
+   "prompt": "A stylized flaming aura in ember tones: orange and crimson ember fire flickering continuously around a glowing core, fiery and warm. Perfectly centered, isolated single effect at steady consistent intensity for the entire clip, with no fade in and no fade out. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Seamless looping glowing particle VFX game asset, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062916_7add39a1-1a7e-4829-9f84-b738fa17d50d.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "c1a5f764-9f7c-43f2-97ba-44a1a87e5ad4",
+   "prompt": "Stylized cartoon soft glowing vertical light column: a tall pillar of crimson-red energy pulses upward from center and fades out, like a lane highlight effect in a stylized game. Perfectly centered on a pure solid black background. No text, no logos, no people, no characters. Clean stylized VFX glow asset, high contrast crimson light. The glow ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062916_c1a5f764-9f7c-43f2-97ba-44a1a87e5ad4.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "d3d2d987-3497-4fc1-bb92-c00f67491214",
+   "prompt": "A stylized bone shatter burst: clean bone-white fragments and shards bursting outward with a warm ember-orange flash and sparks, then fading. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062901_d3d2d987-3497-4fc1-bb92-c00f67491214.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "bca2997f-436f-46c4-b60c-df25dce8d919",
+   "prompt": "A stylized glowing violet ghost flame: cool violet and magenta spectral fire flickering upward continuously, eerie and ethereal. Perfectly centered, isolated single effect at steady consistent intensity for the entire clip, with no fade in and no fade out. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Seamless looping glowing particle VFX game asset, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062821_bca2997f-436f-46c4-b60c-df25dce8d919.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "6f14814f-421a-44b5-87fc-d7f1c9a98a1c",
+   "prompt": "A glass shatter burst: sharp chrome-white and crimson glass shards and crack fragments exploding outward from center with a bright flash, then fading. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062727_6f14814f-421a-44b5-87fc-d7f1c9a98a1c.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "5078e470-a09a-4c6e-aab9-ef2dfc9d3368",
+   "prompt": "A horizontal strum ripple: a quick chrome-white and crimson horizontal wave of light sweeping across the center and dissipating. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062727_5078e470-a09a-4c6e-aab9-ef2dfc9d3368.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "348591a8-f6f8-4774-885c-8b8c6f3d3b69",
+   "prompt": "A vertical lane light pulse: a tall column of crimson-red light energy flares up the vertical center and fades, like a struck guitar lane. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062656_348591a8-f6f8-4774-885c-8b8c6f3d3b69.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "d13f5186-4d16-4446-8380-35201eb1f73a",
+   "prompt": "Stylized cartoon soft glowing ember sparks: small warm orange glowing particles drifting slowly upward, gentle floating motion, calm and ambient. Perfectly centered isolated VFX on pure solid black background, steady consistent intensity throughout entire clip, no fade in no fade out. No people, no characters, no objects, no text, no logos. Abstract particle game asset effect only, high contrast glow.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062619_d13f5186-4d16-4446-8380-35201eb1f73a.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "65ade5ba-cf7d-4da3-ac56-b35e88098146",
+   "prompt": "An angry hazard detonation: a violent dark-red and black explosive burst with a jagged crimson shock front and flying dark debris and sparks, dangerous looking. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062612_65ade5ba-cf7d-4da3-ac56-b35e88098146.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "f4be1025-90f3-47f6-8457-8a58b59e7606",
+   "prompt": "A snappy upward power surge: a bright streak of gold and chrome-white light and sparks shoots upward from a small flash and bursts, signalling a score multiplier increase. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062609_f4be1025-90f3-47f6-8457-8a58b59e7606.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "441ee20d-7c00-47df-8416-2d650fc5d16f",
+   "prompt": "A pulsing catcher glow ring: a thin chrome-white and crimson circular ring softly pulsing slightly larger and smaller in place, steady idle glow. Perfectly centered, isolated single effect at steady consistent intensity for the entire clip, with no fade in and no fade out. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Seamless looping glowing particle VFX game asset, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062413_441ee20d-7c00-47df-8416-2d650fc5d16f.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "900b04b1-d01f-4a54-9ab1-2ab110a21d64",
+   "prompt": "An escalating high-energy combo burst: a white-hot core flashes then erupts into a dense radial spray of crimson-red and gold sparks with thin light streaks fanning outward. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062413_900b04b1-d01f-4a54-9ab1-2ab110a21d64.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "6e53cc01-ec8c-417f-9412-ef798835bb8b",
+   "prompt": "A bright gold star sparkle pop: a four-point gold and white star flares with twinkling sparkle rays then fades, like collecting a star pickup. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062413_6e53cc01-ec8c-417f-9412-ef798835bb8b.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "29e86884-8934-4999-bd38-bdbf16d02f8a",
+   "prompt": "A fast small comet of light shooting through center: a white-hot head with a trailing crimson and ember tail, sharp and quick, then gone. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062412_29e86884-8934-4999-bd38-bdbf16d02f8a.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "b26d6ddc-8e53-49a9-b42a-1af94a323c9c",
+   "prompt": "A swirling overdrive energy aura: rotating ribbons of crimson-red and gold flame-like energy orbiting a bright glowing core, intense star-power glow. Perfectly centered, isolated single effect at steady consistent intensity for the entire clip, with no fade in and no fade out. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Seamless looping glowing particle VFX game asset, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062412_b26d6ddc-8e53-49a9-b42a-1af94a323c9c.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "17ca2f77-f390-4450-a777-34bb6fb87e5e",
+   "prompt": "A celebratory grade-up starburst: a brilliant gold and chrome-white radial flare with a thin expanding ring and showering gold sparks. Perfectly centered, symmetrical, isolated single effect. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Clean glowing particle VFX game asset, high contrast. The effect fully ignites, peaks, and completely fades to black within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062412_17ca2f77-f390-4450-a777-34bb6fb87e5e.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "4b5d6c65-60e2-40c1-ab7e-975410e156e7",
+   "prompt": "A building energy charge orb: a pulsing crimson-red and chrome-white sphere of electric energy with small crackling arcs gathering inward. Perfectly centered, isolated single effect at steady consistent intensity for the entire clip, with no fade in and no fade out. Pure solid black void background, nothing else in frame. No text, no logos, no words, no people, no characters, no other objects. Seamless looping glowing particle VFX game asset, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_062412_4b5d6c65-60e2-40c1-ab7e-975410e156e7.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "339dc07d-7706-475c-b123-9da2d9dca720",
+   "prompt": "Looping telegraph WARNING pulse FX on a PURE SOLID BLACK background (for additive blending): a glowing crimson ring/halo and a soft hazard glow that rhythmically pulses brighter then dimmer in the exact center, with a few faint drifting embers, signalling incoming danger. Only crimson #ff1f2e and ember orange #ff7a4a glow; everything else stays pure black. Seamless continuous pulse loop, no camera movement, centered. No text, no watermark, no blue, no purple, no logo.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061746_339dc07d-7706-475c-b123-9da2d9dca720.mp4",
+   "dur": 5,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "9e956ebf-a779-43ef-b3bb-1ed16457c247",
+   "prompt": "A single ONE-SHOT explosion FX on a PURE SOLID BLACK background (for additive blending): starts black, then a bright white-hot flash ignites in the center, blooming into a billowing crimson-and-ember fireball with flying gold sparks, debris and a quick smoke flash, expanding outward from center, then fading back to pure black at the end. Crimson #ff1f2e, ember orange #ff7a4a, gold #e0a93f, white-hot core. No camera movement, centered, fills the central area. No text, no watermark, no blue, no purple, no logo.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061743_9e956ebf-a779-43ef-b3bb-1ed16457c247.mp4",
+   "dur": 5,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "3de9089d-2253-4469-8f1b-b4d1940d977f",
+   "prompt": "Looping particle FX on a PURE SOLID BLACK background (for additive blending): a tight cluster of bright crackling sparks and a small dancing flame, like a burning bomb fuse, sputtering and sparkling continuously in the exact center of frame. Bright crimson #ff1f2e, ember orange #ff7a4a and gold #e0a93f sparks and embers flying off a glowing hot core. Seamless continuous loop, no camera movement, centered, the FX fills the central area, everything else stays pure black. No objects, no bomb body, no text, no watermark, no blue, no purple, no logo.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061739_3de9089d-2253-4469-8f1b-b4d1940d977f.mp4",
+   "dur": 5,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "f53cc493-4aaf-4375-96c6-652ba4907bff",
+   "prompt": "Seamless looping cinematic anime game-menu background. A dark crimson night sky with slow-drifting deep-red clouds, glowing embers and warm gold sparks rising gently from the bottom edges, faint volumetric crimson god-rays, subtle haze. Very slow, calm, hypnotic drift; no camera movement, no zoom. The lower-center stays darker and calmer (reserved for menu UI tiles). Starts and ends on the same framing for a clean seamless loop. Color palette strictly black, crimson #ff1f2e, ember orange #ff7a4a, warm gold #e0a93f \u2014 absolutely no blue, no purple. Moody, premium, atmospheric. No text, no characters, no watermark.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061709_f53cc493-4aaf-4375-96c6-652ba4907bff.mp4",
+   "dur": 5,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "328580d7-df64-4afd-b93b-b3ec04d62a13",
+   "prompt": "A single energy shockwave ring expanding continuously outward from the exact center of the frame against a pure solid black background. One thin bright chrome-white and crimson-red ring is born at a tiny point in the center, then races outward in one direction only, growing larger and thinner every moment until it passes beyond the edges of the frame and fades. The ring ONLY expands outward, never shrinks, never pulses, never bounces back, never returns to center. Only one single ring for the entire clip; after it fades the frame stays pure black. Perfectly centered and symmetrical, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Clean particle VFX element, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_054954_328580d7-df64-4afd-b93b-b3ec04d62a13.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "44dcf5a6-f314-4bb7-9c33-2cd79c5344fa",
+   "prompt": "A wispy violet ember spirit drifting and curling continuously in the center of the frame against a pure solid black background. Soft glowing violet and magenta embers and smoky wisps rise, swirl, and dissipate in constant gentle looping motion, never fully disappearing, steady intensity throughout. Ethereal, ghostly, soft purple glow. Perfectly centered, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Seamless looping ethereal wisp VFX element, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_054335_44dcf5a6-f314-4bb7-9c33-2cd79c5344fa.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "92a53bad-12b1-4399-9681-ae0f43136975",
+   "prompt": "A dark smoke puff bursting in the exact center of the frame against a pure solid black background, with a few sharp grey crack shards and dim crimson-red embers flying outward then dissipating into thin smoke. Muted, smoky, low glow, gritty. Perfectly centered, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Particle VFX element, high contrast. The puff fully appears, peaks, and fully dissipates within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_054217_92a53bad-12b1-4399-9681-ae0f43136975.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "0ab5c096-6e69-4e77-9c52-f0d4353e84bd",
+   "prompt": "A steady vertical column of fire burning continuously in the exact center of the frame against a pure solid black background. Orange and crimson-red flames rise and flicker in constant looping motion, never extinguishing, filling the vertical center of the frame at the same intensity the entire time. Perfectly centered, isolated single effect, consistent flame throughout. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Seamless looping flame VFX element, high contrast.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_054210_0ab5c096-6e69-4e77-9c52-f0d4353e84bd.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "1555a050-2e4a-479d-bd2f-7465a3079655",
+   "prompt": "A single energy shockwave ring expanding outward from the exact center of the frame against a pure solid black background. A thin bright chrome-white and crimson-red ring snaps outward, expanding and thinning as it races out and fades. One clean concentric ring only, perfectly centered and symmetrical, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Clean particle VFX element, high contrast. The shockwave fully appears, expands, and fully fades within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_053857_1555a050-2e4a-479d-bd2f-7465a3079655.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "9c911bbf-f148-4ea5-9423-96da6c1867a7",
+   "prompt": "A large fiery explosion igniting in the exact center of the frame against a pure solid black background. A burst of orange and crimson-red flame erupts into a billowing fireball, throwing flying embers and sparks that arc outward and burn out, then collapses into drifting smoke and fades completely to black. Perfectly centered, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Cinematic particle VFX element, high contrast. The explosion fully ignites, peaks, and fully fades within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_053854_9c911bbf-f148-4ea5-9423-96da6c1867a7.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "f62cd28e-9a9d-4d3b-9c13-0a22e1edbfa3",
+   "prompt": "A radiant golden light flare igniting in the exact center of the frame against a pure solid black background. A brilliant gold-white core blooms with soft radial light rays while a single thin golden ring expands smoothly outward and fades. Warm gold and amber tones, perfectly centered and symmetrical, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Clean particle VFX element, high contrast. The flare fully ignites, peaks, and fully fades within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_053240_f62cd28e-9a9d-4d3b-9c13-0a22e1edbfa3.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "3daef4ca-aa77-43c5-aa7a-44cdee5bdbb2",
+   "prompt": "A single small sharp spark burst igniting in the exact center of the frame against a pure solid black background. A brilliant white-hot core flashes, then bursts outward into crisp crimson-red sparks and thin radial light streaks that rapidly cool and fade completely back to black. Perfectly centered, symmetrical, isolated single effect. Pure black void background, nothing else in frame. No text, no logos, no people, no other objects. Macro particle VFX element, high contrast. The spark fully ignites, peaks, and fully fades within the clip.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_053156_3daef4ca-aa77-43c5-aa7a-44cdee5bdbb2.mp4",
+   "dur": 4,
+   "ar": "1:1",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "16aa24b8-3b01-4227-94cd-6b8785055ee1",
+   "prompt": "Gentle seamless looping ambient background of a large red moon over slow-drifting dark clouds and distant mountains. Subtle motion only: clouds drift slowly, soft gold sparkles float upward at the edges, a faint warm glow pulses. Calm, cinematic, atmospheric, very low motion. Starts and ends on the same framing for a clean loop. No camera movement, no zoom, no text.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_035842_16aa24b8-3b01-4227-94cd-6b8785055ee1.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 2,
+   "bucket": "BG"
+  },
+  {
+   "id": "0648de40-175a-4115-ade7-105982657dcf",
+   "prompt": "Animate this gothic graveyard scene into a SEAMLESS looping background. The violet lightning storm flickers and forks across the sky, volumetric fog drifts slowly, embers and ash float upward at the left and right edges, the sorceress in the violet gown and lace cape sways gently as her hands subtly conduct, and the faint zombie silhouettes sway. Slow, atmospheric, ominous, hypnotic, cinematic. Begins and ends on the same framing for a clean loop. The dark center-bottom stays clear. No camera cuts, no zoom, no text.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_015420_0648de40-175a-4115-ade7-105982657dcf.mp4",
+   "dur": 5,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 2,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "58c91bfa-c7c6-49e4-bdf6-cfe7191ec159",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_055749_58c91bfa-c7c6-49e4-bdf6-cfe7191ec159.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "3a1470b2-e0e4-45fc-a73d-863fc330b7bd",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_050609_3a1470b2-e0e4-45fc-a73d-863fc330b7bd.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "f4138f60-5ac5-4168-8120-9311b9833d30",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_045723_f4138f60-5ac5-4168-8120-9311b9833d30.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "de2df9d3-7ab9-4ead-8eb5-2f78e93f0eca",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_043046_de2df9d3-7ab9-4ead-8eb5-2f78e93f0eca.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "ddc5106e-a43c-46d5-ae68-ee76047e6b84",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_032445_ddc5106e-a43c-46d5-ae68-ee76047e6b84.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "1ae67a6a-bd06-4ba6-b3b2-029713de9a43",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260519_025817_1ae67a6a-bd06-4ba6-b3b2-029713de9a43.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "880240f9-8d19-4668-90db-7f9b3405a0cc",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_084132_880240f9-8d19-4668-90db-7f9b3405a0cc.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "b852ebbc-c0e9-41ae-9cdd-2a2dd64a42ec",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_082415_b852ebbc-c0e9-41ae-9cdd-2a2dd64a42ec.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "1a98f89a-34b1-4077-b390-b343d2cd8651",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_080924_1a98f89a-34b1-4077-b390-b343d2cd8651.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "ee5fb60a-8af9-46bd-94dc-38860e6f8bd9",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_071355_ee5fb60a-8af9-46bd-94dc-38860e6f8bd9.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "dc136adf-7824-4d1b-a1cf-bc9dd25ddbaa",
+   "prompt": "",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_062700_dc136adf-7824-4d1b-a1cf-bc9dd25ddbaa.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "EMPTY"
+  },
+  {
+   "id": "1063b91f-3beb-4f29-84d7-5e2bc60fdfe9",
+   "prompt": "vast dark concert arena, spotlight sweeps center stage, crowd silhouettes energizing, electric atmosphere building, cinematic epic scale, no faces, slow pull-back camera motion revealing scale",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_043022_1063b91f-3beb-4f29-84d7-5e2bc60fdfe9.mp4",
+   "dur": 4,
+   "ar": "9:16",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "BG"
+  },
+  {
+   "id": "f275a1b1-ee51-401d-83a0-2179fd55d32b",
+   "prompt": "haunted piano keys slowly pressing themselves in a fog-filled cathedral, single light shaft from above, dust motes drifting, cold blue-green atmosphere, deeply cinematic, no faces, slow creeping motion",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_043016_f275a1b1-ee51-401d-83a0-2179fd55d32b.mp4",
+   "dur": 8,
+   "ar": "9:16",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "BG"
+  },
+  {
+   "id": "ca16383f-fadf-43f9-b480-d9bd8a1984a4",
+   "prompt": "shattered vinyl record fragments float and spin in slow motion, dramatic electric blue and amber light pulses, dark studio atmosphere, abstract music energy, ultra cinematic, no faces",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260518_043003_ca16383f-fadf-43f9-b480-d9bd8a1984a4.mp4",
+   "dur": 4,
+   "ar": "9:16",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "BG"
+  },
+  {
+   "id": "08d636e9-88e6-4717-86ff-4fbaef0ed15e",
+   "prompt": "<<<image_1>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog, and effects only.\n\nSHOT: The Other Side | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:03]\nThe wrecked bedroom. Kevin's <<<47667d30-db8d-4eba-b73d-bc0a8253c2fe>>> arms rise slowly, \npalms forward. Violet-black iridescent luminous \nenergy streams from his hands \u2014 controlled, \ndeliberate. The air tears. A vertical rift \nsplits floor to ceiling \u2014 edges ragged, violent, \ncrackling iridescent energy alive at the tear. \nThrough it: the chaos dimension churning and \nvast. The bedroom still visible around the \nrift \u2014 old world and impossible in one frame. \nCrimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> behind Kevin : his face moving from \npost-confrontation cold into something he \nhas no category for.\n\n[0:03\u20130:06]\nKevin turns back from the portal edge \u2014 \nwaiting. Crimson steps beside him. Looks at \nthe portal. Then turns and looks back at \nthe bedroom behind them. The wrecked room. \nThe wrong-angle lamp. The scarred floor. \nEverything that was his life today. \nHis face: memorizing a place he will never \nreturn to. His voice barely a sound: \n\"I can't go back. Can I.\" \nKevin: \"No.\" \nCrimson faces forward. They step through.\n\n[0:06\u20130:09]\nThe chaos dimension. No ground, no ceiling \u2014 \nviolet-black iridescent luminous energy in \nmassive slow currents filling everything. \nFaces of others within the currents \u2014 human \nbut changed, iridescent light beneath their \nskin. Kevin moving forward with purpose. \nCrimson \u2014 hair whipping, arms out, no ground \nbeneath him. His face: overwhelmed, scanning. \nThen beneath his skin the luminescence \nbrightens and moves faster \u2014 involuntary, \nimmediate. His eyes shift. Recognition. \nSomething in him has been here before \neven though he hasn't.\n\n[0:09\u20130:12]\nThey emerge. Kevin through first \u2014 body \nopening, posture shifting, home. Crimson \nsteps into the deep indigo living light \nof the other world and stops. Legs stopping \nbefore his mind tells them to. His face \ntilts upward \u2014 the vast ancient city above \nhim, towers with iridescent energy running \nthrough stone like veins, hundreds of \nfigures at every level each carrying their \nown luminous energy. His jaw drops. \nOne enormous involuntary breath. \nNo words. Kevin quietly beside him: \n\"This is where we start.\"\n\n[0:12\u20130:15]\nCLOSE on Crimson's face \u2014 grief and awe \nand terror and the beginning of something \nunnameable all present at once. His hands \nat his sides slowly opening. HARD CUT \u2014 \nEXTREME MACRO on his left eye. The iris: \nviolet-black iridescent luminous presence \nmoving in multiple simultaneous currents \u2014 \nfaster, more complex, more alive than any \nmoment before this. Deep violet and electric \nindigo flowing through the iris in \ninterlocking patterns, responding to this \nworld, brighter every second. The pupil \nstill at center. The demon has arrived. \nIt was always on its way home. \nFADE TO BLACK. END.\n\nTECHNICAL: KODAK V3 grain maximum. \nColor arc: harsh amber \u2192 violent violet-black \nchaos \u2192 vast deep indigo civilization light. \nIris macro: multiple simultaneous luminescent \ncurrents \u2014 complex, active, alive. \nFADE TO BLACK.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_080446_08d636e9-88e6-4717-86ff-4fbaef0ed15e.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "2a3709d5-cf3e-42b4-a88c-2947bb5de65e",
+   "prompt": "@wittlething \u2014 Cinematic noir, single unbroken 15-second shot, first-person POV from inside a narrow concrete passageway looking outward toward a vertical crack of light: camera holds still for 3 seconds as cold pale blue-white light pulses through the crack in a slow breathing rhythm \u2014 one inhale brightens the beam, one exhale dims it \u2014 then begins an imperceptibly slow forward drift, ultra-fine dust motes rise in the light beam, @wittlething album art woven into the concrete wall surface becomes visible as light catches the texture, text overlay fades in at second 6: 'Breath in Walls' cold condensed white type, then 'Wittle Thing' below at second 8, camera continues its glacial forward push, crack growing slowly closer, room beyond comes into soft focus: bare floor, distant wall, cool ambient light, at second 12 text overlay: 'May 31 \u2014 Live Release Party' and 'reactivvibeai.com' below, at second 14 crack pulses brightest then slowly exhales to near-black at second 15, no cuts, no rapid motion, no people, glacial forward drift only, meditative stillness, charcoal grey and cold blue-white color grade, hyperrealistic IMAX cinematic quality",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_075545_2a3709d5-cf3e-42b4-a88c-2947bb5de65e.mp4",
+   "dur": 15,
+   "ar": "9:16",
+   "model": "seedance_2_0",
+   "nmedia": 1,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "a29c190b-ce4a-4ffd-b04b-a30a4c243eec",
+   "prompt": "<<<image_1>>> Extend from this video clip. <<<image_3>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog, and effects only.\n\nSHOT: The Other Side | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:03]\nThe wrecked bedroom. Kevin's @ arms rise slowly, \npalms forward. Violet-black iridescent luminous \nenergy streams from his hands \u2014 controlled, \ndeliberate. The air tears. A vertical rift \nsplits floor to ceiling \u2014 edges ragged, violent, \ncrackling iridescent energy alive at the tear. \nThrough it: the chaos dimension churning and \nvast. The bedroom still visible around the \nrift \u2014 old world and impossible in one frame. \nCrimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> behind Kevin: his face moving from \npost-confrontation cold into something he \nhas no category for.\n\n[0:03\u20130:06]\nKevin turns back from the portal edge \u2014 \nwaiting. Crimson steps beside him. Looks at \nthe portal. Then turns and looks back at \nthe bedroom behind them. The wrecked room. \nThe wrong-angle lamp. The scarred floor. \nEverything that was his life today. \nHis face: memorizing a place he will never \nreturn to. His voice barely a sound: \n\"I can't go back. Can I.\" \nKevin: \"No.\" \nCrimson faces forward. They step through.\n\n[0:06\u20130:09]\nThe chaos dimension. No ground, no ceiling \u2014 \nviolet-black iridescent luminous energy in \nmassive slow currents filling everything. \nFaces of others within the currents \u2014 human \nbut changed, iridescent light beneath their \nskin. Kevin moving forward with purpose. \nCrimson \u2014 hair whipping, arms out, no ground \nbeneath him. His face: overwhelmed, scanning. \nThen beneath his skin the luminescence \nbrightens and moves faster \u2014 involuntary, \nimmediate. His eyes shift. Recognition. \nSomething in him has been here before \neven though he hasn't.\n\n[0:09\u20130:12]\nThey emerge. Kevin through first \u2014 body \nopening, posture shifting, home. Crimson \nsteps into the deep indigo living light \nof the other world and stops. Legs stopping \nbefore his mind tells them to. His face \ntilts upward \u2014 the vast ancient city above \nhim, towers with iridescent energy running \nthrough stone like veins, hundreds of \nfigures at every level each carrying their \nown luminous energy. His jaw drops. \nOne enormous involuntary breath. \nNo words. Kevin quietly beside him: \n\"This is where we start.\"\n\n[0:12\u20130:15]\nCLOSE on Crimson's face \u2014 grief and awe \nand terror and the beginning of something \nunnameable all present at once. His hands \nat his sides slowly opening. HARD CUT \u2014 \nEXTREME MACRO on his left eye. The iris: \nviolet-black iridescent luminous presence \nmoving in multiple simultaneous currents \u2014 \nfaster, more complex, more alive than any \nmoment before this. Deep violet and electric \nindigo flowing through the iris in \ninterlocking patterns, responding to this \nworld, brighter every second. The pupil \nstill at center. The demon has arrived. \nIt was always on its way home. \nFADE TO BLACK. END.\n\nTECHNICAL: KODAK V3 grain maximum. \nColor arc: harsh amber \u2192 violent violet-black \nchaos \u2192 vast deep indigo civilization light. \nIris macro: multiple simultaneous luminescent \ncurrents \u2014 complex, active, alive. \nFADE TO BLACK.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_075235_a29c190b-ce4a-4ffd-b04b-a30a4c243eec.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 3,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "cbd301fa-89d5-4501-923f-7d931107135a",
+   "prompt": "<<<image_3>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog only.\n\nSHOT: What You Took From Me | 15 sec | 2.39:1\n\n[0:00\u20130:03]\nWIDE LOCKED. The wrecked bedroom. Crimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> standing \nat center \u2014 feet planted, weight forward, completely \nstill. Kevin <<<image_1>>> against the far wall \u2014 standing, \nreceiving. The harsh amber diagonal light cuts \nacross the scarred floor between them. Neither \nmoving. Crimson's voice comes out quiet \u2014 \nwhich is worse than screaming: \"Someone is dead \nbecause of what you put in me.\" He lets that \nsit. Then: \"You chose this for me. You never \nasked me once.\"\n\n[0:03\u20130:06]\nCLOSE on Kevin. His shoulders drop \u2014 physically, \nan inch, visible. His chin lowers. His eyes go \nto the floor. His hands open at his sides \u2014 \npalms out, empty. He has no answer and every \npart of his body is showing it. Crimson's voice \ncontinues \u2014 still quiet, still controlled, \neach word its own sentence: \"My job. My name. \nMy whole life. Everything I had this morning. \nYou took it. You decided it was yours to take \nand you never said a word.\"\n\n[0:06\u20130:09]\nCLOSE on Crimson's face. His jaw barely moving \nbetween words. Eyes locked across the room \u2014 \nwet but held, not falling. His voice dropping \nlower now: \"You knew what you were. You knew \nwhat being near you would cost me. And you \nchose me anyway and called it something else.\" \nHis hands at his sides closing slowly into \nfists \u2014 then releasing. He is choosing not \nto fall apart again. He is choosing to stand \nhere and make Kevin hear every word.\n\n[0:09\u20130:12]\nCUT to CLOSE on Kevin forcing his eyes up \nfrom the floor. His face: brow completely \nsurrendered, mouth open, the most exposed \nhe has ever been. He takes one step toward \nCrimson \u2014 stops. His voice barely a sound: \n\"I told myself I could keep you safe. \nThat I could be near you and it wouldn't\u2014\" \nHis jaw tightens. He stops. Starts again: \n\"I was wrong. I knew I was wrong. \nI stayed anyway.\" His eyes find Crimson's \nand hold them. \"I'm not going to ask you \nto forgive that.\"\n\n[0:12\u20130:15]\nA beat of silence between them \u2014 the longest \nof the film. Then Kevin's voice, different now \u2014 \nquieter, carrying something other than guilt: \n\"There's a place. Others like us \u2014 people \nwho didn't choose this either. A whole world \nof them.\" He stops. Watching Crimson's face. \nCrimson's eyes move \u2014 from Kevin to somewhere \npast him. To something not in this room. \nHis fists slowly open. His jaw slowly releases. \nHe is not forgiving Kevin. He is calculating \nwhat remains of his life. His face in this \nsilence: the specific expression of someone \nwho has no other door and is walking toward \nit anyway. HOLD TO CUT.\n\nTECHNICAL: KODAK V3 grain heavy. Harsh \nwrong-angle amber diagonal \u2014 interrogation \nlight, copper on skin, nothing warm. \nDeep indigo black consuming every edge. \nWide locked static [0:00\u20130:03]. Close \nalternating faces [0:03\u20130:12]. Both faces \nfinal beat [0:12\u20130:15]. No handheld \u2014 \nlocked throughout. Anamorphic bokeh.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_075210_cbd301fa-89d5-4501-923f-7d931107135a.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 3,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "bac598fa-dedd-45c9-8bb6-adfc3548f68c",
+   "prompt": "<<<image_1>>>  Extend from this video clip. <<<image_3>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog, and effects only.\n\nSHOT: The Other Side | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:03]\nThe wrecked bedroom. Kevin's @ arms rise slowly, \npalms forward. Violet-black iridescent luminous \nenergy streams from his hands \u2014 controlled, \ndeliberate. The air tears. A vertical rift \nsplits floor to ceiling \u2014 edges ragged, violent, \ncrackling iridescent energy alive at the tear. \nThrough it: the chaos dimension churning and \nvast. The bedroom still visible around the \nrift \u2014 old world and impossible in one frame. \nCrimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> behind Kevin: his face moving from \npost-confrontation cold into something he \nhas no category for.\n\n[0:03\u20130:06]\nKevin turns back from the portal edge \u2014 \nwaiting. Crimson steps beside him. Looks at \nthe portal. Then turns and looks back at \nthe bedroom behind them. The wrecked room. \nThe wrong-angle lamp. The scarred floor. \nEverything that was his life today. \nHis face: memorizing a place he will never \nreturn to. His voice barely a sound: \n\"I can't go back. Can I.\" \nKevin: \"No.\" \nCrimson faces forward. They step through.\n\n[0:06\u20130:09]\nThe chaos dimension. No ground, no ceiling \u2014 \nviolet-black iridescent luminous energy in \nmassive slow currents filling everything. \nFaces of others within the currents \u2014 human \nbut changed, iridescent light beneath their \nskin. Kevin moving forward with purpose. \nCrimson \u2014 hair whipping, arms out, no ground \nbeneath him. His face: overwhelmed, scanning. \nThen beneath his skin the luminescence \nbrightens and moves faster \u2014 involuntary, \nimmediate. His eyes shift. Recognition. \nSomething in him has been here before \neven though he hasn't.\n\n[0:09\u20130:12]\nThey emerge. Kevin through first \u2014 body \nopening, posture shifting, home. Crimson \nsteps into the deep indigo living light \nof the other world and stops. Legs stopping \nbefore his mind tells them to. His face \ntilts upward \u2014 the vast ancient city above \nhim, towers with iridescent energy running \nthrough stone like veins, hundreds of \nfigures at every level each carrying their \nown luminous energy. His jaw drops. \nOne enormous involuntary breath. \nNo words. Kevin quietly beside him: \n\"This is where we start.\"\n\n[0:12\u20130:15]\nCLOSE on Crimson's face \u2014 grief and awe \nand terror and the beginning of something \nunnameable all present at once. His hands \nat his sides slowly opening. HARD CUT \u2014 \nEXTREME MACRO on his left eye. The iris: \nviolet-black iridescent luminous presence \nmoving in multiple simultaneous currents \u2014 \nfaster, more complex, more alive than any \nmoment before this. Deep violet and electric \nindigo flowing through the iris in \ninterlocking patterns, responding to this \nworld, brighter every second. The pupil \nstill at center. The demon has arrived. \nIt was always on its way home. \nFADE TO BLACK. END.\n\nTECHNICAL: KODAK V3 grain maximum. \nColor arc: harsh amber \u2192 violent violet-black \nchaos \u2192 vast deep indigo civilization light. \nIris macro: multiple simultaneous luminescent \ncurrents \u2014 complex, active, alive. \nFADE TO BLACK.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_074842_bac598fa-dedd-45c9-8bb6-adfc3548f68c.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 4,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "730b2cfc-aa2e-4bab-ab2c-ec7ea2394f48",
+   "prompt": "<<<video_1>>>Extend video from this clip.\n<<<image_3>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog only.\n\nSHOT: What You Took From Me | 15 sec | 2.39:1\n\n[0:00\u20130:03]\nWIDE LOCKED. The wrecked bedroom. Crimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> standing \nat center \u2014 feet planted, weight forward, completely \nstill. Kevin <<<image_1>>> against the far wall \u2014 standing, \nreceiving. The harsh amber diagonal light cuts \nacross the scarred floor between them. Neither \nmoving. Crimson's voice comes out quiet \u2014 \nwhich is worse than screaming: \"Someone is dead \nbecause of what you put in me.\" He lets that \nsit. Then: \"You chose this for me. You never \nasked me once.\"\n\n[0:03\u20130:06]\nCLOSE on Kevin. His shoulders drop \u2014 physically, \nan inch, visible. His chin lowers. His eyes go \nto the floor. His hands open at his sides \u2014 \npalms out, empty. He has no answer and every \npart of his body is showing it. Crimson's voice \ncontinues \u2014 still quiet, still controlled, \neach word its own sentence: \"My job. My name. \nMy whole life. Everything I had this morning. \nYou took it. You decided it was yours to take \nand you never said a word.\"\n\n[0:06\u20130:09]\nCLOSE on Crimson's face. His jaw barely moving \nbetween words. Eyes locked across the room \u2014 \nwet but held, not falling. His voice dropping \nlower now: \"You knew what you were. You knew \nwhat being near you would cost me. And you \nchose me anyway and called it something else.\" \nHis hands at his sides closing slowly into \nfists \u2014 then releasing. He is choosing not \nto fall apart again. He is choosing to stand \nhere and make Kevin hear every word.\n\n[0:09\u20130:12]\nCUT to CLOSE on Kevin forcing his eyes up \nfrom the floor. His face: brow completely \nsurrendered, mouth open, the most exposed \nhe has ever been. He takes one step toward \nCrimson \u2014 stops. His voice barely a sound: \n\"I told myself I could keep you safe. \nThat I could be near you and it wouldn't\u2014\" \nHis jaw tightens. He stops. Starts again: \n\"I was wrong. I knew I was wrong. \nI stayed anyway.\" His eyes find Crimson's \nand hold them. \"I'm not going to ask you \nto forgive that.\"\n\n[0:12\u20130:15]\nA beat of silence between them \u2014 the longest \nof the film. Then Kevin's voice, different now \u2014 \nquieter, carrying something other than guilt: \n\"There's a place. Others like us \u2014 people \nwho didn't choose this either. A whole world \nof them.\" He stops. Watching Crimson's face. \nCrimson's eyes move \u2014 from Kevin to somewhere \npast him. To something not in this room. \nHis fists slowly open. His jaw slowly releases. \nHe is not forgiving Kevin. He is calculating \nwhat remains of his life. His face in this \nsilence: the specific expression of someone \nwho has no other door and is walking toward \nit anyway. HOLD TO CUT.\n\nTECHNICAL: KODAK V3 grain heavy. Harsh \nwrong-angle amber diagonal \u2014 interrogation \nlight, copper on skin, nothing warm. \nDeep indigo black consuming every edge. \nWide locked static [0:00\u20130:03]. Close \nalternating faces [0:03\u20130:12]. Both faces \nfinal beat [0:12\u20130:15]. No handheld \u2014 \nlocked throughout. Anamorphic bokeh.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_073002_730b2cfc-aa2e-4bab-ab2c-ec7ea2394f48.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 4,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "72d6c882-cc77-4a99-b78c-6519daf49564",
+   "prompt": "<<<image_3>>> REFERENCE: Storyboard sets all visual info. Motion, \nacting, dialog only.\n<<<video_1>>>Extend video from this scene.\n\nSHOT: Together | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:03]\nWIDE. The wrecked bedroom. Crimson <<<image_2>>> on his knees \u2014 \nthen his hands go to the floor, then his elbows, \nthen all of it \u2014 a slow total collapse, his body \nstage by stage giving out beneath him until his \ncheek is against the warm wood floor, long dark \nhair spread around him, eyes closing. The wrong-\nangle amber lamp throws its harsh diagonal light \nacross his body on the floor. Kevin <<<image_1>>> across the \nroom \u2014 sees it \u2014 and moves. Crossing the wrecked \nroom in long deliberate strides, face forward, \neyes on Crimson. He is not running. He is arriving.\n\n[0:03\u20130:07]\nKevin drops to his knees beside Crimson. His face \nas he gets there \u2014 his brow collapses first, \npulling hard together at the center, then his \njaw tightens until the muscle shows, then his \neyes fill and go red at the rims. The composure \nthat has held the entire film is simply gone \u2014 \nnot cracked, gone. He puts his hands under \nCrimson and pulls him upright and against his \nchest. Crimson's body: completely passive, no \nhelp, no resistance \u2014 his head falling against \nKevin's shoulder, arms loose. Kevin wraps around \nhim and holds. His face over Crimson's shoulder: \none tear releases from his left eye and tracks \ndown his pale cheek. He says nothing. He holds.\n\n[0:07\u20130:10]\nKevin's hand moves from Crimson's back to his jaw \u2014 \nturning his face slowly upward. Crimson's eyes \nopen \u2014 glassy, heavy, finding Kevin's face above. \nKevin looking down at him: his thumb resting \nagainst Crimson's bronze cheekbone, his face \ncarrying the coworker and the FBI and the bedroom \nand every choice he made. A single beat where \nCrimson just looks at him \u2014 too tired to fight, \ntoo tired to pull away. Then Kevin leans in and \nkisses him. Crimson's eyes close first. Then \nKevin's. The wrong-angle amber lamp throwing \ncopper light across both their faces from below. \nIndigo black consuming every edge of the frame. \nKevin's hand cups the side of Crimson's face. \nThe kiss is not gentle. It holds.\n\n[0:10\u20130:13]\nKevin pulls back one inch \u2014 both eyes open \nsimultaneously. He looks at Crimson: his jaw \nset with the resolve of someone choosing permanent \nresponsibility for permanent damage. His eyes \ncarry the guilt and refuse to look away from it. \nHis voice barely above a whisper, deliberate, \none word at a time: \"We're gonna get through \nthis.\" His eyes don't move. \"Together.\" \nCrimson stares back. His face moves in the \nsilence after the word \u2014 the trembling stops. \nHis eyes fill but don't break. His mouth \ncloses. Something settles in him \u2014 not peace, \nnot happiness \u2014 just the decision to go forward. \nHe holds Kevin's gaze and stays in it.\n\n[0:13\u20130:15]\nSLOW PULL BACK \u2014 both figures small on the dark \nwrecked wood floor, the broken room enormous \naround them, the wrong amber light the only \nwarmth left in the world. Hold this wide for \ntwo full seconds \u2014 the image of them together \nin the wreckage. Then HARD CUT to EXTREME \nMACRO \u2014 Crimson's left eye. His iris. \nThe violet-black iridescent luminous presence \npulses once \u2014 one slow organic surge of deep \nviolet light through the iris, moving around \nthe still pupil. Then completely still. \nThe demon. Settled. Home. FADE TO BLACK.\n\nTECHNICAL: KODAK V3 grain maximum. Wrong-angle \nharsh amber diagonal throughout \u2014 copper on skin, \nindigo black at every edge. Wide [0:00\u20130:03]. \nLow floor arrival [0:03\u20130:07]. Extreme close \nkiss [0:07\u20130:10]. Close two-shot dialog \n[0:10\u20130:13]. Wide pull then iris macro hard \ncut [0:13\u20130:15]. Fade to black. \nAnamorphic bokeh throughout.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_071451_72d6c882-cc77-4a99-b78c-6519daf49564.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 4,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "b8e87e95-f280-461a-82e0-5f4afe571e33",
+   "prompt": "@ Reference image as storyboard. REFERENCE: Storyboard sets all visual info. This prompt \ndescribes what happens on screen only.\n\nSHOT: The Power | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:04]\nThe bedroom. Crimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> is on his knees on the wood \nfloor. One second of stillness. Then his body erupts \nwithout warning \u2014 dark iridescent violet-black light \nshoots outward from his chest, his arms, his neck \nin every direction. He did not choose this. His face: \neyes blown wide, mouth open in pure shock. He looks \ndown at his own hands and arms as it happens and \nhis voice tears out of him \u2014 broken, terrified, \ndirected at his own body: \"No \u2014 NO \u2014 stop \u2014 \nSTOP\u2014\" The words are not for Kevin. They are \nCrimson begging himself. The amber lamp gets knocked \nsideways. The violet-black glow floods the room.\n\n[0:04\u20130:07]\nFull chaos. The dark iridescent light reaches every \nwall, every corner. Objects displaced across the room. \nCrimson's face close up \u2014 streaming, shaking, \ncompletely helpless: \"GET OUT OF ME \u2014 GET OUT\u2014\" \nHis voice is raw and full, cracking between rage \nand terror. He is fighting something he cannot \ntouch. Across the room Kevin pushes off the wall \nand takes a step toward Crimson \u2014 then stops as \na wave of the violet-black light sweeps past him. \nHe raises his voice over the chaos, low and urgent: \n\"Crimson \u2014 look at me. LOOK AT ME.\"\n\n[0:07\u20130:10]\nCrimson cannot look at him. His eyes are wild, \nunfocused, turned inward. Kevin's voice harder now, \ncutting through: \"Don't fight it \u2014 you'll make \nit worse \u2014 let it move through you\u2014\" His face \nacross the room: jaw set, eyes locked on Crimson, \nwilling him to hear it. The violet-black light \nbetween them churning. Crimson's face \u2014 hearing \nthe words but unable to reach them. His mouth \nstill open, breath coming in sharp ragged bursts, \ntears streaming: \"I can't \u2014 I can't stop it \u2014 \nKevin <<<47667d30-db8d-4eba-b73d-bc0a8253c2fe>>> I can't\u2014\" His voice breaking completely \non Kevin's name.\n\n[0:10\u20130:13]\nEverything reverses at once. The violet-black light \nsnaps back toward Crimson from every direction \nsimultaneously \u2014 walls, ceiling, floor \u2014 rushing \ninward at full speed and disappearing back inside \nhim all at once. His arms dragged inward with it. \nHis whole body pulls tight. He makes one sharp \ninvoluntary sound \u2014 not a word, just the sound \nof someone being compressed back into themselves \nagainst their will. Kevin across the room: \n\"Almost \u2014 stay with me \u2014 almost\u2014\"\n\n[0:13\u20130:15]\nGone. Complete silence. The violet-black light \nhas vanished entirely. The knocked-over amber \nlamp throws its harsh wrong light across the \nwrecked room. Crimson collapses forward onto \nhis hands on the wood floor \u2014 head dropping, \nhair falling around his face. One enormous \ngasping breath. Kevin crosses the room fast \nand drops to the floor beside him. Crimson's \nvoice \u2014 barely a sound, aimed at the floor: \n\"Is it always going to be like this.\" \nNot a question. Kevin's hand on his back. \nKevin says nothing. His silence is the answer. \nHOLD TO CUT.\n\nTECHNICAL: KODAK V3 grain heavy. Violet-black \niridescent light erupts instantly, fills the \nroom, snaps back violently all at once. \nKnocked amber lamp \u2014 harsh diagonal light \ndominates final section. Anamorphic lens.\nonly 1 kevin in the room.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_070328_b8e87e95-f280-461a-82e0-5f4afe571e33.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 3,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "da2d8d75-cd0d-4592-8f9c-440b1fdeccd1",
+   "prompt": "@ Reference image as storyboard. REFERENCE: Storyboard sets all visual info. This prompt \ndescribes what happens on screen only.\n\nSHOT: The Power | 15 sec | 2.39:1 anamorphic\n\n[0:00\u20130:04]\nThe bedroom. Crimson <<<16c08ff6-4297-47a3-a654-537bb570db76>>> is on his knees on the wood \nfloor. One second of stillness. Then his body erupts \nwithout warning \u2014 dark iridescent violet-black light \nshoots outward from his chest, his arms, his neck \nin every direction. He did not choose this. His face: \neyes blown wide, mouth open in pure shock. He looks \ndown at his own hands and arms as it happens and \nhis voice tears out of him \u2014 broken, terrified, \ndirected at his own body: \"No \u2014 NO \u2014 stop \u2014 \nSTOP\u2014\" The words are not for Kevin. They are \nCrimson begging himself. The amber lamp gets knocked \nsideways. The violet-black glow floods the room.\n\n[0:04\u20130:07]\nFull chaos. The dark iridescent light reaches every \nwall, every corner. Objects displaced across the room. \nCrimson's face close up \u2014 streaming, shaking, \ncompletely helpless: \"GET OUT OF ME \u2014 GET OUT\u2014\" \nHis voice is raw and full, cracking between rage \nand terror. He is fighting something he cannot \ntouch. Across the room Kevin pushes off the wall \nand takes a step toward Crimson \u2014 then stops as \na wave of the violet-black light sweeps past him. \nHe raises his voice over the chaos, low and urgent: \n\"Crimson \u2014 look at me. LOOK AT ME.\"\n\n[0:07\u20130:10]\nCrimson cannot look at him. His eyes are wild, \nunfocused, turned inward. Kevin's voice harder now, \ncutting through: \"Don't fight it \u2014 you'll make \nit worse \u2014 let it move through you\u2014\" His face \nacross the room: jaw set, eyes locked on Crimson, \nwilling him to hear it. The violet-black light \nbetween them churning. Crimson's face \u2014 hearing \nthe words but unable to reach them. His mouth \nstill open, breath coming in sharp ragged bursts, \ntears streaming: \"I can't \u2014 I can't stop it \u2014 \nKevin <<<47667d30-db8d-4eba-b73d-bc0a8253c2fe>>> I can't\u2014\" His voice breaking completely \non Kevin's name.\n\n[0:10\u20130:13]\nEverything reverses at once. The violet-black light \nsnaps back toward Crimson from every direction \nsimultaneously \u2014 walls, ceiling, floor \u2014 rushing \ninward at full speed and disappearing back inside \nhim all at once. His arms dragged inward with it. \nHis whole body pulls tight. He makes one sharp \ninvoluntary sound \u2014 not a word, just the sound \nof someone being compressed back into themselves \nagainst their will. Kevin across the room: \n\"Almost \u2014 stay with me \u2014 almost\u2014\"\n\n[0:13\u20130:15]\nGone. Complete silence. The violet-black light \nhas vanished entirely. The knocked-over amber \nlamp throws its harsh wrong light across the \nwrecked room. Crimson collapses forward onto \nhis hands on the wood floor \u2014 head dropping, \nhair falling around his face. One enormous \ngasping breath. Kevin crosses the room fast \nand drops to the floor beside him. Crimson's \nvoice \u2014 barely a sound, aimed at the floor: \n\"Is it always going to be like this.\" \nNot a question. Kevin's hand on his back. \nKevin says nothing. His silence is the answer. \nHOLD TO CUT.\n\nTECHNICAL: KODAK V3 grain heavy. Violet-black \niridescent light erupts instantly, fills the \nroom, snaps back violently all at once. \nKnocked amber lamp \u2014 harsh diagonal light \ndominates final section. Anamorphic lens.\nonly 1 kevin in the room.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_065452_da2d8d75-cd0d-4592-8f9c-440b1fdeccd1.mp4",
+   "dur": 15,
+   "ar": "9:16",
+   "model": "seedance_2_0",
+   "nmedia": 3,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "a0177995-8819-46ac-a842-055f777adc70",
+   "prompt": "Anime boy with wild spiky black hair, dark hoodie, and a large fluffy orange fox tail walks forward confidently on a black background, turns to face camera with a sharp smirk, then points at viewer. Orange tail sweeps with energy. Noir anime cinematic style.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_061836_a0177995-8819-46ac-a842-055f777adc70.mp4",
+   "dur": 8,
+   "ar": "9:16",
+   "model": "kling3_0",
+   "nmedia": 0,
+   "bucket": "BG"
+  },
+  {
+   "id": "d692cd56-417d-433e-b7ad-45744761bb49",
+   "prompt": "Photorealistic cinematic drama. 16:9. KODAK VISION3 500T grain. Anamorphic lens. Dark wrecked bedroom \u2014 wood floor, displaced objects, marks on walls. Only light: amber practical lamp knocked sideways on the floor, throwing harsh diagonal copper-gold light upward from below. Deep indigo darkness above. Crushed blacks.\n\nCHARACTER A \u2014 CRIMSON: Lean South Asian man, mid-20s. Very long wavy dark black hair falling past his shoulders. Deep warm bronze skin. Angular jaw, high cheekbones, dark eyes. Dark gray fitted crew-neck t-shirt, black slim jeans. Physically and emotionally destroyed.\n\nCHARACTER B \u2014 KEVIN: Lean white male, approximately 5'11\", early 20s. Short textured dark brown hair, slightly messy. Pale olive skin with scattered moles on face and neck. Strong angular jaw, hollowed cheeks, dark brown eyes, heavy brow. Heavily distressed torn white t-shirt, dark slim jeans, dark worn boots.\n\nContinuous 15-second sequence \u2014 no cuts, slow deliberate camera:\n\n0-3s: WIDE \u2014 Crimson in the center of the wrecked room, pitching forward from his knees, body completely giving out. Long dark hair swinging forward around his face as he falls toward the wood floor. Kevin already mid-stride across the room toward him, face set, no hesitation. Amber lamp light diagonal across the floor between them.\n\n3-7s: MEDIUM \u2014 Kevin drops to his knees, grabs Crimson, pulls him upright against his chest. Crimson's back against Kevin's front, head falling back on Kevin's shoulder, eyes closed, body passive. Kevin's arm wraps across Crimson's chest. Kevin's face over his shoulder: jaw clenched, eyes red-rimmed, holding together the person he broke. Copper-gold light raking up both of them from the floor lamp below.\n\n7-11s: MEDIUM CLOSE \u2014 Kevin's hand moves to Crimson's jaw, turning his face toward him. Crimson's eyes open slowly \u2014 glassy, finding Kevin. Kevin's face above: one tear tracking down his pale cheek through the harsh amber light. Raw. Unguarded. Their faces inches apart. The specific look of someone unable to look away from what their choices cost another person.\n\n11-14s: EXTREME CLOSE TWO-SHOT \u2014 Kevin's lips meet Crimson's. Both eyes close. Kevin's hand cups the side of Crimson's bronze face. Copper-gold amber light across both faces. Deep indigo black consuming every edge. The kiss carries everything that could not be said. Not a beginning \u2014 a reckoning.\n\n14-15s: MACRO \u2014 Crimson's left eye filling the frame. Dark iris. A single barely-visible pulse of violet-black iridescent light moves through the pupil \u2014 organic, unhurried, still. The surface of the eye is calm. The demon was always there. Hold on this. Final frame.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260517_054055_d692cd56-417d-433e-b7ad-45744761bb49.mp4",
+   "dur": 15,
+   "ar": "16:9",
+   "model": "seedance_2_0",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "106d4323-569b-4eb3-a5d4-06030819c982",
+   "prompt": "A 12-second hyper-realistic 4K video with decadent volumetric lighting\u2014chandeliers casting molten gold across mirrored parquet, prismatic shards floating in slow-motion. Style: Razor-sharp ultra-realistic satire; every smirk, every pearl, every tremor of a child\u2019s tray in unflinching detail. Cinematography: 50mm anamorphic (f/1.4 DOF), slow orbital dolly from ceiling text to floor-level circle; text melts into bokeh. Actions: 0-3s: Fade in\u2014regal gold filigree text center-frame: \u201cThe New White House Ballroom \u2013 Grand Opening Gala\u201d with subtle lens flare; dissolves into glittering dust. 3-7s: Camera descends into a smug knot of five tuxedoed elites. One raises flute: \u201cThey think donations built this? Ha! We funded it by slashing food stamps!\u201d Another snorts: \u201cLittle Timmy\u2019s dinner paid for the chandeliers\u2014hohoho!\u201d 7-10s: Third, nasal: \u201cThink they\u2019ll eat?\u201d Fourth, choking on caviar: \u201cAbsolutely not\u2014that\u2019s the beauty, darling!\u201d\u2014they burst into synchronized, hyena-rich guffaws. 10-12s: Tilt down\u2014three barefoot African children (6\u20138) in starched smocks silently proffer silver trays of micro-canap\u00e9s; one tray wobbles as a diamond bracelet grazes past. Dialogue: Elite 1: \u201cThey think donations built this? We funded it by slashing food stamps!\u201d Elite 2: \u201cLittle Timmy\u2019s dinner paid for the chandeliers\u2014hohoho!\u201d Elite 3: \u201cThink they\u2019ll eat?\u201d Elite 4: \u201cAbsolutely not\u2014that\u2019s the beauty, darling!\u201d [obnoxious synchronized hyena-laughter] Background Sound: Muted string quartet, crystal clink, echoing guffaws, faint tray rattle, children\u2019s bare feet on marble.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/d78cd5cf-6514-467b-a365-750cdaedb814.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "a933a33e-42a4-407e-9c22-4600e66d9f35",
+   "prompt": "A 12-second hyper-realistic 4K TV commercial with dramatic volumetric lighting\u2014crimson emergency strobes sweeping across a cavernous Walmart aisle, sparks from overhead fluorescents flickering like distant riots. Style: Gritty post-apocalyptic retail satire, ultra-realistic handheld urgency; desaturated palette punched by neon sale signs. Cinematography: Rapid tracking through aisles (24mm wide lens, f/2.8 DOF), whip-pans to products, final smash-zoom on register; cinematic color grade with high-contrast shadows. Actions: 0-4s: Darkened supercenter\u2014red alarm lights pulse; frantic shoppers sprint past. Deep voiceover kicks in as camera barrels toward garden section stacked with gleaming pitchforks and LED torches. 4-8s: Close-up: pitchfork tines glint, torch flames whoosh on; bold yellow \u201c50% OFF\u201d banner slams down. POV shopper grabs both, eyes wild. 8-12s: Cut to checkout\u2014cashier in Walmart vest deadpan scans items, screen flashes \u201cEBT DECLINED.\u201d Voiceover: \u201cStock up now. Cash only.\u201d Smash to Walmart smiley face logo flickering under red strobes. Dialogue: Voiceover (gruff, urgent): \u201cGovernment took your EBT? Purge is coming. Grab pitchforks and torches\u2014half off at Walmart. No EBT accepted.\u201d Background Sound: Distant sirens, fluorescent buzz, cart rattles, torch whoosh, register beep-denied, ending on low Walmart jingle warped into minor key.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/9dae1877-8bd6-4d66-b1bc-88ea60f8dcc6.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "fe394eb0-61c8-45fb-b9c9-9e717128f211",
+   "prompt": "A 12-second hyper-realistic 4K video with decadent volumetric lighting\u2014chandeliers casting molten gold across mirrored parquet, prismatic shards floating in slow-motion. Style: Razor-sharp ultra-realistic satire; every smirk, every pearl, every tremor of a child\u2019s tray in unflinching detail. Cinematography: 50mm anamorphic (f/1.4 DOF), slow orbital dolly from ceiling text to floor-level circle; text melts into bokeh. Actions: 0-3s: Fade in\u2014regal gold filigree text center-frame: \u201cThe New White House Ballroom \u2013 Grand Opening Gala\u201d with subtle lens flare; dissolves into glittering dust. 3-7s: Camera descends into a smug knot of five tuxedoed elites. One raises flute: \u201cThey think donations built this? Ha! We funded it by slashing food stamps!\u201d Another snorts: \u201cLittle Timmy\u2019s dinner paid for the chandeliers\u2014hohoho!\u201d 7-10s: Third, nasal: \u201cThink they\u2019ll eat?\u201d Fourth, choking on caviar: \u201cAbsolutely not\u2014that\u2019s the beauty, darling!\u201d\u2014they burst into synchronized, hyena-rich guffaws. 10-12s: Tilt down\u2014three barefoot African children (6\u20138) in starched smocks silently proffer silver trays of micro-canap\u00e9s; one tray wobbles as a diamond bracelet grazes past. Dialogue: Elite 1: \u201cThey think donations built this? We funded it by slashing food stamps!\u201d Elite 2: \u201cLittle Timmy\u2019s dinner paid for the chandeliers\u2014hohoho!\u201d Elite 3: \u201cThink they\u2019ll eat?\u201d Elite 4: \u201cAbsolutely not\u2014that\u2019s the beauty, darling!\u201d [obnoxious synchronized hyena-laughter] Background Sound: Muted string quartet, crystal clink, echoing guffaws, faint tray rattle, children\u2019s bare feet on marble.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/d918d85e-1352-490e-bf84-87ff519bea73.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "0bf40b13-3a8d-4b6e-8bd9-5b5282763882",
+   "prompt": "A 12-second hyper-realistic 4K TV commercial with dramatic volumetric lighting\u2014crimson emergency strobes sweeping across a cavernous Walmart aisle, sparks from overhead fluorescents flickering like distant riots. Style: Gritty post-apocalyptic retail satire, ultra-realistic handheld urgency; desaturated palette punched by neon sale signs. Cinematography: Rapid tracking through aisles (24mm wide lens, f/2.8 DOF), whip-pans to products, final smash-zoom on register; cinematic color grade with high-contrast shadows. Actions: 0-4s: Darkened supercenter\u2014red alarm lights pulse; frantic shoppers sprint past. Deep voiceover kicks in as camera barrels toward garden section stacked with gleaming pitchforks and LED torches. 4-8s: Close-up: pitchfork tines glint, torch flames whoosh on; bold yellow \u201c50% OFF\u201d banner slams down. POV shopper grabs both, eyes wild. 8-12s: Cut to checkout\u2014cashier in Walmart vest deadpan scans items, screen flashes \u201cEBT DECLINED.\u201d Voiceover: \u201cStock up now. Cash only.\u201d Smash to Walmart smiley face logo flickering under red strobes. Dialogue: Voiceover (gruff, urgent): \u201cGovernment took your EBT? Purge is coming. Grab pitchforks and torches\u2014half off at Walmart. No EBT accepted.\u201d Background Sound: Distant sirens, fluorescent buzz, cart rattles, torch whoosh, register beep-denied, ending on low Walmart jingle warped into minor key.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/a7ee2e71-3979-4663-8212-4c441ffb2eab.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "03da15ec-189e-4ad2-bd50-ea0e9c445260",
+   "prompt": "A 12-second hyper-realistic 4K video with razor-sharp volumetric forest light\u2014golden shafts slicing through canopy, pollen glinting like diamonds in slow-motion 120fps air.\nStyle: Bone-dry ultra-realistic comedy; zero cartooning, pure physics\u2014creaking wood fibers, sawdust clouds, authentic chainsaw bite.\nCinematography: Locked macro on boy (35mm anamorphic, f/1.4 DOF), silky 120fps dolly-back to full 40ft reveal, final whip-pan to ground trio; color-graded for late-afternoon warmth.\nActions:\n\n0-4s: ECU 5-year-old in red hoodie, wind whipping hair, screams \u201cSIX SIGMA!\u201d then hits stiff dad-dance: finger guns, lawnmower yank, running man\u2014branch flexes.\n4-8s: Camera rockets back\u2014tree sways, mom below in yoga pants cups hands: \u201cCALM DOWN! How did you GET UP THERE?!\u201d\n8-12s: Woodsman in plaid steps in, deadpan: \u201cMa\u2019am, sure?\u201d Mom frantic nod. Chainsaw roars alive\u2014sawdust erupts, trunk groans, boy freezes mid-dance as tree tilts.\n\nDialogue:\nBoy: \u201cSIX SIGMA!\u201d\nMom: \u201cCALM DOWN! How did you GET UP THERE?!\u201d\nWoodsman: \u201cMa\u2019am, sure?\u201d\nMom: \u201cYES!\u201d\nBackground Sound: Wind in leaves, faint birds, branch creak, mom\u2019s echo, chainsaw snarl, tiny tinny dance beat leaking from boy\u2019s pocket phone.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/40045398-b7ed-49cd-aae8-ceccf4f97eed.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "f62d2956-5929-4242-a12f-b1a589bbef44",
+   "prompt": "A 12-second hyper-realistic 4K cinematic trailer with dynamic volumetric lighting\u2014neon blues and purples pulsing through holographic interfaces, lens flares from energy surges, and god rays from virtual portals for immersive sci-fi depth. Style: Polished PlayStation advertisement homage, sleek 2030s futurism with seamless CGI integration; matte-black console design as a floating obsidian obelisk (8 inches tall, etched with glowing circuit veins that bloom into fractal patterns on activation), encircled by orbiting holographic projectors that manifest game worlds in mid-air. Cinematography: Epic wide establishing shots with fluid drone-like orbits; 70mm anamorphic lens emulation for widescreen grandeur, shallow DOF on console details, rapid cross-fades between reality and generated realms; high-contrast color grading with deep blacks and electric accents. Actions: - 0-4s: Dark living room fades in\u2014spotlit PS6 obelisk hums to life on a glass pedestal, veins ignite in azure glow, projectors spin up emitting ethereal mist. - 4-8s: User (diverse gamer in casual hoodie) leans in, whispers command; console pulses\u2014holographic portal rips open, instantly birthing a cyberpunk cityscape with flying vehicles and neon spires materializing around them. - 8-12s: Seamless dive-in: Gamer grabs ethereal controller (morphing light strands), dashes through generated streets battling AI foes; quick montage of idea-to-game morphs (sketchpad doodle warps into fantasy dragon arena, neural scan spawns space opera). Dialogue: Deep, resonant voiceover (Morgan Freeman-esque gravitas): \u201cPlayStation 6: Fuse dimensions. Command AI. Any dream, any world\u2014instantly yours. Power on. Play infinite.\u201d User (whispered): \u201cBuild me a cyberpunk heist across collapsing stars.\u201d Background Sound: Pulsing synth bass swell building to orchestral crescendo, whooshing portal rips, crystalline activation chimes, layered with immersive game SFX (laser zaps, crowd roars) fading to signature PS fanfare sting.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/0393d46a-c619-42d4-b9fa-530f9fa9b301.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "86598fee-ba14-4974-8829-a03d3437f0d5",
+   "prompt": "A 12-second hyper-realistic 4K video with razor-sharp volumetric forest light\u2014golden shafts slicing through canopy, pollen glinting like diamonds in slow-motion 120fps air.\nStyle: Bone-dry ultra-realistic comedy; zero cartooning, pure physics\u2014creaking wood fibers, sawdust clouds, authentic chainsaw bite.\nCinematography: Locked macro on boy (35mm anamorphic, f/1.4 DOF), silky 120fps dolly-back to full 40ft reveal, final whip-pan to ground trio; color-graded for late-afternoon warmth.\nActions:\n\n0-4s: ECU 5-year-old in red hoodie, wind whipping hair, screams \u201cSIX SIGMA!\u201d then hits stiff dad-dance: finger guns, lawnmower yank, running man\u2014branch flexes.\n4-8s: Camera rockets back\u2014tree sways, mom below in yoga pants cups hands: \u201cCALM DOWN! How did you GET UP THERE?!\u201d\n8-12s: Woodsman in plaid steps in, deadpan: \u201cMa\u2019am, sure?\u201d Mom frantic nod. Chainsaw roars alive\u2014sawdust erupts, trunk groans, boy freezes mid-dance as tree tilts.\n\nDialogue:\nBoy: \u201cSIX SIGMA!\u201d\nMom: \u201cCALM DOWN! How did you GET UP THERE?!\u201d\nWoodsman: \u201cMa\u2019am, sure?\u201d\nMom: \u201cYES!\u201d\nBackground Sound: Wind in leaves, faint birds, branch creak, mom\u2019s echo, chainsaw snarl, tiny tinny dance beat leaking from boy\u2019s pocket phone.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/b7153ab7-fac3-4805-8fdd-92d640d48a49.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "c2989a21-d0bf-4219-9506-14f765363893",
+   "prompt": "A 12-second hyper-realistic 4K video with crisp volumetric forest light piercing through dense canopy, dappled sunbeams and swirling pollen catching golden hour glow for immersive depth. Style: Ultra-realistic slow-motion comedy with dry, deadpan delivery; physics-accurate tree sway, leaf flutter, and chainsaw grit; no cartoon exaggeration. Cinematography: Starts locked-off macro close-up on the boy\u2019s face (35mm anamorphic, shallow DOF, eye-level with branch), then smooth 120fps dolly-back to reveal full height; final whip-pan down to mom and woodsman. Actions: 0-4s: Extreme close-up\u2014wide-eyed 5-year-old boy in a red hoodie balances on a thin 40-foot branch, wind tousling hair; he bellows \u201cSIX SIGMA!\u201d then launches into stiff, awkward dad-dance (finger guns, lawnmower pull, running man). 4-8s: Camera pulls back rapidly\u2014tree sways, branch creaks; cut to ground-level POV of frantic mom in yoga pants shielding eyes, screaming up: \u201cCALM DOWN! How did you even GET UP THERE?!\u201d 8-12s: Burly woodsman in flannel strides in frame, deadpan: \u201cMa\u2019am, you sure?\u201d Mom nods hysterically. He yanks chainsaw cord\u2014engine roars to life, sawdust erupts as he slices into trunk; tree groans, boy freezes mid-dance on tilting branch. Dialogue: Boy: \u201cSIX SIGMA!\u201d Mom: \u201cCALM DOWN! How did you even GET UP THERE?!\u201d Woodsman: \u201cMa\u2019am, you sure?\u201d Mom: \u201cYES!\u201d Background Sound: Wind through leaves, distant birds, branch creak, mom\u2019s panicked echo, chainsaw rip snarling over comedic silence as boy\u2019s dance music faintly plays from a phone in his pocket.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/9282526d-bce6-414c-aa03-1a111379942d.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "8d89e3a1-7b1f-424a-92c5-59ee0c6c27a1",
+   "prompt": "A 12-second hyper-realistic 4K video with crisp volumetric sunlight streaming through gym windows, golden hour glow illuminating floating dust and lens flares for dramatic depth. Opens in a pristine modern gym\u2014polished wood floors, mirrored walls, a lone clear plastic water bottle glinting on a bench. Style: Ultra-realistic slow-motion action parody, no cartoon elements; physics-accurate impacts with visceral crunch and shatter, dry deadpan delivery. Cinematography: Locked-off wide establishing shot exploding into high-speed tracking; 120fps emulation, 50mm anamorphic lens with razor-thin DOF on impacts, dynamic whip-pan following trajectory. Actions: 0-4s: Energetic 8-year-old Chinese girl in bright sneakers sprints across frame, launches precise martial-arts side-kick into fluffy white puppy on the bench\u2014puppy rockets backward. 4-8s: Puppy smashes through tempered glass window in sparkling slow-mo shards, arcs skyward; collides mid-air with a soaring pigeon\u2014explosive burst of white feathers fills frame. 8-12s: Puppy tumbles through feather cloud, clips low-flying private Cessna\u2014wing shears off in fiery bloom; puppy ricochets over distant rainbow, plunges into forest, clocks startled hiker square in the face with a cartoonish thwack\u2014she spins comically. Dialogue: None\u2014pure visual slapstick. Background Sound: Glass shatter in crystalline detail, puppy yelp stretched in slo-mo, pigeon poof, jet fuel roar, distant rainbow shimmer, final face-smack boing on muted forest ambience.1.3sFast",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/6bcec188-8345-494d-a111-26195f7ecb73.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "add0e2d3-8dc9-404a-b8ea-79573ffa9c30",
+   "prompt": "A 12-second hyper-realistic 4K cinematic trailer with dynamic volumetric lighting\u2014neon blues and purples pulsing through holographic interfaces, lens flares from energy surges, and god rays from virtual portals for immersive sci-fi depth. Style: Polished PlayStation advertisement homage, sleek 2030s futurism with seamless CGI integration; matte-black console design as a floating obsidian obelisk (8 inches tall, etched with glowing circuit veins that bloom into fractal patterns on activation), encircled by orbiting holographic projectors that manifest game worlds in mid-air. Cinematography: Epic wide establishing shots with fluid drone-like orbits; 70mm anamorphic lens emulation for widescreen grandeur, shallow DOF on console details, rapid cross-fades between reality and generated realms; high-contrast color grading with deep blacks and electric accents. Actions: - 0-4s: Dark living room fades in\u2014spotlit PS6 obelisk hums to life on a glass pedestal, veins ignite in azure glow, projectors spin up emitting ethereal mist. - 4-8s: User (diverse gamer in casual hoodie) leans in, whispers command; console pulses\u2014holographic portal rips open, instantly birthing a cyberpunk cityscape with flying vehicles and neon spires materializing around them. - 8-12s: Seamless dive-in: Gamer grabs ethereal controller (morphing light strands), dashes through generated streets battling AI foes; quick montage of idea-to-game morphs (sketchpad doodle warps into fantasy dragon arena, neural scan spawns space opera). Dialogue: Deep, resonant voiceover (Morgan Freeman-esque gravitas): \u201cPlayStation 6: Fuse dimensions. Command AI. Any dream, any world\u2014instantly yours. Power on. Play infinite.\u201d User (whispered): \u201cBuild me a cyberpunk heist across collapsing stars.\u201d Background Sound: Pulsing synth bass swell building to orchestral crescendo, whooshing portal rips, crystalline activation chimes, layered with immersive game SFX (laser zaps, crowd roars) fading to signature PS fanfare sting.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/2bbb222d-63fa-412f-a7ce-b6076334fbcb.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "f4323e86-d547-40e4-bf18-57ba0e25d3ea",
+   "prompt": "A 12-second hyper-realistic 4K video with dynamic volumetric lighting casting warm golden rays through classroom windows, subtle god rays highlighting floating dust motes for an intimate, nostalgic glow. Opens in a bustling elementary classroom filled with colorful posters, scattered crayons, and giggling kids at tiny desks; a wide-eyed 4-year-old boy in a striped shirt sits doodling, suddenly blurting out \"6767!\" with innocent glee, his face lit by a dramatic spotlight from above. Style: Absurdly upbeat parody of 1990s infomercials, ultra-realistic CGI-enhanced whimsy with exaggerated expressions and vibrant orange accents for comedic punch. Cinematography: Handheld medium-wide establishing shot transitioning to quick cuts; shallow depth of field on faces for emotional focus, 35mm lens emulation with subtle chromatic aberration for retro flair; dynamic camera dolly-in on key moments. Actions: 0-4s: Boy at desk blurts number, teacher in floral blouse strides over gracefully, places gentle hand on his shoulder. 4-8s: Teacher turns to camera with a knowing wink, breaking fourth wall as room softens to spotlight her. 8-12s: Seamless cut to glossy product reveal\u2014spinning orange helmet with built-in PEZ-style dispenser popping colorful \"Zen Zaps\" candies, helmet humming comically with glowing vibes to \"zap\" wandering thoughts back on track. Dialogue: Boy: \"6767!\" Teacher: \"Is your little genius bubbling with extra spark? Spotting those quirky signs all day? We've got the fun fix!\" Voiceover (cheerful announcer): \"Introducing the BuzzBuddy Helmet\u2014dispenses yummy focus fizzies and buzzes gently for super concentration adventures!\" Background Sound: Playful school bell chimes, kid laughter fading into bubbly synth jingle, candy dispense \"pop\" and soft vibration hum for whimsical emphasis.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/b792ad65-9062-44ed-8e3f-7b9ffe51f55d.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "ba6d33a9-1f0f-4b9c-9433-827dc02fabb3",
+   "prompt": "A 12-second hyper-realistic 4K video with crisp volumetric forest light piercing through dense canopy, dappled sunbeams and swirling pollen catching golden hour glow for immersive depth. Style: Ultra-realistic slow-motion comedy with dry, deadpan delivery; physics-accurate tree sway, leaf flutter, and chainsaw grit; no cartoon exaggeration. Cinematography: Starts locked-off macro close-up on the boy\u2019s face (35mm anamorphic, shallow DOF, eye-level with branch), then smooth 120fps dolly-back to reveal full height; final whip-pan down to mom and woodsman. Actions: 0-4s: Extreme close-up\u2014wide-eyed 5-year-old boy in a red hoodie balances on a thin 40-foot branch, wind tousling hair; he bellows \u201cSIX SIGMA!\u201d then launches into stiff, awkward dad-dance (finger guns, lawnmower pull, running man). 4-8s: Camera pulls back rapidly\u2014tree sways, branch creaks; cut to ground-level POV of frantic mom in yoga pants shielding eyes, screaming up: \u201cCALM DOWN! How did you even GET UP THERE?!\u201d 8-12s: Burly woodsman in flannel strides in frame, deadpan: \u201cMa\u2019am, you sure?\u201d Mom nods hysterically. He yanks chainsaw cord\u2014engine roars to life, sawdust erupts as he slices into trunk; tree groans, boy freezes mid-dance on tilting branch. Dialogue: Boy: \u201cSIX SIGMA!\u201d Mom: \u201cCALM DOWN! How did you even GET UP THERE?!\u201d Woodsman: \u201cMa\u2019am, you sure?\u201d Mom: \u201cYES!\u201d Background Sound: Wind through leaves, distant birds, branch creak, mom\u2019s panicked echo, chainsaw rip snarling over comedic silence as boy\u2019s dance music faintly plays from a phone in his pocket.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/96b5ef6f-2daa-44df-bc3a-6af0dd8c9c78.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "4c755a42-b8eb-4240-b585-8a66634896d2",
+   "prompt": "A 12-second hyper-realistic 4K video with crisp volumetric sunlight streaming through gym windows, golden hour glow illuminating floating dust and lens flares for dramatic depth. Opens in a pristine modern gym\u2014polished wood floors, mirrored walls, a lone clear plastic water bottle glinting on a bench. Style: Ultra-realistic slow-motion action parody, no cartoon elements; physics-accurate impacts with visceral crunch and shatter, dry deadpan delivery. Cinematography: Locked-off wide establishing shot exploding into high-speed tracking; 120fps emulation, 50mm anamorphic lens with razor-thin DOF on impacts, dynamic whip-pan following trajectory. Actions: 0-4s: Energetic 8-year-old Chinese girl in bright sneakers sprints across frame, launches precise martial-arts side-kick into fluffy white puppy on the bench\u2014puppy rockets backward. 4-8s: Puppy smashes through tempered glass window in sparkling slow-mo shards, arcs skyward; collides mid-air with a soaring pigeon\u2014explosive burst of white feathers fills frame. 8-12s: Puppy tumbles through feather cloud, clips low-flying private Cessna\u2014wing shears off in fiery bloom; puppy ricochets over distant rainbow, plunges into forest, clocks startled hiker square in the face with a cartoonish thwack\u2014she spins comically. Dialogue: None\u2014pure visual slapstick. Background Sound: Glass shatter in crystalline detail, puppy yelp stretched in slo-mo, pigeon poof, jet fuel roar, distant rainbow shimmer, final face-smack boing on muted forest ambience.1.3sFast",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/4a6bf39f-9e0a-4156-97ac-9a287a7c1a78.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "b90de3ab-7e10-490e-a23b-67820adaf130",
+   "prompt": "A 12-second hyper-realistic 4K video with dynamic volumetric lighting casting warm golden rays through classroom windows, subtle god rays highlighting floating dust motes for an intimate, nostalgic glow. Opens in a bustling elementary classroom filled with colorful posters, scattered crayons, and giggling kids at tiny desks; a wide-eyed 4-year-old boy in a striped shirt sits doodling, suddenly blurting out \"6767!\" with innocent glee, his face lit by a dramatic spotlight from above. Style: Absurdly upbeat parody of 1990s infomercials, ultra-realistic CGI-enhanced whimsy with exaggerated expressions and vibrant orange accents for comedic punch. Cinematography: Handheld medium-wide establishing shot transitioning to quick cuts; shallow depth of field on faces for emotional focus, 35mm lens emulation with subtle chromatic aberration for retro flair; dynamic camera dolly-in on key moments. Actions: 0-4s: Boy at desk blurts number, teacher in floral blouse strides over gracefully, places gentle hand on his shoulder. 4-8s: Teacher turns to camera with a knowing wink, breaking fourth wall as room softens to spotlight her. 8-12s: Seamless cut to glossy product reveal\u2014spinning orange helmet with built-in PEZ-style dispenser popping colorful \"Zen Zaps\" candies, helmet humming comically with glowing vibes to \"zap\" wandering thoughts back on track. Dialogue: Boy: \"6767!\" Teacher: \"Is your little genius bubbling with extra spark? Spotting those quirky signs all day? We've got the fun fix!\" Voiceover (cheerful announcer): \"Introducing the BuzzBuddy Helmet\u2014dispenses yummy focus fizzies and buzzes gently for super concentration adventures!\" Background Sound: Playful school bell chimes, kid laughter fading into bubbly synth jingle, candy dispense \"pop\" and soft vibration hum for whimsical emphasis.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/eaf1b0e9-d9f3-4416-bf13-9e02d405350c.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "4de5fe14-0043-4970-a619-3060dc06a91f",
+   "prompt": "It's late Friday night inside of a kitchen a poor family a mom and a husband sit down they're discussing what they're going to do now that food stamps are gone He lays out a black ski mask in front of her and says honey I don't think we have any other options they put on the ski mask they grab their shotgun Reload it Alright let's go grocery shopping",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/cd7e4566-216f-4bf1-b536-dee0fb905fb9.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "bdd0f569-bace-41ce-86ab-d0bc9fd67650",
+   "prompt": "A 12-second sleek 4K grocery store commercial with upbeat jingle and bright aisle lighting. Opens on polished entrance with a futuristic archway labeled \u201cBudgetCare Scanner.\u201d Warm voiceover: \u201cWith food stamps gone, we check so you don\u2019t have to.\u201d A tired shopper in faded clothes pushes an empty cart through\u2014soft red lights blink, gentle chime. Two courteous security staff in navy vests appear, calmly guide them aside with a nod: \u201cAppreciate your understanding!\u201d Cut to overflowing produce displays; voiceover: \u201cFamily comes first\u2014that\u2019s why we choose who we feed.\u201d Ends on glowing generic logo \u201cMarketFresh \u2013 Where shopping is a privilege.\u201d Smooth tracking shots, crisp colors, friendly bell tones.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/c1ddec15-20f1-4727-a00f-65bd92eebd87.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "2e182d61-de39-4a38-b7c7-97f2962e88c6",
+   "prompt": "A 12-second hyper-realistic 4K video starting inside a rattling, dented minivan packed with trash bags and cracked seats. A weary mom in a stained hoodie grips the wheel, 6 wild kids (ages 4\u201312) in tattered clothes scream and bounce in back. She yells over the chaos: \u201cWho\u2019s ready to go shopping?!\u201d Kids shriek \u201cME! ME!\u201d in unison. Cut to minivan screeching into a busy Walmart lot; she parks crooked. Doors fly open\u2014kids tumble out, yank colorful bandanas up over faces like playful masks. They dart between cars, smash windows with toy hammers, grab grocery bags from trunks (bread, cereal, juice flying). Little ones sprint back, hurling loot through the sliding door. Mom guns the engine: \u201cLet\u2019s go go go GO!\u201d Tires squeal out as bags spill snacks everywhere. Handheld shaky cam, bright daylight, frantic kid cheers and cartoon sound effects for comedic chaos.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/26d580c8-de25-4be1-be0c-6fc4a7ea86ad.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "6ab9c440-e431-4781-99fa-4d70f2e91567",
+   "prompt": "A 12-second cinematic video in a grand White House briefing room with American flags and presidential seal backdrop. A stern government official in a dark suit strides confidently to the wooden podium with microphones. He adjusts his tie, leans in solemnly: \"We apologize for cutting EBT and food stamps. We know it impacts your families, your kids. But we're bringing them back\u2014nothing to worry about.\" Slight pause as he scans the room nervously. Suddenly, his face twists into a mischievous grin; he bursts into laughter, points directly at the camera: \"Psych! Those funds are gone forever. Get your ass to work!\" Camera zooms in on his wicked smile as he slams the podium. Realistic 4K, dramatic lighting, subtle patriotic music swells then cuts to silence on the punchline.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/fb701444-6537-4154-9375-d217275773ab.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "c4d61652-1e7d-4598-b91c-d427e24aa1b4",
+   "prompt": "A 12-second hyper-realistic 4K video inside a cramped, filthy living room littered with trash, broken toys, and overturned furniture. A weary single mom in a stained hoodie sits at a wobbly kitchen table, face buried in trembling hands, sobbing into a cracked phone camera on selfie mode. Behind her, absolute bedlam: 12 wild, barefoot kids (ages 2\u201314) in tattered clothes scream and ricochet\u2014climbing walls, swinging from ceiling fans, riding a bleating goat and a hyper border coll0 collie through the chaos, knocking over lamps. Mom wails through tears: \u201cThey took our food stamps! I got nothin\u2019 left to feed my babies!\u201d A skinny 5-year-old boy tugs her sleeve: \u201cMama, I hungry.\u201d She looks down, exhausted, grabs a fist-sized rock from the floor, hands it over with dead eyes: \u201cHere you go, baby. Chew real slow\u2014you\u2019ll be alright.\u201d Close-up on the rock in tiny hands as goat crashes into frame. Dim flickering bulb light, handheld shaky cam, raw ambient audio of crying and crashing.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/4e593cd6-7434-48a8-9cfb-974a4a311198.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "e22ad602-6697-4241-a468-6db5f9be2893",
+   "prompt": "It's late Friday night inside of a kitchen a poor family a mom and a husband sit down they're discussing what they're going to do now that food stamps are gone He lays out a black ski mask in front of her and says honey I don't think we have any other options they put on the ski mask they grab their shotgun Reload it Alright let's go grocery shopping",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/2265e91a-6050-4e7c-928a-47ee7dd67a20.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "704b311c-4023-4058-9713-9abb8fae2368",
+   "prompt": "A 12-second sleek 4K grocery store commercial with upbeat jingle and bright aisle lighting. Opens on polished entrance with a futuristic archway labeled \u201cBudgetCare Scanner.\u201d Warm voiceover: \u201cWith food stamps gone, we check so you don\u2019t have to.\u201d A tired shopper in faded clothes pushes an empty cart through\u2014soft red lights blink, gentle chime. Two courteous security staff in navy vests appear, calmly guide them aside with a nod: \u201cAppreciate your understanding!\u201d Cut to overflowing produce displays; voiceover: \u201cFamily comes first\u2014that\u2019s why we choose who we feed.\u201d Ends on glowing generic logo \u201cMarketFresh \u2013 Where shopping is a privilege.\u201d Smooth tracking shots, crisp colors, friendly bell tones.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/459d5670-4249-4680-a2f8-635fa6ec85ef.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "1f884a2f-8d36-4deb-af14-02d8a1ca276c",
+   "prompt": "A 12-second hyper-realistic 4K video inside a cramped, filthy living room littered with trash, broken toys, and overturned furniture. A weary single mom in a stained hoodie sits at a wobbly kitchen table, face buried in trembling hands, sobbing into a cracked phone camera on selfie mode. Behind her, absolute bedlam: 12 wild, barefoot kids (ages 2\u201314) in tattered clothes scream and ricochet\u2014climbing walls, swinging from ceiling fans, riding a bleating goat and a hyper border coll0 collie through the chaos, knocking over lamps. Mom wails through tears: \u201cThey took our food stamps! I got nothin\u2019 left to feed my babies!\u201d A skinny 5-year-old boy tugs her sleeve: \u201cMama, I hungry.\u201d She looks down, exhausted, grabs a fist-sized rock from the floor, hands it over with dead eyes: \u201cHere you go, baby. Chew real slow\u2014you\u2019ll be alright.\u201d Close-up on the rock in tiny hands as goat crashes into frame. Dim flickering bulb light, handheld shaky cam, raw ambient audio of crying and crashing.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/395ff344-3547-428a-992d-f791be141f90.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "d755866e-8594-4d03-9e27-02845b663523",
+   "prompt": "A 12-second hyper-realistic 4K video starting inside a rattling, dented minivan packed with trash bags and cracked seats. A weary mom in a stained hoodie grips the wheel, 6 wild kids (ages 4\u201312) in tattered clothes scream and bounce in back. She yells over the chaos: \u201cWho\u2019s ready to go shopping?!\u201d Kids shriek \u201cME! ME!\u201d in unison. Cut to minivan screeching into a busy Walmart lot; she parks crooked. Doors fly open\u2014kids tumble out, yank colorful bandanas up over faces like playful masks. They dart between cars, smash windows with toy hammers, grab grocery bags from trunks (bread, cereal, juice flying). Little ones sprint back, hurling loot through the sliding door. Mom guns the engine: \u201cLet\u2019s go go go GO!\u201d Tires squeal out as bags spill snacks everywhere. Handheld shaky cam, bright daylight, frantic kid cheers and cartoon sound effects for comedic chaos.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/eaeba4cc-5abe-4f0e-918c-7821d5faaddf.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "6d99dca1-0ea9-4bb6-bf59-c13e09d415e1",
+   "prompt": "A 12-second cinematic video in a grand White House briefing room with American flags and presidential seal backdrop. A stern government official in a dark suit strides confidently to the wooden podium with microphones. He adjusts his tie, leans in solemnly: \"We apologize for cutting EBT and food stamps. We know it impacts your families, your kids. But we're bringing them back\u2014nothing to worry about.\" Slight pause as he scans the room nervously. Suddenly, his face twists into a mischievous grin; he bursts into laughter, points directly at the camera: \"Psych! Those funds are gone forever. Get your ass to work!\" Camera zooms in on his wicked smile as he slams the podium. Realistic 4K, dramatic lighting, subtle patriotic music swells then cuts to silence on the punchline.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/e3007c03-b2a1-4796-b198-7177d0da9d9b.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "cdbe2b4b-a5ed-462a-95e1-8936d4a9853f",
+   "prompt": "A 12-second cinematic video in a grand White House briefing room with American flags and presidential seal backdrop. A stern government official in a dark suit strides confidently to the wooden podium with microphones. He adjusts his tie, leans in solemnly: \"We apologize for cutting EBT and food stamps. We know it impacts your families, your kids. But we're bringing them back\u2014nothing to worry about.\" Slight pause as he scans the room nervously. Suddenly, his face twists into a mischievous grin; he bursts into laughter, points directly at the camera: \"Psych! Those funds are gone forever. Get your ass to work!\" Camera zooms in on his wicked smile as he slams the podium. Realistic 4K, dramatic lighting, subtle patriotic music swells then cuts to silence on the punchline.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/043d0014-c124-4e92-85ef-fa32aa69df5a.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "b3e52f84-1de8-4190-871f-24c7256253ab",
+   "prompt": "It's late Friday night inside of a kitchen a poor family a mom and a husband sit down they're discussing what they're going to do now that food stamps are gone He lays out a black ski mask in front of her and says honey I don't think we have any other options they put on the ski mask they grab their shotgun Reload it Alright let's go grocery shopping",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/cc3fef86-3087-42dd-a7ac-5ac8c70eaa5e.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "5575978a-8d59-4c9b-bffb-471e80cfb928",
+   "prompt": "A 12-second hyper-realistic 4K video inside a cramped, filthy living room littered with trash, broken toys, and overturned furniture. A weary single mom in a stained hoodie sits at a wobbly kitchen table, face buried in trembling hands, sobbing into a cracked phone camera on selfie mode. Behind her, absolute bedlam: 12 wild, barefoot kids (ages 2\u201314) in tattered clothes scream and ricochet\u2014climbing walls, swinging from ceiling fans, riding a bleating goat and a hyper border coll0 collie through the chaos, knocking over lamps. Mom wails through tears: \u201cThey took our food stamps! I got nothin\u2019 left to feed my babies!\u201d A skinny 5-year-old boy tugs her sleeve: \u201cMama, I hungry.\u201d She looks down, exhausted, grabs a fist-sized rock from the floor, hands it over with dead eyes: \u201cHere you go, baby. Chew real slow\u2014you\u2019ll be alright.\u201d Close-up on the rock in tiny hands as goat crashes into frame. Dim flickering bulb light, handheld shaky cam, raw ambient audio of crying and crashing.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/6c469189-4ca2-4153-9756-576078c28d19.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "c481385e-8d9c-48f5-8ff0-58c3a922d4a2",
+   "prompt": "A 12-second cinematic video in a grand White House briefing room with American flags and presidential seal backdrop. A stern government official in a dark suit strides confidently to the wooden podium with microphones. He adjusts his tie, leans in solemnly: \"We apologize for cutting EBT and food stamps. We know it impacts your families, your kids. But we're bringing them back\u2014nothing to worry about.\" Slight pause as he scans the room nervously. Suddenly, his face twists into a mischievous grin; he bursts into laughter, points directly at the camera: \"Psych! Those funds are gone forever. Get your ass to work!\" Camera zooms in on his wicked smile as he slams the podium. Realistic 4K, dramatic lighting, subtle patriotic music swells then cuts to silence on the punchline.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/a57d7c88-cd8b-4b3c-98fc-410b12515059.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "c7bd4e57-7622-45ef-9209-359ba5cf1e5c",
+   "prompt": "It's late Friday night inside of a kitchen a poor family a mom and a husband sit down they're discussing what they're going to do now that food stamps are gone He lays out a black ski mask in front of her and says honey I don't think we have any other options they put on the ski mask they grab their shotgun Reload it Alright let's go grocery shopping",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/74ccc39c-5731-4937-9dd9-e02daa09f6cb.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "8a0e8956-65a8-4369-8656-6d55028993fd",
+   "prompt": "Dynamic lighting ultra realism inside of a Walmart a Karen young woman essentially is walking through the aisles as she discovers a bag of Cheetos she reaches out to the bag of Cheetos sniffs it takes a step back opens the bag for a rabid raccoon to jump out and jump on her face the woman screams and panic and fear as she is wrangled by this crazy chaotic raccoon",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/ad70d228-c85a-4ac2-bca1-01e5d35432a6.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "49d6524b-81c6-49da-9393-5c12d3b093d8",
+   "prompt": "Dynamic lighting ultra realism inside of a Walmart a Karen young woman essentially is walking through the aisles as she discovers a bag of Cheetos she reaches out to the bag of Cheetos sniffs it takes a step back opens the bag for a rabid raccoon to jump out and jump on her face the woman screams and panic and fear as she is wrangled by this crazy chaotic raccoon",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/4ff0890d-7302-4f69-80ca-90897226fe33.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "a3eecd26-2e0a-4fe2-9cfd-202729eb7fb0",
+   "prompt": "young boy teaching his Pet black bear to do tricks outback of his house",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/113ec0b9-1cdb-4e8c-8fcc-bd3f17577055.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "b0c5be88-fb5b-4fc6-a48d-efd1f3298e92",
+   "prompt": "young boy teaching his Pet black bear to do tricks outback of his house",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/6aa09364-8420-45e8-a780-f0b668f50329.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  },
+  {
+   "id": "7bd9975f-7585-48b7-bc25-6b62ba75ada3",
+   "prompt": "12-second cinematic product demo showcasing a futuristic 3D bioprinter that prints inside a transparent liquid-gel chamber. Ultra-realistic lighting, shallow depth of field, crisp reflections on glass and metal surfaces. The camera tracks smoothly around the device on a rotating slider shot. Inside the chamber, multiple precision laser beams sweep through the viscous gel, tracing luminous lines that rapidly form the shape of a small lamb. The lamb materializes layer by layer, translucent at first, then turning opaque and textured with fine fur detail as curing lights solidify each layer. Gentle hum of servos and soft mechanical whirring. The printer\u2019s status lights glow blue and white, displaying \u201cModel Complete.\u201d The camera pushes in for a macro shot of the finished lamb resting in the gel, perfectly formed. Clean, scientific aesthetic with subtle cinematic lens flares, dynamic lighting, and IMAX-level realism.",
+   "rawUrl": "https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/78e2aab7-357a-4467-8831-ddffba0263c4.mp4",
+   "dur": 12,
+   "ar": "9:16",
+   "model": "sora2_video_deflicker",
+   "nmedia": 0,
+   "bucket": "OTHER"
+  }
+ ]
+}

@@ -1,0 +1,4 @@
+blast-red|https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_063817_f9f51c4c-4b1b-4fe2-848b-8d874cb78c6a.mp4
+blast-burst|https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061743_9e956ebf-a779-43ef-b3bb-1ed16457c247.mp4
+telegraph-warn|https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061746_339dc07d-7706-475c-b123-9da2d9dca720.mp4
+fuse-spark|https://d8j0ntlcm91z4.cloudfront.net/user_337ovpVbf3tV2GrZtbs9az0p6z6/hf_20260607_061739_3de9089d-2253-4469-8f1b-b4d1940d977f.mp4
