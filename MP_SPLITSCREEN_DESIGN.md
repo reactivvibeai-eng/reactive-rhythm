@@ -56,8 +56,18 @@ meters (lerp ~0.25) → fire one-shot lane sparkles on `ev`. **Degrade:** no `st
    no-op pass and prove `tick`/winner-settle/spectate/tournament still work, BEFORE building HUD against it.
 7. **Degrade seam:** generalize a `mountOppRenderer` out of `spectateMatch` WITHOUT its `finishedLocal=true`
    side effect (you ARE playing locally in versus).
-8. **Responsive:** `.vs-narrow` (<~720px) collapses to single deck + `#mp-opp` card via a debounced
-   ResizeObserver/resize handler (no `:has`/`@container`); re-fire resize+verify on every narrow↔wide flip.
+8. **Responsive / PLATFORM GATING (firm rule):** SPLIT-SCREEN IS DESKTOP/PC ONLY. On **mobile** (and any
+   narrow window ≤900px), multiplayer AND tournaments run **SINGLE-DECK** — your full highway + the
+   opponent as the compact `#mp-opp` stats card, NEVER a second highway (two half-width decks are
+   unplayable on a phone; shipping that = shipping broken). Two layers:
+   - **CSS safety net (done, v141):** inside the existing `@media (max-width:900px)` block, `.game-screen.
+     active` is already `display:block` + `.game-center` full-screen, so `vs-mode` can't split there; we
+     also force `#vs-opp-deck { display:none !important }` on mobile. Verified at 430px: deck stays
+     full-width, opponent deck hidden, lanes on the strings.
+   - **JS gate (P4):** `beginMatch` only adds `.vs-mode` when `!isMobile()` (the engine's existing
+     `matchMedia('(max-width:900px)')`); on mobile it runs the current single-deck + `#mp-opp` card path.
+   - Desktop narrow windows: a debounced ResizeObserver `.vs-narrow` fallback can still collapse to single
+     deck (no `:has`/`@container`); re-fire resize+verify on every narrow↔wide flip.
 
 ## Build phases
 - **P1 — split layout + alignment proof** ✅ DONE (v140): `#game.vs-mode` CSS (2×1fr, hide `.hud-panel`,
