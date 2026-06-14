@@ -1107,6 +1107,31 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v137 — per-level gameplay MODS are now WIRED + live (speed / mirror / failOn)  ✅
+A re-audit found _levelMods/_levelCtx were set but NEVER read — levels differed only by theme + difficulty.
+Now wired into the engine, gated so they can NEVER leak into quick-play:
+- **speed** — multiplies the note approach rate: `approach = base / (userScroll * _levelSpeedMul())` (clamped 0.5–2×).
+- **mirror** — flips every note onto the opposite lane at the END of buildNotes (after all inserts + sort);
+  input/render mapping untouched so the chart simply plays mirrored. chordLanes remap via .map (fresh array
+  per note, no double-flip on shared arrays).
+- **failOn** — forces the empty-stability fail check on for that level: `(failMode || bossMode || _levelFailOn())`.
+- **Gating:** all three read through `_modActive() = _levelSkinActive && _levelMods` — only while a level is
+  genuinely active; clearLevelTheme now also nulls setLevelMods/setLevelContext. Flag `LEVELDESIGN_MODS` false→true.
+Verified in-engine: a forced mirror level flipped the first chord t=2.53 from lead-lane 1 / [1,3,0] →
+lane 3 / [3,1,4] (every lane → 4−lane), note count unchanged (335). REGRESSION-PROOF: after dropping the
+level skin (with _levelMods left deliberately stale), quick-play returned to the exact baseline (lane 1 /
+[1,3,0]) — the _levelSkinActive gate alone stops any leak. node --check clean, zero console errors.
+(Reachable today only via the dev-unlocked campaign — Campaign stays gated per the user; the system is
+built + verified for when it goes live.) Bump ?v 136→137.
+
+### v136 — analyzeBeats synthetic-grid fallback: every decodable track always charts  ✅
+Audit: a "ready" track (decodable audio_url) could still throw "No beats in chart" and bounce to the menu
+when onset detection found nothing above its fixed energy floor (quiet/ambient/low-RMS music). Now, if
+detected onsets are too sparse (< max(8, duration*0.4)), analyzeBeats falls back to an evenly-spaced
+synthetic grid — tempo from the median detected gap (clamped 0.3–0.6s), else ~120 BPM — with light accent
+variation. Only replaces detection when the grid is denser; logs a dev warn. Verified: demo unchanged
+(335 notes from real onsets — fallback does NOT trigger), node-clean. Bump ?v 135→136.
+
 ### v135 — end-to-end AUDIT fixes: 2 P0 + 3 P1 + 2 hardening (9-agent review)  ✅
 A 9-agent parallel audit (flow/compat · levels · campaign · multiplayer · catalog · engine · persistence ·
 resilience → synthesis) found and we fixed the verified, high-value, low-risk items (each confirmed by

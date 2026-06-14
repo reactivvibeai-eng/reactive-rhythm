@@ -1034,6 +1034,17 @@
       }
     }
     if (fillers.length) { notes.push(...fillers); notes.sort((a, b) => a.time - b.time); }
+    // build36: per-level MIRROR mod — flip every note onto the opposite lane. Done LAST (after all
+    // inserts + the final sort); a lane remap doesn't change time order. Input/render lane mapping is
+    // untouched, so the chart simply plays mirrored. .map() reassigns each note's chordLanes to a fresh
+    // mirrored array (never mutates the shared source), so chord partners can't double-flip.
+    if (_levelMirror()) {
+      const mir = (l) => (LANE_COUNT - 1) - l;
+      for (const n of notes) {
+        if (typeof n.lane === 'number') n.lane = mir(n.lane);
+        if (n.chordLanes) n.chordLanes = n.chordLanes.map(mir);
+      }
+    }
     try {
       window.__rrChartStats = {
         notes: notes.length,
@@ -1237,6 +1248,14 @@
   let _levelCtx = null, _levelMods = null, _lastResults = null;
   window.RhythmGame.setLevelContext = (L) => { _levelCtx = L || null; };
   window.RhythmGame.setLevelMods = (m) => { _levelMods = (m && typeof m === 'object') ? m : null; };
+  // build36: per-level gameplay MODS (speed / mirror / failOn) are now LIVE. Read ONLY while a level is
+  // genuinely active (_levelSkinActive — set on level launch, cleared by applyEquippedSkin on quick-play/
+  // menu) so a campaign level's mods can NEVER leak into a normal quick-play run, even if _levelMods is
+  // left stale. clearLevelTheme also nulls them for hygiene.
+  function _modActive() { return _levelSkinActive && _levelMods; }
+  function _levelSpeedMul() { return (_modActive() && typeof _levelMods.speed === 'number') ? Math.max(0.5, Math.min(2, _levelMods.speed)) : 1; }
+  function _levelMirror() { return !!(_modActive() && _levelMods.mirror); }
+  function _levelFailOn() { return !!(_modActive() && _levelMods.failOn); }
   // build7: per-level visual identity hook. accent = 'r,g,b' string (or null to clear);
   // amb = 0..1 ambient FX strength (default 0.6 when an accent is given). Presentation only.
   window.RhythmGame.setLevelAccent = (accent, amb) => {
@@ -2675,7 +2694,7 @@
       cameraShake = Math.max(cameraShake, 16); glitchAmount = Math.min(1, glitchAmount + 0.5); bgPulse = 1;
       flashJudgment('⚠ ENRAGED — HOLD THE LINE', '#ff1f2e');
     }
-    if ((failMode || bossMode) && state === 'playing' && stability <= 0 && !runFailed) failRun();
+    if ((failMode || bossMode || _levelFailOn()) && state === 'playing' && stability <= 0 && !runFailed) failRun();   // build36: per-level failOn mod
     // STREAK FLAMES — the catchers catch fire as your multiplier climbs (Guitar-Hero feel)
     const _mlt = curMult();
     if (_mlt >= 2 && !reduceMotion && !fxLite) {
@@ -2732,7 +2751,7 @@
       if (_skinBuildT >= 1) _igniteCatchers();
     }
     const t = songTime();
-    const approach = DIFFICULTY[difficulty].approach / userScroll;
+    const approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul());   // build36: per-level SPEED mod
     const sx = (Math.random() - 0.5) * cameraShake, sy = (Math.random() - 0.5) * cameraShake;
     ctx.save(); ctx.translate(sx, sy);
     ctx.clearRect(0, 0, cw, ch);

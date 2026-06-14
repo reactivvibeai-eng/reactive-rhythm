@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=136" />
+<link rel="stylesheet" href="jukebox.css?v=137" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4118,11 +4118,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=136"></script>
-<script src="game.js?v=136"></script>
-<script src="jukebox.js?v=136"></script>
-<script src="catalog.js?v=136"></script>
-<script src="multiplayer.js?v=136"></script>
+<script src="assets/fx/fx-player.js?v=137"></script>
+<script src="game.js?v=137"></script>
+<script src="jukebox.js?v=137"></script>
+<script src="catalog.js?v=137"></script>
+<script src="multiplayer.js?v=137"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4271,7 +4271,7 @@
   //  entry fall back to the deterministic rr_levelmap stride pick (unchanged).
   //  Modifiers (speed/mirror/failOn) are OFF unless LEVELDESIGN_MODS is true.
   // ============================================================
-  var LEVELDESIGN_MODS = false;   // FLAG (default OFF): apply per-level mods to gameplay.
+  var LEVELDESIGN_MODS = true;    // build36: per-level mods (speed/mirror/failOn) are now WIRED into the engine + live.
   var LV_THEMES = { crimson:1, ember:1, gold:1, chrome:1, violet:1, bone:1, pink:1 };   // violet=gothic, bone=Bone Daddy, pink=Melody (per-level palettes; UI stays crimson)
   var AUTHORED = [
     // ====================================================================
@@ -4772,6 +4772,9 @@
     // build7: clear the level accent (additive glow + ambient off) and restore the equipped/default guitar
     try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.applyEquippedSkin) window.RhythmGame.applyEquippedSkin(); } catch (e) {}
+    // build36: drop any per-level gameplay mods + context so they can't carry into the next (quick-play) run
+    try { window.RhythmGame && window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {}
+    try { window.RhythmGame && window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(null); } catch (e) {}
     // build8: clear the per-level gem tint (back to the crimson default marble)
     try { window.RhythmGame && window.RhythmGame.setLevelGemTint && window.RhythmGame.setLevelGemTint(null); } catch (e) {}
     hideReactive();
