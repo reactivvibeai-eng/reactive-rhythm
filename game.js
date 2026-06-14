@@ -3035,27 +3035,30 @@
           : Math.min(1.04, d + n.hold / approach);          // full tail ahead of the head
         const hx = noteX(n.lane, dEnd), hy = noteY(dEnd);
         const lit = held || (!resolving && n.hit && n.hit !== 'miss');  // brighten while held; NOT when dropped
-        const wB = lw * 0.30 * (0.7 + 0.3 * sc);             // slim beam (no fat slab)
-        const aM = resolving ? 0.32 : (lit ? 1 : 0.8);       // dropped beam = dim & dying
+        // build36 (polish): SLIMMER beam — fewer, narrower glow layers + less blur than the old fat
+        // 3-layer crimson slab, and LANE-TINTED so a held sustain matches its marble (yellow note →
+        // yellow beam, etc.) instead of always reading crimson. Keeps the hot white core + molten pulses.
+        const wB = lw * 0.24 * (0.7 + 0.3 * sc);             // slimmer base (was 0.30)
+        const aM = resolving ? 0.30 : (lit ? 1 : 0.78);      // dropped beam = dim & dying
+        const lc = resolving ? '150,58,58' : LANE_COLORS[n.lane].rgb;   // match the note's lane (was hardcoded crimson)
         ctx.save(); ctx.lineCap = 'round'; ctx.globalCompositeOperation = 'lighter';
-        ctx.shadowColor = resolving ? '#6e0f15' : '#ff2a30';
+        ctx.shadowColor = 'rgb(' + lc + ')';
         const beam = (w, col, blur) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.shadowBlur = blur; ctx.beginPath(); ctx.moveTo(nx, ny); ctx.lineTo(hx, hy); ctx.stroke(); };
-        // feathered crimson glow — wide & soft → tighter & brighter (additive = soft edges)
-        beam(wB * 2.1, 'rgba(255,38,46,' + (0.14 * aM) + ')', 20);
-        beam(wB * 1.3,  'rgba(255,52,54,' + (0.30 * aM) + ')', 11);
-        beam(wB * 0.78, 'rgba(255,104,84,' + (0.52 * aM) + ')', 6);
+        // two feathered lane-color layers (soft outer → tighter inner) — additive = soft edges, no slab
+        beam(wB * 1.45, 'rgba(' + lc + ',' + (0.11 * aM).toFixed(3) + ')', 12);
+        beam(wB * 0.85, 'rgba(' + lc + ',' + (0.30 * aM).toFixed(3) + ')', 6);
         if (!resolving) {
-          // molten pulses flowing DOWN the beam toward the catcher (animated dashes) — alive only while playable
-          ctx.shadowBlur = 8;
-          ctx.strokeStyle = 'rgba(255,184,120,' + (lit ? 0.9 : 0.5) + ')';
-          ctx.lineWidth = wB * 0.62;
-          ctx.setLineDash([wB * 0.85, wB * 2.4]);
+          // molten pulses flowing DOWN the beam toward the catcher (animated dashes) — slimmer, warm-white
+          ctx.shadowBlur = 6;
+          ctx.strokeStyle = 'rgba(255,236,214,' + (lit ? 0.85 : 0.45) + ')';
+          ctx.lineWidth = wB * 0.5;
+          ctx.setLineDash([wB * 0.8, wB * 2.6]);
           ctx.lineDashOffset = -((performance.now() * 0.22) % 100000);  // scroll toward the head
           ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(nx, ny); ctx.stroke();
           ctx.setLineDash([]);
         }
-        // hot white core thread (cool & faint when dropped)
-        beam(Math.max(1.1, wB * 0.2), 'rgba(255,242,236,' + (resolving ? 0.26 : (lit ? 0.95 : 0.62)) + ')', 4);
+        // thin hot-white core thread (cool & faint when dropped)
+        beam(Math.max(1, wB * 0.17), 'rgba(255,248,244,' + (resolving ? 0.24 : (lit ? 0.9 : 0.58)) + ')', 3);
         ctx.restore();
       }
       // build7: soft accent aura behind a note as it nears the catcher (additive; Quick Play / fxLite skip).

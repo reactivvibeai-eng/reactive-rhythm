@@ -1107,6 +1107,23 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v139 — HOLD-note sustain beam: slimmer + lane-tinted (polish)  ✅
+Playtest: the long-note (hold) trail read as a thick crimson+white slab. Slimmed it and made it cohesive
+with the v129 lane-colored marbles: base width 0.30→0.24·lw, the old 3 crimson glow layers (2.1/1.3/0.78
+·wB, blur 20/11/6) → 2 layers (1.45/0.85·wB, blur 12/6), and the whole beam now LANE-TINTED
+(LANE_COLORS[n.lane]) so a held sustain matches its marble (orange note → orange beam) instead of always
+crimson. Kept the thin hot-white core thread + the animated molten down-pulses (slimmer). Dropped beams
+(early release) read dim. Verified in-engine on Melody: a slim orange lane-4 beam tapering to its orange
+marble (was a fat red/white bar). node --check clean, zero console errors. Bump ?v 138→139.
+
+### v138 — hold Multiplayer for the beta (gate the tile) + server-scoring backend brief  ✅
+MP works but scores are unsigned peer-broadcast (spoofable), so per the user it's held until
+server-authoritative scoring lands. The hub multiplayer tile is gated behind MP_PUBLIC=false (shows an
+"online multiplayer opens soon" toast; ?dev=1 still opens it for testing — verified both paths). Wrote
+MP_SERVER_SCORING_BRIEF.md for Lovable: reuse the engine's authenticated solo submission tagged with a
+roundId, have the SERVER decide winnerId from validated stored scores, advance the bracket on that; plus
+host-migration, random-per-round track, and timing-fragile-handoff notes. ?v 137→138.
+
 ### v137 — per-level gameplay MODS are now WIRED + live (speed / mirror / failOn)  ✅
 A re-audit found _levelMods/_levelCtx were set but NEVER read — levels differed only by theme + difficulty.
 Now wired into the engine, gated so they can NEVER leak into quick-play:
