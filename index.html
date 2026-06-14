@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Nosifer&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=137" />
+<link rel="stylesheet" href="jukebox.css?v=138" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4118,11 +4118,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=137"></script>
-<script src="game.js?v=137"></script>
-<script src="jukebox.js?v=137"></script>
-<script src="catalog.js?v=137"></script>
-<script src="multiplayer.js?v=137"></script>
+<script src="assets/fx/fx-player.js?v=138"></script>
+<script src="game.js?v=138"></script>
+<script src="jukebox.js?v=138"></script>
+<script src="catalog.js?v=138"></script>
+<script src="multiplayer.js?v=138"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -6137,7 +6137,21 @@
     relay(); requestAnimationFrame(relay);
     setTimeout(relay, 60); setTimeout(relay, 200);
   }
-  function toMultiplayer() { if (!mp) return; hub.classList.remove('active'); mp.classList.add('active'); }
+  // build36: Multiplayer is HELD for the beta until scores are server-authoritative (current scores are
+  // unsigned peer-broadcast = spoofable — see MP_SERVER_SCORING_BRIEF.md). The tile stays visible but
+  // shows an "opens soon" toast instead of entering MP; ?dev=1 still opens it for internal testing. Flip
+  // MP_PUBLIC=true once the backend validation lands. (Invite-link ?mpjoin only circulates among testers,
+  // since you must be inside MP — dev-only here — to generate one.)
+  var MP_PUBLIC = false;
+  var MP_DEV = /[?&]dev=1/.test(location.search) || (function () { try { return localStorage.getItem('rr_dev') === '1'; } catch (e) { return false; } })();
+  function toMultiplayer() {
+    if (!mp) return;
+    if (!MP_PUBLIC && !MP_DEV) {
+      try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('Online multiplayer opens soon — tournaments are in private testing'); } catch (e) {}
+      return;
+    }
+    hub.classList.remove('active'); mp.classList.add('active');
+  }
   function via(openId) { return function () { var b = $(openId); if (b) b.click(); }; }
   var W = [
     ['mh-campaign',    via('levels-open')],
