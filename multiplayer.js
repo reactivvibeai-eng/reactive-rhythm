@@ -1359,6 +1359,7 @@
     ch.on('broadcast', { event: 't-track' },  function (m) { onTourTrack(m.payload); });
     ch.on('broadcast', { event: 't-round' },  function (m) { onTourRound(m.payload); });
     ch.on('broadcast', { event: 't-tick' },   function (m) { onTourTick(m.payload); });
+    ch.on('broadcast', { event: 't-state' },  function (m) { onTourState(m.payload); });   // build44: rival's full render frame → real hits/misses on the ghost deck
     ch.on('broadcast', { event: 't-final' },  function (m) { onTourFinal(m.payload); });
     ch.on('broadcast', { event: 't-result' }, function (m) { onTourResult(m.payload); });
     ch.on('broadcast', { event: 't-finalverdict' }, function (m) { onTourFinalVerdict(m.payload); });
@@ -1804,7 +1805,15 @@
         tour.ch.send({ type: 'broadcast', event: 't-tick', payload: { id: ME.id, score: stt.score, combo: stt.combo, prog: stt.progress } });
       }
       if (_vsMode) {
-        if (window.RhythmGame.getRenderFrame && now - _lastStateSend > 72) { _lastStateSend = now; _myRf = window.RhythmGame.getRenderFrame(); }
+        if (window.RhythmGame.getRenderFrame && now - _lastStateSend > 72) {
+          _lastStateSend = now; _myRf = window.RhythmGame.getRenderFrame();
+          // build44: stream the FULL render frame to your rival (the pair you're watching) so a REAL opponent's ghost
+          // deck shows their ACTUAL hits/misses, not just score — matches 1v1. Bounded: only paired players in small
+          // rounds (≤6) stream this; the board always rides the cheap t-tick. Big rounds → the future live leaderboard.
+          if (tour.ch && tour.meIn && tour.rival && _myRf && (!tour.alive || tour.alive.length <= 6)) {
+            _myRf.id = ME.id; try { tour.ch.send({ type: 'broadcast', event: 't-state', payload: _myRf }); } catch (e) {}
+          }
+        }
         renderVsHud(stt, _myRf); renderGhost();
       } else if (oppPanel && oppPanel.parentNode) renderOpp(stt);
     }
@@ -1821,17 +1830,29 @@
     }
     updateBoardScore(p.id, p.score);
   }
+  // build44: the rival's FULL render frame (paired tournament players stream it like 1v1) → the ghost deck shows
+  // their real hits/misses, combo + OD — it reads as them actually playing, not just a climbing score.
+  function onTourState(p) { if (p && p.id === tour.rival) lastOppState = p; }
   // dev: in a solo bot tournament, drive the rival bot's live "play" so the split-screen ghost looks alive
   function devDriveRival(roundN) {
     if (_npcRaf) cancelAnimationFrame(_npcRaf);
     var t0 = performance.now(); _npcLastEv = 0;
+    // build44: make the bot read as a REAL player — strike a note ~9/s and HIT or MISS by its difficulty; a miss
+    // RESETS the combo (so the ghost deck flashes a crimson miss + the multiplier dips), not a flawless auto-run.
+    var missRate = _devBotDiff === 'easy' ? 0.22 : (_devBotDiff === 'hard' ? 0.06 : 0.13), _npcCombo = 0;
     (function ghost() {
       if (!tour.id || tour.round !== roundN || !tour.meIn) { _npcRaf = 0; return; }
       var stt = window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : null;
       var el = (performance.now() - t0) / 1000, ev = [];
-      if (el - _npcLastEv > 0.16) { _npcLastEv = el; ev.push({ l: Math.floor(Math.random() * 5), j: Math.random() < 0.85 ? 'g' : 'm' }); }
-      lastOppState = { sc: Math.round((stt ? stt.score : 0) * 0.9 + el * _botPace()), cb: stt ? Math.round(stt.combo * 0.85) : 0,
-        mu: 1, od: Math.min(1, el / 16), oda: (el % 20) > 16, st: 1, pr: stt ? stt.progress : Math.min(1, el / 120), ev: ev };
+      if (el - _npcLastEv > 0.11) {
+        _npcLastEv = el;
+        var miss = Math.random() < missRate;
+        if (miss) _npcCombo = 0; else _npcCombo++;
+        ev.push({ l: Math.floor(Math.random() * 5), j: miss ? 'm' : 'g' });
+      }
+      lastOppState = { sc: Math.round((stt ? stt.score : 0) * 0.9 + el * _botPace()), cb: _npcCombo,
+        mu: 1 + Math.min(3, Math.floor(_npcCombo / 10)), od: Math.min(1, el / 16), oda: (el % 20) > 16, st: 1,
+        pr: stt ? stt.progress : Math.min(1, el / 120), ev: ev };
       lastOppTick = { id: tour.rival, score: lastOppState.sc, combo: lastOppState.cb, prog: lastOppState.pr };
       updateBoardScore(tour.rival, lastOppState.sc);
       _npcRaf = requestAnimationFrame(ghost);
@@ -2311,6 +2332,7 @@
     tour.ch.on('broadcast', { event: 't-track' }, function (m) { onTourTrack(m.payload); });
     tour.ch.on('broadcast', { event: 't-round' }, function (m) { onTourRound(m.payload); });
     tour.ch.on('broadcast', { event: 't-tick' }, function (m) { onTourTick(m.payload); });
+    tour.ch.on('broadcast', { event: 't-state' }, function (m) { onTourState(m.payload); });
     tour.ch.on('broadcast', { event: 't-final' }, function (m) { onTourFinal(m.payload); });
     tour.ch.on('broadcast', { event: 't-result' }, function (m) { onTourResult(m.payload); });
     tour.ch.on('broadcast', { event: 't-finalverdict' }, function (m) { onTourFinalVerdict(m.payload); });

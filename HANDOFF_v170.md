@@ -65,7 +65,7 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - More **beat-pulse / juice** polish.
 - MP **before-public** track (server-authoritative scoring [needs Lovable], reconnection, host migration) — larger.
 
-## STATE: now v176 (was v170). Since v170, five passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
+## STATE: now v177 (was v170). Since v170, six passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
 - **v171 JUICE** — global beat-bloom on EVERY stage (themed video too) + at 1× mult; Overdrive ignition flash+shockwave;
   results S/A ember burst; menu atom-breathe + primary-CTA crimson heartbeat. Pure CSS/canvas, reduce-motion/fx-lite gated.
 - **v172–v173 MP BEFORE-PUBLIC HARDENING (build42)** — `t-snapshot` host heartbeat (self-heal), reconnection
@@ -88,5 +88,9 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
   (dim/blurry); now full-res + bright (0.9) + the guitar is **warped to match your neck-recede** (`renderGhost` +
   new `getGuitarArt` nutFY/bridgeFY/warp). Reads as a living board played beside you. Needs the user's DESKTOP to see
   (split-screen is desktop-only; headless locks to mobile width — warp math verified against real engine data instead).
-- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, v175, v176. Origin =
+- **v177** — CO-OP rival now actually PLAYS: tournaments only streamed `t-tick` (score, no per-note), so the rival deck
+  couldn't show real play (1v1 already streamed the full frame). Now paired tournament players stream `t-state` (→
+  `onTourState`) so real opponents' hits/misses show on the ghost deck (bounded ≤6p); the NPC (`devDriveRival`) now
+  hits AND misses by difficulty (combo resets → visible misses). + polish (empty-Career opacity, owned-store contrast).
+- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, v175, v176, v177. Origin =
   github.com/reactivvibeai-eng/reactive-rhythm (not pushed).

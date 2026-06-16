@@ -1107,6 +1107,25 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v177 — CO-OP: the rival actually PLAYS (real hits/misses in tournaments) + believable NPC  ✅
+Playtest follow-up: "the person next to me doesn't look like they're actually playing — is that an NPC thing, or does
+it happen vs a real person too?" Root cause traced: it depended on the mode.
+- **1v1 versus already worked** — it streams the FULL render frame (`state`, ~14/s) with real per-note hit/miss events,
+  so a real 1v1 opponent's deck shows their actual playing.
+- **Tournaments were the gap** — to stay cheap for 5–10 players, rounds only streamed `t-tick` (score/combo/progress,
+  NO per-note data), so the rival deck couldn't show real play — for **both NPCs and real humans**.
+- **FIX (build44): paired tournament players now stream the full frame too** (`t-state`, like 1v1) → `onTourState`
+  applies the rival's frame so their **real hits/misses/combo/OD** drive the ghost deck. Bounded: only paired players
+  in **≤6-player rounds** stream it (the board always rides the cheap `t-tick`); big rounds fall back (→ the future
+  live-leaderboard mode). So a real opponent in a tournament now looks like they're playing, same as 1v1.
+- **Believable NPC** — `devDriveRival` was a near-flawless auto-run (combo never dropped). Now the bot strikes ~9/s and
+  **hits OR misses by its difficulty** (easy 22% / medium 13% / hard 6% miss); a miss **resets its combo** → the ghost
+  deck flashes a crimson miss + the multiplier dips. It reads like a real player having a real run, not a metronome.
+- **Extra polish:** empty-Career stats opacity 0.32 → 0.5 (was reading as "broken" when you have no runs yet); the
+  "OWNED" store button gets a subtle gold fill + firmer border (was low-contrast transparent).
+- Verified: `node --check` clean; a solo bracket still launches + runs clean (no regression from the new `t-state`/
+  `onTourState`/NPC changes). The on-screen split-screen result needs the desktop (desktop-only; headless = mobile width).
+
 ### v176 — CO-OP: the rival deck comes to life (vivid + warped + crisp)  ✅
 Playtest feedback: in split-screen the opponent's (left) guitar "doesn't look right" — it read dim/flat/blurry next to
 your vivid right deck, so it didn't feel like watching them play beside you (the whole point of co-op). Cause found in
