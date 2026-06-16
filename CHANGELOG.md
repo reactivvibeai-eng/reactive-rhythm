@@ -1107,6 +1107,33 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v194-v195 — Review-and-polish pass (5-agent code review + live smoke-test): critical Random-Stage gate + teardown + hygiene  ✅
+A multi-agent adversarial static review across 5 dimensions plus a full live smoke-test. Fixes, highest-impact first:
+- **CRITICAL — Quickplay "Random Stage" bypassed the beta gate.** The DEFAULT play path (pick a song → play; env=`__random`)
+  rolled the full authored pool with NO finished-check → ~78% chance of dropping a beta player into an unfinished ("Coming
+  Soon") level. `pickRandomEnvId` now rolls FINISHED levels only (bone-daddy/frac-01/carnival-boss; the paid melody-boss is
+  correctly excluded from random). Added a **central backstop in `applyEnvironment`** — it refuses to apply ANY non-finished
+  env no matter who asks (manual pick, random, or an MP host broadcasting a stale/edited stage id), which also closes the
+  MP-guest trust hole. Live-verified: warm-01 → blocked to moon; carnival → applied; random → a finished backdrop.
+- **Whitelist single source of truth.** The finished-levels list was hand-duplicated in 3 places; hoisted to
+  `window.RR_FINISHED_LEVELS` (defined with RHYTHM_CONFIG, fail-closed to {}) and read by the Levels screen, Environment
+  Picker, tournament picker, and the random-gate. Promoting a level is now ONE edit.
+- **Cutaway teardown bugs (introduced by the v191 crossfade).** `clearLevelTheme` now resets `#bg-video` opacity→1 (exiting
+  mid-cutaway no longer leaves the backdrop transparent); `RhythmLevelFx.cancel()` (called by `hideReactive`) kills the
+  in-flight cutaway guard timer so a stale timer can't corrupt the next backdrop.
+- **GoTrue double-client.** catalog.js + multiplayer.js now share ONE `window.__rrSupa` client (was 2 → the "Multiple
+  GoTrueClient instances" warning ×18). Live-verified: **0 console warnings** on a fresh browser.
+- **Entitlements shape.** `getEntitlements` tolerates the backend's `{entitlements:[]}` (was only reading `owns`) so
+  purchases persist across reload.
+- **Hygiene:** removed a duplicate `crimson-chaos-ryo` SKIN_GEOM key (v190 accident); pointed the 3 older loadout thumbs at
+  their `-card.jpg` crops (was ~11MB of PNGs on profile open); **untracked 44MB of guitar-pipeline scratch** from git
+  (`assets/guitars/_*` → .gitignore + `git rm --cached`; the .py measure tools stay tracked) so it can't ship to /play.
+- Live-verified (:8790, v195, fresh browser): random gate finished-only, backstop blocks unfinished, levels 4/18, env
+  picker 8 Coming-Soon, loadout thumbs all `-card.jpg`, **0 console errors, 0 warnings**; `node --check` clean on all JS.
+- NOTED (deliberate / backend-dependent — NOT changed): the loadout equips any skin free (intentional beta test affordance —
+  gate on ownership when the economy goes live); the store still spends CASHABLE Sparks (relabel to Bonus + wire `/bonus`
+  endpoints per `LOVABLE_BONUS_INTEGRATION_BRIEF.md` before enabling real spending).
+
 ### v193 — BETA lock: tournament stage picker gates unfinished levels too  ✅
 The third (and last) level-selection surface — the multiplayer TOURNAMENT stage picker (host picks the bracket's stages) —
 had the same gap: it only locked PAID envs, and its "All Stages" random resolver (`hostResolveEnv`) picked from ALL

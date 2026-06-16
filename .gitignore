@@ -8,3 +8,8 @@ launch-game.bat
 _cap_*.jpg
 assets/_ringtest_*.jpg
 assets/mp/_*_draft.png
+# guitar-skin pipeline scratch: draft renders, measure overlays, proof sheets, re-render dumps
+# (~44MB; the .py measure tools stay tracked). The runtime references none of these.
+assets/guitars/_*.png
+assets/guitars/_*.jpg
+assets/guitars/_rerender/

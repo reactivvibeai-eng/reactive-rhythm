@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=193" />
+<link rel="stylesheet" href="jukebox.css?v=195" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3202,7 +3202,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=193" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=195" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4427,6 +4427,11 @@
     SUPABASE_URL: 'https://bxiejoktoknybpraxebm.supabase.co',
     SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4aWVqb2t0b2tueWJwcmF4ZWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNTExNDIsImV4cCI6MjA4NzgyNzE0Mn0.mXL_YUhYmMXGO0kh9ouDIu088Epgqc9rB0lX57WYimo'
   };
+  // build50: SINGLE SOURCE OF TRUTH for which levels are FINISHED (beta-public). Read by EVERY level-pick surface —
+  // the Levels screen, the Environment Picker, and the multiplayer tournament stage picker — so promoting a level to
+  // "done" is ONE edit here. Set early (before the module scripts + inline controllers run). Surfaces fail CLOSED
+  // (to {} → everything Coming Soon) if this is ever missing, so an unfinished level can never leak public.
+  window.RR_FINISHED_LEVELS = { 'carnival-boss': 1, 'melody-boss': 1, 'frac-01': 1, 'bone-daddy': 1 };
 </script>
 
 <!-- ===== BETA GATE logic — server-authoritative, FAILS OPEN (never blocks the game if the backend is down/absent) ===== -->
@@ -4531,11 +4536,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=193"></script>
-<script src="game.js?v=193"></script>
-<script src="jukebox.js?v=193"></script>
-<script src="catalog.js?v=193"></script>
-<script src="multiplayer.js?v=193"></script>
+<script src="assets/fx/fx-player.js?v=195"></script>
+<script src="game.js?v=195"></script>
+<script src="jukebox.js?v=195"></script>
+<script src="catalog.js?v=195"></script>
+<script src="multiplayer.js?v=195"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4662,9 +4667,9 @@
     { id:'crimson_fox',   title:'Crimson Moon Fox', thumb:'assets/guitars/crimson-fox-card.jpg',   src:'assets/guitars/crimson-fox.png' },
     { id:'crimson_tarot', title:'Crimson Fortune',  thumb:'assets/guitars/crimson-tarot-card.jpg', src:'assets/guitars/crimson-tarot.png' },
     { id:'clockwork',     title:'Tourbillon',       thumb:'assets/guitars/clockwork-card.jpg',     src:'assets/guitars/clockwork.png' },
-    { id:'violet_gothic', title:'Violet Gothic',    thumb:'assets/guitars/violet-gothic-5.png',    src:'assets/guitars/violet-gothic-5.png' },
-    { id:'bone_daddy',    title:'Bone Daddy',       thumb:'assets/guitars/bone-daddy.png',         src:'assets/guitars/bone-daddy.png' },
-    { id:'melody_pink',   title:'Melody',           thumb:'assets/guitars/melody-pink.png',        src:'assets/guitars/melody-pink.png' },
+    { id:'violet_gothic', title:'Violet Gothic',    thumb:'assets/guitars/violet-gothic-5-card.jpg', src:'assets/guitars/violet-gothic-5.png' },
+    { id:'bone_daddy',    title:'Bone Daddy',       thumb:'assets/guitars/bone-daddy-card.jpg',    src:'assets/guitars/bone-daddy.png' },
+    { id:'melody_pink',   title:'Melody',           thumb:'assets/guitars/melody-pink-card.jpg',   src:'assets/guitars/melody-pink.png' },
     { id:'shaman_wolf',   title:'Shaman Wolf',      thumb:'assets/guitars/shaman-wolf-card.jpg',   src:'assets/guitars/shaman-wolf.png' },
     { id:'crimson_chaos', title:'Crimson Chaos',    thumb:'assets/guitars/crimson-chaos-ryo-card.jpg', src:'assets/guitars/crimson-chaos-ryo.png' }
   ];
@@ -5298,13 +5303,16 @@
         if (mech && mech.onMiss) { try { mech.onMiss(lane); } catch (e) {} }
       },
       // combo milestone / overdrive → kick the intense backdrop (Skully) + a big mechanic beat.
-      onCombo: function (combo, big) { _intenseKick(); if (mech && mech.onCombo) { try { mech.onCombo(combo, big); } catch (e) {} } }
+      onCombo: function (combo, big) { _intenseKick(); if (mech && mech.onCombo) { try { mech.onCombo(combo, big); } catch (e) {} } },
+      // build50: teardown hook — cancel any in-flight cutaway so its guard timer can't tick against the next backdrop.
+      cancel: function () { _intenseOn = false; if (_intenseT) { try { clearTimeout(_intenseT); } catch (e) {} _intenseT = null; } }
     };
   }
   function hideReactive() {
     if (_rcEl) _rcEl.classList.remove('show');
     if (_rcPosT) { clearInterval(_rcPosT); _rcPosT = 0; }
     hideMechanic();
+    try { if (window.RhythmLevelFx && window.RhythmLevelFx.cancel) window.RhythmLevelFx.cancel(); } catch (e) {}   // build50: kill any in-flight cutaway timer BEFORE dropping the FX, so a stale guard can't reach the next backdrop
     try { window.RhythmLevelFx = null; } catch (e) {}
   }
   // QUICK PLAY default full-bleed backdrop: the moon loop (already #bg-video's default src).
@@ -5323,7 +5331,7 @@
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
     if (v) {
-      v.onerror = null; v.onended = null; v.loop = true; v.style.visibility = '';   // also sever any stale cutaway onended + restore looping so exiting MID-cutaway can't leak onto the menu backdrop
+      v.onerror = null; v.onended = null; v.loop = true; v.style.visibility = ''; v.style.opacity = '1';   // also sever any stale cutaway onended + restore looping + reset the build49 crossfade opacity (exiting MID-cutaway must not leave the backdrop transparent)
       var target = (_bgSaved && _bgSaved.src) ? _bgSaved.src : QUICKPLAY_BG;
       if (v.getAttribute('src') !== target) { v.setAttribute('src', target); try { v.load(); v.play().catch(function(){}); } catch (e) {} }
       else { try { v.play().catch(function(){}); } catch (e) {} }
@@ -5397,7 +5405,7 @@
   function build() {
     var body = $('levels-body'); if (!body) return;
     // BETA gate: only these FINISHED bespoke levels are playable; every other authored level + all stride-fill show "Coming Soon".
-    var LVL_FINISHED = { 'carnival-boss': 1, 'melody-boss': 1, 'frac-01': 1, 'bone-daddy': 1 };
+    var LVL_FINISHED = window.RR_FINISHED_LEVELS || {};   // single source of truth (defined with RHYTHM_CONFIG); fail-closed
     var tracks = levelTracks();
     if (!tracks.length) { body.innerHTML = '<div class="levels-empty">Levels load from your library — give it a moment, then reopen.</div>'; return; }
     var totalStars = 0; for (var a = 0; a < tracks.length; a++) totalStars += lvState(a, tracks).stars;
@@ -5572,7 +5580,10 @@
     }
     // pick a random non-default / non-boss / non-paid authored environment id (drives the Random chip)
     function pickRandomEnvId() {
-      var pool = environments().filter(function (e) { return !e.isDefault && !e.isRandom && !e.boss && !e.paid; });
+      // build50 BETA FIX: Random must only roll FINISHED levels (incl. finished bosses) — never a Coming-Soon stage.
+      // (Was: !boss && !paid only → ~78% chance of an unfinished level on the DEFAULT quickplay path.)
+      var fin = window.RR_FINISHED_LEVELS || {};
+      var pool = environments().filter(function (e) { return !e.isDefault && !e.isRandom && !e.paid && fin[e.id]; });
       if (!pool.length) return null;
       return pool[Math.floor(Math.random() * pool.length)].id;
     }
@@ -5581,6 +5592,9 @@
       if (id === '__random') { var rid = pickRandomEnvId(); if (rid) { applyEnvironment(rid); return; } clearEnvironment(); return; }
       var e = envById(id);
       if (!e || e.isDefault || e.isRandom) { clearEnvironment(); return; }
+      // build50 BETA backstop: never apply an UNFINISHED level's environment, whoever asks (manual pick, Random
+      // roll, or an MP host broadcasting a stale/edited stage id) → fall back to the plain Arena.
+      if (!(window.RR_FINISHED_LEVELS || {})[e.id]) { clearEnvironment(); return; }
       var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
         cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', intenseVideos: e.intenseVideos || null, reactiveCards: e.reactiveCards, mechanic: e.mechanic || null, boss: false, _isEnv: true };
       _activeLevel = synthetic;
@@ -6538,7 +6552,7 @@
     var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
     // BETA gate: only FINISHED levels are pickable as environments; the rest are Coming Soon (independent of dev,
     // to match the Levels screen). Quick Play + Random Stage are always available. Keep in sync with LVL_FINISHED.
-    var FINISHED = { 'carnival-boss':1, 'melody-boss':1, 'frac-01':1, 'bone-daddy':1 };
+    var FINISHED = window.RR_FINISHED_LEVELS || {};   // single source of truth (defined with RHYTHM_CONFIG); fail-closed
     list.forEach(function (e) {
       e.comingSoon = !(e.isDefault || e.isRandom) && !FINISHED[e.id];
       e.locked = !!((e.paid && !dev) || e.comingSoon);

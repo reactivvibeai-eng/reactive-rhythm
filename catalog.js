@@ -22,9 +22,11 @@
     try {
       // Match the parent site's client config exactly so the iframe inherits the
       // session from shared localStorage (default storageKey, no override).
-      supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, {
+      // build50: ONE shared client across catalog.js + multiplayer.js — avoids the "Multiple GoTrueClient
+      // instances" warning (+ the undefined concurrent behavior it warns about under the same storage key).
+      supa = window.__rrSupa || (window.__rrSupa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, {
         auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true },
-      });
+      }));
     } catch (e) { console.warn('supabase init failed', e); }
   }
   async function getToken() {
@@ -136,7 +138,8 @@
     if (!API_BASE) { _setEntCache([], false); return { signed_in: false, owns: [] }; }
     try {
       const out = await api('/entitlements', { auth: true });
-      const owns = Array.isArray(out && out.owns) ? out.owns : [];
+      // build50: tolerate BOTH shapes — the live backend returns { entitlements:[…] } but the brief asks for { owns:[…] }.
+      const owns = Array.isArray(out && out.owns) ? out.owns : (Array.isArray(out && out.entitlements) ? out.entitlements : []);
       _setEntCache(owns, !!(out && out.signed_in));
       return { signed_in: !!(out && out.signed_in), owns: owns };
     } catch (e) { return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() }; }

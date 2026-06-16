@@ -33,9 +33,10 @@
   var supa = null;
   try {
     if (window.supabase && CFG.SUPABASE_URL && CFG.SUPABASE_KEY) {
-      supa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, {
+      // build50: reuse the ONE shared client (created by catalog.js or here, whichever runs first) — no double GoTrue.
+      supa = window.__rrSupa || (window.__rrSupa = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_KEY, {
         auth: { storage: window.localStorage, persistSession: true, autoRefreshToken: true },
-      });
+      }));
     }
   } catch (e) { /* offline / no realtime → MP simply shows the sign-in banner */ }
 
@@ -1618,8 +1619,9 @@
   }
   // BETA gate: only FINISHED levels are playable as tournament stages (keep in sync with LVL_FINISHED in the
   // Levels screen + the Environment Picker). Unfinished envs are Coming Soon: not pickable AND excluded from Random.
-  var TOUR_FINISHED = { 'carnival-boss':1, 'melody-boss':1, 'frac-01':1, 'bone-daddy':1 };
-  function _envComingSoon(e) { return !!(e && !e.isDefault && !e.isRandom && !TOUR_FINISHED[e.id]); }
+  // single source of truth (window.RR_FINISHED_LEVELS, defined with RHYTHM_CONFIG before this script loads); fail-closed to {}
+  function _finished() { return (typeof window !== 'undefined' && window.RR_FINISHED_LEVELS) || {}; }
+  function _envComingSoon(e) { return !!(e && !e.isDefault && !e.isRandom && !_finished()[e.id]); }
   function poolHas(id) { return (tour.envPool || []).indexOf(id) >= 0; }
   // host's stage pool → a short human summary for the room display
   function envPoolSummary() {

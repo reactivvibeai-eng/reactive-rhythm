@@ -566,7 +566,7 @@
       bridgeXF: [0.3380, 0.4093, 0.4843, 0.5565, 0.6333] },   // 57 clean 5-string rows — Skully; proven themed surface
     'assets/guitars/crimson-chaos-ryo.png': { verified: true, aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
       nutXF:    [0.4620, 0.4833, 0.5065, 0.5296, 0.5528],
-      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380] },   // 64 clean rows — THE canonical default
+      bridgeXF: [0.3444, 0.4176, 0.4917, 0.5648, 0.6380] },   // 64 clean rows — canonical default + the "Crimson Chaos" store skin
     'assets/guitars/violet-gothic.png': { verified: true, aspect: 904 / 1664, nutFY: 0.105, bridgeFY: 0.795,
       nutXF:    [0.4569, 0.4769, 0.4924, 0.5097, 0.5269],
       bridgeXF: [0.3558, 0.4115, 0.4661, 0.5216, 0.5764] },
@@ -607,10 +607,6 @@
     'assets/guitars/clockwork.png':     { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Tourbillon" clockwork — 58 rows, res 2.84px
       nutXF:    [0.4386, 0.4594, 0.4891, 0.5134, 0.5387],
       bridgeXF: [0.4080, 0.4613, 0.5058, 0.5615, 0.6130] },
-    // The base crimson-chaos-ryo template, also sold as the "Crimson Chaos" skin (88 rows, res 1.30px).
-    'assets/guitars/crimson-chaos-ryo.png': { verified: true, aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
-      nutXF:    [0.4624, 0.4840, 0.5067, 0.5307, 0.5538],
-      bridgeXF: [0.3479, 0.4204, 0.4944, 0.5697, 0.6440] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
   // resample a measured per-string array to the active LANE_COUNT: exact when counts match; the most
