@@ -173,6 +173,10 @@
   background-size: 220% 100%; background-repeat: no-repeat; animation: coverSheen 3.6s ease-in-out infinite;
 }
 @keyframes coverSheen { 0% { background-position: 150% 0; } 100% { background-position: -50% 0; } }
+html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; }   /* a11y: no infinite shimmer under reduce-motion */
+/* a11y: keyboard focus rings on jukebox/library controls (match the game's 2px crimson :focus-visible standard) */
+.jb-nav:focus-visible, .jb-tab:focus-visible, .jb-play:focus-visible, .jb-browse:focus-visible,
+.view-back:focus-visible, .lib-search-x:focus-visible, .jb-cover:focus-visible { outline: 2px solid #ff1f2e; outline-offset: 2px; }
 
 /* floor reflection */
 .cover-reflect {
@@ -421,7 +425,7 @@
   color: var(--ink-dim); text-transform: uppercase;
   border: 1px solid var(--line); border-radius: 999px;
 }
-.lib-ready > i { width: 6px; height: 6px; border-radius: 50%; background: #36d07a; box-shadow: 0 0 8px #36d07a; animation: pulse 1.8s ease-in-out infinite; }
+.lib-ready > i { width: 6px; height: 6px; border-radius: 50%; background: #e0a93f; box-shadow: 0 0 8px #e0a93f; animation: pulse 1.8s ease-in-out infinite; }
 #lib-refresh-btn.spinning svg { animation: rr-spin 0.6s linear infinite; }
 @keyframes rr-spin { to { transform: rotate(360deg); } }
 

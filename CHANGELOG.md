@@ -1107,6 +1107,30 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v175 — Melody combo-gag fix · FX Intensity is a real setting · brand+a11y polish · master roadmap  ✅
+User playtest pass: the Melody combo video cut off mid-tumble, juice needed to be a real user setting, and a polish
+sweep + a forward roadmap were requested.
+- **Melody combo-gag fix (build43)** — "Melanie's level" = Melody (the cat-pink boss). Her intense combo clip
+  (`melody-intense.mp4`, the cat falling/tumbling over the ambient `melody-loop.mp4`) was reverted on a blind **5.2s
+  timer** (`_intenseKick`), so it got **chopped mid-tumble** right as the cat reached center. Now the gag plays as a
+  one-shot through to its **natural `onended`** (`loop` off), with a self-extending guard as the only backstop (never a
+  blind mid-clip cut) and re-triggers ignored while it's rolling. Applies to any level's `intenseVideo` (e.g. Skully).
+- **FX Intensity is now a real in-game setting** — Settings → "FX Intensity: Subtle / Balanced / Intense" (segmented
+  control, persisted, applied live), mapping to a shared `FX_PRESETS` table that drives the canvas juice (beat-bloom,
+  OD ignition flash + shockwave, OD vignette). `balanced` = the v171 defaults. The `__rrJuice` dev hook now routes
+  through this (a dev fine-tune layers on top of the chosen preset). Verified: default balanced → intense (bloom 0.14)
+  / subtle (0.05), persists via getSettings, segmented control wired.
+- **Polish sweep (from a background review agent)** — fixed **2 brand-green violations on chrome**: the library "live"
+  pulse dot (`#36d07a` green → gold `#e0a93f`) and the dev badge/button (`#6fe0a0` mint → chrome). Added **keyboard
+  focus rings** (`:focus-visible`, 2px crimson) to the main controls (ghost-btn, icon-btn, jukebox nav/tabs/play/
+  browse/back) and a **reduce-motion guard** on the coverflow shimmer; made `.icon-btn:hover` use `--chrome` not the
+  `--cyan` alias. Verified headless: `greenHits: []` (no banned colors in the loaded stylesheets). Remaining P2/P3
+  items (empty-Career opacity, owned-store contrast, nitpicks) logged in `ROADMAP_FUTURE.md` §6.
+- **`ROADMAP_FUTURE.md`** — the master forward roadmap + a "how the systems work" guide (engine/charts, levels,
+  progression, and the full multiplayer/tournament logic + status), a recommended sequence, and the open decisions.
+- MP regression: re-confirmed a solo bracket launches clean at v175 (R1 live, 4 pairs, snapshot heartbeat + proof-of-
+  life running) — this session's edits don't touch `multiplayer.js`. `node --check` clean.
+
 ### v174 — JUICE is live-tunable to taste + MP validated over the REAL transport  ✅
 Two follow-ups to the v171 juice + v172–v173 MP hardening: make the FX intensities dial-able without a rebuild,
 and validate the new netcode over the actual Supabase transport (not just the offline loopback).

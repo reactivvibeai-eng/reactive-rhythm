@@ -65,7 +65,7 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - More **beat-pulse / juice** polish.
 - MP **before-public** track (server-authoritative scoring [needs Lovable], reconnection, host migration) — larger.
 
-## STATE: now v174 (was v170). Since v170, three passes landed — see CHANGELOG.md (top entries):
+## STATE: now v175 (was v170). Since v170, four passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
 - **v171 JUICE** — global beat-bloom on EVERY stage (themed video too) + at 1× mult; Overdrive ignition flash+shockwave;
   results S/A ember burst; menu atom-breathe + primary-CTA crimson heartbeat. Pure CSS/canvas, reduce-motion/fx-lite gated.
 - **v172–v173 MP BEFORE-PUBLIC HARDENING (build42)** — `t-snapshot` host heartbeat (self-heal), reconnection
@@ -81,5 +81,8 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
   transport** (automated 2-peer test: subscribe + soft-presence + `t-snapshot` heartbeat + `t-final` sanitation all
   round-tripped with a genuine 2nd client). **`MP_SMOKE_TEST.md`** = the 2-device manual procedure (the full UI
   reconnect/host-migration handoff needs two real game instances).
-- Git: the **v173 checkpoint is committed** (`db10878` on `visual-overhaul`); v174 is a follow-up commit on the same
-  branch. Origin = github.com/reactivvibeai-eng/reactive-rhythm (not pushed).
+- **v175** — playtest pass: Melody combo-gag plays through (was chopped at 5.2s); **FX Intensity is a real Settings
+  control** (Subtle/Balanced/Intense → `FX_PRESETS`); polish (2 brand-green fixes + keyboard focus rings + reduce-motion
+  guard); **`ROADMAP_FUTURE.md`** = master forward roadmap + "how the systems work" (incl. full MP/tournament logic).
+- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, then v175. Origin =
+  github.com/reactivvibeai-eng/reactive-rhythm (not pushed).

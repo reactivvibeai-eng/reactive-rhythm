@@ -102,12 +102,15 @@
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
   let bgPulse = 0;
-  // ---- JUICE: live-tunable FX intensities (dev hook `window.__rrJuice` — strip at content-freeze; the chosen
-  // values bake in as defaults). bloom = whole-frame beat-bloom max alpha, bloomR = its outer radius (×canvas
-  // height); OD ignition odFlash = flash peak alpha, odRing = shockwave reach (×screen diagonal); odVig /
-  // odVigPulse = the sustained Overdrive vignette. Persisted to localStorage `rr_juice`. ----
+  // ---- JUICE: FX intensities. The user-facing "FX Intensity" setting picks a preset; "balanced" = the defaults
+  // below. The `window.__rrJuice` dev hook (strip at content-freeze) fine-tunes individual values live. ----
   const JUICE = { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 };
-  try { const _sj = JSON.parse(localStorage.getItem('rr_juice') || 'null'); if (_sj) for (const k in JUICE) if (typeof _sj[k] === 'number') JUICE[k] = _sj[k]; } catch (e) {}
+  const FX_PRESETS = {
+    subtle:   { bloom: 0.05,  bloomR: 0.90, odVig: 0.12, odVigPulse: 0.10, odFlash: 0.22, odRing: 0.50 },
+    balanced: { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 },
+    intense:  { bloom: 0.14,  bloomR: 1.00, odVig: 0.22, odVigPulse: 0.18, odFlash: 0.50, odRing: 0.82 }
+  };
+  let fxIntensity = 'balanced';   // Settings -> FX Intensity (subtle | balanced | intense)
   // ---- PER-LEVEL VISUAL IDENTITY (build7) ----
   // Set by RhythmGame.setLevelAccent('r,g,b') from the level-theme code; null = Quick Play (no tint).
   // Used ONLY for ADDITIVE glow + ambient FX — LANE_COLORS / scoring / timing are untouched.
@@ -152,7 +155,10 @@
     if (typeof s.sfx === 'number') SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx));
     if (typeof s.failMode === 'boolean') failMode = s.failMode;
     if (s.chartMode === 'classic' || s.chartMode === 'musical') chartMode = s.chartMode;
+    if (s.fxIntensity && FX_PRESETS[s.fxIntensity]) { fxIntensity = s.fxIntensity; Object.assign(JUICE, FX_PRESETS[fxIntensity]); }   // user FX-intensity preset
   } catch (e) {}
+  // dev __rrJuice fine-tune (rr_juice) layers on top of the chosen preset; absent for normal users
+  try { const _sj = JSON.parse(localStorage.getItem('rr_juice') || 'null'); if (_sj) for (const k in JUICE) if (typeof _sj[k] === 'number') JUICE[k] = _sj[k]; } catch (e) {}
   // ?novideo=1 forces performance mode (FPS diagnostic / quick override)
   try { if (/[?&]novideo=1/.test(location.search)) bgMode = 'performance'; } catch (e) {}
   let glitchAmount = 0;
@@ -1374,9 +1380,10 @@
     if (s && typeof s.sfx === 'number') { SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx)); }
     if (s && typeof s.failMode === 'boolean') failMode = s.failMode;
     if (s && (s.chartMode === 'classic' || s.chartMode === 'musical')) chartMode = s.chartMode;
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode })); } catch (e) {}
+    if (s && FX_PRESETS[s.fxIntensity]) { fxIntensity = s.fxIntensity; Object.assign(JUICE, FX_PRESETS[fxIntensity]); try { localStorage.removeItem('rr_juice'); } catch (e) {} }   // picking a preset = clean reset to it
+    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, fxIntensity: fxIntensity })); } catch (e) {}
   };
-  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode });
+  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, fxIntensity: fxIntensity });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }
   applyReduceMotion();
   // performance background: hide + pause the moon video (kills its compositing cost so the
@@ -1756,8 +1763,8 @@
     window.__rrJuice = {
       get: () => Object.assign({}, JUICE),
       set: (o) => { if (o) for (const k in JUICE) if (typeof o[k] === 'number') JUICE[k] = o[k]; try { localStorage.setItem('rr_juice', JSON.stringify(JUICE)); } catch (e) {} return Object.assign({}, JUICE); },
-      preset: function (n) { const P = { subtle: { bloom: 0.05, bloomR: 0.9, odVig: 0.12, odVigPulse: 0.10, odFlash: 0.22, odRing: 0.5 }, balanced: { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 }, intense: { bloom: 0.14, bloomR: 1.0, odVig: 0.22, odVigPulse: 0.18, odFlash: 0.5, odRing: 0.82 } }; if (P[n]) this.set(P[n]); return this.get(); },
-      reset: function () { return this.set({ bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 }); }
+      preset: (n) => { if (FX_PRESETS[n]) window.RhythmGame.applySettings({ fxIntensity: n }); return Object.assign({}, JUICE); },
+      reset: () => { window.RhythmGame.applySettings({ fxIntensity: 'balanced' }); return Object.assign({}, JUICE); }
     };
     window.__rrDebug = {
       state: () => state,
@@ -4297,6 +4304,7 @@
     { const m = $('set-music'); if (m) { m.value = s.music; const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(s.music * 100) + '%'; } }
     { const x = $('set-sfx'); if (x) { x.value = s.sfx; const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((s.sfx / 0.5) * 100) + '%'; } }
     [...$('set-fx').children].forEach(b => b.classList.toggle('active', (b.dataset.fx === 'lite') === s.fxLite));
+    { const fi = $('set-fxi'); if (fi) [...fi.children].forEach(b => b.classList.toggle('active', b.dataset.fxi === (s.fxIntensity || 'balanced'))); }
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
     { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
@@ -4350,6 +4358,10 @@
     [...$('set-fx').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ fxLite: b.dataset.fx === 'lite' });
   }));
+  { const fi = $('set-fxi'); if (fi) [...fi.children].forEach(b => b.addEventListener('click', () => {
+    [...fi.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.applySettings({ fxIntensity: b.dataset.fxi });
+  })); }
   { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.addEventListener('click', () => {
     [...rm.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ reduceMotion: b.dataset.rm === 'on' });

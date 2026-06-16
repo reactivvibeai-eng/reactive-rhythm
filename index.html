@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=174" />
+<link rel="stylesheet" href="jukebox.css?v=175" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -614,14 +614,14 @@
   .lv-card.locked:hover { transform: none; border-color: var(--line); box-shadow: none; }
   .lv-soon { position: absolute; top: 6px; right: 7px; font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--crimson); background: rgba(7,6,10,0.78); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 7px; }
   .lv-lockbadge { display: inline-block; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--crimson); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; margin: 0 0 6px; }
-  .lv-lockbadge.dev { color: #6fe0a0; border-color: rgba(111,224,160,0.4); }
+  .lv-lockbadge.dev { color: var(--chrome); border-color: rgba(218,215,210,0.4); }
   /* campaign progression UI */
   .lv-progress { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 16px; }
   .lv-prog-bar { flex: 1; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
   .lv-prog-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--crimson), #e0a93f); border-radius: 999px; transition: width 0.45s cubic-bezier(.2,.8,.2,1); }
   .lv-prog-txt { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: #e0a93f; letter-spacing: 0.05em; white-space: nowrap; }
-  .lv-devbtn { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.08em; color: #6fe0a0; background: rgba(111,224,160,0.08); border: 1px solid rgba(111,224,160,0.4); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
-  .lv-devbtn:hover { background: rgba(111,224,160,0.16); }
+  .lv-devbtn { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--chrome); background: rgba(218,215,210,0.08); border: 1px solid rgba(218,215,210,0.4); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+  .lv-devbtn:hover { background: rgba(218,215,210,0.16); }
   .lv-tier-head .t-stars { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; color: #e0a93f; letter-spacing: 0.04em; }
   .lv-stars { display: flex; gap: 3px; margin-top: 6px; }
   .lv-star { font-size: 12px; line-height: 1; color: rgba(255,255,255,0.15); }
@@ -1627,6 +1627,7 @@
   .ghost-btn:hover, .ghost-btn:active { border-color: var(--crimson); box-shadow: 0 0 18px rgba(255,42,48,0.4), inset 0 0 18px rgba(255,42,48,0.12); }
   .ghost-btn.primary { background: linear-gradient(180deg, #ff2a38, #b3121f); border: none; color: #fff; font-weight: 700; box-shadow: 0 8px 26px rgba(255,31,46,0.4), inset 0 1px 0 rgba(255,255,255,0.3); }
   .ghost-btn.primary:hover, .ghost-btn.primary:active { box-shadow: 0 10px 32px rgba(255,31,46,0.55), inset 0 1px 0 rgba(255,255,255,0.4); }
+  .ghost-btn:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 
   /* ============ RESULTS ============ */
   .results-wrap {
@@ -1978,7 +1979,8 @@
     cursor: pointer;
     transition: all 0.15s ease;
   }
-  .icon-btn:hover, .icon-btn:active { color: var(--cyan); border-color: rgba(224,218,214,0.35); }
+  .icon-btn:hover, .icon-btn:active { color: var(--chrome); border-color: rgba(224,218,214,0.35); }
+  .icon-btn:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
   .icon-btn svg { width: 18px; height: 18px; }
 
   /* ---------- Sparks balance chip + identity (library top bar) ---------- */
@@ -3128,7 +3130,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=174" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=175" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -3913,6 +3915,14 @@
         </div>
       </div>
       <div class="set-row">
+        <span class="set-l">FX Intensity</span>
+        <div class="set-seg" id="set-fxi">
+          <button data-fxi="subtle">Subtle</button>
+          <button data-fxi="balanced" class="active">Balanced</button>
+          <button data-fxi="intense">Intense</button>
+        </div>
+      </div>
+      <div class="set-row">
         <span class="set-l">Reduce Motion</span>
         <div class="set-seg" id="set-rm">
           <button data-rm="off" class="active">Off</button>
@@ -4445,11 +4455,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=174"></script>
-<script src="game.js?v=174"></script>
-<script src="jukebox.js?v=174"></script>
-<script src="catalog.js?v=174"></script>
-<script src="multiplayer.js?v=174"></script>
+<script src="assets/fx/fx-player.js?v=175"></script>
+<script src="game.js?v=175"></script>
+<script src="jukebox.js?v=175"></script>
+<script src="catalog.js?v=175"></script>
+<script src="multiplayer.js?v=175"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5051,25 +5061,42 @@
     function _intenseRevert() {
       if (!_intenseOn) return; _intenseOn = false;
       var v = $('bg-video'); if (!v) return;
-      try { v.onerror = function () { try { v.onerror = null; } catch (e) {} };
+      if (_intenseT) { clearTimeout(_intenseT); _intenseT = null; }
+      try {
+        v.onended = null; v.loop = true;                 // restore the ambient loop behavior
+        v.onerror = function () { try { v.onerror = null; } catch (e) {} };
         var back = (L.bgVideo || (_bgSaved && _bgSaved.src) || QUICKPLAY_BG);
         if (v.getAttribute('src') !== back) { v.setAttribute('src', back); v.load(); }
         v.play().catch(function(){});
       } catch (e) {}
     }
+    // build43 (user, Melody): the intense combo clip is a one-shot GAG (the cat falls + tumbles) — it must
+    // play ALL the way through, then ease back to the ambient loop. The old fixed 5.2s revert chopped it
+    // mid-tumble (right as the cat reached center). Now: play once (loop off) → revert on its NATURAL end;
+    // a self-extending guard is the only backstop (never a blind mid-clip cut); a re-trigger while it's
+    // already rolling is ignored so the gag is never restarted or cut short.
+    function _intenseGuard() {
+      var v = $('bg-video');
+      if (!_intenseOn || !v) { _intenseT = null; return; }
+      if (!v.paused && isFinite(v.duration) && v.duration > 0 && v.currentTime < v.duration - 0.25) {
+        _intenseT = setTimeout(_intenseGuard, 1500); return;   // still rolling toward the end → let it finish
+      }
+      _intenseRevert();                                        // ended / stalled → ease back
+    }
     function _intenseKick() {
       if (!_intenseSrc) return;
       var v = $('bg-video'); if (!v) return;
-      if (!_intenseOn) {
-        _intenseOn = true;
-        try {
-          v.onerror = function () { try { v.onerror = null; } catch (e) {} _intenseOn = false; _intenseRevert(); };
-          if (v.getAttribute('src') !== _intenseSrc) { v.setAttribute('src', _intenseSrc); v.load(); }
-          v.play().catch(function(){});
-        } catch (e) { _intenseOn = false; }
-      }
+      if (_intenseOn) return;                            // already showing the gag → let it play through (no restart, no chop)
+      _intenseOn = true;
+      try {
+        v.onerror = function () { try { v.onerror = null; } catch (e) {} _intenseRevert(); };
+        v.onended = function () { try { v.onended = null; } catch (e) {} _intenseRevert(); };
+        v.loop = false;                                  // one-shot: play the whole gag, then onended → revert
+        if (v.getAttribute('src') !== _intenseSrc) { v.setAttribute('src', _intenseSrc); v.load(); }
+        v.play().catch(function(){});
+      } catch (e) { _intenseOn = false; }
       if (_intenseT) clearTimeout(_intenseT);
-      _intenseT = setTimeout(_intenseRevert, 5200);   // hold the spike, then ease back to the loop
+      _intenseT = setTimeout(_intenseGuard, 6000);       // backstop only; self-extends while the clip is still rolling
     }
     window.RhythmLevelFx = {
       // THE WORLD charges with clean hits (cards) + drives the level mechanic (booty bounce / paw bat).
