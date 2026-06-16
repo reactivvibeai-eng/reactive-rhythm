@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=190" />
+<link rel="stylesheet" href="jukebox.css?v=191" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1249,6 +1249,7 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; object-position: 50% 42%; z-index: 0; pointer-events: none;
     transform: scale(var(--rr-bgfit, 1)); transform-origin: 50% 42%;
+    transition: opacity 0.3s ease;   /* build49: crossfade the combo cutaway swap (blurred fill shows through) so it's not a hard cut */
   }
   /* the fill = the same world barely out of focus at near-full brightness — when the capped case
      leaves margins, they read as a soft continuation of the SAME image, not a dark letterbox.
@@ -3196,7 +3197,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=190" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=191" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -3863,7 +3864,7 @@
         <div class="profile-grades" id="profile-grades"></div>
       </div>
       <div class="profile-loadout-wrap">
-        <div class="pg-head">GUITAR LOADOUT <span class="pl-note">tap to equip · carries into levels &amp; multiplayer</span></div>
+        <div class="pg-head">GUITAR LOADOUT <span class="pl-note">tap to equip · applies in Quickplay &amp; Multiplayer · “Default” = use each level’s own guitar · Campaign always uses the level’s guitar</span></div>
         <div class="profile-loadout" id="profile-loadout"></div>
       </div>
       <p class="profile-empty" id="profile-empty">No runs logged yet — finish a track and your career starts filling in here.</p>
@@ -4525,11 +4526,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=190"></script>
-<script src="game.js?v=190"></script>
-<script src="jukebox.js?v=190"></script>
-<script src="catalog.js?v=190"></script>
-<script src="multiplayer.js?v=190"></script>
+<script src="assets/fx/fx-player.js?v=191"></script>
+<script src="game.js?v=191"></script>
+<script src="jukebox.js?v=191"></script>
+<script src="catalog.js?v=191"></script>
+<script src="multiplayer.js?v=191"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5035,8 +5036,18 @@
       g.classList.remove('rr-lvl-themed'); g.removeAttribute('data-rrtheme');
       try { window.RhythmGame && window.RhythmGame.setLevelAccent && window.RhythmGame.setLevelAccent(null); } catch (e) {}
     }
-    // build7: per-level custom guitar (temporary override; self-heals to default on 404). Falsy guitarSkin → equipped/default.
-    try { if (window.RhythmGame && window.RhythmGame.setGuitarSkin) window.RhythmGame.setGuitarSkin(L && L.guitarSkin ? L.guitarSkin : null); } catch (e) {}
+    // build49 (user rule): the level's own guitar is MANDATORY only in CAMPAIGN (authored levels, launched from the
+    // Levels screen — these are NOT _isEnv). In Quickplay / Multiplayer / free-play-in-environment (L._isEnv), the
+    // player's EQUIPPED skin wins; with nothing equipped ("Default"), it falls back to the level's own guitar.
+    // (setGuitarSkin self-heals to the profile default on a 404.)
+    try {
+      if (window.RhythmGame && window.RhythmGame.setGuitarSkin) {
+        var _lg = (L && L.guitarSkin) ? L.guitarSkin : null;
+        var _eq = (window.RhythmGame.getEquippedSkin && window.RhythmGame.getEquippedSkin()) || null;
+        var _campaign = !!(L && !L._isEnv);                       // authored campaign level → its guitar is locked in
+        window.RhythmGame.setGuitarSkin(_campaign ? _lg : (_eq ? null : _lg));
+      }
+    } catch (e) {}
     // build28: per-level GEM TINT DISABLED (playtest) — recoloring notes to the level theme made them blend
     // into the guitar (pink-on-pink etc.). Notes are now the fixed bright per-lane gem; never theme-tinted.
     try {
@@ -5204,6 +5215,14 @@
       while (i === _intenseLast) i = Math.floor(Math.random() * _intenseList.length);
       _intenseLast = i; return _intenseList[i];
     }
+    // build49: crossfade helper — ease #bg-video opacity back to 1 once it's actually PLAYING (the blurred
+    // #bg-video-fill mirrors the src, so during the fade the backdrop is never black). Safety-timed so it can't stick at 0.
+    function _fadeVidIn(v) {
+      var done = false;
+      var fin = function () { if (done) return; done = true; try { v.style.opacity = '1'; } catch (e) {} try { v.removeEventListener('playing', fin); } catch (e) {} };
+      try { v.addEventListener('playing', fin); } catch (e) {}
+      setTimeout(fin, 650);
+    }
     // The cutaway must show ON TOP of whatever backdrop is live (ambient loop, static poster, or a 404-healed poster)
     // and then restore EXACTLY that backdrop. We snapshot the pre-cutaway state on kick (runtime, not config) and
     // replay it on revert — correct for bgVideo levels, static-bgArt levels, AND a bgVideo that 404-self-healed.
@@ -5218,10 +5237,11 @@
         var pk = _preKick || {}, bi = $('bg-image');
         if (bi && pk.bidisp != null) bi.style.display = pk.bidisp;           // restore the poster's pre-cutaway display
         v.loop = (pk.vloop != null) ? pk.vloop : true;
+        v.style.opacity = '0';                                               // build49: crossfade back to the loop (blurred fill shows through)
         if (pk.vsrc && v.getAttribute('src') !== pk.vsrc) { v.setAttribute('src', pk.vsrc); v.load(); }
         v.style.visibility = (pk.vvis != null) ? pk.vvis : '';              // 'hidden' again for a static backdrop, '' for a loop
-        if ((pk.vvis || '') !== 'hidden') { v.play().catch(function () {}); } else { try { v.pause(); } catch (e) {} }
-      } catch (e) {}
+        if ((pk.vvis || '') !== 'hidden') { v.play().catch(function () {}); _fadeVidIn(v); } else { try { v.pause(); } catch (e) {} v.style.opacity = '1'; }
+      } catch (e) { try { v.style.opacity = '1'; } catch (e2) {} }
     }
     // build43 (user, Melody): the intense combo clip is a one-shot GAG (the cat falls + tumbles) — it must
     // play ALL the way through, then ease back to the ambient loop. The old fixed 5.2s revert chopped it
@@ -5251,11 +5271,13 @@
         v.onerror = function () { try { v.onerror = null; } catch (e) {} _intenseRevert(); };
         v.onended = function () { try { v.onended = null; } catch (e) {} _intenseRevert(); };
         v.loop = false;                                  // one-shot: play the whole gag, then onended → revert
+        v.style.opacity = '0';                            // build49: crossfade — drop the sharp layer (blurred fill shows) then ease the cutaway in
         if (v.getAttribute('src') !== src) { v.setAttribute('src', src); v.load(); }
         v.style.visibility = '';                          // make the cutaway the visible TOP layer no matter the config / 404 state
         if (bi) bi.style.display = 'none';               // ...and hide any static poster so the gag is never trapped behind it
         v.play().catch(function () {});
-      } catch (e) { _intenseOn = false; }
+        _fadeVidIn(v);                                    // opacity → 1 once the cutaway is actually playing
+      } catch (e) { _intenseOn = false; try { v.style.opacity = '1'; } catch (e2) {} }
       if (_intenseT) clearTimeout(_intenseT);
       _intenseT = setTimeout(_intenseGuard, 6000);       // backstop only; self-extends while the clip is still rolling
     }

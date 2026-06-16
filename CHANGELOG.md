@@ -1107,6 +1107,22 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v191 — Playtest fixes: equipped-skin rule (campaign vs free/MP) + smoother Carnival cutaway  ✅
+Three issues from the user's playtest:
+- **Equipped skin now applies outside campaign.** Every level launch was force-overriding the player's equipped guitar
+  with the level's own (`setGuitarSkin` always won). Fixed in `applyLevelTheme`: CAMPAIGN levels (authored, launched from
+  the Levels screen — NOT `_isEnv`) keep their guitar MANDATORY; in Quickplay / Multiplayer / free-play-in-environment the
+  player's EQUIPPED skin wins, and with nothing equipped ("Default") it falls back to the level's own guitar. (Wrapped in
+  try/catch — can never break a launch.)
+- **"Use the level's guitar" option** clarified — the loadout **Default** tile = no personal skin = each level's own
+  guitar; the loadout note now states the full rule.
+- **Carnival cutaway is no longer a hard cut.** Added a safe opacity crossfade (0.3s) on the `#bg-video` swap for both the
+  cut-IN and the revert; the blurred `#bg-video-fill` (mirrors the src) shows through so there's no black flash, and a
+  safety timeout means it can never stick transparent. The two cutaways already alternate (strict random no-repeat) on each
+  combo milestone + Overdrive — if only one showed, it was too few combo triggers that run (frequency tunable on request).
+- Live-verified (:8790, v191): loads clean, **0 console errors**, equip applies (fox geometry active), launch initiates.
+  The in-level skin swap + cutaway crossfade are visual/timing behaviors that need the user's real-machine playtest.
+
 ### v190 — Store guitar fix: correct-string previews + 2 reused skins (Shaman Wolf · Crimson Chaos)  ✅
 User reported the top 3 store guitars (Violet Gothic / Bone Daddy / Melody) showed the WRONG strings — they were old
 hero-render previews (`assets/store/skin-*.jpg`), NOT the verified 5-string play surfaces. Fixed with ZERO new gens:
