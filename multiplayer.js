@@ -723,15 +723,7 @@
       _gCtx.lineTo(lf.nearX[i] * sx, lf.nearY * sy);
     }
     _gCtx.stroke();
-    // lit CATCHER row — crimson with a soft glow, so you can SEE where the rival strikes
-    _gCtx.save();
-    _gCtx.strokeStyle = 'rgba(255,40,52,0.55)'; _gCtx.lineWidth = Math.max(1.5, lf.lw * 0.05 * sx);
-    _gCtx.shadowColor = 'rgba(255,40,52,0.6)'; _gCtx.shadowBlur = 8 * sx;
-    _gCtx.beginPath();
-    _gCtx.moveTo(lf.nearX[0] * sx, lf.nearY * sy);
-    _gCtx.lineTo(lf.nearX[N - 1] * sx, lf.nearY * sy);
-    _gCtx.stroke();
-    _gCtx.restore();
+    var cols = lf.colors || null;   // build45: per-lane note colors (mirror YOUR deck) — drive the gems + catcher buttons below
     // rival COMBO TREND → arrivals paint as misses (crimson) for a short window after a combo drop, else hits (gold)
     var _oc = (lastOppState && lastOppState.cb) || 0;
     if (_oc < _gPrevCombo - 0.5) _gMissWin = 20;
@@ -756,39 +748,47 @@
           _gCtx.beginPath(); _gCtx.arc(gx, gy, rad, 0, 6.283); _gCtx.stroke();
           continue;
         }
-        aGem = 0.42 + 0.5 * (1 - u);                               // brighter — a real rival highway, not an 18% ghost
-        _gCtx.fillStyle = 'rgba(240,236,230,' + aGem.toFixed(3) + ')';   // chrome-white core
-        _gCtx.beginPath(); _gCtx.arc(gx, gy, rad, 0, 6.283); _gCtx.fill();
-        _gCtx.strokeStyle = 'rgba(255,60,72,' + (aGem * 0.85).toFixed(3) + ')';   // crimson rim → reads as the brand note
-        _gCtx.lineWidth = Math.max(1, rad * 0.3);
-        _gCtx.beginPath(); _gCtx.arc(gx, gy, rad, 0, 6.283); _gCtx.stroke();
-        if (u >= 0.92 && u <= 1.05 && _gFlash[it.lane] < 0.6) { _gFlash[it.lane] = 1; _gFlashCr[it.lane] = _gMissWin > 0; }   // note hit the catcher → pulse the lane (synthesized hit/miss)
-        if (it.type === 1) {                                       // hold → short chrome tail toward the nut
-          var d2 = dd + 0.10; if (d2 > 1.02) d2 = 1.02;
+        var lcol = (cols && cols[it.lane]) ? cols[it.lane] : '255,60,60';
+        aGem = 0.62 + 0.38 * (1 - u);                              // bright LANE-COLORED gem — the SAME colored note as your deck
+        if (it.type === 1) {                                       // hold → lane-colored beam toward the nut (behind the head)
+          var d2 = dd + 0.12; if (d2 > 1.02) d2 = 1.02;
           var u2; if (zf > 1) { var z2 = 1 + d2 * (zf - 1); u2 = (1 - 1 / z2) / (1 - 1 / zf); } else { u2 = d2; }
           var lx2 = lf.nearX[it.lane] + (lf.farX[it.lane] - lf.nearX[it.lane]) * u2;
           if (warp > 0) lx2 = cxw + (lx2 - cxw) * (1 - warp * (u2 < 0 ? 0 : u2));
-          _gCtx.strokeStyle = 'rgba(218,215,210,' + (aGem * 0.6).toFixed(3) + ')';
-          _gCtx.lineWidth = Math.max(1, rad * 0.7);
+          _gCtx.strokeStyle = 'rgba(' + lcol + ',' + (aGem * 0.5).toFixed(3) + ')';
+          _gCtx.lineWidth = Math.max(1.5, rad * 0.8);
           _gCtx.beginPath(); _gCtx.moveTo(gx, gy); _gCtx.lineTo(lx2 * sx, (lf.nearY + (lf.farY - lf.nearY) * u2) * sy); _gCtx.stroke();
-        } else if (it.type === 2) {                                // chord → chrome rim ("double")
-          _gCtx.strokeStyle = 'rgba(225,222,214,' + (aGem * 0.7).toFixed(3) + ')';
-          _gCtx.lineWidth = Math.max(1, rad * 0.3);
-          _gCtx.beginPath(); _gCtx.arc(gx, gy, rad * 1.35, 0, 6.283); _gCtx.stroke();
         }
+        _gCtx.fillStyle = 'rgba(' + lcol + ',' + aGem.toFixed(3) + ')';   // LANE-COLORED core (matches your deck's note)
+        _gCtx.beginPath(); _gCtx.arc(gx, gy, rad, 0, 6.283); _gCtx.fill();
+        _gCtx.fillStyle = 'rgba(255,255,255,' + (aGem * 0.55).toFixed(3) + ')';   // glossy highlight → reads as a real gem, not a flat dot
+        _gCtx.beginPath(); _gCtx.arc(gx - rad * 0.3, gy - rad * 0.3, rad * 0.34, 0, 6.283); _gCtx.fill();
+        if (it.type === 2) {                                       // chord → white double-rim
+          _gCtx.strokeStyle = 'rgba(255,255,255,' + (aGem * 0.7).toFixed(3) + ')';
+          _gCtx.lineWidth = Math.max(1, rad * 0.3);
+          _gCtx.beginPath(); _gCtx.arc(gx, gy, rad * 1.3, 0, 6.283); _gCtx.stroke();
+        }
+        if (u >= 0.9 && u <= 1.06 && _gFlash[it.lane] < 0.5) { _gFlash[it.lane] = 1; _gFlashCr[it.lane] = _gMissWin > 0; }   // gem reaches the catcher → synthesize a strike (t-tick-only fallback)
       }
     }
-    // paint + decay the per-lane catcher FLASH (gold hit / crimson miss) — a glance left reads 'nailing it' vs 'choked'
+    // per-lane CATCHER BUTTONS — colored rings (mirror YOUR deck) that PRESS DOWN + light WHITE-HOT (crimson on a miss)
+    // when the rival strikes that lane, driven by their real feed. This is the "you can SEE them pushing the buttons" GH split-screen.
     for (i = 0; i < N; i++) {
-      var fl = _gFlash[i]; if (fl <= 0.02) { _gFlash[i] = 0; continue; }
-      var fx = lf.nearX[i] * sx, fy = lf.nearY * sy, fr = lf.lw * 0.55 * sx * (0.5 + fl);
+      var fl = _gFlash[i];
+      var bcol = (cols && cols[i]) ? cols[i] : '255,60,60';
+      var press = fl * lf.lw * 0.10 * sy, bx = lf.nearX[i] * sx, by = lf.nearY * sy + press, brad = lf.lw * 0.26 * sx;
       _gCtx.save();
-      _gCtx.globalAlpha = 0.5 * fl;
-      _gCtx.fillStyle = _gFlashCr[i] ? '#ff2834' : '#ffd27a';
-      _gCtx.shadowColor = _gCtx.fillStyle; _gCtx.shadowBlur = 10 * sx;
-      _gCtx.beginPath(); _gCtx.arc(fx, fy, fr, 0, 6.283); _gCtx.fill();
+      _gCtx.lineWidth = Math.max(1.4, lf.lw * 0.055 * sx);
+      _gCtx.strokeStyle = 'rgba(' + bcol + ',' + (0.5 + fl * 0.5).toFixed(3) + ')';
+      if (fl > 0.02) { _gCtx.shadowColor = _gFlashCr[i] ? '#ff2834' : 'rgba(255,250,235,1)'; _gCtx.shadowBlur = 16 * sx * fl; }
+      _gCtx.beginPath(); _gCtx.arc(bx, by, brad, 0, 6.283); _gCtx.stroke();
+      if (fl > 0.04) {   // strike pop — white-hot core (crimson on a miss)
+        _gCtx.globalAlpha = fl;
+        _gCtx.fillStyle = _gFlashCr[i] ? 'rgba(255,40,52,0.85)' : 'rgba(255,250,238,0.95)';
+        _gCtx.beginPath(); _gCtx.arc(bx, by, brad * (0.5 + fl * 0.35), 0, 6.283); _gCtx.fill();
+      }
       _gCtx.restore();
-      _gFlash[i] *= 0.85;
+      _gFlash[i] *= 0.84; if (_gFlash[i] <= 0.02) _gFlash[i] = 0;
     }
     if (document.documentElement.classList.contains('rr-reduce-motion')) return;   // strings + gems + flashes only, no sparkles
     // spawn sparkles from fresh opponent events ('p'/'g' = chrome hit, 'm' = crimson miss) + drive the lane flash from REAL hits/misses (1v1)

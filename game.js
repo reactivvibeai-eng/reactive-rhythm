@@ -1355,6 +1355,7 @@
       return { x: r.left, y: r.top, w: r.width, h: r.height,
         nearX: g.nearX.slice(), farX: g.farX.slice(), nearY: g.nearY, farY: g.farY, lw: g.lw,
         persp: (ART.persp > 1) ? (perspOverride || ART.persp) : 0,   // versus ghost deck: match the real board's projection
+        colors: LANE_COLORS.map(c => c.rgb),   // versus ghost deck: per-lane note colors so the rival deck mirrors YOUR colored notes
         warp: (warpOverride >= 0 ? warpOverride : (ART.warp || 0)) };
     } catch (e) { return null; }
   };

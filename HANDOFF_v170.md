@@ -65,7 +65,7 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - More **beat-pulse / juice** polish.
 - MP **before-public** track (server-authoritative scoring [needs Lovable], reconnection, host migration) — larger.
 
-## STATE: now v177 (was v170). Since v170, six passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
+## STATE: now v178 (was v170). Since v170, seven passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
 - **v171 JUICE** — global beat-bloom on EVERY stage (themed video too) + at 1× mult; Overdrive ignition flash+shockwave;
   results S/A ember burst; menu atom-breathe + primary-CTA crimson heartbeat. Pure CSS/canvas, reduce-motion/fx-lite gated.
 - **v172–v173 MP BEFORE-PUBLIC HARDENING (build42)** — `t-snapshot` host heartbeat (self-heal), reconnection
@@ -92,5 +92,8 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
   couldn't show real play (1v1 already streamed the full frame). Now paired tournament players stream `t-state` (→
   `onTourState`) so real opponents' hits/misses show on the ghost deck (bounded ≤6p); the NPC (`devDriveRival`) now
   hits AND misses by difficulty (combo resets → visible misses). + polish (empty-Career opacity, owned-store contrast).
-- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, v175, v176, v177. Origin =
+- **v178** — CO-OP rival deck is now a TRUE GH mirror: lane-COLORED gems (exposed `LANE_COLORS` via
+  `getLaneFrame().colors` — green/red/yellow/white/orange) + per-lane CATCHER BUTTONS that press + light on the rival's
+  strikes (`renderGhost` rebuild). The "see them pushing the colored buttons" split-screen. Needs desktop to view.
+- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, v175, v176, v177, v178. Origin =
   github.com/reactivvibeai-eng/reactive-rhythm (not pushed).

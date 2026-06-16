@@ -1107,6 +1107,21 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v178 — CO-OP: the rival deck is a TRUE Guitar-Hero mirror (colored notes + catcher buttons)  ✅
+Playtest: "I don't see the color notes, it doesn't look like the buttons are being pushed — it needs to look like a
+true GH split-screen." Dead on. The ghost deck was drawing **monochrome chrome gems + one flat crimson catcher line**,
+so it never read as someone playing. Rebuilt it as a real colored mirror of your deck (`renderGhost` + `getLaneFrame`):
+- **Lane-COLORED note gems** — exposed the live `LANE_COLORS` through `getLaneFrame().colors`; the rival gems now draw
+  in the SAME per-lane colors as your deck (verified: 5-lane mode → **green / red / yellow / white / orange**, the GH
+  palette), with a glossy white highlight so they read as real gems instead of flat dots. (Was a chrome-white blob.)
+- **Per-lane CATCHER BUTTONS** — replaced the single flat line with one **colored ring per lane** (mirroring your
+  deck's catchers) that **presses DOWN + lights WHITE-HOT** (crimson on a miss) the instant the rival strikes that
+  lane — driven by their real hit/miss feed (1v1 + tournament `t-state` `ev`, the NPC's synthetic strikes, or the
+  gem-reaching-catcher fallback for score-only streams). So you can SEE them pushing the buttons, like real GH co-op.
+- Hold notes draw a lane-colored beam; chords get a white double-rim — all matching your side.
+- Verified: `getLaneFrame().colors` returns the 5 GH colors; `node --check` clean; 0 new errors. The on-screen result
+  needs your desktop (split-screen is desktop-only; headless = mobile width, so `renderGhost` can't run there).
+
 ### v177 — CO-OP: the rival actually PLAYS (real hits/misses in tournaments) + believable NPC  ✅
 Playtest follow-up: "the person next to me doesn't look like they're actually playing — is that an NPC thing, or does
 it happen vs a real person too?" Root cause traced: it depended on the mode.
