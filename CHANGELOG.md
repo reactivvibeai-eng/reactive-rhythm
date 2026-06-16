@@ -1107,6 +1107,25 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v181 — Carnival of Souls, part 3: ambient loop backdrop + fate cards + hero cover + GAMEPLAY VERIFIED  ✅
+Playtest feedback: "the static image background feels flat — it needs to be a video loop. Do all three + make sure the
+gameplay is on point." Done, every piece verified live.
+- **Ambient carnival LOOP** (`carnival-loop.mp4`, Seedance 2.0, 27 cr) replaces the flat static backdrop — a dark
+  carnival at night (lit tents, a distant ferris wheel, drifting fog, gentle motion that loops smoothly). Now the level's
+  living `bgVideo`; the cutaways revert to IT (Melody-style, so the `_staticBg` path is bypassed when a bgVideo exists).
+  Verified live: during play `#bg-video` src = `carnival-loop.mp4` (visible), never the moon.
+- **Fate-card pair** (`carnival-card-tomb.png` / `carnival-card-jar.png`, GPT Image 2, ~8 cr) — a cracked TOMBSTONE that
+  charges on misses ↔ a glowing SOUL-JAR that fills on hits, both in matching gothic-carnival tarot frames. Verified:
+  `rc-death` = tomb, `rc-world` = jar applied on launch.
+- **Hero COVER** (`carnival-cover.jpg`, free PIL composite) — the wild **wolf-rib-cage "hero" guitar** (the one the user
+  loved, that can't be a play surface) glowing over a darkened, vignetted carnival scene. The card + splash show it now.
+- **GAMEPLAY verified on point** (dev `?dev=1` unlock + real launch of the Creekfire Overdrive track): the in-browser
+  charter built a rich HARD chart — **705 notes · 161 chords · 25 holds · 11 bombs · all 5 lanes** (`__rrChartStats`).
+  Confirmed in-DOM during the run: the striker tower (bell+column+base), the fate cards, the ambient loop on `#bg-video`,
+  and a live `RhythmLevelFx`. 0 console errors. (The `?dev=1` unlock was test-only; the user's `unlock:{stars:2}` stands.)
+- The level is COMPLETE: wolf surface + high-striker (bell→Overdrive) + 2 random cutaways + ambient loop + fate cards +
+  hero cover + the real song — out-juicing Melody on every axis.
+
 ### v180 — Carnival of Souls, part 2: the two Seedance cutaways + the real song + static-bg cutaway flow  ✅
 - **Song locked** — Carnival now plays **"Creekfire Overdrive" — Sisoka (Electronic)** (`trackId 8f9fb888…`), the user's pick.
 - **Two cutaway gags** (Seedance 2.0, 720p, 27 cr each = 54 cr) wired as the random-no-repeat combo-spike pool:

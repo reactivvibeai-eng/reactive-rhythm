@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=180" />
+<link rel="stylesheet" href="jukebox.css?v=181" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3161,7 +3161,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=180" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=181" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4486,11 +4486,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=180"></script>
-<script src="game.js?v=180"></script>
-<script src="jukebox.js?v=180"></script>
-<script src="catalog.js?v=180"></script>
-<script src="multiplayer.js?v=180"></script>
+<script src="assets/fx/fx-player.js?v=181"></script>
+<script src="game.js?v=181"></script>
+<script src="jukebox.js?v=181"></script>
+<script src="catalog.js?v=181"></script>
+<script src="multiplayer.js?v=181"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4711,12 +4711,14 @@
       unlock:{ stars:2, entitlement:{ item_type:'level', item_id:'melody_boss' } } },
     // CARNIVAL OF SOULS — boss level (the next showcase, built to out-do Melody). theme 'ember'; wolf-pelt SHAMAN
     // guitar (measured play surface, rides the lanes) + the HIGH-STRIKER mechanic (every hit pumps the strongman
-    // meter; topping it RINGS the bell → banks Overdrive) + (landing next) a POOL of random-no-repeat cutaway gags
-    // (intenseVideos[]) on combo spikes + an ambient carnival bgVideo + fate cards. bgArt = the carnival scene now.
+    // meter; topping it RINGS the bell → banks Overdrive) + a POOL of random-no-repeat cutaway gags (intenseVideos[])
+    // on combo spikes, an ambient carnival bgVideo loop + a fate-card pair. Cover = the wild wolf-rib-cage hero guitar.
     { id:'carnival-boss', tier:'hard', title:'Carnival of Souls', song:{ trackId:'8f9fb888-1e34-4df0-a108-a3895ec395b0' }, theme:'ember', boss:true,   // Creekfire Overdrive — Sisoka (Electronic)
-      cover:'assets/levels/carnival-bg.jpg', bgArt:'assets/levels/carnival-bg.jpg',
+      cover:'assets/levels/carnival-cover.jpg', bgArt:'assets/levels/carnival-bg.jpg',
+      bgVideo:'assets/levels/carnival-loop.mp4',
       guitarSkin:'assets/guitars/shaman-wolf.png',
       intenseVideos:[ 'assets/levels/carnival-intense-1.mp4', 'assets/levels/carnival-intense-2.mp4' ],   // 2 Seedance cutaways, random no-repeat on combo spikes (404 → safe)
+      reactiveCards:{ miss:'assets/levels/carnival-card-tomb.png', hit:'assets/levels/carnival-card-jar.png' },   // fate-pair: tombstone cracks on misses, soul-jar fills on hits
       mechanic:{ type:'striker' },   // carnival high-striker: hits pump the meter, bell ring → Overdrive
       mods:{ speed:1.16, failOn:true }, unlock:{ stars:2 } },
   ];
