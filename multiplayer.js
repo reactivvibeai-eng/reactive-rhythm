@@ -1616,6 +1616,10 @@
     try { if (window.RhythmLevels && window.RhythmLevels.environments) return window.RhythmLevels.environments(); } catch (e) {}
     return null;
   }
+  // BETA gate: only FINISHED levels are playable as tournament stages (keep in sync with LVL_FINISHED in the
+  // Levels screen + the Environment Picker). Unfinished envs are Coming Soon: not pickable AND excluded from Random.
+  var TOUR_FINISHED = { 'carnival-boss':1, 'melody-boss':1, 'frac-01':1, 'bone-daddy':1 };
+  function _envComingSoon(e) { return !!(e && !e.isDefault && !e.isRandom && !TOUR_FINISHED[e.id]); }
   function poolHas(id) { return (tour.envPool || []).indexOf(id) >= 0; }
   // host's stage pool → a short human summary for the room display
   function envPoolSummary() {
@@ -1650,17 +1654,18 @@
     var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
     rowEl.innerHTML = '';
     list.forEach(function (e) {
-      var locked = !!(e.paid && !dev);
+      var comingSoon = _envComingSoon(e);
+      var locked = !!((e.paid && !dev) || comingSoon);
       var on = poolHas(e.id) || (e.isRandom && (!tour.envPool || !tour.envPool.length));
       var b = document.createElement('button');
       b.type = 'button';
-      b.className = 'env-chip' + (on ? ' sel' : '') + (locked ? ' locked' : '');
+      b.className = 'env-chip' + (on ? ' sel' : '') + (locked ? ' locked' : '') + (comingSoon ? ' soon' : '');
       b.setAttribute('role', 'checkbox');
       b.setAttribute('aria-checked', on ? 'true' : 'false');
       if (e.accent) b.style.setProperty('--ec', e.accent);
       var ini = (e.name || '?').trim().charAt(0).toUpperCase();
       var artBg = e.cover ? ("background-image:url('" + safeUrl(e.cover) + "');") : '';
-      var tag = e.isRandom ? 'ALL STAGES' : e.isDefault ? 'ARENA' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
+      var tag = e.isRandom ? 'ALL STAGES' : e.isDefault ? 'ARENA' : comingSoon ? 'COMING SOON' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
       b.innerHTML = '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + esc(ini) + '</span>') + (locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
         '<div class="ec-body"><div class="ec-name">' + esc(e.name) + '</div><div class="ec-tag">' + esc(tag) + '</div></div>';
       if (show && !locked) b.addEventListener('click', function () { toggleEnvPool(e.id, !!e.isRandom); });
@@ -1673,7 +1678,7 @@
     var pool = tour.envPool || [];
     var list = tourEnvList(); if (!list) return null;
     if (!pool.length || pool.indexOf('__random') >= 0) {
-      var all = list.filter(function (e) { return !e.isDefault && !e.isRandom; });
+      var all = list.filter(function (e) { return !e.isDefault && !e.isRandom && !_envComingSoon(e); });
       if (!all.length) return null;
       var r = all[Math.floor(Math.random() * all.length)];
       return { id: r.id, name: r.name };

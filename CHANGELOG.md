@@ -1107,6 +1107,15 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v193 — BETA lock: tournament stage picker gates unfinished levels too  ✅
+The third (and last) level-selection surface — the multiplayer TOURNAMENT stage picker (host picks the bracket's stages) —
+had the same gap: it only locked PAID envs, and its "All Stages" random resolver (`hostResolveEnv`) picked from ALL
+non-special levels, so a host could land everyone on an unfinished level. Applied the same FINISHED whitelist in
+multiplayer.js: unfinished stages render greyed + 🔒 + COMING SOON and can't be added to the host's pool, AND the random
+resolver now excludes them. Arena + All-Stages stay; the 4 finished levels stay pickable. `node --check` clean; loads with
+0 console errors. **All three level-pick surfaces now share the whitelist** (Levels screen v187, Environment Picker v192,
+Tournament stages v193).
+
 ### v192 — BETA lock: the Environment Picker also gates unfinished levels (Coming Soon)  ✅
 The Environment Picker (the "play this song in a level's environment" carousel in the song sheet) only locked PAID
 environments — every unfinished level (First Light, Steady Hands, Ember Drift, Heartbeat, Overdrive, Chrome Veins, Hollow
