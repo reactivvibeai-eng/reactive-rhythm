@@ -596,6 +596,17 @@
     'assets/guitars/gold-relic.png':    { aspect: 904 / 2160, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4332, 0.4480, 0.4644, 0.4782, 0.4921],
       bridgeXF: [0.3341, 0.3743, 0.4160, 0.4582, 0.5008] },
+    // ---- PREMIUM STORE GUITARS (i2i from crimson-chaos-ryo: theme painted on the BODY, neck + 5 strings kept clean).
+    // Each gate-PASSED via adaptive neck-band measure on the transparent cutout; fit overlay-verified riding the strings.
+    'assets/guitars/crimson-fox.png':   { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // Ryo "Crimson Moon Fox" — 100 rows, res 4.36px
+      nutXF:    [0.4565, 0.4787, 0.5030, 0.5298, 0.5561],
+      bridgeXF: [0.3427, 0.4169, 0.4889, 0.5600, 0.6344] },
+    'assets/guitars/crimson-tarot.png': { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Crimson Fortune" tarot — 32 rows, res 5.56px
+      nutXF:    [0.4552, 0.4775, 0.4985, 0.5215, 0.5425],
+      bridgeXF: [0.3956, 0.4453, 0.5016, 0.5484, 0.5952] },
+    'assets/guitars/clockwork.png':     { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Tourbillon" clockwork — 58 rows, res 2.84px
+      nutXF:    [0.4386, 0.4594, 0.4891, 0.5134, 0.5387],
+      bridgeXF: [0.4080, 0.4613, 0.5058, 0.5615, 0.6130] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
   // resample a measured per-string array to the active LANE_COUNT: exact when counts match; the most

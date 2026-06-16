@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=188" />
+<link rel="stylesheet" href="jukebox.css?v=189" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -581,6 +581,18 @@
   .profile-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; display: none; }
   .profile-screen.is-empty .profile-empty { display: block; }
   .profile-screen.is-empty .profile-stats, .profile-screen.is-empty .profile-grades-wrap { opacity: 0.5; }
+  /* Guitar Loadout (profile) — equip any unlocked skin; the choice carries into levels + multiplayer */
+  .profile-loadout-wrap { margin-top: 16px; }
+  .pl-note { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 400; letter-spacing: 0.03em; color: var(--ink-dim); text-transform: none; margin-left: 8px; }
+  .profile-loadout { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 8px; margin-top: 10px; }
+  .pl-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px 7px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
+  .pl-tile:hover { transform: translateY(-2px); border-color: var(--crimson); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+  .pl-thumb { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506); }
+  .pl-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center 70%; }
+  .pl-name { font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; color: var(--ink); text-align: center; line-height: 1.1; }
+  .pl-tile.on { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 6px 18px rgba(255,31,46,0.28); }
+  .pl-tile.on .pl-thumb { box-shadow: inset 0 0 0 2px rgba(255,31,46,0.55); }
+  .pl-on { font-family: 'Chakra Petch', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.1em; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-radius: 5px; padding: 2px 6px; }
   #profile-reset { color: var(--ink-dim); }
   @media (max-width: 560px) { .profile-stats { grid-template-columns: repeat(2, 1fr); } .profile-title { font-size: 36px; } }
 
@@ -826,6 +838,13 @@
   .store-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 10px; }
   .store-price { display: inline-flex; align-items: center; gap: 5px; font-family: 'Oxanium', monospace; font-weight: 800; font-size: 15px; color: var(--chrome); font-variant-numeric: tabular-nums; }
   .store-price .spk-glyph { width: 13px; height: 13px; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 3px rgba(255,122,74,0.6)); }
+  /* BETA: Coming-soon padlock on unfinished store assets (mirrors the Levels lock styling) */
+  .store-item.soon { opacity: 0.9; }
+  .store-item.soon:hover { transform: none; border-color: var(--line); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+  .store-item.soon .store-art img { filter: grayscale(0.72) brightness(0.46); }
+  .store-item.soon .store-art::before { content: ''; position: absolute; inset: 0; background: rgba(8,5,5,0.5); pointer-events: none; z-index: 1; }
+  .store-soon { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 3; font-family: 'Chakra Petch', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; color: var(--crimson); background: rgba(7,6,10,0.82); border: 1px solid var(--crimson); border-radius: 8px; padding: 5px 10px; white-space: nowrap; }
+  .store-price.soon-px { color: var(--ink-dim); font-style: italic; font-weight: 600; font-size: 12px; }
   .store-buy { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border: none; border-radius: 10px; padding: 9px 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(255,31,46,0.35); transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease; }
   .store-buy:hover, .store-buy:focus-visible { box-shadow: 0 6px 20px rgba(255,31,46,0.5); }
   .store-buy:active { transform: translateY(1px); }
@@ -3177,7 +3196,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=188" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=189" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -3843,6 +3862,10 @@
         <div class="pg-head">GRADE DISTRIBUTION</div>
         <div class="profile-grades" id="profile-grades"></div>
       </div>
+      <div class="profile-loadout-wrap">
+        <div class="pg-head">GUITAR LOADOUT <span class="pl-note">tap to equip · carries into levels &amp; multiplayer</span></div>
+        <div class="profile-loadout" id="profile-loadout"></div>
+      </div>
       <p class="profile-empty" id="profile-empty">No runs logged yet — finish a track and your career starts filling in here.</p>
       <div class="pause-actions" style="margin-top:18px;">
         <button class="ghost-btn" id="profile-reset">RESET CAREER</button>
@@ -4502,11 +4525,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=188"></script>
-<script src="game.js?v=188"></script>
-<script src="jukebox.js?v=188"></script>
-<script src="catalog.js?v=188"></script>
-<script src="multiplayer.js?v=188"></script>
+<script src="assets/fx/fx-player.js?v=189"></script>
+<script src="game.js?v=189"></script>
+<script src="jukebox.js?v=189"></script>
+<script src="catalog.js?v=189"></script>
+<script src="multiplayer.js?v=189"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4623,6 +4646,41 @@
     var gr = $('profile-grades');
     if (gr) gr.innerHTML = order.map(function (g) { return '<div class="pg-cell g-' + g + '"><span class="pg-g">' + g + '</span><span class="pg-c">' + fmt((c.grades && c.grades[g]) || 0) + '</span></div>'; }).join('');
     screen.classList.toggle('is-empty', !c.runs);
+    renderLoadout();
+  }
+  // ---- GUITAR LOADOUT — equip any unlocked skin; the choice carries into levels + multiplayer ----
+  // BETA: all VERIFIED play-surface skins are equippable here for testing. When the Bonus-Sparks
+  // economy is wired, gate the non-default tiles on RhythmCatalog.ownsItem('skin', id) → lock + route to Store.
+  var SKINS = [
+    { id:'',              title:'Default',          thumb:'assets/guitar.png',                     src:null },
+    { id:'crimson_fox',   title:'Crimson Moon Fox', thumb:'assets/guitars/crimson-fox-card.jpg',   src:'assets/guitars/crimson-fox.png' },
+    { id:'crimson_tarot', title:'Crimson Fortune',  thumb:'assets/guitars/crimson-tarot-card.jpg', src:'assets/guitars/crimson-tarot.png' },
+    { id:'clockwork',     title:'Tourbillon',       thumb:'assets/guitars/clockwork-card.jpg',     src:'assets/guitars/clockwork.png' },
+    { id:'violet_gothic', title:'Violet Gothic',    thumb:'assets/guitars/violet-gothic-5.png',    src:'assets/guitars/violet-gothic-5.png' },
+    { id:'bone_daddy',    title:'Bone Daddy',       thumb:'assets/guitars/bone-daddy.png',         src:'assets/guitars/bone-daddy.png' },
+    { id:'melody_pink',   title:'Melody',           thumb:'assets/guitars/melody-pink.png',        src:'assets/guitars/melody-pink.png' }
+  ];
+  function equippedSkinId() { try { return localStorage.getItem('rr_skin_id') || ''; } catch (e) { return ''; } }
+  function renderLoadout() {
+    var wrap = $('profile-loadout'); if (!wrap) return;
+    var cur = equippedSkinId();
+    wrap.innerHTML = SKINS.map(function (s) {
+      var on = (cur || '') === s.id;
+      return '<button class="pl-tile' + (on ? ' on' : '') + '" data-id="' + s.id + '" title="' + s.title + '">' +
+        '<span class="pl-thumb"><img src="' + s.thumb + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>' +
+        '<span class="pl-name">' + s.title + '</span>' +
+        (on ? '<span class="pl-on">EQUIPPED</span>' : '') +
+      '</button>';
+    }).join('');
+    var btns = wrap.querySelectorAll('.pl-tile');
+    for (var i = 0; i < btns.length; i++) btns[i].addEventListener('click', function () {
+      var id = this.getAttribute('data-id'), sk = null;
+      for (var j = 0; j < SKINS.length; j++) if (SKINS[j].id === id) { sk = SKINS[j]; break; }
+      if (!sk) return;
+      try { if (id) localStorage.setItem('rr_skin_id', id); else localStorage.removeItem('rr_skin_id'); } catch (e) {}
+      try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(sk.src); } catch (e) {}
+      renderLoadout();
+    });
   }
   var armed = false, armT = 0;
   function disarm() { armed = false; var rb = $('profile-reset'); if (rb) rb.textContent = 'RESET CAREER'; }
@@ -5758,7 +5816,10 @@
     ember_bone:    'assets/guitars/ember-bone.png',
     gold_relic:    'assets/guitars/gold-relic.png',
     bone_daddy:    'assets/guitars/bone-daddy.png',
-    melody_pink:   'assets/guitars/melody-pink.png'
+    melody_pink:   'assets/guitars/melody-pink.png',
+    crimson_fox:   'assets/guitars/crimson-fox.png',
+    crimson_tarot: 'assets/guitars/crimson-tarot.png',
+    clockwork:     'assets/guitars/clockwork.png'
   };
   function skinSrcFor(it) {
     var m = it && it.meta;
@@ -5779,6 +5840,10 @@
     // them defensively if the backend ever re-sends them.
     { item_type:'skin',  item_id:'bone_daddy',     title:'Bone Daddy',     price_sparks:1600, meta:{ description:'Charred bone-carved axe (Bone Daddy)', art_url:STORE_ART.bone_daddy, skin_url:SKIN_GUITAR.bone_daddy } },
     { item_type:'skin',  item_id:'melody_pink',    title:'Melody',         price_sparks:1800, meta:{ description:'Cat-pink showpiece (Melody boss)', art_url:STORE_ART.melody_pink, skin_url:SKIN_GUITAR.melody_pink } },
+    // PREMIUM guitars (verified play surfaces — SKIN_GEOM verified:true). Art preview = the transparent cutout itself.
+    { item_type:'skin',  item_id:'crimson_fox',   title:'Crimson Moon Fox', price_sparks:2400, meta:{ description:'Ryo’s spirit-fox beneath a blood moon', art_url:'assets/guitars/crimson-fox-card.jpg',   skin_url:SKIN_GUITAR.crimson_fox } },
+    { item_type:'skin',  item_id:'crimson_tarot', title:'Crimson Fortune',  price_sparks:2200, meta:{ description:'Arcana tarot bass — it reads your fate', art_url:'assets/guitars/crimson-tarot-card.jpg', skin_url:SKIN_GUITAR.crimson_tarot } },
+    { item_type:'skin',  item_id:'clockwork',     title:'Tourbillon',       price_sparks:2600, meta:{ description:'Exposed luxury watch-movement showpiece', art_url:'assets/guitars/clockwork-card.jpg',     skin_url:SKIN_GUITAR.clockwork } },
     { item_type:'level', item_id:'boss_neon',      title:'THE BREAKER (Boss)', price_sparks:2500, meta:{ description:'Unlock the Fracture boss stage', art_url:STORE_ART.boss_neon } },
     { item_type:'level', item_id:'melody_boss',    title:'Melody (Boss)',  price_sparks:2200, meta:{ description:'Unlock the Melody cat-paw boss', art_url:STORE_ART.melody_boss } },
     { item_type:'theme', item_id:'theme_neon',     title:'Neon Theme',     price_sparks:800,  meta:{ description:'Neon HUD accent theme', art_url:STORE_ART.theme_neon } }
@@ -5851,16 +5916,25 @@
     return '<button class="store-buy" data-act="buy" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '">Buy</button>';
   }
 
+  // BETA gate: only FULLY-finished assets are purchasable; everything else shows a Coming Soon padlock.
+  // Verified-playable guitar skins are done. Other categories (levels/themes/packs) need their
+  // unlock→entitlement flow wired & verified before they go public → add their "type:id" here when ready.
+  var STORE_FINISHED_NONSKIN = {};
+  function storeFinished(it) { if (isSkin(it)) return storePlayable(it); return !!STORE_FINISHED_NONSKIN[String(it.item_type) + ':' + String(it.item_id)]; }
+
   function itemHtml(it) {
     var owned = isOwned(it);
-    return '<div class="store-item' + (owned ? ' owned' : '') + '" data-key="' + esc(ownKey(it)) + '">' +
-      '<div class="store-art">' + artHtml(it) + '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span></div>' +
+    var soon = !storeFinished(it);
+    return '<div class="store-item' + (owned ? ' owned' : '') + (soon ? ' soon' : '') + '" data-key="' + esc(ownKey(it)) + '">' +
+      '<div class="store-art">' + artHtml(it) + '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span>' +
+        (soon ? '<span class="store-soon">🔒 COMING SOON</span>' : '') + '</div>' +
       '<div class="store-body">' +
         '<div class="store-item-t">' + esc(it.title || it.item_id || 'Item') + '</div>' +
         '<div class="store-item-d">' + esc(blurb(it)) + '</div>' +
         '<div class="store-foot">' +
-          '<span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>' +
-          buyBtnHtml(it) +
+          (soon
+            ? '<span class="store-price soon-px">Coming soon</span>'
+            : '<span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>' + buyBtnHtml(it)) +
         '</div>' +
       '</div>' +
     '</div>';

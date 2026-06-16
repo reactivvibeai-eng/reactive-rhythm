@@ -1107,6 +1107,23 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v189 — Premium guitar skins (Fox · Tarot · Clockwork) + profile loadout + beta store padlocks  ✅
+Three new PREMIUM guitar skins, designed WITH the user and finalized as real play surfaces:
+- **Crimson Moon Fox** (Ryo’s spirit-fox under a blood moon), **Crimson Fortune** (crimson tarot-card arcana),
+  **Tourbillon** (exposed luxury watch-movement). Each i2i’d from the verified `crimson-chaos-ryo` template (theme on the
+  BODY, neck + 5 strings kept clean), iterated until BOTH the look and the string-alignment held, then background-removed
+  to transparent cutouts. Gate-PASSED via adaptive measure — fox **4.36px** / tarot **5.56px** / clock **2.84px** residual
+  → registered in `SKIN_GEOM` `verified:true`. 16:10 body-art store-card previews generated (`*-card.jpg`).
+- **Store**: the 3 guitars are live + purchasable (2200–2600); `SKIN_GUITAR` + `STORE_FALLBACK` wired.
+- **Profile GUITAR LOADOUT** (new): a tap-to-equip gallery of every verified skin in the Controller Profile — the choice
+  carries into levels + multiplayer (persists via `rr_skin_id`). Fulfils the user ask “select what guitar skin they play with.”
+- **BETA padlocks**: only FINISHED assets go public. A `storeFinished()` gate + Coming-Soon rendering padlocks every
+  non-skin store item (levels/themes/packs) until its unlock flow is wired & verified; verified guitar skins stay live.
+  (Levels were already gated in v187.)
+- **Live-verified (:8790, v189):** store shows 6 live guitar skins + 3 coming-soon non-skins; loadout renders 7 tiles and
+  equipping the fox sets `rr_skin_id` + applies the skin; `isSkinPlayable` true for all 3; **0 console errors**; game.js node-clean.
+- Asset spend: ~51 credits (12 gens + 3 bg-removes) across the design iteration. Currency/economy handoff → `LOVABLE_BONUS_INTEGRATION_BRIEF.md`.
+
 ### v188 — P0 store fix: pull the three unverified guitar skins + a defensive play-surface gate  ✅
 The store was selling three guitar skins (**Crimson Chrome / Ember Bone / Gold Relic**) whose art FAILS the
 play-surface measurement gate — strings don't form straight lines (5 / 27 / 10 clean rows, 16-18px residual vs the
