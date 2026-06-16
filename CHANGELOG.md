@@ -1107,6 +1107,378 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v172–v173 — MP BEFORE-PUBLIC HARDENING: self-heal, reconnect, host failover, fair forfeits (build42)  ✅
+The tournament works for solo/friends but was fragile to drops (host crash = bracket dissolved; a presence blip could
+forfeit a live player; a reload booted you from the bracket; raw peer scores were trusted verbatim). This pass adds a
+**snapshot-driven** resilience layer — all ADDITIVE, the verified bracket flow is untouched. (Server-authoritative
+re-judge — the real `MP_PUBLIC=true` gate — is a backend job; `MP_SERVER_SCORING_BRIEF.md` updated to reflect what's
+now done client-side vs. what the server still owes.)
+- **`t-snapshot` host heartbeat** — the host rebroadcasts a compact, idempotent mirror of the referee state
+  (`state/round/pairs/alive/settled/finals/awaitWinners/champ/hostAt`, monotonic `version`) every **4s + on every
+  transition**. Clients apply the newest version only (`applyTourSnapshot`, version-gated) → dropped `t-round`/`t-result`
+  events self-heal; the snapshot is also the backbone for reconnect + failover.
+- **Reconnection** — a small pointer + the latest snapshot persist to `sessionStorage`; on reload (< 90s) the client
+  re-surfaces MP, rejoins the channel, and restores the bracket in place (`persistTour`/`maybeReconnectTour`). Dev/solo
+  brackets are never persisted.
+- **Host migration** — host vanished mid-bracket now **elects a successor** (the earliest-joined human still present,
+  deterministic on a stable `tour._joinAt`; tie-break id) who promotes and **resumes refereeing from the snapshot**
+  (re-arms settlement / rebuilds the next round from `awaitWinners`) — replaces the old "tournament dissolved." A brief
+  double-host window self-resolves (junior host steps down on the senior's snapshot). Falls back to dissolve only if no
+  human heir remains.
+- **Proof-of-life forfeit guard** — duelists already stream `t-tick` ~3/s while playing; the host now records that as
+  liveness (`tour._alive`) and **never forfeits a player who ticked within 6s**. A vanished-but-recently-live player is
+  re-checked on a loop ("Waiting on NAME…") instead of stubbed; the post-first-final absent window tightened 45s→30s and
+  is liveness-guarded (`forceSettleGuarded`). A transient presence sweep can no longer kill a live run.
+- **Score sanitation** — every inbound final is clamped/repaired (`sanitizeFinal`: NaN/overflow→-1 or ≤20M ceiling, acc
+  0–100, combo ≥0) before it can win a bracket. *Sanity guard, not anti-cheat* (a client owns its own number — real
+  validation is the server re-judge). `t-final` now also carries `{ trackId, diff, notes, fc, ranked: MP_PUBLIC }` so the
+  backend has the chart context to re-judge later.
+- Dev hooks: `RhythmMP.__tour` gains `.snap()` `.promote()` `.sanitize()` `.persisted()`; `t-snapshot` wired into the
+  offline `fakeTourChannel` harness too.
+- Verified headless (v172, real catalog, `__mpDev.run(7)`): an 8-player auto bracket ran **round 1 full lifecycle**
+  (launch → all 8 finals → 4 pairs settled → result → between-rounds await with the 4 winners stored) and **advanced
+  R1→R2** (4 players, 2 pairs, both settled) with the **snapshot version climbing 0→32** the whole time and `_alive`
+  tracking all 8 from the tick stream — **0 new console errors**. `sanitizeFinal` verified directly (NaN→-1, 1e30→20M,
+  acc 150→100, combo<0→0); host election correctly **refused** to promote in an all-bot solo bracket (no human heir);
+  the snapshot carries the resumable `finals/settled/awaitWinners/hostAt`. Rounds 2→champion + the true 2-client paths
+  (live reconnect/migration handoff) need the user's real multi-device test — the offline harness has no 2nd client and
+  headless throttles the idle-state timers. `node --check` clean on every edit.
+
+### v171 — JUICE pass: the whole frame breathes on the beat (Hi-Fi Rush lesson)  ✅
+The single biggest taste-uplift per the evolution study is "make the whole frame breathe on the beat" — pure
+CSS/canvas, no new assets. Extended the existing `bgPulse`/`--rr-beat` infra (which only lit 3 HUD glyphs) outward.
+- **Global BEAT BLOOM (every stage):** a gentle full-screen additive wash keyed to the live `bgPulse`, drawn in
+  `render()` using the **level accent** (`levelAccentRGB`, crimson default) so it breathes on *themed* video stages too
+  (the old god-ray/ember pulse was `!levelAccentRGB`-gated to the moon world only) and even at 1× multiplier. Capped
+  ~0.085 alpha, `reduceMotion` clamps to a faint floor, **skipped in fx-lite** (perf). `game.js` render, after the heat-glow.
+- **OVERDRIVE = a theatrical ignition:** a new render-only `odBurst` one-shot (set to 1 in `activateOverdrive()`, decays
+  ~0.6s) drives a fast **white-gold screen flash + an expanding gold shockwave ring** racing out from the catcher row the
+  instant Star Power fires (the GH "tilt-the-guitar" moment). The sustained OD edge-glow bumped a touch (0.14→0.16). Ring
+  is full-motion-only; the flash stays (brief) under reduce-motion.
+- **Results climax burst:** a pure-CSS ember **spark-ring** on the **S / A** grade reveal (`.results-grade.gr-{S,A}::after`,
+  `currentColor` → S bursts gold, A bursts crimson), fired ~0.45s into the existing `gradeReveal`. Reserved for the top
+  grades; reduce-motion off.
+- **Menu has life:** the hub has no live beat, so a slow ambient breathe — the **atom mark** breathes (`mhAtomBreathe`)
+  and the **primary tile's** accent glow beats a **crimson heartbeat** (`mhPrimaryBeat` on `.mh-tile.primary::before`),
+  answering the evolution critique "no crimson heat on the primary action." Animates only the glow/atom layers, so the
+  tiles' entrance animation is untouched; reduce-motion / fx-lite off. Plus a beat-glow on the in-game multiplier badge.
+- Verified headless (v171, real catalog, demo track): all four new rules resolve (pseudo `animationName` =
+  `mhPrimaryBeat`/`mhAtomBreathe`/`gradeBurst`; keyframes defined; grade `position:relative`); drove the demo to
+  `state:playing`, fired Overdrive (`active:true`, so `odBurst` + the bloom/ignition render ran every frame) + a manual
+  `__render()` — **0 new console errors** (`node --check` clean). The *look/feel* (bloom intensity, shockwave, ember
+  burst) is the user's call on a 60fps desktop — headless throttles rAF + can't screenshot the canvas.
+
+### v170 — live SPECTATE mode (eliminated/all-NPC players watch the race, not an instant resolve)  ✅
+Owner: spectating "didn't work — with all NPCs they just battled it out instantly, I didn't get to watch." Cause: dev
+bots banked their finals instantly (a 4–10s timer), so the board jumped to final scores with no race to watch. Fixes:
+- **NPCs now RAMP** their score 0→target over a watchable ~18–26s round (smoothstep), streaming `t-tick` so the bracket
+  board climbs live; they bank the final at the end (the human's rival still banks at the human's real song-end). The
+  human's auto/spectate self-run ramps alongside. (`_botRampT`, cleared on close/champ.)
+- **Live LEAD highlight** on the board: `updateBoardScore` marks the higher score in each duel (crimson glow) so the
+  race reads at a glance.
+- **Real SPECTATING state**: when you're eliminated / on a bye / not in a pair, the board gets a pulsing
+  **"● SPECTATING — LIVE"** badge (`.mpx-watching` on `#mpx-tour-live`) + a clearer banner — you watch it play to the
+  champion instead of seeing instant results. Cleared when you're competing / at champion / on leave.
+- Verified headless (auto bracket, real catalog): round-1 scores climbed live (188k/116k, 226k/140k…) with the lead
+  highlight; once eliminated, `watching:true` + the SPECTATING badge showed; no new console errors. (With REAL players
+  the duelists already stream t-tick — this makes the *solo/NPC* test match that live feel.)
+
+### v169 — tournament round-start ACTUALLY fixed (my v167 watchdog was false-aborting valid rounds)  ✅
+Owner re-reported: tournament "never started the round and then it just advanced me without even playing." Root cause
+was a regression **I introduced in v167**: the start-watchdog checked `#game.active` within ~2.8s of the synced start —
+but a real track legitimately spends those seconds on the **`#loading` (decode) screen** (providers call
+`showScreen('loading')`; `showScreen('game')` only fires at game.js:1461 AFTER decode). So the watchdog saw `#loading`
+(not `#game`) and **aborted a perfectly valid round** → the round "never started," and the bracket then carried the
+player forward with no game. Fix: the watchdog now treats `#loading` OR `#game` as "progressing," waits through the
+decode (re-checks every 3s up to 30s), and only aborts if NEITHER screen is up past the synced start (play() truly
+never fired). `abortRound` likewise won't yank a round that's loading/playing.
+- **Verified end-to-end (real catalog, 1065 tracks):** a manual solo tournament round now **starts + plays** (`#game`
+  active, `playing:true`, progress advancing, opponent panel mounted — mobile `#mp-opp` at the 704px preview width;
+  the desktop split-screen is the same logic, viewport-gated ≥900px). A full **auto bracket advanced
+  quarter → semi → final → CHAMPION** (state `done`, winner crowned) with no new console errors.
+- Headless limits noted: the preview window is locked at 704px (can't verify the *desktop* split visually here — code
+  intact + verified in prior sessions), and real-time songs can't be fast-forwarded headless. The owner should playtest
+  the full manual playthrough on their desktop. Deeper MP hardening (onSongStart seam, etc.) remains per MP_GAMEPLAN.md.
+
+### v168 — start-screen wordmark = generated chrome/crimson logo (replaces the plain text)  ✅
+Owner disliked the plain Unbounded title text. Generated a designed **"REACTIVE RHYTHM" wordmark** via Higgsfield
+gpt_image_2 (3 low drafts ~0.5cr each → owner picked draft 2 → refined it i2i at high-res 4cr → bg-removed 1cr,
+≈6.5cr total, owner pre-approved ~6). Saved transparent RGBA → **assets/rr-wordmark.png** (1168×880, true alpha).
+Wired into `.start-wordmark` as `.rr-wordmark` (img) with the slam-in animation + a gold stage-rule under it; the old
+`.rr-logo` text stays as an **onerror fallback** (hidden via `.start-wordmark.has-wm` once the image loads). Verified:
+asset serves 200, image loads (naturalW 1168), `has-wm` applied, text fallback `display:none`, gold rule shows.
+
+### v166–v167 — tournament "round never starts" ROOT-CAUSE fix + browse top-left overlap  ✅
+Driven by a research+code-trace workflow (netcode · brackets/lobby · competitive-rhythm-MP · full code trace → game
+plan in **MP_GAMEPLAN.md**). ROOT CAUSE: the first-run **How-To overlay** (#howto-screen, z-260, opaque) auto-showed
+over a live tournament because `tryShowHowto` (game.js) skipped `#start/#ryo-intro/#game/#loading` but NOT
+`#multiplayer-screen` — so it occluded the whole round, the countdown veil (z-60) hid behind it, and #game never
+activated (the only thing that strips it, showScreen('game'), is deferred ~5.2s). Reproduced exactly, then fixed:
+- **v166:** browse top-left overlap — the absolute `‹ MENU` back button overlapped the brand row (atom + REACTIVVIBE);
+  added `margin-left` to `.lib-bar .brand-row` so it clears the button (verified: overlap:false, brand x:165 > button right:152).
+- **v167 P0 cluster (verified):** (A) added `#multiplayer-screen.active, #results.active` to the tryShowHowto skip-list
+  → How-To can never occlude a round; (B) `closeTransientOverlays()` at the top of onTourRound + beginMatch; (C) round-start
+  now FAILS LOUD + RECOVERS — `console.error` on provider/fallback failure + a ~2.8s watchdog → `abortRound()` (tears down
+  veil+vs-mode, banner "Could not start the track — back to the bracket", returns to the room) instead of hanging; (D)
+  resume the AudioContext on the START gesture (not the deferred timer), `play()`'s catch no longer `showScreen('menu')`
+  when `RhythmMP.isLive()` (the watchdog recovers), and `startTour`'s silent no-op guards now banner why.
+- Verified headless: first-run tournament → How-To stays hidden (howto_active:false), MP screen stays active, the
+  countdown content populates (SEMI-FINAL / YOU VS Echo), and a failed (mock-404) track recovers cleanly with the banner
+  instead of a dead screen. Real-catalog tracks decode + play normally (the 404 is a ?mock=1 artifact).
+- The deeper architecture (onSongStart seam, MP-aware showScreen, t-snapshot, forfeit state machine, reconnection,
+  server-authoritative scoring before MP_PUBLIC) is the P1/P2/P3/pre-public plan in MP_GAMEPLAN.md.
+
+### v165 — full page-by-page review pass (polish + brand + regression fixes)  ✅
+Driven by a 5-agent adversarial review of every screen. Fixed (all verified headless):
+- **Browse: the REAL "red moon" found + removed** — a desktop `.lib::after` painted `moon.png` (cropped, masked) at
+  center-top over the video — the same motif the owner rejected (the earlier `.lib::before` glow was only half of it).
+  Removed it; reconciled the conflicting desktop widths to one (`.lib` 1200px ≥901px).
+- **Brand:** Levels EASY tier chip mint-green `#6fe0a0` → chrome; dev-bar + #mpx-act-npc literal **blue** → chrome.
+- **MP:** the regrouped combo chip never popped in vs-mode (`animation:none !important` beat the `.pop` rule) → added
+  `!important` so it pops again; the rival **mult dial** showed a frozen `1x` in tournaments → hidden under `.vs-tour`
+  (mirrors the OD hide); tournament seat grid `repeat(5)` → `auto-fit` (a 4-bracket no longer leaves an empty cell);
+  winner screen made **REMATCH** the primary CTA (was the destructive LEAVE, which also contradicted the Enter key).
+- **Start:** wordmark clipped at 360–375px → `clamp(34px,10.5vw,76px)`; motion/perf thinned (`.start-glow` static,
+  embers 18→9, flame sim 3/frame-uncapped → 2/frame + a 110 cap); brand eyebrow → chrome+shadow for legibility.
+- **Onboarding/Settings:** How-To key hint dropped the dead `L` (5-lane default = A S D J K, id'd for future data-drive);
+  settings lane note no longer hardcodes "1–6"; menu-hub wordmark capped (`max-height:140px`) so it clears the laptop fold.
+- **Browse badges:** capped `.cbadge` width + star-only Golden Buzzer on covers so a badge can't crowd the grade chip.
+- Verified: combo pop = vschippop, devbar/easy = chrome, `.lib::after` = none, opp-mult hidden in vs-tour, howto = ASDJK,
+  rematch = primary, no console errors. (FALSE ALARM corrected: results-next/results-career ARE wired — left as-is.)
+  Left as optional cleanup (harmless, brand-safe via aliases): dead `.loading-glyph`/`.sc-badge` CSS, a duplicate start
+  keydown listener, the warm-black blue-cast nit. Needs the owner's eyes: start-screen feel, overall first impression.
+
+### v164 — CRITICAL tournament-logic fix + NPC difficulty + start-screen CTA  ✅
+- **Mid-song "you lost" + instant bracket race — FIXED (root cause):** the dev NPC bots banked a final in **1.4–4s**,
+  so while the human played a 1–3 min song, the bot finished, the **45s forfeit timer then forfeited the still-playing
+  human** ("you lost"), and the dev auto-advance raced the whole bracket to champion in seconds. Fixes: (a) the human's
+  RIVAL bot now banks its final at the **human's song-end** (`onTourSongEnd`), never early → the human's pair can't
+  settle mid-song, no premature forfeit; its score = the running ghost score the user just watched. (b) other bots bank
+  on a realistic 4–10s spread (the round still waits for the human's pair). (c) **bots bank whenever they exist** (not
+  only in AUTO-RUN) so a *manual* solo tournament completes each round → verdict → host clicks START NEXT ROUND.
+  (d) AUTO-RUN now ties spectate+auto-advance together (off = manual play + manual advance).
+- **NPCs actually play + difficulty:** the rival ghost deck now drives whenever the rival is a bot (not only auto-run),
+  so you SEE them play the full song; added **easy/medium/hard** (`__mpDev.diff` + a `NPC: <DIFF>` dev-bar button) that
+  scales bot score ranges (easy 110–360k / med 320–680k / hard 620k–1.15M) + the ghost score pace.
+  Verified headless: an 8-bracket progresses quarter→semi→final→settle with NO errors and NO instant-race (the champ
+  reveal is gated by a 2600ms timer that headless throttles; fires on a real machine).
+- **Start screen:** real **crimson "PRESS START" pill** CTA (was a blinking text label + ping ring → read unfinished);
+  wordmark on **Unbounded** with a cleaner stroke/shadow; reduce-motion safe. (A deeper art-directed splash redo —
+  fresh hero key-art — is logged as forecast; best done with eyes-on / a generated asset.)
+
+### v163 — evolution "up-next" sweep: browse, badges, results-grade, type, beat-pulse  ✅
+The taste-pass items from RR_EVOLUTION.md's top-10 (everything that was quick-win-able without a blind redesign):
+- **Browse "red moon hanging" — fixed:** the culprit was `.lib::before`, a top-anchored crimson radial bloom clipped
+  over the video (read exactly as "a cropped red moon at center-top"). Removed it (`content:none`) — the full-bleed
+  menu video + scrim carry the mood. Tamed the focused-cover aura (52px→30px red blur → crisp art). Widened `.lib`
+  to 1100px on desktop (≥900px) so it's not a phone column on a monitor (coverflow `cv` scales off the box).
+- **AI Radio badges:** wrote **BADGES_BACKEND_BRIEF.md** (precise spec for a `badges` array field on game-catalog —
+  Golden Buzzer / judge_grade / hot, always-present array, JSON examples, rollout notes) and built the **render** on
+  the coverflow cards (top-right chips: gold star / tier-colored letter / crimson HOT; DOM-node `textContent` =
+  injection-safe). Lights up the moment the backend ships the field; renders nothing until then.
+- **Results grade colored by tier:** the 220px climax was grey (`var(--cyan)`). Now S=gold (with a slow bloom),
+  A=crimson, B/C=chrome, D/F=dim — engine tags `gr-<grade>`; gold reserved for the S triumph; reduce-motion safe.
+- **Type unification:** killed **Nosifer** (illegible blood-horror) on the start wordmark → **Unbounded** (the brand
+  display face the hub + results already use); dropped the Nosifer web-font fetch.
+- **Global beat-pulse (Hi-Fi Rush "everything on the beat"):** the engine now writes the live beat (`--rr-beat` 0..1,
+  from `bgPulse`) each frame; the DOM HUD chrome (combo, brand-dot, mobile score) **glows on the beat** — glow only
+  (no layout scale → never seasick), scoped to `#game`, reduce-motion damped. (The canvas already pulsed; this brings
+  the DOM HUD along.)
+- **First-run tutorial + no-fail:** confirmed both already exist — the How-To auto-shows once on first run (after the
+  intro, never over gameplay; gated on `rr_howto_seen`), and **Fail Mode defaults OFF = the game is already no-fail**.
+  The deeper *interactive* 5-note tutorial + an auto-play **Watch** mode are logged as forecast (real features, not
+  quick wins). Verified: Unbounded font, glow removed, S=gold/D=dim grade, beat glow 0→18px, badge chips render.
+
+### v160–v162 — evolution study + MP "looks broken" fixes (Bone Daddy cards, HUD cohesion, rival deck to life)  ✅
+Driven by a 5-agent evolution study (designer critique · 5 personas · competitive research · GH history · synthesis →
+**RR_EVOLUTION.md**), plus the owner's live screenshots. Owner call: **keep the chrome gauge assets, fix their breaks.**
+- **v160 — Bone Daddy "level looks broken" in tournaments:** the per-level reactive fate-cards (`#rc-death`/`#rc-world`,
+  appended to `<body>`, pinned beside ONE deck's neck) + the mechanic prop (`#rr-mech`) rendered as broken dark boxes on
+  a half-deck. Suppressed in vs-mode via an `html.rr-vs` class (toggled by mount/unmountVsHud). Also purged a **purple**
+  (`rgba(166,77,255)`) from the `.rc-world` fate-meter fill → warm ember (brand).
+- **v161–v162 — split-screen HUD cohesion + rival deck (the loud complaints):**
+  - **Score overflow:** the fixed-aspect chrome plate window couldn't hold a 6–7 digit score at 34px. Fit it — 28px +
+    tabular-nums + tight tracking, plate widened to 172px / tighter side padding, and JS **abbreviates ≥1M** (`_fmtScore`)
+    so the number never crosses its frame.
+  - **Floating dials + lone combo pill:** docked the combo capsule up into the top-outer **stat cluster** (under the
+    mult dial) on both decks (`top:150px`, no translate) — score → mult → combo now read as ONE island per deck, no orphan
+    mid-deck pill. (Reverted the `vschippop` keyframe to plain scale.)
+  - **Grid harden:** the 1fr/1fr split applied only on `#game.vs-mode.game-screen.active`; dropping `.active` lowered
+    specificity below the solo 3-col layout, so it now uses `!important` + no `.active` → always beats `280px 1fr 280px`,
+    a transitional frame can't collapse the split. (Verified: real `#game.vs-mode` → `grid-template-columns: 1fr 1fr`.)
+  - **Rival deck brought to LIFE (co-op feel):** `renderGhost` was an ~18% grey ghost. Now — brighter strings (0.34),
+    a **lit crimson catcher row** (glow), **colored gems** (chrome-white core + crimson rim), and per-lane **catcher
+    FLASH** (gold hit / crimson miss) so a glance left reads "nailing it" vs "choked." Fed by real `ev` hits/misses in
+    1v1, and **synthesized** from note-arrivals + the rival's combo-trend in tournaments (which stream only score/combo/
+    prog, no per-note ev). Per-lane flash state resets on mount; honors reduce-motion.
+  - Headless can't render the live split or the animated ghost (rAF/grid-active throttle) — CSS values, grid specificity,
+    score-fit math, and node-validity verified; the rendered feel needs the owner's 60fps machine.
+
+### v156–v159 — split-screen made playable + HUD into the side gaps + tournament CINEMATIC FLOW  ✅
+Third polish wave, planned by a 3-track design workflow (`mp-polish-round2`) + an adversarial sweep, then
+implemented in four collision-safe phases with headless verification (preview_eval / computed-styles / node-check).
+
+- **v156 — the over-zoom fix (CRITICAL):** the half-deck is wider than the guitar aspect, so the cover-fit
+  fill-width branch over-scaled the portrait guitar and cropped the note-spawn end off-screen → no runway.
+  Added a vs-mode HEIGHT-fit branch in `guitarRect` (`_vsFit` + `RhythmGame.setVsMode`, wired via
+  mount/unmountVsHud) that centres the guitar with a full runway, catcher pinned at 86%.
+- **v157 — opponent guitar (CRITICAL):** exposed `RhythmGame.getGuitarArt()`; `renderGhost` now blits a dim
+  guitar behind the ghost strings/gems, so the LEFT deck reads as a real second player, not bare strings.
+- **v158 — state-safety + HUD readability + brand:**
+  - **Zombie split-screen (CRITICAL):** `beginMatch`/`onTourRound` deferred-mount timers now guard on
+    `matchLive`/round-token and are cleared on teardown (`_mountT`) — a mid-lead-in abort can't resurrect a
+    split with no song + leak a tick rAF + `_vsFit` into the next solo run.
+  - **Rematch re-init (CRITICAL):** `resetForRematch` now fully tears down vs-mode so the next `mountVsHud`
+    re-seeds clean (no carrying the prior match's final score / stale delta-sign / leftover ghost sparkles).
+  - **Combo capsule was a strike-zone collision + showed a stale number** — moved to the outer side gap,
+    mid-runway, and the engine now always writes `#combo-num` (vs-mode forces the capsule opaque). The
+    `vschippop` keyframe preserves `translateY(-50%)` so the pop no longer snaps to deck-top.
+  - **Whole HUD relocated into the side gaps:** score plates → outer edge + enlarged; mult dial → outer gap
+    under the score; OD bar lifted/inset + a `scaleX`-driven fill (no more overshoot past the trough cap) +
+    stronger READY glow; centre seam lead-bar + delta widened/brightened (gold-lead / crimson-behind / chrome
+    neutral) and the lead indicator now dims as a whole when a stream lags (puck + delta never contradict).
+  - **vsFitFY 0.98→0.9:** the vs-mode guitar is a touch shorter (less "zoomed/too close"), opening top
+    headroom + ~120px side gaps so the HUD never overlaps the playfield. Verified at a real 640px half-deck.
+  - Opp OD bar hidden in tournaments (`vs-tour` class) — `t-tick` carries no OD, so a flat-empty meter is gone.
+  - Mobile breakpoint now also hides the seam/your-score/OD if a desktop player narrows below 900px mid-song.
+- **v159 — tournament CINEMATIC FLOW:** the GO countdown used to `step('go')`, which unmounted the whole
+  bracket room. Now a veil (`#mpx-tour-cd`) sits OVER the live room (never blanks) and runs a 3-beat build off
+  the shared `atMs` — **ROUND/SEMI/THE FINAL card → VS reveal → 3·2·1·GO** (own `_tourCdRaf`; tournament
+  lead-in widened to 5.2s). The same veil flashes the **"YOU ADVANCE" / "ELIMINATED"** round verdict (FLOW-M2)
+  and a **"CHAMPION DECIDED"** beat before the champion reveal, which now gets a `.reveal` entrance (clip +
+  crown + name ramp/scale-in, FLOW-M3). Between rounds, the host sees the **exact next matchups** and a pulsing
+  advance button (FLOW-S1). A dedup guard stops a duplicated `t-round` from double-launching the song.
+  Verified end-to-end on an offline 3-bot bracket: SEMI → resolve → advance → THE FINAL → CHAMPION DECIDED →
+  champion reveal ("YOU"), 0 console errors. Brand-correct throughout, `rr-reduce-motion` honored, no `:has()`.
+
+### v152–v155 — tournament split-screen + ghost-notes + host controls + GAME-ASSET GAUGES + brand fix  ✅
+The second playtest-feedback wave, planned by a 3-track design workflow (`mp-polish-plan`).
+- **v152 — tournament duels get the split-screen:** tournaments run on `startTourTick`, not `startTick`, so
+  the split never mounted there. `onTourRound`'s handoff now adds `vs-mode` + `mountVsHud` (desktop),
+  `startTourTick` renders the vs HUD + ghost, `onTourTick` maps the rival's `t-tick` → `lastOppState`,
+  `devDriveRival` drives a bot rival's live play for solo testing, and `onTourSongEnd`/`closeTour` tear it down.
+- **v153 — GHOST = real play:** `RhythmGame.getGhostNotes()` getter (pooled on-screen notes as the engine's own
+  timeline param `d`) + `getLaneFrame` now exposes `persp`/`warp`; `renderGhost` scrolls dim-chrome gems down
+  the opponent deck with the real board's 1/z perspective + neck-recede warp (holds/chords/bombs styled). The
+  opponent now reads as a live player, not static strings. (Getter verified: valid notes, d∈[-0.12,1.02].)
+- **v153 — HOST controls:** the auto-7s round advance is replaced by a host **START NEXT ROUND** button
+  (`t-await` puts everyone in a "between rounds" state; host clicks → synced 3·2·1 via `startCountdown`); a
+  host-only **✕ kick** on each open-lobby seat (`t-kick`; target leaves via `closeTour`). Bot brackets keep
+  flowing via a `_devAuto` auto-start shim. Verified: an 8-bot bracket still runs to a champion.
+- **v154 — brand fix:** killed every green in the tournament/room chips — `mpx-tour-chip[open]`, `.mpx-rc-tag.pub`,
+  `#mpx-tour-invite.copied`, `#mpx-dev-spectate.on`, and two dev-only greens (FPS meter, `.dev-v.ok`) → chrome;
+  "live" stays crimson, "done" stays gold. Grep of index.html + both JS = zero green remaining.
+- **v155 — GAME-ASSET GAUGES + connector lines:** 5 generated metal frame assets (`assets/mp/gauge-scoreplate
+  / dial-mult / combo-frame / od-meter / seam-column.png`, gpt_image_2 + bg-removal for true alpha, 7.5 cr)
+  mounted behind each live HUD value in vs-mode (frames = backdrops, the JS still drives the values; opponent
+  desaturated to warm chrome via `saturate(0.12)`). Bracket **connector lines**: `renderTourBracket` tags
+  avatars `data-bid` + `drawBracketLines` draws gold (winner-feeder) / dim-chrome (loser-feeder) SVG curves
+  between tiers — verified 14 paths (7+7) on an 8-player bracket. Final visual fit (gauge sizing at ~46px,
+  line routing on wrapped tiers) is the user's eyes-on call; wiring + asset loads + path counts verified, no errors.
+
+### v149–v151 — playtest-feedback fixes: combo FX + tournament return + NPC 1v1 + ghost highway (P4)  ✅
+Four issues the user hit on their machine, each root-caused by a parallel diagnostic workflow (precise
+line-level fixes), then applied + verified to the limit headless allows.
+- **Combo FX "two side columns" (game.js drawComboEnergy):** the combo energy was painted full-width with
+  only a vertical gradient + an OUTSIDE-the-edge feather, so the neck-edge cutoffs read as standing crimson
+  columns (the user circled them "NO" — survived two prior edge-only fixes). Fixed at the source: a HORIZONTAL
+  center-weighted mask erases the energy toward both sides so it concentrates on the neck center and is gone
+  well before the edges; edge feather widened lw·1.35 → lw·2.0. Now a soft neck glow, no columns. (Visual
+  sign-off on the user's machine — sustained combos don't reproduce under headless rAF throttling.)
+- **Tournament didn't return to the bracket room (multiplayer.js onTourSongEnd):** the engine's
+  `endGame()` calls `showScreen('results')` SYNCHRONOUSLY right after the song-end callback, stripping `.active`
+  off the tournament overlay that `onTourSongEnd` had just re-raised → the solo results screen won. Fixed by
+  deferring the re-raise one tick (`setTimeout(0)`), exactly like the 1v1 `showWinner()` path already does.
+  Win or lose, you now land back in the tournament room; the host advances rounds.
+- **NPC 1v1 test path (multiplayer.js devVsNpc + a dev lobby button):** a real OFFLINE 1v1 vs a local bot —
+  fake match channel (the `matchCh.send` guards make it inert), `beginMatch` mounts the full desktop
+  split-screen + countdown + launches the song, the NPC "plays" by tracking your run at a skill factor and
+  emitting hit/miss events, and a real WIN/LOSE settles at song end. Reach it via the dev-gated **🤖 Play vs
+  NPC** lobby button (or `__mpDev.npc({skill})`). Lets the user test the entire split-screen solo.
+- **Ghost highway renderer (P4, multiplayer.js renderGhost):** the opponent's left deck now draws — dim chrome
+  lane strings (re-based from `getLaneFrame()`) + a pre-allocated 48-slot sparkle pool fired from
+  `lastOppState.ev` ('p'/'g' = chrome hit, 'm' = crimson miss), half-res, reduced-motion = strings only, zero
+  per-frame allocation. Runs inside `startTick`'s rAF (no second loop). **Key fix:** `getLaneFrame`'s
+  nearX/nearY are CANVAS-LOCAL (not page) coords — the original re-base subtracted the page origin and pushed
+  everything off-canvas; corrected to scale directly (proven: an inline draw with the fix renders 3,793 visible
+  string pixels). Auto-execution can't be confirmed headless (rAF throttles to ~0.3fps + the demo song ends
+  before the first frame), but the draw + wiring are verified; it runs at 60fps on the user's machine.
+
+### v146–v148 — split-screen P3: the "Crimson Meridian" compact HUD + synced countdown + VS intro  ✅
+Built from a design+judge+adversarial-verify workflow (winner: seam-minimal, with rockband-mirror/esports/
+fighting-vs grafts). Spec in `MP_HUD_SPEC.md`. All gated by a `.vs-mode` class on `#game` (no :has/@container).
+- **Brand overrides (global):** killed the three literal greens — `.mpx-ready.armed` → crimson,
+  `#mp-opp .mo-live` → chrome, `#mp-opp .mo-delta.ahead` → gold.
+- **Synced countdown:** one shared `VS_LEADIN_MS=3600` (maybeStart + tournament + room paths) + a rAF that
+  paints 3·2·1·GO! in the centered `#mpx-go-num` card off the shared `atMs` (frame-synced across machines,
+  crimson pop → gold GO!).
+- **Compact HUD:** scores flank a crimson→chrome center **seam** (your crimson deck RIGHT, opponent chrome
+  deck LEFT); the seam carries a progress hairline, a signed **delta** (raw gap), and a vertical **lead bar**
+  (progress-normalized `(myPace−opPace)/(myPace+opPace+1)`, lerp-eased, midline-guarded below 3% and frozen+"~"
+  when the progress gap >6%). Multiplier/combo reuse the SP `#mult-gauge`/`#combo-display` as outer-edge pills
+  (restore on teardown); overdrive = a slim gold underglow bar per deck (READY pulse + SPACE tag). Opponent
+  meters eased off the ~13/s P2 stream.
+- **Spectacle (scoped):** your overdrive → full-deck gold wash + seam rim-light; lead sign-flip → delta jolt.
+- **VS intro:** seam wipe → decks part → "VS" flash, reduced-motion early-out; runs after the engine takes over.
+- **Wiring:** `beginMatch` handoff adds `.vs-mode` + `mountVsHud()` + fires resize (gated `!isMobile()`; mobile
+  stays single-deck + `#mp-opp` card); `teardownMatch` removes + `unmountVsHud()` + refits. `renderVsHud(stt,
+  myRf)` drives off ONE `getRenderFrame()` drain captured in `startTick` (the hits buffer is drained once).
+- **Verified in-engine (desktop 1280px, demo + `__mpDev.vsPreview`):** grid `640px 640px` one row (fixed a
+  sparse-auto-placement bug that pushed the opp deck to row 2 → pinned both to `grid-row:1`), seam centered at
+  640, your/opp score plates + chips + OD bars all correctly placed, brand colors confirmed (crimson/chrome/
+  gold/ink-dim), side panels + SP od-gauge hidden, lanes still on the strings in the half cell, zero console
+  errors. Dev: `__mpDev.vsPreview()` previews the whole HUD over a demo with a synthetic rival; `__mpDev.vsOff()`.
+
+### v145 — split-screen P2: opponent render-stream data plumbing (no-op-safe)  ✅
+The foundation for the live ghost deck, landed additively so it can't disturb the shipping match path.
+- **`RhythmGame.getRenderFrame()`** (game.js) — a compact per-frame snapshot `{sc,cb,mu,od,oda,st,pr,ev}`
+  where `ev` is a **drained** hit/miss buffer. Hits push `{l,j}` through the single chokepoint
+  `spawnHitParticles` (`j='p'|'g'`) + `missNote` (`j='m'`); buffer capped at 12; mult tier cached from
+  `updateHUD`. Verified live: a demo run produced 12 `{l,j}` miss events, `st` tracked stability, and the
+  buffer **drained** (12 → 0 on the next read).
+- **Additive `state` broadcast** (multiplayer.js) — a ~13/s opponent stream piggybacked on `startTick`'s
+  rAF, GATED by `_vsActive` (off until P4 mounts the ghost deck — zero extra network until then). New
+  `state` event handler stores `lastOppState`; brand-new event name, separate cadence + var → strictly
+  additive. Verified: the offline tournament still ran to a champion with the stream flag on, no console
+  errors. Dev hooks: `__mpDev.vs(true)` + `__mpDev.oppState()`.
+
+### v144 — tournament HOST SETUP: bracket SIZE + multi-stage POOL  ✅
+The host now configures the bracket, not just a single stage.
+- **Bracket size** selector (4 / 8 / 10) — `tour.size`, broadcast via `t-track` + `tour-meta`; the seat
+  grid + "START BRACKET (n/size)" label + empties follow it. Host-only (guests see the target).
+- **Stage POOL (multi-select):** the old single-stage picker is now multi-select — host picks one or more
+  of the 13 designed stages and **rounds rotate through the pool** (`hostResolveEnv(n)` cycles
+  `tour.envPool` by round; Random/empty = roll a fresh stage each round). Chips show a gold ✓; the room
+  shows a summary ("First Light +1"). Verified in-engine: size 8↔4 updates the label, pool multi-select +
+  Random auto-deselect, 13 stages listed, no console errors.
+
+### v140–v143 — MULTIPLAYER overhaul, part 1: split-screen P1 + tournament showpieces + NPC harness  ✅
+The big MP push (design phase, internal). See `MP_SPLITSCREEN_DESIGN.md` + `ROADMAP.md`.
+- **v140 — split-screen P1 (alignment proof):** `#game.vs-mode` CSS (2×1fr, hide `.hud-panel`, your deck
+  RIGHT / opponent ghost-deck LEFT). The critical fix: `min-width:0` on `.game-center` so the 1fr column
+  can shrink below the canvas's intrinsic width — verified the half-width deck keeps catchers riding the
+  painted strings (`_cap_v140_vs_right`). NO engine math changed (resize() is box-relative).
+- **v141 — mobile guard:** split-screen is DESKTOP/PC ONLY. Inside `@media(max-width:900px)`,
+  `#vs-opp-deck{display:none!important}` so mobile MP/tournaments stay single-deck (two half decks are
+  unplayable on a phone). Verified at 430px.
+- **v142 — TOURNAMENT showpieces (GPT Image 2 + Seedance assets):**
+  - `assets/mp/bracket-arena.png` (gpt_image_2 high, 3:4 — champion throne + blood-moon at top, dark open
+    central column for the UI). `renderTourBracket()` rewritten as a **climbing-avatar pyramid** over it:
+    FIELD → ROUND-N WINNERS → FINALISTS → CHAMPION throne, you in crimson, eliminated dimmed, advancing
+    chips glow gold + rise (`brkRise`). Verified in-engine (8-player bracket, throne seated on the art).
+  - `assets/mp/champion-hero.png` + `assets/mp/champion-celebration.mp4` (Seedance 2.0 720p, with audio)
+    wired into `#mpx-tour-champ`: the clip is a muted ambient backdrop with a gold name / "BRACKET CHAMPION"
+    / score plate composited on top (`onTourChamp` mounts the clip + banked final). Fixed a real bug:
+    `display:flex` on `.mpx-tour-champ` defeated the `hidden` attribute → added `[hidden]{display:none}`.
+- **v143 — DEV NPC harness (solo + stress test; on the strip-list):** add NPCs to a bracket to test alone.
+  `_devBots` map merged back into `tour.members` after every presence overwrite (so local bots survive
+  `onTourPeers`); host synthesizes bot (and spectate-mode self) finals each round (`devDriveBots`) so the
+  bracket auto-resolves. A dev-only bar in the tournament setup (+1/+3/+7 NPC, AUTO-RUN toggle; `?dev=1`
+  gated) + console API `window.__mpDev` with an **offline stub channel** (`__mpDev.run(7)` — broadcasts
+  loop back locally, no sign-in). Verified: full 8-player bracket auto-ran round1→round2→final→champion
+  ("Echo" crowned), bracket re-rendered each round, champion screen shown, **zero console errors**.
+  Cost: bracket arena 4.5cr (0.5 draft + 4 high) + champion 27cr (4 high still + 22.5 clip) = 31.5cr.
+
 ### v139 — HOLD-note sustain beam: slimmer + lane-tinted (polish)  ✅
 Playtest: the long-note (hold) trail read as a thick crimson+white slab. Slimmed it and made it cohesive
 with the v129 lane-colored marbles: base width 0.30→0.24·lw, the old 3 crimson glow layers (2.1/1.3/0.78

@@ -2,17 +2,28 @@
 
 > **Status:** Multiplayer is fully built and works end-to-end on the client (open lobby, public/private
 > rooms, 1v1, 5–10-player single-elimination tournament, correct `softPresence` broadcast-heartbeat
-> roster). It is **gated OFF for the public beta** (`MP_PUBLIC = false` in `index.html`, hub tile shows
-> "opens soon"; `?dev=1` still opens it). This brief is the backend work required to flip it on for
+> roster). It is **gated OFF for the public beta** (`MP_PUBLIC = false`, now defined in `multiplayer.js`;
+> the hub tile is held; `?dev=1` opens it). This brief is the backend work required to flip it on for
 > **ranked / competitive** play. Until then MP ships as dev-only.
+>
+> **build42 update (client hardening shipped — this reduces the brief to just the re-judge):** the client
+> now self-heals and fails over so a live bracket survives drops — a host **`t-snapshot` state-heartbeat**
+> (every 4s + on every transition, monotonic `version`) that clients apply idempotently; **reconnection**
+> (sessionStorage persist + rejoin-in-place on reload, < 90s); **host migration** (deterministic
+> earliest-joined election + snapshot-driven resume — replaces the old "dissolve"); a **proof-of-life
+> forfeit guard** (never forfeits a player still streaming `t-tick`); and **score sanitation** (clamp/repair
+> NaN/overflow/out-of-range on receipt — a *sanity* guard, NOT anti-cheat). The `t-final` payload now also
+> carries `{ trackId, diff, notes, fc, ranked }` so the server has the chart context to re-judge.
+> **What remains for the backend is exactly §1–§4 below: the authoritative re-judge + `winnerId`.**
 
 ## The problem (why it's held)
 
 Match results are **unsigned peer broadcast**. Each client computes its own score in the engine and
 broadcasts a `t-final` / `final` message over the shared Supabase Realtime channel; the host (or the
 peers) accept the first payload's score **verbatim** and advance the bracket on it. Relevant client
-code (`multiplayer.js`): `1154` (tournament `t-final` send), `1159–1187` (`onTourFinal` / `trySettlePair`
-trust the raw payload score), `577–578` (1v1 `onFinal` / `settleIfReady`).
+code (`multiplayer.js`, grep the function names — line numbers drift): `onTourSongEnd` (tournament
+`t-final` send), `onTourFinal` / `trySettlePair` (decide the pair from the payload score — build42 added
+`sanitizeFinal` to clamp junk, but the value is still **client-owned**), `onFinal` / `settleIfReady` (1v1).
 
 Consequences:
 - A modified client can broadcast any score → win any match / tournament.
@@ -85,10 +96,12 @@ only **who advances** must come from the server.
 
 ## Also worth deciding (separate from scoring, surfaced by the audit)
 
-- **Host migration:** today if the room/tournament host drops, the whole bracket dissolves
-  (`multiplayer.js:935–940, 709–715`). For 5–10-player events, elect a new referee (mirror the lobby's
-  smallest-id host election at `multiplayer.js:256`). A server-authoritative result model makes this
-  easier (the server, not the host, holds the truth).
+- **Host migration:** ✅ **done client-side in build42** — on host loss the earliest-joined human still
+  present promotes (deterministic election on the stable `tour._joinAt`) and resumes refereeing from the
+  latest `t-snapshot` (which carries `finals` / `settled` / `awaitWinners`), instead of dissolving the
+  bracket. Best-effort: a brief double-host window self-resolves (the junior host steps down when it sees
+  the senior's snapshot). A server-authoritative result model would make this fully robust (the server, not
+  a peer, holds the truth) — but the bracket no longer dies when the host drops.
 - **Round 2+ track:** `hostNextTrack` currently picks a **new random** catalog track each tournament
   round (`multiplayer.js:1079–1085, 1188–1200`); only round 1 honors the host's pick. Decide whether the
   host should pick per round (carry `tour.sel`/a host playlist forward) or random-per-round is intended.
@@ -103,8 +116,9 @@ only **who advances** must come from the server.
 - `score ≤ notes_total * 1500` (post-sustain-decision) holds server-side; mismatched `notes_total` for a
   server-charted track is rejected.
 - A disconnecting player forfeits cleanly (timeout) without hanging the round.
-- Casual/unranked rooms can still run **without** this path (keep the current peer flow behind a
-  `ranked:false` flag) so casual play isn't blocked by the backend dependency.
+- Casual/unranked rooms can still run **without** this path — the current peer flow is already tagged
+  `ranked: MP_PUBLIC` on every `t-final` (build42), so casual play isn't blocked by the backend; the server
+  only needs to re-judge submissions where `ranked:true`.
 
 ---
 *Client reference points: `multiplayer.js` lines cited above; the solo submission path is

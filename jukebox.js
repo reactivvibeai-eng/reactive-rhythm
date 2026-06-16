@@ -61,6 +61,7 @@
       el.style.setProperty('--cv', cv + 'px');
       el.innerHTML =
         '<div class="cover-grade"></div>' +
+        '<div class="cover-badges"></div>' +
         '<div class="cover-card"><div class="cover-art"></div><span class="cover-mark"></span></div>' +
         '<div class="cover-reflect"></div>';
       el.addEventListener('click', () => {
@@ -100,6 +101,25 @@
     const gc = el.querySelector('.cover-grade');
     if (best) { gc.style.display = 'flex'; gc.textContent = best.grade; gc.className = 'cover-grade ' + gradeClass(best.grade); }
     else gc.style.display = 'none';
+    // AI-radio badges (Golden Buzzer / judge grade / hot) — from the backend `badges` field (BADGES_BACKEND_BRIEF.md).
+    // Renders nothing until the backend ships the field; chips are built as DOM nodes (textContent → injection-safe).
+    const bc = el.querySelector('.cover-badges');
+    if (bc) {
+      bc.innerHTML = '';
+      const badges = Array.isArray(t.badges) ? t.badges : [];
+      badges.slice(0, 3).forEach(b => {
+        if (!b || !b.type) return;
+        const chip = document.createElement('span');
+        let cls = 'cbadge', txt = '';
+        if (b.type === 'golden_buzzer') { cls += ' gold'; txt = '★'; chip.title = b.label || 'Golden Buzzer'; }   /* star-only on covers (full label in tooltip) so it can't crowd the grade chip */
+        else if (b.type === 'judge_grade') { cls += ' jg ' + gradeClass(b.tier); txt = b.tier || b.label || ''; }
+        else if (b.type === 'hot') { cls += ' hot'; txt = b.label || 'HOT'; }
+        else { cls += ' pick'; txt = b.label || ''; }
+        chip.className = cls; chip.textContent = txt;
+        bc.appendChild(chip);
+      });
+      bc.style.display = bc.children.length ? 'flex' : 'none';
+    }
   }
 
   function layout() {

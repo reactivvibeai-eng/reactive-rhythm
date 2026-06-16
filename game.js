@@ -97,6 +97,7 @@
   let overdrive = 0;                            // 0..1 meter
   let odActive = false;                         // overdrive mode engaged (x2 payoff)
   let odTimer = 0;                              // seconds of overdrive remaining
+  let odBurst = 0;                              // one-shot OD-ignition shockwave (1→0 over ~0.6s, render-only)
   let odReadyAnnounced = false;                // one-shot "OVERDRIVE READY" cue per fill
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
@@ -176,6 +177,10 @@
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
+  // versus split-screen (P2): a drained hit/miss event buffer + cached mult tier for getRenderFrame()
+  let _rfHits = [];        // [{l:lane, j:'p'|'g'|'m'} …] drained each getRenderFrame() call
+  let _rfMult = 1;         // last displayed multiplier tier (set by updateHUD)
+  function _rfPush(lane, j) { _rfHits.push({ l: lane, j: j }); if (_rfHits.length > 12) _rfHits.shift(); }
 
   // audio/input latency offset (seconds). Positive = player hits late -> shift
   // the judgment clock earlier to compensate. Set via tap calibration.
@@ -354,9 +359,26 @@
     nutXF:    [0.450, 0.470, 0.490, 0.510, 0.530, 0.550],   // at the nut/spawn (y≈0.05): tight, centered — strings span only 0.448–0.552 here
     bridgeXF: [0.247, 0.358, 0.469, 0.570, 0.659, 0.750],   // at the bridge/catcher row (y≈0.75): wide saddle fan (confirmed good)
   };
+  let _vsFit = false;   // split-screen versus: fit the guitar to deck HEIGHT (full runway), not cover-fill width
   function guitarRect() {
     const aspect = (activeGuitarImg && activeGuitarImg.width && activeGuitarImg.height) ? activeGuitarImg.width / activeGuitarImg.height : ART.aspect;
     let gw, gh, gx, gy;
+    if (_vsFit) {
+      // SPLIT-SCREEN: the half-deck is WIDER than the guitar, so cover-fit-fill-width over-zooms and crops the
+      // far (note-spawn) end off the top → no runway. Fit to HEIGHT instead so the whole neck + a full note
+      // runway is visible; centre it (the level world shows on the sides); anchor the CATCHER at ~86% so there's
+      // strike space below. Lanes still ride the painted strings (derived from this same rect → alignment holds).
+      // vsFitFY = guitar height as a fraction of deck height; vsCatcherFY pins the CATCHER (bridge) at that
+      // fraction of deck height REGARDLESS of vsFitFY (gy+bridgeFY*gh resolves to ch*vsCatcherFY), so lowering
+      // vsFitFY only drops the far/spawn end — shortening the on-screen neck (less "zoomed/too close") and
+      // opening top headroom + wider side gaps for the HUD, without moving the strike row or changing note timing.
+      // 0.9 leaves the spawn end below the top score-plate row so the side-gap HUD never overlaps the playfield.
+      // (Optional per-skin hooks; no profile defines them today. If a skin sets them, re-check the index.html
+      // vs-mode HUD anchors — combo top:50%, OD bottom inset — against the new catcher band.)
+      const vh = ch * (ART.vsFitFY || 0.9);
+      const vw = vh * aspect;
+      return { gx: (cw - vw) / 2, gy: ch * (ART.vsCatcherFY || 0.86) - ART.bridgeFY * vh, gw: vw, gh: vh };
+    }
     // (build12: the v99 "invariant-lane skin fit" branch is GONE — the user's playtest verdict: a
     // custom guitar must look like THE GUITAR at the default's framing, lanes on its own strings.
     // Skins set ART.fit='cover' + their measured fractions and take the same paths as the default.)
@@ -1222,7 +1244,9 @@
     } catch (e) {
       console.error(e);
       showToast(e && e.message ? e.message : 'Could not start this track');
-      showScreen('menu');
+      // don't eject an MP/tournament player to the menu on a decode/start failure — let the MP watchdog (abortRound)
+      // recover them back to the bracket; only bail to menu in single-player.
+      if (!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) showScreen('menu');
     } finally {
       $('play-btn').disabled = false;
     }
@@ -1317,7 +1341,20 @@
       if (!cw || !ch) return null;
       const g = fretGeom(); const r = canvas.getBoundingClientRect();
       return { x: r.left, y: r.top, w: r.width, h: r.height,
-        nearX: g.nearX.slice(), farX: g.farX.slice(), nearY: g.nearY, farY: g.farY, lw: g.lw };
+        nearX: g.nearX.slice(), farX: g.farX.slice(), nearY: g.nearY, farY: g.farY, lw: g.lw,
+        persp: (ART.persp > 1) ? (perspOverride || ART.persp) : 0,   // versus ghost deck: match the real board's projection
+        warp: (warpOverride >= 0 ? warpOverride : (ART.warp || 0)) };
+    } catch (e) { return null; }
+  };
+  // split-screen versus: when true, the guitar fits to deck HEIGHT (full runway) instead of cover-filling width.
+  window.RhythmGame.setVsMode = (b) => { _vsFit = !!b; try { resize(); } catch (e) {} };
+  // versus ghost deck: the current guitar image + its draw rect (canvas coords) so the opponent deck can blit
+  // a dim guitar behind its strings/gems (reads as a real second board). Returns null until art + canvas are ready.
+  window.RhythmGame.getGuitarArt = () => {
+    try {
+      if (!activeGuitarImg || !activeGuitarImg.width || !cw || !ch) return null;
+      const r = guitarRect();
+      return { img: activeGuitarImg, gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, cw: cw, ch: ch };
     } catch (e) { return null; }
   };
   window.RhythmGame.lastResults = () => _lastResults;
@@ -1547,7 +1584,7 @@
   }
 
   function renderResults(results, accPct, grade) {
-    $('results-grade').textContent = grade;
+    { const ge = $('results-grade'); ge.textContent = grade; ge.className = 'results-grade gr-' + (grade || 'D'); }   // tier class → color-coded grade (S=gold, A=crimson, …)
     // star rating from accuracy — a quick visual read layered on the letter grade
     { const starN = accPct >= 95 ? 5 : accPct >= 85 ? 4 : accPct >= 72 ? 3 : accPct >= 55 ? 2 : accPct >= 30 ? 1 : 0;
       const sh = $('results-stars');
@@ -1798,7 +1835,7 @@
     // is carried by the activation comets, the burning strings/wash, the catcher fire at high
     // mult, the HUD flame, and note-comet trails — all anchored to play elements.
     try { if (_odAura) { _odAura.stop(); _odAura = null; } } catch (e) {}
-    bgPulse = 1; cameraShake = 10;
+    bgPulse = 1; odBurst = 1; cameraShake = 10;   // odBurst → screen-flooding ignition flash + shockwave (render)
     flashJudgment('OVERDRIVE', '#ffd98a');
     if (odFlame) odFlame.classList.add('active');
     // build8: tell a level its big moment landed (Skully kicks the intense backdrop). No-op when unset.
@@ -2458,6 +2495,7 @@
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
     counts.miss++; combo = 0;
+    _rfPush(note.lane, 'm');   // versus stream
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
     // a dull "dud" spatter on the missed string (Guitar-Hero "clam" feel).
     stability = Math.max(0, stability - bossDrain(0.04));
@@ -2486,6 +2524,7 @@
   }
 
   function spawnHitParticles(lane, kind) {
+    _rfPush(lane, kind === 'perfect' ? 'p' : 'g');   // versus stream (every hit routes here)
     const _fg = fretGeom(); const laneX = _fg.nearX[lane]; const hitY = _fg.nearY; const color = LANE_COLORS[lane];
     const isPerfect = kind === 'perfect';
     const burst = isPerfect ? '255,255,255' : color.rgb;
@@ -2566,6 +2605,7 @@
     const _tpH = timingProf();
     const comboTier = Math.min(_tpH.comboCap, 1 + Math.floor(combo / _tpH.comboStep));
     const tier = Math.min(odActive ? _tpH.comboCap + 1 : _tpH.comboCap, odActive ? comboTier + 1 : comboTier);
+    _rfMult = tier;   // versus stream: cache the displayed multiplier tier for getRenderFrame()
     const _atCap = combo >= _tpH.comboStep * _tpH.comboCap;
     const within = odActive ? overdrive : (_atCap ? 1 : (combo % _tpH.comboStep) / _tpH.comboStep);
     const mb = $('mult-badge'); if (mb) mb.textContent = tier + 'x';
@@ -2591,7 +2631,10 @@
       setSeg('jb-perfect', counts.perfect); setSeg('jb-great', counts.great);
       setSeg('jb-good', counts.good); setSeg('jb-miss', counts.miss); }
     const cd = $('combo-display');
-    if (combo >= 10) { cd.classList.add('show'); $('combo-num').textContent = combo; }
+    // Always write the number — vs-mode forces the capsule opaque, so a value left stale below the
+    // single-player reveal threshold would read as a frozen combo. .show still gates the SP reveal at >=10.
+    $('combo-num').textContent = combo;
+    if (combo >= 10) cd.classList.add('show');
     else cd.classList.remove('show');
     $('hud-stability').style.width = (stability * 100) + '%';
     let stxt = 'STABLE';
@@ -2666,6 +2709,10 @@
       }
     }
     bgPulse = Math.max(0, bgPulse - dt * 1.8);
+    odBurst = Math.max(0, odBurst - dt * 1.7);    // decay the OD-ignition one-shot (~0.6s)
+    // expose the live beat (0..1) as a CSS var so the DOM HUD chrome can BREATHE on the beat (Hi-Fi Rush "everything
+    // on the beat"). Only #game elements read it, so a stale value off the gameplay screen is harmless.
+    if (state === 'playing') { try { document.documentElement.style.setProperty('--rr-beat', bgPulse.toFixed(2)); } catch (e) {} }
     // AUDIO-REACTIVE: pulse the whole scene on the music's bass onsets (kick/beat) via the analyser tap
     if (musicAnalyser && musicFreq && state === 'playing') {
       try {
@@ -3145,17 +3192,52 @@
       }
     }
 
+    // BEAT BLOOM — the whole frame breathes on the beat (Hi-Fi Rush "everything on the beat"): a gentle
+    // full-screen additive wash keyed to the live bgPulse, using the level accent (crimson default), so it
+    // works on EVERY stage (themed video included) and even at 1x multiplier. Subtle cap + reduce-motion
+    // floor so it can never read as a strobe; skipped in fx-lite (perf) mode.
+    if (state === 'playing' && !fxLite) {
+      const bb = reduceMotion ? Math.min(0.18, bgPulse) * 0.4 : bgPulse;
+      if (bb > 0.02) {
+        const _ac = levelAccentRGB || '255,31,46';
+        const bbg = ctx.createRadialGradient(cw / 2, ch * 0.52, ch * 0.30, cw / 2, ch * 0.52, ch * 0.95);
+        bbg.addColorStop(0, 'rgba(' + _ac + ',0)');
+        bbg.addColorStop(1, 'rgba(' + _ac + ',' + (0.085 * Math.min(1, bb)).toFixed(3) + ')');
+        ctx.save(); ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = bbg; ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
+      }
+    }
+
     // OVERDRIVE window: warm gold edge-glow framing the whole screen (on-brand, warm,
     // additive so it never reads purple). Pulses unless reduce-motion is on.
     if (odActive) {
       const pulse = reduceMotion ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() / 140));
-      const a = 0.14 + 0.13 * pulse;
+      const a = 0.16 + 0.14 * pulse;
       const og = ctx.createRadialGradient(cw / 2, ch * 0.5, ch * 0.34, cw / 2, ch * 0.5, ch * 0.8);
       og.addColorStop(0, 'rgba(255,200,120,0)');
       og.addColorStop(1, 'rgba(255,180,90,' + a.toFixed(3) + ')');
       ctx.save(); ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = og; ctx.fillRect(0, 0, cw, ch);
       ctx.restore();
+    }
+
+    // OVERDRIVE IGNITION — a one-shot screen-flooding beat the instant Star Power fires: a fast white-gold
+    // flash + (full-motion only) an expanding gold shockwave ring racing out from the catcher row. odBurst 1→0.
+    if (odBurst > 0.01) {
+      const ob = odBurst;
+      ctx.save(); ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = 'rgba(255,226,160,' + (0.34 * ob * ob).toFixed(3) + ')';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+      if (!reduceMotion) {
+        const rw = (1 - ob) * Math.hypot(cw, ch) * 0.62;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255,206,120,' + (0.55 * ob).toFixed(3) + ')';
+        ctx.lineWidth = 2 + 10 * ob;
+        ctx.beginPath(); ctx.arc(cw / 2, ch * 0.56, Math.max(1, rw), 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // MISS edge-vignette — a brief crimson frame pulse on a missed note / combo break (brand crimson).
@@ -3762,7 +3844,14 @@
     // FEATHER: erase everything outside the trapezoid + a smooth lw·1.35 falloff inward along
     // both edges, then melt both ENDS — the glow breathes out of existence, no boundary anywhere.
     ox.globalCompositeOperation = 'destination-out';
-    const f = fg.lw * 1.35, S = 14;
+    // HORIZONTAL center-weighting (the fix for the "two side columns"): the energy was uniformly bright
+    // edge-to-edge, so the neck-edge cutoffs read as standing crimson columns. Erase progressively toward
+    // BOTH sides so the glow concentrates on the neck center and is gone well before the trapezoid edges.
+    const hmask = ox.createLinearGradient(x0, 0, x1, 0);
+    hmask.addColorStop(0, 'rgba(0,0,0,1)'); hmask.addColorStop(0.30, 'rgba(0,0,0,0)');
+    hmask.addColorStop(0.70, 'rgba(0,0,0,0)'); hmask.addColorStop(1, 'rgba(0,0,0,1)');
+    ox.fillStyle = hmask; ox.fillRect(x0, ng.yF, W2, ng.yN - ng.yF);
+    const f = fg.lw * 2.0, S = 14;
     for (let s = 0; s < S; s++) {
       const ya = ng.yF + (ng.yN - ng.yF) * (s / S), yb = ng.yF + (ng.yN - ng.yF) * ((s + 1) / S);
       const sm = (s + 0.5) / S;                            // 0 at the nut end → 1 at the skirt end
@@ -4221,7 +4310,7 @@
       if (hs && !localStorage.getItem('rr_howto_seen')) {
         const tryShowHowto = () => {
           try {
-            if (document.querySelector('#start.active, #ryo-intro.active, #game.active, #loading.active')) { setTimeout(tryShowHowto, 900); return; }
+            if (document.querySelector('#start.active, #ryo-intro.active, #game.active, #loading.active, #multiplayer-screen.active, #results.active')) { setTimeout(tryShowHowto, 900); return; }   // never pop the first-run How-To over a live MP/tournament round or results (it occluded the whole round)
             hs.classList.add('active');
           } catch (e) {}
         };
@@ -4337,6 +4426,35 @@
       playing: state === 'playing',
       grade: (function (p) { return p >= 95 ? 'S' : p >= 88 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D'; })(accFrac * 100)
     };
+  };
+  // versus split-screen (P2): a compact per-frame render snapshot + drained hit/miss events for the
+  // opponent ghost deck. Additive + side-effect-free except it drains the hits buffer.
+  window.RhythmGame.getRenderFrame = function () {
+    var prog = (songDuration > 0 && player) ? Math.max(0, Math.min(1, songTime() / songDuration)) : 0;
+    var ev = _rfHits; _rfHits = [];   // drain
+    return { sc: Math.round(score), cb: combo, mu: _rfMult, od: +overdrive.toFixed(3), oda: odActive,
+      st: +stability.toFixed(3), pr: Math.round(prog * 1000) / 1000, ev: ev };
+  };
+  // versus ghost deck: a read-only POOLED snapshot of the on-screen notes so the opponent's deck can scroll
+  // the SAME chart (both clients share the chart + atMs). d = the engine's own timeline param (0=catcher,
+  // 1=nut) so the ghost reuses the board's projection verbatim. type: 0 tap · 1 hold · 2 chord · 3 bomb. No alloc.
+  var _ghostPool = []; for (var _gp = 0; _gp < 96; _gp++) _ghostPool.push({ lane: 0, d: 0, type: 0 });
+  window.RhythmGame.getGhostNotes = function (aheadSec) {
+    var t = songTime();
+    var approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul());
+    var dMax = (typeof aheadSec === 'number' && aheadSec > 0) ? Math.min(1.02, aheadSec / approach) : 1.02;
+    var n = 0, L = notes.length;
+    for (var k = 0; k < L && n < _ghostPool.length; k++) {
+      var nn = notes[k];
+      if (nn.judged && nn.hit !== 'miss') continue;     // already struck/cleared
+      if (nn.open) continue;                             // open strum bar, not a lane gem
+      var d = (nn.time - t) / approach;
+      if (d < -0.12 || d > dMax) continue;               // matches the render cull
+      var p = _ghostPool[n++];
+      p.lane = nn.lane; p.d = d;
+      p.type = nn.type === 'hold' ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
+    }
+    return { n: n, items: _ghostPool };
   };
   var _songEndCbs = [];
   window.RhythmGame.onSongEnd = function (cb) { if (typeof cb === 'function') _songEndCbs.push(cb); };

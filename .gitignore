@@ -4,3 +4,7 @@ __pycache__/
 .DS_Store
 serve.log
 launch-game.bat
+# debug / scratch artifacts (the /__cap sink + draft renders) — never commit
+_cap_*.jpg
+assets/_ringtest_*.jpg
+assets/mp/_*_draft.png

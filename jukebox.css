@@ -14,17 +14,10 @@
   overflow: hidden;
 }
 
-/* ambient crimson + moon glow behind the whole library (theme intensity ~3) */
-.lib::before {
-  content: '';
-  position: absolute;
-  left: 50%; top: -8%;
-  width: 130%; height: 60%;
-  transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(255,31,46,0.16), rgba(163,6,15,0.05) 45%, transparent 72%);
-  pointer-events: none;
-  z-index: 0;
-}
+/* (removed) the old top-anchored crimson radial bloom read as "a cropped red moon hanging at center-top" over the
+   video and amplified the floating-cover look. The full-bleed menu video + .lib-bg-scrim now carry the atmosphere. */
+.lib::before { content: none; }
+/* desktop width is set in the min-width:901px block below (1200px) so wide monitors aren't a stretched phone column. */
 
 /* ---------- top bar ---------- */
 .lib-bar {
@@ -33,7 +26,8 @@
   padding: max(calc(env(safe-area-inset-top, 0px) + 14px), 30px) 18px 10px;
   flex-shrink: 0;
 }
-.lib-bar .brand-row { display: flex; align-items: center; gap: 9px; }
+.lib-bar .brand-row { display: flex; align-items: center; gap: 9px; margin-left: 96px; }   /* clear the absolute "‹ MENU" back button (left:16, ~84px wide) — they were overlapping in the top-left */
+@media (max-width: 640px) { .lib-bar .brand-row { margin-left: 84px; } }
 .lib-bar .brand-name { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.28em; color: var(--ink-dim); }
 .lib-actions { display: flex; gap: 11px; }
 
@@ -171,7 +165,7 @@
   font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 64px;
   color: rgba(255,255,255,0.82); text-shadow: 0 2px 18px rgba(0,0,0,0.5);
 }
-.jb-cover.is-center .cover-card { box-shadow: 0 26px 64px rgba(0,0,0,0.7), 0 0 52px rgba(255,31,46,0.32), inset 0 1px 0 rgba(255,255,255,0.2); border-color: rgba(255,60,70,0.45); }
+.jb-cover.is-center .cover-card { box-shadow: 0 26px 64px rgba(0,0,0,0.7), 0 0 30px rgba(255,31,46,0.2), inset 0 1px 0 rgba(255,255,255,0.2); border-color: rgba(255,60,70,0.4); }   /* tamer aura — crisp album art, not a red blur */
 /* living shimmer + breathing aura on the FOCUSED cover — feels reactive/alive, not a static tile */
 .jb-cover.is-center .cover-card::after {
   content: ''; position: absolute; inset: 0; border-radius: 16px; pointer-events: none; z-index: 3;
@@ -204,6 +198,17 @@
   background: rgba(7,6,10,0.8); border: 1px solid currentColor;
   backdrop-filter: blur(4px);
 }
+/* AI-radio badges (top-right, opposite the personal-grade chip). Driven by the backend `badges` field per
+   BADGES_BACKEND_BRIEF.md — Golden Buzzer = gold star, judge_grade = tier-colored letter, hot = crimson HOT. */
+.cover-badges { position: absolute; top: 10px; right: 10px; z-index: 4; display: none; flex-direction: column; align-items: flex-end; gap: 5px; }
+.cbadge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 7px; border-radius: 7px;
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  background: rgba(7,6,10,0.82); border: 1px solid currentColor; backdrop-filter: blur(4px); white-space: nowrap;
+  max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; }   /* can't grow left into the top-left grade chip */
+.cbadge.gold { color: var(--gold, #e0a93f); box-shadow: 0 0 12px rgba(224,169,63,0.35); }
+.cbadge.hot  { color: var(--crimson, #ff1f2e); }
+.cbadge.pick { color: var(--chrome, #dad7d2); }
+.cbadge.jg   { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; width: 24px; height: 24px; padding: 0; justify-content: center; }
 
 /* now-focused meta */
 .jb-nav {
@@ -465,19 +470,9 @@
    Left = large reactive coverflow stage. Right = "NOW FOCUSED" hero rail.
    =========================================================================== */
 @media (min-width: 901px) {
-  .lib { max-width: min(1480px, 95vw); }
-  /* ambient blood-moon presence behind the deck (the in-world moon art).
-     `screen` drops the art's black bg; a radial mask softens the edges. */
-  .lib::after {
-    content: ''; position: absolute; z-index: 0; pointer-events: none;
-    top: -7%; left: 50%; width: min(640px, 48%); aspect-ratio: 1;
-    transform: translateX(-50%);
-    background: url('assets/moon.png') center top / contain no-repeat;
-    mix-blend-mode: screen; opacity: 0.5;
-    -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 52%, transparent 76%);
-    mask-image: radial-gradient(ellipse at 50% 42%, #000 52%, transparent 76%);
-    animation: moonFloat 16s ease-in-out infinite;
-  }
+  .lib { max-width: min(1200px, 92vw); }
+  /* (removed) the .lib::after blood-moon (assets/moon.png) painted a cropped moon IMAGE at center-top over the
+     video — the same "red moon hanging at the top" the owner rejected. The menu video carries the atmosphere. */
 
   /* ---- jukebox: two-zone deck ---- */
   #view-jukebox.lib-view {
