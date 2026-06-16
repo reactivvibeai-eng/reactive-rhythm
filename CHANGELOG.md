@@ -1107,6 +1107,22 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v180 — Carnival of Souls, part 2: the two Seedance cutaways + the real song + static-bg cutaway flow  ✅
+- **Song locked** — Carnival now plays **"Creekfire Overdrive" — Sisoka (Electronic)** (`trackId 8f9fb888…`), the user's pick.
+- **Two cutaway gags** (Seedance 2.0, 720p, 27 cr each = 54 cr) wired as the random-no-repeat combo-spike pool:
+  `carnival-intense-1.mp4` = a top-hat RINGMASTER throwing his arms wide as ember-gold soul-fire swirls up;
+  `carnival-intense-2.mp4` = the carnival erupting — carousel + arcade lights → a golden bell-burst of sparks + souls.
+  Warm crimson-gold-charcoal palette (no blue), self-verified frame-by-frame via an ffmpeg montage before wiring.
+- **Static-bg cutaway flow (engine fix)** — a level with a static `bgArt` but no ambient `bgVideo` used to revert a
+  finished cutaway to the MOON loop (the `#bg-video` is hidden behind the static `#bg-image` for bgArt levels). Now
+  `showReactive` tracks `_staticBg`: `_intenseKick` reveals the `#bg-video` layer for the gag, `_intenseRevert` re-hides
+  it (back to the static carnival scene) — never the moon. General fix; benefits any static-bg level that has cutaways.
+- Verified live (:8790, serve.py untouched): v180 loads, 0 console errors, all Carnival assets serve 200 (both mp4s
+  valid video/mp4), skin verified, and the engine calls `RhythmLevelFx.onHit/onCombo/onMiss` (the chain that pumps the
+  striker + fires the cutaways). The combo→cutaway visual is the user's to confirm in a playthrough.
+- NEXT (optional polish): a proper cover + hit/miss fate cards; the wild "hero" wolf guitar as the cover splash; an
+  ambient carnival loop only if the static scene ever feels flat.
+
 ### v179 — CARNIVAL OF SOULS level, part 1: the wolf-shaman play surface + the high-striker mechanic  ✅
 Building the next boss level ("better than Melody's", per the brief). This pass = the hardest pieces, fully verified.
 - **Wolf-pelt SHAMAN guitar (the play surface)** — `assets/guitars/shaman-wolf.png`. The wild hero guitar approved in
