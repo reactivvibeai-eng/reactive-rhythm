@@ -1107,6 +1107,30 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v179 — CARNIVAL OF SOULS level, part 1: the wolf-shaman play surface + the high-striker mechanic  ✅
+Building the next boss level ("better than Melody's", per the brief). This pass = the hardest pieces, fully verified.
+- **Wolf-pelt SHAMAN guitar (the play surface)** — `assets/guitars/shaman-wolf.png`. The wild hero guitar approved in
+  chat can't BE a play surface (its rib-cage/rune body sits OVER the strings → the lane-aligner measured 1 clean row).
+  So, the proven path (how Melody's + Bone Daddy's surfaces were made): i2i restyle from the canonical `crimson-chaos-ryo`
+  template (GPT Image 2, the only model the user approves) → wolf-skull headstock + furred wings + rune circle on a CLEAN
+  neck, strings kept clear. New **adaptive neck-band string measurer** (`assets/guitars/_measure_adaptive.py`) locked it:
+  **66 clean exactly-5 rows, 3.36px residual, overlay-verified riding the painted strings nut→bridge.** Registered
+  `verified:true` in `SKIN_GEOM` (game.js). Confirmed live: `setGuitarSkin('…/shaman-wolf.png')` applies with **zero
+  "not verified" warnings** → the lanes ride its strings.
+- **HIGH-STRIKER mechanic** (`mechanic:{type:'striker'}`, index.html `buildMechanic`) — the carnival strongman game:
+  every note hit **pumps the meter** (the chrome puck climbs the tower); topping it out **RINGS the bell** and banks a
+  chunk of **Overdrive** (new public `RhythmGame.chargeOverdrive(amt)` in game.js). Pure-CSS tower (brand crimson/gold
+  on charcoal). Verified live: the `--f` meter drives fill+puck 0→100% (0→312px), the ring class fires `rrm-bell-ring`,
+  `chargeOverdrive(0.3)` → 0.3.
+- **Random-no-repeat cutaway pool** — the combo-spike backdrop (Melody's "gag" system) now takes a POOL
+  `intenseVideos:[…]` chosen random with no immediate repeat (`_pickIntense`), falling back to the single `intenseVideo`.
+  Plumbing is in; the two carnival clips get generated next.
+- **Level wired** — `carnival-boss` (theme 'ember', boss, wolf skin, striker, the carnival scene as `bgArt`). Renders in
+  the Levels screen. Song is a `stride:21` placeholder pending the user's track pick.
+- Verified headless (rr-verify server on :8790, serve.py on :8787 untouched): page loads on v179, **0 console errors**,
+  skin verifies, striker meter + bell work, `chargeOverdrive` works, the level lists. NEXT: 2 cutaway clips + ambient
+  carnival loop (needs the preferred VIDEO model + a credit quote) + a proper cover + fate cards + the real song.
+
 ### v178 — CO-OP: the rival deck is a TRUE Guitar-Hero mirror (colored notes + catcher buttons)  ✅
 Playtest: "I don't see the color notes, it doesn't look like the buttons are being pushed — it needs to look like a
 true GH split-screen." Dead on. The ghost deck was drawing **monochrome chrome gems + one flat crimson catcher line**,

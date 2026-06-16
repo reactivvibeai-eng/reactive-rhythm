@@ -581,6 +581,12 @@
     'assets/guitars/bone-daddy.png':    { verified: true, aspect: 1504 / 2650, nutFY: 0.160, bridgeFY: 0.810,
       nutXF:    [0.4608, 0.4820, 0.5066, 0.5326, 0.5572],
       bridgeXF: [0.3544, 0.4249, 0.4953, 0.5672, 0.6370] },
+    // Carnival of Souls — wolf-pelt SHAMAN bass (i2i restyle from crimson-chaos-ryo, body→wolf fur+skull+runes,
+    // neck/strings kept clean). Gate PASSED via adaptive neck-band measure: 66 clean exactly-5 rows (res 3.36px),
+    // fit overlay-verified riding the painted strings nut→bridge. Transparent cutout, aspect ≈0.560.
+    'assets/guitars/shaman-wolf.png':   { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,
+      nutXF:    [0.4583, 0.4779, 0.4990, 0.5197, 0.5375],
+      bridgeXF: [0.3866, 0.4403, 0.4980, 0.5612, 0.6203] },
     'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
       nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
       bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },
@@ -706,6 +712,8 @@
   window.RhythmGame.equipGuitarSkin = equipGuitarSkin;   // global persisted equip
   window.RhythmGame.applyEquippedSkin = applyEquippedSkin;
   window.RhythmGame.getEquippedSkin = () => equippedSkinSrc;
+  // Carnival high-striker mechanic: ringing the bell banks a chunk of Overdrive (clamped 0..1).
+  window.RhythmGame.chargeOverdrive = (amt) => { try { overdrive = Math.min(1, overdrive + (typeof amt === 'number' ? amt : 0.2)); if (typeof updateHUD === 'function') updateHUD(); } catch (e) {} return (typeof overdrive === 'number' ? overdrive : 0); };
 
   // ---------- SHARED, UNLOCKABLE AUDIO CONTEXT (mobile autoplay) ----------
   let sharedAC = null;

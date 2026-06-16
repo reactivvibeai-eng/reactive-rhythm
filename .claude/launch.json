@@ -8,6 +8,12 @@
       "port": 8787
     },
     {
+      "name": "rr-verify",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8790", "--bind", "127.0.0.1", "--directory", "D:/sunoai music plan/animev1/veo 3 round 2/can i pet that dog/cloudcode/v2"],
+      "port": 8790
+    },
+    {
       "name": "crew-lab",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8766", "--bind", "127.0.0.1", "--directory", "C:/Users/tjean/OneDrive/Documents/Claude/NeuralBrain"],
