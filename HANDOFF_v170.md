@@ -65,7 +65,7 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - More **beat-pulse / juice** polish.
 - MP **before-public** track (server-authoritative scoring [needs Lovable], reconnection, host migration) — larger.
 
-## STATE: now v173 (was v170). Since v170, two passes landed — see CHANGELOG.md (top entries):
+## STATE: now v174 (was v170). Since v170, three passes landed — see CHANGELOG.md (top entries):
 - **v171 JUICE** — global beat-bloom on EVERY stage (themed video too) + at 1× mult; Overdrive ignition flash+shockwave;
   results S/A ember burst; menu atom-breathe + primary-CTA crimson heartbeat. Pure CSS/canvas, reduce-motion/fx-lite gated.
 - **v172–v173 MP BEFORE-PUBLIC HARDENING (build42)** — `t-snapshot` host heartbeat (self-heal), reconnection
@@ -76,5 +76,10 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - Verified headless to the harness's limit (8-player auto bracket: R1 full lifecycle + R1→R2 advance, snapshot version
   0→32, 0 new errors). The desktop split-screen + full-song feel + the TRUE 2-client reconnect/migration handoff need the
   user's machine (offline harness has no 2nd client; headless throttles idle timers).
-- Working tree has uncommitted edits on the MAIN dir (v158→v173, branch `visual-overhaul`).
-Origin = github.com/reactivvibeai-eng/reactive-rhythm.
+- **v174 FOLLOW-UP** — JUICE is now **live-tunable to taste** (`window.__rrJuice` presets/`set`/persist — no rebuild;
+  the canvas magic numbers live in a `JUICE` config in game.js). MP netcode **validated over the REAL Supabase
+  transport** (automated 2-peer test: subscribe + soft-presence + `t-snapshot` heartbeat + `t-final` sanitation all
+  round-tripped with a genuine 2nd client). **`MP_SMOKE_TEST.md`** = the 2-device manual procedure (the full UI
+  reconnect/host-migration handoff needs two real game instances).
+- Git: the **v173 checkpoint is committed** (`db10878` on `visual-overhaul`); v174 is a follow-up commit on the same
+  branch. Origin = github.com/reactivvibeai-eng/reactive-rhythm (not pushed).

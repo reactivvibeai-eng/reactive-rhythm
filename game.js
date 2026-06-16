@@ -102,6 +102,12 @@
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
   let bgPulse = 0;
+  // ---- JUICE: live-tunable FX intensities (dev hook `window.__rrJuice` — strip at content-freeze; the chosen
+  // values bake in as defaults). bloom = whole-frame beat-bloom max alpha, bloomR = its outer radius (×canvas
+  // height); OD ignition odFlash = flash peak alpha, odRing = shockwave reach (×screen diagonal); odVig /
+  // odVigPulse = the sustained Overdrive vignette. Persisted to localStorage `rr_juice`. ----
+  const JUICE = { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 };
+  try { const _sj = JSON.parse(localStorage.getItem('rr_juice') || 'null'); if (_sj) for (const k in JUICE) if (typeof _sj[k] === 'number') JUICE[k] = _sj[k]; } catch (e) {}
   // ---- PER-LEVEL VISUAL IDENTITY (build7) ----
   // Set by RhythmGame.setLevelAccent('r,g,b') from the level-theme code; null = Quick Play (no tint).
   // Used ONLY for ADDITIVE glow + ambient FX — LANE_COLORS / scoring / timing are untouched.
@@ -1745,6 +1751,14 @@
   }
   // dev-only harness for deterministic input/sustain testing (no effect on real play)
   try {
+    // JUICE live-tuning (dev hook, strip at content-freeze): tune FX intensities to taste while a song plays —
+    // __rrJuice.preset('subtle'|'balanced'|'intense'), or .set({ bloom: 0.12, odRing: 0.8 }); persists to localStorage.
+    window.__rrJuice = {
+      get: () => Object.assign({}, JUICE),
+      set: (o) => { if (o) for (const k in JUICE) if (typeof o[k] === 'number') JUICE[k] = o[k]; try { localStorage.setItem('rr_juice', JSON.stringify(JUICE)); } catch (e) {} return Object.assign({}, JUICE); },
+      preset: function (n) { const P = { subtle: { bloom: 0.05, bloomR: 0.9, odVig: 0.12, odVigPulse: 0.10, odFlash: 0.22, odRing: 0.5 }, balanced: { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 }, intense: { bloom: 0.14, bloomR: 1.0, odVig: 0.22, odVigPulse: 0.18, odFlash: 0.5, odRing: 0.82 } }; if (P[n]) this.set(P[n]); return this.get(); },
+      reset: function () { return this.set({ bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 }); }
+    };
     window.__rrDebug = {
       state: () => state,
       jt: () => (state === 'playing' ? +(songTime() - audioOffset).toFixed(3) : null),
@@ -3200,9 +3214,9 @@
       const bb = reduceMotion ? Math.min(0.18, bgPulse) * 0.4 : bgPulse;
       if (bb > 0.02) {
         const _ac = levelAccentRGB || '255,31,46';
-        const bbg = ctx.createRadialGradient(cw / 2, ch * 0.52, ch * 0.30, cw / 2, ch * 0.52, ch * 0.95);
+        const bbg = ctx.createRadialGradient(cw / 2, ch * 0.52, ch * 0.30, cw / 2, ch * 0.52, ch * JUICE.bloomR);
         bbg.addColorStop(0, 'rgba(' + _ac + ',0)');
-        bbg.addColorStop(1, 'rgba(' + _ac + ',' + (0.085 * Math.min(1, bb)).toFixed(3) + ')');
+        bbg.addColorStop(1, 'rgba(' + _ac + ',' + (JUICE.bloom * Math.min(1, bb)).toFixed(3) + ')');
         ctx.save(); ctx.globalCompositeOperation = 'screen';
         ctx.fillStyle = bbg; ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
@@ -3213,7 +3227,7 @@
     // additive so it never reads purple). Pulses unless reduce-motion is on.
     if (odActive) {
       const pulse = reduceMotion ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() / 140));
-      const a = 0.16 + 0.14 * pulse;
+      const a = JUICE.odVig + JUICE.odVigPulse * pulse;
       const og = ctx.createRadialGradient(cw / 2, ch * 0.5, ch * 0.34, cw / 2, ch * 0.5, ch * 0.8);
       og.addColorStop(0, 'rgba(255,200,120,0)');
       og.addColorStop(1, 'rgba(255,180,90,' + a.toFixed(3) + ')');
@@ -3227,11 +3241,11 @@
     if (odBurst > 0.01) {
       const ob = odBurst;
       ctx.save(); ctx.globalCompositeOperation = 'screen';
-      ctx.fillStyle = 'rgba(255,226,160,' + (0.34 * ob * ob).toFixed(3) + ')';
+      ctx.fillStyle = 'rgba(255,226,160,' + (JUICE.odFlash * ob * ob).toFixed(3) + ')';
       ctx.fillRect(0, 0, cw, ch);
       ctx.restore();
       if (!reduceMotion) {
-        const rw = (1 - ob) * Math.hypot(cw, ch) * 0.62;
+        const rw = (1 - ob) * Math.hypot(cw, ch) * JUICE.odRing;
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = 'rgba(255,206,120,' + (0.55 * ob).toFixed(3) + ')';
         ctx.lineWidth = 2 + 10 * ob;

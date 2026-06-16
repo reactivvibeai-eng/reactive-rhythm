@@ -1107,6 +1107,29 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v174 — JUICE is live-tunable to taste + MP validated over the REAL transport  ✅
+Two follow-ups to the v171 juice + v172–v173 MP hardening: make the FX intensities dial-able without a rebuild,
+and validate the new netcode over the actual Supabase transport (not just the offline loopback).
+- **`window.__rrJuice` live tuning** — the canvas juice magic numbers are centralized in a `JUICE` config
+  (game.js): `bloom` (whole-frame beat-bloom alpha) + `bloomR` (its radius), `odFlash` + `odRing` (the Overdrive
+  ignition flash + shockwave size), `odVig` + `odVigPulse` (sustained OD vignette). Tune them **live while a song
+  plays**: `__rrJuice.preset('subtle'|'balanced'|'intense')`, or `.set({ bloom: 0.12, odRing: 0.8 })`, `.get()`,
+  `.reset()`. Persisted to `localStorage.rr_juice` and re-loaded at boot, so a chosen taste sticks; the render reads
+  `JUICE.*` so changes apply on the next frame. (Dev hook — strip at content-freeze; the dialed-in values bake in as
+  the new defaults. `balanced` = the current v171 defaults.) Verified: get/set (bad keys rejected) + persist + all 3
+  presets + reset; drove the demo at **intense** then toggled to **subtle** mid-run with Overdrive firing — every
+  `JUICE`-reading render path (bloom, OD vignette, ignition flash+ring) ran clean, 0 errors.
+- **Real 2-peer transport smoke test** — spun a **genuine second Supabase client** (separate websocket) onto a real
+  bracket channel the running game hosted, and confirmed end-to-end over the actual transport: the 2nd peer
+  **subscribed**, the host **saw it via real soft-presence** (`memberCount:2`), the host's **`t-snapshot` heartbeat
+  reached the peer** (6 received, version-matched v12), and the peer's deliberately-junk `t-final`
+  (`score 1e30 / acc 250 / combo −5`) **arrived sanitized** to `20000000 / 100 / 0` on the host. So subscribe +
+  presence + the new snapshot heartbeat + final-sanitation all work with two independent peers, not just the
+  `fakeTourChannel` loopback. (The full UI reconnect / host-migration **handoff** still wants two separate game
+  instances — that's the manual test.)
+- **`MP_SMOKE_TEST.md`** — a ~10-min 2-device/2-tab manual procedure (happy path · forfeit guard · reconnection ·
+  host migration) with the exact console probes, for the definitive multi-client test.
+
 ### v172–v173 — MP BEFORE-PUBLIC HARDENING: self-heal, reconnect, host failover, fair forfeits (build42)  ✅
 The tournament works for solo/friends but was fragile to drops (host crash = bracket dissolved; a presence blip could
 forfeit a live player; a reload booted you from the bracket; raw peer scores were trusted verbatim). This pass adds a
