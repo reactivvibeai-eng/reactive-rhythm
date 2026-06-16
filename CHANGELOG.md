@@ -1107,6 +1107,19 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v187 — BETA: "Coming Soon" level locks + matched-frame cutaway stitch  ✅
+Two from the inflection-point session: gate the beta, and apply the user's AI-video stitch technique.
+- **Coming Soon locks** — only the FINISHED bespoke levels are playable; every other level shows a "🔒 COMING SOON"
+  badge and can't launch. A `LVL_FINISHED` whitelist in the levels build (carnival-boss, melody-boss, frac-01/Skully,
+  bone-daddy); every other authored level + ALL stride-fill catalog cards get the `coming-soon` class (dimmed/grayscaled
+  art + centered badge), and the card click early-returns on that class. Verified live: 4 playable, 14 locked; clicking a
+  locked card stays on the menu; clicking a finished level still launches (striker builds).
+- **Cutaway stitch (matched frames)** — per the user's technique (end frame of one clip = start frame of the next so the
+  camera "travels"): regenerated both cutaways with Seedance start_image AND end_image = the carnival scene, then ffmpeg
+  crossfaded each tail back onto the carnival frame. Each cutaway now TRAVELS IN from a frame matching the static loop
+  (seamless cut-in) and TRAVELS BACK to it (last-frame-vs-carnival PSNR 24/18 dB → **34.5 dB** after the crossfade) — no
+  jar on either end, the "you triggered it" illusion intact. Same filenames, so no rewiring.
+
 ### v185-v186 — Carnival critique/polish pass: perf-aware cutaways (adversarial regression + smoke-test came back clean)  ✅
 The user's process (critique → smoke-test → polish → re-critique). A 3-agent adversarial pass (regression · Carnival
 critique · backdrop-loop smoke-test) found **NO regressions** and the loop/cutaway/revert lifecycle CORRECT (loops on

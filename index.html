@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=186" />
+<link rel="stylesheet" href="jukebox.css?v=187" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -627,6 +627,15 @@
   .lv-star { font-size: 12px; line-height: 1; color: rgba(255,255,255,0.15); }
   .lv-star.on { color: #e0a93f; text-shadow: 0 0 8px rgba(224,169,63,0.6); }
   .lv-lock { position: absolute; top: 6px; right: 7px; font-size: 13px; opacity: 0.92; }
+  /* BETA "Coming Soon" lock — only the finished bespoke levels are playable; the rest are visibly locked + promised */
+  .lv-card.coming-soon { cursor: not-allowed; }
+  .lv-card.coming-soon:hover { transform: none; border-color: var(--line); box-shadow: none; }
+  .lv-card.coming-soon .lv-art { filter: grayscale(0.72) brightness(0.46); }
+  .lv-card.coming-soon .lv-art::after { content: ''; position: absolute; inset: 0; background: rgba(8,5,5,0.5); pointer-events: none; z-index: 2; }
+  .lv-soon { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 3;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.1em; white-space: nowrap;
+    color: #ffe0b0; background: rgba(20,8,6,0.88); border: 1px solid rgba(224,169,63,0.6); border-radius: 8px;
+    padding: 5px 9px; box-shadow: 0 2px 12px rgba(0,0,0,0.55), inset 0 0 12px rgba(224,169,63,0.12); }
   .lv-next { position: absolute; top: 6px; right: 7px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.14em; color: #160606; background: var(--crimson); border-radius: 6px; padding: 3px 6px; box-shadow: 0 0 14px rgba(255,31,46,0.6); }
   .lv-card.is-next { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 0 22px rgba(255,31,46,0.3); }
   .lv-card.is-next .lv-art { animation: lvnextpulse 1.8s ease-in-out infinite; }
@@ -3168,7 +3177,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=186" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=187" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4493,11 +4502,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=186"></script>
-<script src="game.js?v=186"></script>
-<script src="jukebox.js?v=186"></script>
-<script src="catalog.js?v=186"></script>
-<script src="multiplayer.js?v=186"></script>
+<script src="assets/fx/fx-player.js?v=187"></script>
+<script src="game.js?v=187"></script>
+<script src="jukebox.js?v=187"></script>
+<script src="catalog.js?v=187"></script>
+<script src="multiplayer.js?v=187"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5300,6 +5309,8 @@
   function tierStars(ti, tracks) { var ts = 0; for (var j = 0; j < PER; j++) ts += lvState(ti * PER + j, tracks).stars; return ts; }
   function build() {
     var body = $('levels-body'); if (!body) return;
+    // BETA gate: only these FINISHED bespoke levels are playable; every other authored level + all stride-fill show "Coming Soon".
+    var LVL_FINISHED = { 'carnival-boss': 1, 'melody-boss': 1, 'frac-01': 1, 'bone-daddy': 1 };
     var tracks = levelTracks();
     if (!tracks.length) { body.innerHTML = '<div class="levels-empty">Levels load from your library — give it a moment, then reopen.</div>'; return; }
     var totalStars = 0; for (var a = 0; a < tracks.length; a++) totalStars += lvState(a, tracks).stars;
@@ -5343,10 +5354,11 @@
         var art = L.cover
           ? ('<img src="' + esc(L.cover) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + esc((L.title || 'L').charAt(0).toUpperCase()) + '</span>\'">')
           : artHTML(lt, ai);
-        var corner = !unlocked ? '<span class="lv-lock">🔒</span>' : '';
+        var soon = !LVL_FINISHED[L.id];   // Coming Soon unless it's a finished bespoke level
+        var corner = soon ? '<span class="lv-soon">🔒 COMING SOON</span>' : (!unlocked ? '<span class="lv-lock">🔒</span>' : '');
         var modBits = '';
         if (LEVELDESIGN_MODS && L.mods) { if (L.mods.speed && L.mods.speed !== 1) modBits += '<span class="lv-mod">' + (L.mods.speed > 1 ? 'fast' : 'slow') + '</span>'; if (L.mods.mirror) modBits += '<span class="lv-mod">mirror</span>'; if (L.mods.failOn) modBits += '<span class="lv-mod">no-fail-off</span>'; }
-        var cls = 'lv-card authored' + (L.boss ? ' boss' : '') + (unlocked ? '' : ' locked') + (stN > 0 ? ' cleared' : '');
+        var cls = 'lv-card authored' + (L.boss ? ' boss' : '') + (soon ? ' coming-soon' : (unlocked ? '' : ' locked')) + (stN > 0 ? ' cleared' : '');
         html += '<button class="' + cls + '" data-lvl="' + esc(L.id) + '">' +
           '<div class="lv-art' + (hasArt ? '' : ' has-initial') + '" style="' + (hasArt ? '' : toneStyle(ai)) + '">' + art +
             '<span class="lv-num">' + esc((L.title || (lt && lt.title) || '').slice(0, 14) || ('0' + (ai + 1))) + '</span>' +
@@ -5363,9 +5375,9 @@
         var idx = ti * PER + i, t = tracks[idx], num = idx + 1, st = lvState(idx, tracks);
         var hasArt2 = !!(t && t.artwork_url);
         var art2 = artHTML(t, idx);
-        var corner2 = !st.unlocked ? '<span class="lv-lock">🔒</span>' : (idx === nextIdx ? '<span class="lv-next">NEXT</span>' : '');
-        var nextGlyph = (st.unlocked && idx === nextIdx) ? '<span class="lv-next-glyph" aria-hidden="true">▶</span>' : '';
-        var cls2 = 'lv-card' + (st.unlocked ? '' : ' locked') + (idx === nextIdx ? ' is-next' : '') + (st.stars > 0 ? ' cleared' : '');
+        var corner2 = '<span class="lv-soon">🔒 COMING SOON</span>';   // BETA: stride-fill catalog levels aren't finished levels → Coming Soon
+        var nextGlyph = '';
+        var cls2 = 'lv-card coming-soon' + (st.stars > 0 ? ' cleared' : '');
         html += '<button class="' + cls2 + '" data-idx="' + idx + '">' +
           '<div class="lv-art' + (hasArt2 ? '' : ' has-initial') + '" style="' + (hasArt2 ? '' : toneStyle(idx)) + '">' + art2 + '<span class="lv-num">' + (num < 10 ? '0' : '') + num + '</span>' + corner2 + nextGlyph + '</div>' +
           '<div class="lv-meta"><div class="lv-t">' + esc(t.title || 'Untitled') + '</div><div class="lv-a">' + esc(t.artist_name || t.artist_credit_name || '') + '</div>' + starRow(st.stars) + '</div>' +
@@ -5392,6 +5404,7 @@
     var readyForClick = rcReady();
     for (var c = 0; c < cards.length; c++) {
       cards[c].addEventListener('click', function () {
+        if (this.classList.contains('coming-soon')) return;   // BETA: Coming Soon levels aren't playable yet
         // ---- authored level branch ----
         var lvId = this.getAttribute('data-lvl');
         if (lvId) {
