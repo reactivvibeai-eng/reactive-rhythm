@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=189" />
+<link rel="stylesheet" href="jukebox.css?v=190" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3196,7 +3196,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=189" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=190" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4525,11 +4525,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=189"></script>
-<script src="game.js?v=189"></script>
-<script src="jukebox.js?v=189"></script>
-<script src="catalog.js?v=189"></script>
-<script src="multiplayer.js?v=189"></script>
+<script src="assets/fx/fx-player.js?v=190"></script>
+<script src="game.js?v=190"></script>
+<script src="jukebox.js?v=190"></script>
+<script src="catalog.js?v=190"></script>
+<script src="multiplayer.js?v=190"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4658,7 +4658,9 @@
     { id:'clockwork',     title:'Tourbillon',       thumb:'assets/guitars/clockwork-card.jpg',     src:'assets/guitars/clockwork.png' },
     { id:'violet_gothic', title:'Violet Gothic',    thumb:'assets/guitars/violet-gothic-5.png',    src:'assets/guitars/violet-gothic-5.png' },
     { id:'bone_daddy',    title:'Bone Daddy',       thumb:'assets/guitars/bone-daddy.png',         src:'assets/guitars/bone-daddy.png' },
-    { id:'melody_pink',   title:'Melody',           thumb:'assets/guitars/melody-pink.png',        src:'assets/guitars/melody-pink.png' }
+    { id:'melody_pink',   title:'Melody',           thumb:'assets/guitars/melody-pink.png',        src:'assets/guitars/melody-pink.png' },
+    { id:'shaman_wolf',   title:'Shaman Wolf',      thumb:'assets/guitars/shaman-wolf-card.jpg',   src:'assets/guitars/shaman-wolf.png' },
+    { id:'crimson_chaos', title:'Crimson Chaos',    thumb:'assets/guitars/crimson-chaos-ryo-card.jpg', src:'assets/guitars/crimson-chaos-ryo.png' }
   ];
   function equippedSkinId() { try { return localStorage.getItem('rr_skin_id') || ''; } catch (e) { return ''; } }
   function renderLoadout() {
@@ -5796,12 +5798,16 @@
   // jpg at assets/store/<id>.jpg and it appears (missing → initial-letter tile via the <img onerror>). ----
   var STORE_ART = {
     // skins (covers on disk: assets/store/skin-*.jpg)
-    violet_gothic: 'assets/store/skin-violet-gothic.jpg',
+    // FIXED: the 3 below now use a crop of the REAL verified 5-string play surface (the old
+    // assets/store/skin-*.jpg hero renders showed the wrong strings — user-reported).
+    violet_gothic: 'assets/guitars/violet-gothic-5-card.jpg',
     crimson_chrome:'assets/store/skin-crimson-chrome.jpg',
     ember_bone:    'assets/store/skin-ember-bone.jpg',
     gold_relic:    'assets/store/skin-gold-relic.jpg',
-    bone_daddy:    'assets/store/skin-bone-daddy.jpg',
-    melody_pink:   'assets/store/skin-melody-pink.jpg',
+    bone_daddy:    'assets/guitars/bone-daddy-card.jpg',
+    melody_pink:   'assets/guitars/melody-pink-card.jpg',
+    shaman_wolf:   'assets/guitars/shaman-wolf-card.jpg',
+    crimson_chaos: 'assets/guitars/crimson-chaos-ryo-card.jpg',
     // premium level + theme (reuse existing covers)
     boss_neon:     'assets/store/boss_neon.jpg',
     melody_boss:   'assets/levels/melody-cover.jpg',
@@ -5819,7 +5825,9 @@
     melody_pink:   'assets/guitars/melody-pink.png',
     crimson_fox:   'assets/guitars/crimson-fox.png',
     crimson_tarot: 'assets/guitars/crimson-tarot.png',
-    clockwork:     'assets/guitars/clockwork.png'
+    clockwork:     'assets/guitars/clockwork.png',
+    shaman_wolf:   'assets/guitars/shaman-wolf.png',
+    crimson_chaos: 'assets/guitars/crimson-chaos-ryo.png'
   };
   function skinSrcFor(it) {
     var m = it && it.meta;
@@ -5844,6 +5852,9 @@
     { item_type:'skin',  item_id:'crimson_fox',   title:'Crimson Moon Fox', price_sparks:2400, meta:{ description:'Ryo’s spirit-fox beneath a blood moon', art_url:'assets/guitars/crimson-fox-card.jpg',   skin_url:SKIN_GUITAR.crimson_fox } },
     { item_type:'skin',  item_id:'crimson_tarot', title:'Crimson Fortune',  price_sparks:2200, meta:{ description:'Arcana tarot bass — it reads your fate', art_url:'assets/guitars/crimson-tarot-card.jpg', skin_url:SKIN_GUITAR.crimson_tarot } },
     { item_type:'skin',  item_id:'clockwork',     title:'Tourbillon',       price_sparks:2600, meta:{ description:'Exposed luxury watch-movement showpiece', art_url:'assets/guitars/clockwork-card.jpg',     skin_url:SKIN_GUITAR.clockwork } },
+    // Reusing existing verified play surfaces as skins (fills the store, more customization, zero new gens).
+    { item_type:'skin',  item_id:'shaman_wolf',   title:'Shaman Wolf',      price_sparks:2000, meta:{ description:'Wolf-pelt shaman bass (Carnival surface)', art_url:STORE_ART.shaman_wolf,   skin_url:SKIN_GUITAR.shaman_wolf } },
+    { item_type:'skin',  item_id:'crimson_chaos', title:'Crimson Chaos',    price_sparks:2000, meta:{ description:'The blood-lava signature axe', art_url:STORE_ART.crimson_chaos, skin_url:SKIN_GUITAR.crimson_chaos } },
     { item_type:'level', item_id:'boss_neon',      title:'THE BREAKER (Boss)', price_sparks:2500, meta:{ description:'Unlock the Fracture boss stage', art_url:STORE_ART.boss_neon } },
     { item_type:'level', item_id:'melody_boss',    title:'Melody (Boss)',  price_sparks:2200, meta:{ description:'Unlock the Melody cat-paw boss', art_url:STORE_ART.melody_boss } },
     { item_type:'theme', item_id:'theme_neon',     title:'Neon Theme',     price_sparks:800,  meta:{ description:'Neon HUD accent theme', art_url:STORE_ART.theme_neon } }

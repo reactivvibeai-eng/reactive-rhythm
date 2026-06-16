@@ -607,6 +607,10 @@
     'assets/guitars/clockwork.png':     { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Tourbillon" clockwork — 58 rows, res 2.84px
       nutXF:    [0.4386, 0.4594, 0.4891, 0.5134, 0.5387],
       bridgeXF: [0.4080, 0.4613, 0.5058, 0.5615, 0.6130] },
+    // The base crimson-chaos-ryo template, also sold as the "Crimson Chaos" skin (88 rows, res 1.30px).
+    'assets/guitars/crimson-chaos-ryo.png': { verified: true, aspect: 1080 / 1920, nutFY: 0.160, bridgeFY: 0.810,
+      nutXF:    [0.4624, 0.4840, 0.5067, 0.5307, 0.5538],
+      bridgeXF: [0.3479, 0.4204, 0.4944, 0.5697, 0.6440] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
   // resample a measured per-string array to the active LANE_COUNT: exact when counts match; the most

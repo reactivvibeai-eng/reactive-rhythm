@@ -1107,6 +1107,17 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v190 — Store guitar fix: correct-string previews + 2 reused skins (Shaman Wolf · Crimson Chaos)  ✅
+User reported the top 3 store guitars (Violet Gothic / Bone Daddy / Melody) showed the WRONG strings — they were old
+hero-render previews (`assets/store/skin-*.jpg`), NOT the verified 5-string play surfaces. Fixed with ZERO new gens:
+- Repointed those 3 store cards to 16:10 crops of their REAL verified play surfaces (`*-card.jpg`) — correct straight 5 strings.
+- Added two existing verified guitars as purchasable skins (fills the store + more customization, reusing what we have):
+  **Shaman Wolf** (the Carnival play surface) and **Crimson Chaos** (the `crimson-chaos-ryo` base template — measured 88
+  rows / **1.30px**, registered `SKIN_GEOM verified:true`). Both wired into SKIN_GUITAR + STORE_FALLBACK + STORE_ART + the
+  profile loadout.
+- Store now lists **8 live guitar skins** (all correct strings) + 3 coming-soon non-skins; loadout shows 9 tiles.
+- Live-verified (:8790, v190): 11/11 store images load (0 broken), `isSkinPlayable` true for both new skins, 0 console errors.
+
 ### v189 — Premium guitar skins (Fox · Tarot · Clockwork) + profile loadout + beta store padlocks  ✅
 Three new PREMIUM guitar skins, designed WITH the user and finalized as real play surfaces:
 - **Crimson Moon Fox** (Ryo’s spirit-fox under a blood moon), **Crimson Fortune** (crimson tarot-card arcana),
