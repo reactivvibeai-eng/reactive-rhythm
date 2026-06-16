@@ -1107,6 +1107,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v185-v186 — Carnival critique/polish pass: perf-aware cutaways (adversarial regression + smoke-test came back clean)  ✅
+The user's process (critique → smoke-test → polish → re-critique). A 3-agent adversarial pass (regression · Carnival
+critique · backdrop-loop smoke-test) found **NO regressions** and the loop/cutaway/revert lifecycle CORRECT (loops on
+launch, reverts to loop=true + resumes). One real polish acted on:
+- **Cutaways are now perf-aware** — `_intenseKick` early-returns under `rr-perf-bg` / `?novideo` (the backdrop is hidden
+  there), so it no longer decodes a 5-6MB cutaway invisibly (a low-end stutter risk). Verified live: the cutaway fires in
+  normal mode and SKIPS under `rr-perf-bg`. (First attempt used a too-broad `display:none` check that false-positived when
+  the game screen wasn't active; refined to the explicit perf/novideo flags.)
+- Left by design: the vs cutaway swaps the SHARED `#bg-video` (both decks see a local combo's gag) — the intended MP
+  spectacle; the 1-frame revert poster-flash is imperceptible for Carnival (the poster IS the loop's source frame). No
+  regression to Skully/Melody/Bone Daddy — their fate-cards also show in vs now, anchored to the local deck + scaled.
+
 ### v184 — Carnival REFINEMENT: near-static seamless loop + MP cutaways/cards + ember motif  ✅
 Playtest: "the looping background is jarring (frame A≠B); MP isn't featuring the cards and I couldn't trigger the combo
 cutaways; rethink the whole level." Diagnosed (3-agent), fixed, verified. The backdrop DESIGN LAW is now saved to memory.
