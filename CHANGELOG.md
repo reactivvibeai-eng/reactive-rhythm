@@ -1107,6 +1107,27 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v184 — Carnival REFINEMENT: near-static seamless loop + MP cutaways/cards + ember motif  ✅
+Playtest: "the looping background is jarring (frame A≠B); MP isn't featuring the cards and I couldn't trigger the combo
+cutaways; rethink the whole level." Diagnosed (3-agent), fixed, verified. The backdrop DESIGN LAW is now saved to memory.
+- **Backdrop is near-static + SEAMLESS** (the Melody model). The old `carnival-loop.mp4` had a moving CAMERA + a spinning
+  wheel/carousel → start/end were different shots (seam PSNR 18.75 dB; 27× Melody's motion). Regenerated as
+  **image-to-video from the static carnival scene** (locked camera; only fog + lights move), then ffmpeg crossfade-wrapped
+  the seam. New clip: **seam PSNR 34.4 dB** (matches Melody's 34.1) + near-static. No more jarring loop — the cutaway is
+  the only motion event (the "you triggered it" illusion). [[memory: reactive-rhythm-level-backdrop-design]]
+- **MP cutaways FIXED** — the env-mapping (`envFromAuthored` + the `applyEnvironment` synthetic) copied only the legacy
+  singular `intenseVideo` and DROPPED Carnival's `intenseVideos[]` array → in tournaments `_intenseList` was empty and the
+  cutaway no-op'd ("just looked like it was looping"). Both env paths now carry `intenseVideos`. Verified: in the env path
+  `onCombo` swaps `#bg-video` loop→`carnival-intense-1.mp4`.
+- **MP cards FIXED** — `html.rr-vs` hard-hid `#rr-reactive` in ALL split-screen. The cards pin to the LOCAL deck's neck
+  (`getLaneFrame`), so they CAN show; relaxed the hide (cards `display:block` in vs, scaled 0.8), kept the single-deck
+  striker prop hidden in vs. (Split-screen pixel-fit needs a desktop playtest — headless caps the viewport width.)
+- **Ember (Carnival) HUD motif** added (a strongman-bell watermark) — `ember` was the only theme missing one.
+- **Striker on mobile:** measured at 375px — sits in the left gutter (x9-61), leftmost lane at x136 → NO lane overlap; the
+  audit's "covers lane 1" was a code-read overestimate. Left as-is.
+- Verified live (single-player + the MP env path): new loop wired + visible, cutaways fire on combo in BOTH paths, cards
+  build + show in vs, striker builds, 0 console errors.
+
 ### v183 — Cutaway HARDENING: a 3-agent adversarial pass found 3 more gaps; rewrote the swap as runtime snapshot/restore  ✅
 After v182 fixed the config-static case, a 3-agent adversarial verification (bgVideo path · static path · regression)
 found the bgVideo + regression paths CLEAN but flagged 3 real gaps in the static path — all now fixed + live-verified.

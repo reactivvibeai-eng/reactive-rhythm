@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=183" />
+<link rel="stylesheet" href="jukebox.css?v=184" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -683,7 +683,8 @@
   /* split-screen versus: the level's reactive fate-cards + mechanic prop are full-screen, single-deck
      overlays — they pin beside only ONE deck's neck and read as broken dark boxes on a half-deck. Suppress
      them entirely in vs-mode (the rr-vs class is toggled by mount/unmountVsHud). */
-  html.rr-vs #rr-reactive, html.rr-vs #rr-mech { display: none !important; }
+  html.rr-vs #rr-mech { display: none !important; }   /* striker tower is a single-deck left-edge prop — keep hidden in vs. The fate-cards DO show in vs: placeReactiveCards pins them to the LOCAL deck's neck (getLaneFrame is the local deck), scaled down via the rule below. */
+  html.rr-vs #rr-reactive .rc-card { transform: scale(0.8); }   /* trim the cards so they sit cleanly beside the half-deck neck */
   /* Cards sit LOW, flanking the guitar bridge (closer in, clearly in view), and FILL UP like fate
      meters: DEATH charges with misses, THE WORLD charges with hits. */
   /* build9: cards HUG THE GUITAR NECK (user spec) — left/top/size are JS-driven off the live lane
@@ -936,6 +937,12 @@
     box-shadow: inset 0 0 28px rgba(255, 95, 162, 0.08);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ff5fa2' opacity='0.11'%3E%3Cellipse cx='32' cy='38' rx='12' ry='10'/%3E%3Ccircle cx='18' cy='26' r='5'/%3E%3Ccircle cx='27' cy='20' r='5'/%3E%3Ccircle cx='37' cy='20' r='5'/%3E%3Ccircle cx='46' cy='26' r='5'/%3E%3C/g%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: 50% calc(100% - 18px); background-size: 54px;
+  }
+  /* ember (Carnival of Souls) = the carnival strongman BELL motif in ember-orange */
+  #game.rr-lvl-themed[data-rrtheme="ember"] .hud-panel {
+    box-shadow: inset 0 0 28px rgba(255, 122, 74, 0.08);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ff7a4a' stroke-width='2.4' opacity='0.12'%3E%3Cpath d='M32 14c-8 0-13 6-13 16 0 6-2 9-5 12h36c-3-3-5-6-5-12 0-10-5-16-13-16z'/%3E%3Cpath d='M28 42a4 4 0 0 0 8 0'/%3E%3Cpath d='M32 9v5'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: 50% calc(100% - 18px); background-size: 52px;
   }
   /* the crimson hero readouts retint to the level accent */
   #game.rr-lvl-themed .hud-block .val.crimson {
@@ -3161,7 +3168,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=183" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=184" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4486,11 +4493,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=183"></script>
-<script src="game.js?v=183"></script>
-<script src="jukebox.js?v=183"></script>
-<script src="catalog.js?v=183"></script>
-<script src="multiplayer.js?v=183"></script>
+<script src="assets/fx/fx-player.js?v=184"></script>
+<script src="game.js?v=184"></script>
+<script src="jukebox.js?v=184"></script>
+<script src="catalog.js?v=184"></script>
+<script src="multiplayer.js?v=184"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5448,6 +5455,7 @@
         cover: L.cover || '', bgArt: L.bgArt || '', bgVideo: L.bgVideo || '',
         guitarSkin: L.guitarSkin || '',                 // build8: carry per-level guitar onto the env path (was dropped → skin never fired)
         intenseVideo: L.intenseVideo || '',             // build8: carry the combo-spike backdrop onto the env path
+        intenseVideos: L.intenseVideos || null,         // build48: carry the random-no-repeat cutaway POOL too (Carnival) — was dropped → cutaways never fired in MP/tournaments
         reactiveCards: L.reactiveCards || null, mechanic: L.mechanic || null, boss: !!L.boss,
         paid: !!(L.unlock && L.unlock.entitlement)
       };
@@ -5473,7 +5481,7 @@
       var e = envById(id);
       if (!e || e.isDefault || e.isRandom) { clearEnvironment(); return; }
       var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
-        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', reactiveCards: e.reactiveCards, mechanic: e.mechanic || null, boss: false, _isEnv: true };
+        cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', intenseVideos: e.intenseVideos || null, reactiveCards: e.reactiveCards, mechanic: e.mechanic || null, boss: false, _isEnv: true };
       _activeLevel = synthetic;
       try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(synthetic); } catch (e2) {}
       applyLevelTheme(synthetic);
