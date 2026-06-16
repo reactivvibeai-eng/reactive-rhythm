@@ -712,6 +712,9 @@
   window.RhythmGame.equipGuitarSkin = equipGuitarSkin;   // global persisted equip
   window.RhythmGame.applyEquippedSkin = applyEquippedSkin;
   window.RhythmGame.getEquippedSkin = () => equippedSkinSrc;
+  // P0 store guard: is this guitar a usable PLAY SURFACE? no-src/default + skins the engine doesn't know = ok; a
+  // KNOWN-unverified skin is NOT (it would fall back to crimson). The store uses this to never sell a broken skin.
+  window.RhythmGame.isSkinPlayable = (src) => (!src || !SKIN_GEOM[src] || !!SKIN_GEOM[src].verified);
   // Carnival high-striker mechanic: ringing the bell banks a chunk of Overdrive (clamped 0..1).
   window.RhythmGame.chargeOverdrive = (amt) => { try { overdrive = Math.min(1, overdrive + (typeof amt === 'number' ? amt : 0.2)); if (typeof updateHUD === 'function') updateHUD(); } catch (e) {} return (typeof overdrive === 'number' ? overdrive : 0); };
 

@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=187" />
+<link rel="stylesheet" href="jukebox.css?v=188" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3177,7 +3177,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=187" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=188" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4502,11 +4502,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=187"></script>
-<script src="game.js?v=187"></script>
-<script src="jukebox.js?v=187"></script>
-<script src="catalog.js?v=187"></script>
-<script src="multiplayer.js?v=187"></script>
+<script src="assets/fx/fx-player.js?v=188"></script>
+<script src="game.js?v=188"></script>
+<script src="jukebox.js?v=188"></script>
+<script src="catalog.js?v=188"></script>
+<script src="multiplayer.js?v=188"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5766,13 +5766,17 @@
     return SKIN_GUITAR[String(it && it.item_id)] || '';
   }
   function isSkin(it) { return String(it && it.item_type).toLowerCase() === 'skin'; }
+  // P0: never offer a SKIN whose guitar fails the play-surface gate — it would equip to the crimson fallback (paid for nothing).
+  // Non-skins always pass; a skin_url the engine doesn't know (custom/backend) is trusted; only KNOWN-unverified guitars are hidden.
+  function storePlayable(it) { if (!isSkin(it)) return true; var src = skinSrcFor(it); try { return !(window.RhythmGame && window.RhythmGame.isSkinPlayable) || window.RhythmGame.isSkinPlayable(src); } catch (e) { return true; } }
   // ---- CLIENT STORE FALLBACK CATALOG: used ONLY when backend /store returns no items (dormant / pre-update).
   // Mirrors the Lovable brief below. Prices in Sparks. Equip works fully client-side; level/theme ownership needs backend.
   var STORE_FALLBACK = [
     { item_type:'skin',  item_id:'violet_gothic',  title:'Violet Gothic',  price_sparks:1200, meta:{ description:'Necro-violet relic finish', art_url:STORE_ART.violet_gothic, skin_url:SKIN_GUITAR.violet_gothic } },
-    { item_type:'skin',  item_id:'crimson_chrome', title:'Crimson Chrome', price_sparks:1000, meta:{ description:'Mirror-chrome with crimson burst', art_url:STORE_ART.crimson_chrome, skin_url:SKIN_GUITAR.crimson_chrome } },
-    { item_type:'skin',  item_id:'ember_bone',     title:'Ember Bone',     price_sparks:1500, meta:{ description:'Charred bone + ember inlays', art_url:STORE_ART.ember_bone, skin_url:SKIN_GUITAR.ember_bone } },
-    { item_type:'skin',  item_id:'gold_relic',     title:'Gold Relic',     price_sparks:2000, meta:{ description:'Hammered gold, chrome hardware', art_url:STORE_ART.gold_relic, skin_url:SKIN_GUITAR.gold_relic } },
+    // PULLED (P0): crimson_chrome / ember_bone / gold_relic FAIL the play-surface measurement gate (5 / 27 / 10 clean
+    // rows, residual 16-18px — strings don't form straight lines) → they'd equip to the crimson fallback. Re-add each only
+    // once a VERIFIED guitar exists (template-i2i → adaptive-measure → SKIN_GEOM verified:true). storePlayable() also hides
+    // them defensively if the backend ever re-sends them.
     { item_type:'skin',  item_id:'bone_daddy',     title:'Bone Daddy',     price_sparks:1600, meta:{ description:'Charred bone-carved axe (Bone Daddy)', art_url:STORE_ART.bone_daddy, skin_url:SKIN_GUITAR.bone_daddy } },
     { item_type:'skin',  item_id:'melody_pink',    title:'Melody',         price_sparks:1800, meta:{ description:'Cat-pink showpiece (Melody boss)', art_url:STORE_ART.melody_pink, skin_url:SKIN_GUITAR.melody_pink } },
     { item_type:'level', item_id:'boss_neon',      title:'THE BREAKER (Boss)', price_sparks:2500, meta:{ description:'Unlock the Fracture boss stage', art_url:STORE_ART.boss_neon } },
@@ -5864,9 +5868,10 @@
 
   function render() {
     var grid = $('store-grid'), empty = $('store-empty');
-    if (!items.length) { grid.innerHTML = ''; empty.hidden = false; return; }
+    var shown = items.filter(storePlayable);   // P0: hide any skin whose guitar fails the play-surface gate
+    if (!shown.length) { grid.innerHTML = ''; empty.hidden = false; return; }
     empty.hidden = true;
-    grid.innerHTML = items.map(itemHtml).join('');
+    grid.innerHTML = shown.map(itemHtml).join('');
     if (!signedIn) banner('Browsing as a guest. <b>Sign in on ReactivVibe</b> to spend Sparks and keep your unlocks.');
     else banner(null);
     wireBuys();

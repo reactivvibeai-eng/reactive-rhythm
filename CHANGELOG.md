@@ -1107,6 +1107,21 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v188 — P0 store fix: pull the three unverified guitar skins + a defensive play-surface gate  ✅
+The store was selling three guitar skins (**Crimson Chrome / Ember Bone / Gold Relic**) whose art FAILS the
+play-surface measurement gate — strings don't form straight lines (5 / 27 / 10 clean rows, 16-18px residual vs the
+~4px target), so equipping any of them would silently fall back to the default crimson guitar: a paid cosmetic that
+does nothing.
+- **Removed** the three from `STORE_FALLBACK` (the client catalog) with a comment explaining the gate + how to re-add
+  (template-i2i → adaptive-measure → `SKIN_GEOM verified:true`).
+- **Defensive gate** so this can't recur even if the backend re-sends them: new public `RhythmGame.isSkinPlayable(src)`
+  (`game.js`) = a guitar is sellable iff it's the default (no src), a skin the engine doesn't know (custom/backend
+  `skin_url`, trusted), or a `SKIN_GEOM` entry marked `verified:true`; a KNOWN-unverified guitar returns false. The
+  store's `render()` now `items.filter(storePlayable)` so no broken skin ever appears.
+- **Live-verified (:8790, v188):** `isSkinPlayable` correct on all 9 cases (3 broken → false; shaman-wolf/violet5/
+  melody/bone-daddy/no-src/unknown → true); the store renders exactly 6 cards (3 *verified* skins + 2 levels + 1 theme),
+  zero leaked banned skins, 0 console errors. `node --check` clean on game.js + inline.
+
 ### v187 — BETA: "Coming Soon" level locks + matched-frame cutaway stitch  ✅
 Two from the inflection-point session: gate the beta, and apply the user's AI-video stitch technique.
 - **Coming Soon locks** — only the FINISHED bespoke levels are playable; every other level shows a "🔒 COMING SOON"
