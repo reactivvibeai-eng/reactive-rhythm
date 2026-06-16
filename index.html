@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=181" />
+<link rel="stylesheet" href="jukebox.css?v=183" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3161,7 +3161,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=181" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=183" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4486,11 +4486,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=181"></script>
-<script src="game.js?v=181"></script>
-<script src="jukebox.js?v=181"></script>
-<script src="catalog.js?v=181"></script>
-<script src="multiplayer.js?v=181"></script>
+<script src="assets/fx/fx-player.js?v=183"></script>
+<script src="game.js?v=183"></script>
+<script src="jukebox.js?v=183"></script>
+<script src="catalog.js?v=183"></script>
+<script src="multiplayer.js?v=183"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5128,23 +5128,23 @@
       while (i === _intenseLast) i = Math.floor(Math.random() * _intenseList.length);
       _intenseLast = i; return _intenseList[i];
     }
-    var _staticBg = !!(L && L.bgArt && !L.bgVideo);   // static bgArt + no ambient loop → cutaways toggle the hidden #bg-video layer (reveal on kick, hide on revert) instead of flashing the moon
-    var _intenseOn = false, _intenseT = null;
+    // The cutaway must show ON TOP of whatever backdrop is live (ambient loop, static poster, or a 404-healed poster)
+    // and then restore EXACTLY that backdrop. We snapshot the pre-cutaway state on kick (runtime, not config) and
+    // replay it on revert — correct for bgVideo levels, static-bgArt levels, AND a bgVideo that 404-self-healed.
+    var _intenseOn = false, _intenseT = null, _preKick = null;
     function _intenseRevert() {
       if (!_intenseOn) return; _intenseOn = false;
       var v = $('bg-video'); if (!v) return;
       if (_intenseT) { clearTimeout(_intenseT); _intenseT = null; }
       try {
-        v.onended = null; v.loop = true;                 // restore the ambient loop behavior
+        v.onended = null;
         v.onerror = function () { try { v.onerror = null; } catch (e) {} };
-        if (_staticBg) {                                 // no ambient bgVideo → hide the video, reveal the static bgArt (never flash the moon)
-          try { v.pause(); } catch (e) {}
-          v.style.visibility = 'hidden';
-          return;
-        }
-        var back = (L.bgVideo || (_bgSaved && _bgSaved.src) || QUICKPLAY_BG);
-        if (v.getAttribute('src') !== back) { v.setAttribute('src', back); v.load(); }
-        v.play().catch(function(){});
+        var pk = _preKick || {}, bi = $('bg-image');
+        if (bi && pk.bidisp != null) bi.style.display = pk.bidisp;           // restore the poster's pre-cutaway display
+        v.loop = (pk.vloop != null) ? pk.vloop : true;
+        if (pk.vsrc && v.getAttribute('src') !== pk.vsrc) { v.setAttribute('src', pk.vsrc); v.load(); }
+        v.style.visibility = (pk.vvis != null) ? pk.vvis : '';              // 'hidden' again for a static backdrop, '' for a loop
+        if ((pk.vvis || '') !== 'hidden') { v.play().catch(function () {}); } else { try { v.pause(); } catch (e) {} }
       } catch (e) {}
     }
     // build43 (user, Melody): the intense combo clip is a one-shot GAG (the cat falls + tumbles) — it must
@@ -5165,14 +5165,19 @@
       var src = _pickIntense();
       if (!src) return;
       var v = $('bg-video'); if (!v) return;
+      var bi = $('bg-image');
       _intenseOn = true;
+      // snapshot the EXACT live backdrop so revert restores it (covers ambient loop / static poster / 404-healed poster)
+      _preKick = { vsrc: v.getAttribute('src'), vvis: v.style.visibility, vloop: v.loop, bidisp: bi ? bi.style.display : null };
       try {
-        if (_staticBg) v.style.visibility = '';          // static-bg level: reveal the #bg-video layer for the cutaway
+        if (L && L.bgArt) v.setAttribute('poster', L.bgArt);   // mask any load-gap frame with the level poster, never the moon
         v.onerror = function () { try { v.onerror = null; } catch (e) {} _intenseRevert(); };
         v.onended = function () { try { v.onended = null; } catch (e) {} _intenseRevert(); };
         v.loop = false;                                  // one-shot: play the whole gag, then onended → revert
         if (v.getAttribute('src') !== src) { v.setAttribute('src', src); v.load(); }
-        v.play().catch(function(){});
+        v.style.visibility = '';                          // make the cutaway the visible TOP layer no matter the config / 404 state
+        if (bi) bi.style.display = 'none';               // ...and hide any static poster so the gag is never trapped behind it
+        v.play().catch(function () {});
       } catch (e) { _intenseOn = false; }
       if (_intenseT) clearTimeout(_intenseT);
       _intenseT = setTimeout(_intenseGuard, 6000);       // backstop only; self-extends while the clip is still rolling
@@ -5214,7 +5219,7 @@
     var bi = $('bg-image'); if (bi) { bi.style.display = 'none'; bi.style.backgroundImage = ''; }
     var v = $('bg-video');
     if (v) {
-      v.onerror = null; v.style.visibility = '';
+      v.onerror = null; v.onended = null; v.loop = true; v.style.visibility = '';   // also sever any stale cutaway onended + restore looping so exiting MID-cutaway can't leak onto the menu backdrop
       var target = (_bgSaved && _bgSaved.src) ? _bgSaved.src : QUICKPLAY_BG;
       if (v.getAttribute('src') !== target) { v.setAttribute('src', target); try { v.load(); v.play().catch(function(){}); } catch (e) {} }
       else { try { v.play().catch(function(){}); } catch (e) {} }

@@ -1107,6 +1107,33 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v183 — Cutaway HARDENING: a 3-agent adversarial pass found 3 more gaps; rewrote the swap as runtime snapshot/restore  ✅
+After v182 fixed the config-static case, a 3-agent adversarial verification (bgVideo path · static path · regression)
+found the bgVideo + regression paths CLEAN but flagged 3 real gaps in the static path — all now fixed + live-verified.
+- **(med, reachable today) 404-healed cutaway trapped behind the poster.** `_staticBg` was computed ONCE from config, so
+  a level WITH a `bgVideo` that 404-self-heals (→ poster shown, video hidden) still took the non-static kick path and
+  played the cutaway *behind* the poster. **Fix:** dropped the config flag — `_intenseKick` now SNAPSHOTS the live
+  backdrop (src/visibility/loop/poster-display) and ALWAYS reveals the video + hides the poster; `_intenseRevert` replays
+  that snapshot. One runtime path, correct for ambient-loop / static-poster / 404-healed alike.
+- **(med) teardown leak.** Exiting MID-cutaway left a stale `onended` + `loop=false` on `#bg-video`; the moon then played
+  once and fired the stale handler onto the menu backdrop. **Fix:** `clearLevelTheme` now nulls `onended` + restores `loop=true`.
+- **(low) moon-frame flash** on a static level's first kick — masked by setting the bg-video `poster` to the level `bgArt`.
+- **Live-verified (v183):** Carnival (bgVideo) still cycles loop→cutaway→loop with no-repeat (intense-1→intense-2); a
+  simulated 404-static state now REVEALS the cutaway on kick (poster hidden) and RESTORES the poster on revert. The
+  regression agent confirmed Melody/Skully (single `intenseVideo`) are byte-identical to before.
+
+### v182 — Carnival cutaway FIX: the combo gag was playing HIDDEN behind the static poster  ✅
+Playtest: "I did not see the video spawn on the combo for his level." Root cause found, fixed, and live-verified.
+- **The bug (v180):** with a static `bgArt` and no ambient `bgVideo`, the cutaway DID fire on every 25-combo — but
+  `applyLevelTheme`/`showStatic` draws the `#bg-image` poster (display:block) ON TOP of the hidden `#bg-video`. The
+  `_staticBg` `_intenseKick` un-hid `#bg-video` but never hid the poster → the cutaway played *behind* it, invisible.
+  (Adding the ambient loop in v181 incidentally fixed Carnival, since any `bgVideo` hides the poster.)
+- **The fix (v182):** the static-bg cutaway path now HIDES the `#bg-image` poster on kick (cutaway shows on top) and
+  RESTORES it on revert. Bulletproof for ANY static-bgArt level + cutaway, not just Carnival.
+- **Live-verified (v182):** firing `onCombo` at 25/50/75 swaps `#bg-video` loop→cutaway→loop; the cutaway is visible
+  (`poster:none` throughout), reverts cleanly, and the two clips ALTERNATE with no immediate repeat (2→1→2). Trigger
+  (`game.js` onCombo every 25-combo + on Overdrive) is easily reachable on the 705-note chart.
+
 ### v181 — Carnival of Souls, part 3: ambient loop backdrop + fate cards + hero cover + GAMEPLAY VERIFIED  ✅
 Playtest feedback: "the static image background feels flat — it needs to be a video loop. Do all three + make sure the
 gameplay is on point." Done, every piece verified live.
