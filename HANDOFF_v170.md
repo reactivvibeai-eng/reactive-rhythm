@@ -65,7 +65,7 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - More **beat-pulse / juice** polish.
 - MP **before-public** track (server-authoritative scoring [needs Lovable], reconnection, host migration) — larger.
 
-## STATE: now v175 (was v170). Since v170, four passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
+## STATE: now v176 (was v170). Since v170, five passes landed — see CHANGELOG.md (top entries) + ROADMAP_FUTURE.md:
 - **v171 JUICE** — global beat-bloom on EVERY stage (themed video too) + at 1× mult; Overdrive ignition flash+shockwave;
   results S/A ember burst; menu atom-breathe + primary-CTA crimson heartbeat. Pure CSS/canvas, reduce-motion/fx-lite gated.
 - **v172–v173 MP BEFORE-PUBLIC HARDENING (build42)** — `t-snapshot` host heartbeat (self-heal), reconnection
@@ -84,5 +84,9 @@ candidates from RR_EVOLUTION.md top-10 / MP_GAMEPLAN.md:
 - **v175** — playtest pass: Melody combo-gag plays through (was chopped at 5.2s); **FX Intensity is a real Settings
   control** (Subtle/Balanced/Intense → `FX_PRESETS`); polish (2 brand-green fixes + keyboard focus rings + reduce-motion
   guard); **`ROADMAP_FUTURE.md`** = master forward roadmap + "how the systems work" (incl. full MP/tournament logic).
-- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, then v175. Origin =
+- **v176** — CO-OP rival deck brought to life: the opponent split-screen deck was half-res + a flat 0.5-alpha guitar
+  (dim/blurry); now full-res + bright (0.9) + the guitar is **warped to match your neck-recede** (`renderGhost` +
+  new `getGuitarArt` nutFY/bridgeFY/warp). Reads as a living board played beside you. Needs the user's DESKTOP to see
+  (split-screen is desktop-only; headless locks to mobile width — warp math verified against real engine data instead).
+- Git: checkpoints committed on `visual-overhaul` — `db10878` (v173), then v174, v175, v176. Origin =
   github.com/reactivvibeai-eng/reactive-rhythm (not pushed).

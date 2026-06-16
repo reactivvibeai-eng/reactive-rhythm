@@ -1366,7 +1366,8 @@
     try {
       if (!activeGuitarImg || !activeGuitarImg.width || !cw || !ch) return null;
       const r = guitarRect();
-      return { img: activeGuitarImg, gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, cw: cw, ch: ch };
+      return { img: activeGuitarImg, gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, cw: cw, ch: ch,
+        nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, warp: (warpOverride >= 0 ? warpOverride : (ART.warp || 0)) };   // versus ghost: warp the rival guitar to match your neck-recede
     } catch (e) { return null; }
   };
   window.RhythmGame.lastResults = () => _lastResults;

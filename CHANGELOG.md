@@ -1107,6 +1107,23 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v176 — CO-OP: the rival deck comes to life (vivid + warped + crisp)  ✅
+Playtest feedback: in split-screen the opponent's (left) guitar "doesn't look right" — it read dim/flat/blurry next to
+your vivid right deck, so it didn't feel like watching them play beside you (the whole point of co-op). Cause found in
+`renderGhost` (multiplayer.js): the rival deck was a **half-resolution** canvas with the guitar blitted **flat at 0.5
+alpha** and **no neck-recede warp** — a dim sticker, not a living board.
+- **Full-resolution backing store** (was `cw>>1` half-res → blurry) — the rival highway is now crisp.
+- **Bright guitar** (0.5 → **0.9 alpha**) — vivid, mirrors your deck instead of washing out.
+- **Warped to match your neck-recede** — the ghost guitar now replicates the engine's slice-warp (narrows toward the
+  nut by `1 - warp*u`), driven by new `getGuitarArt` fields (`nutFY`/`bridgeFY`/`warp`). So the rival neck recedes
+  exactly like yours — it reads as a second board played next to you, not a flat overlay.
+- Brighter lane strings (0.34 → 0.44). The lit catcher row, scrolling rival gems (same chart), per-lane hit/miss
+  flash, and sparkle pool were already there — they now sit on a crisp, bright, correctly-warped deck.
+- Verified: `getGuitarArt` returns the warp fields (nutFY 0.16 / bridgeFY 0.81 / warp 0.2, matching the lane frame);
+  the warp slice math, run against real engine data, is finite + positive + narrows toward the nut **exactly like the
+  engine**. `node --check` clean, 0 new errors. The on-screen result needs your desktop — the split-screen is
+  desktop-only and headless is locked to mobile width.
+
 ### v175 — Melody combo-gag fix · FX Intensity is a real setting · brand+a11y polish · master roadmap  ✅
 User playtest pass: the Melody combo video cut off mid-tumble, juice needed to be a real user setting, and a polish
 sweep + a forward roadmap were requested.

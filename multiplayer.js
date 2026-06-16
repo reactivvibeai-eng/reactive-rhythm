@@ -681,23 +681,42 @@
     var lf = window.RhythmGame.getLaneFrame && window.RhythmGame.getLaneFrame();
     if (!lf || !lf.nearX || !lf.w) return;                       // engine canvas not sized yet
     var cw = cv.clientWidth, chh = cv.clientHeight; if (!cw || !chh) return;
-    var bw = Math.max(1, cw >> 1), bh = Math.max(1, chh >> 1);   // HALF-RES backing store
+    var bw = Math.max(1, cw), bh = Math.max(1, chh);   // FULL-RES backing store — crisp rival deck (was half-res >>1 = blurry, the "doesn't look right")
     if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
     // getLaneFrame's nearX/farX/nearY/farY are CANVAS-LOCAL coords (0->canvas size), not page coords — so
     // scale them straight into the ghost's own box (NO origin subtraction; both canvases share a local origin).
     var sx = bw / lf.w, sy = bh / lf.h, N = lf.nearX.length, i;
     _gCtx.setTransform(1, 0, 0, 1, 0, 0);
     _gCtx.clearRect(0, 0, bw, bh);
-    // dim opponent GUITAR behind the strings — reads as a real second deck (mirrors your skin for v1)
+    // opponent GUITAR behind the strings — WARPED to match your deck's neck-recede + bright, so it reads as a LIVE
+    // second board played beside you (was a dim 0.5 FLAT blit = the "looks like a sticker, not them playing").
     var art = window.RhythmGame.getGuitarArt && window.RhythmGame.getGuitarArt();
     if (art && art.img) {
-      _gCtx.save(); _gCtx.globalAlpha = 0.5;
-      try { _gCtx.drawImage(art.img, art.gx * sx, art.gy * sy, art.gw * sx, art.gh * sy); } catch (e) {}
+      _gCtx.save(); _gCtx.globalAlpha = 0.9;
+      try {
+        var gwp = art.warp || 0;
+        if (gwp > 0 && art.nutFY != null && art.bridgeFY != null) {
+          // replicate the engine's NECK-RECEDE warp: slice the guitar into bands, narrow each toward the centerline
+          // by (1 - warp*u) (u: 0 at the bridge → 1 at the nut), so the rival neck recedes exactly like yours.
+          var giw = art.img.width, gih = art.img.height, GNS = 40;
+          var gnY = (art.gy + art.bridgeFY * art.gh) * sy, gfY = (art.gy + art.nutFY * art.gh) * sy;
+          var gcX = (art.gx + 0.5 * art.gw) * sx, gwpx = art.gw * sx;
+          for (var gb = 0; gb < GNS; gb++) {
+            var gv0 = gb / GNS, gv1 = (gb + 1) / GNS;
+            var gdy0 = (art.gy + gv0 * art.gh) * sy, gdy1 = (art.gy + gv1 * art.gh) * sy;
+            var guu = ((gdy0 + gdy1) / 2 - gnY) / (gfY - gnY);
+            var gdw = gwpx * (1 - gwp * (guu < 0 ? 0 : guu));
+            _gCtx.drawImage(art.img, 0, gv0 * gih, giw, (gv1 - gv0) * gih, gcX - gdw / 2, gdy0, gdw, (gdy1 - gdy0) + 0.6);
+          }
+        } else {
+          _gCtx.drawImage(art.img, art.gx * sx, art.gy * sy, art.gw * sx, art.gh * sy);   // skins without warp: plain blit
+        }
+      } catch (e) {}
       _gCtx.restore();
     }
     // lane strings (far -> near) — brighter so the rival reads as a LIVE highway, not a faint 18% ghost
     _gCtx.lineWidth = Math.max(1, lf.lw * 0.06 * sx);
-    _gCtx.strokeStyle = 'rgba(220,217,212,0.34)';
+    _gCtx.strokeStyle = 'rgba(220,217,212,0.44)';
     _gCtx.beginPath();
     for (i = 0; i < N; i++) {
       _gCtx.moveTo(lf.farX[i] * sx, lf.farY * sy);
