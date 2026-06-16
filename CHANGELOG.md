@@ -1107,6 +1107,14 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v192 — BETA lock: the Environment Picker also gates unfinished levels (Coming Soon)  ✅
+The Environment Picker (the "play this song in a level's environment" carousel in the song sheet) only locked PAID
+environments — every unfinished level (First Light, Steady Hands, Ember Drift, Heartbeat, Overdrive, Chrome Veins, Hollow
+Choir, THE BREAKER) was still pickable. Applied the same finished-whitelist as the Levels screen: non-special
+environments not in FINISHED ({carnival-boss, melody-boss, frac-01, bone-daddy}) now render greyed + 🔒 + **COMING SOON**,
+and a click is blocked with a hint. Quick Play (Arena) + Random Stage stay available; the 4 finished levels stay pickable.
+Live-verified (:8790, v192): 8 envs Coming-Soon-locked, 4 finished + 2 special available, locked-click blocked, 0 console errors.
+
 ### v191 — Playtest fixes: equipped-skin rule (campaign vs free/MP) + smoother Carnival cutaway  ✅
 Three issues from the user's playtest:
 - **Equipped skin now applies outside campaign.** Every level launch was force-overriding the player's equipped guitar

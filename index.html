@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=191" />
+<link rel="stylesheet" href="jukebox.css?v=192" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -361,6 +361,11 @@
   .env-chip .ec-lock { position: absolute; top: 5px; left: 6px; z-index: 2; font-size: 11px; opacity: 0.9; }
   .env-chip.locked { opacity: 0.55; }
   .env-chip.locked:hover { transform: none; }
+  /* BETA: Coming-Soon (unfinished) environments — locked + greyed, crimson tag */
+  .env-chip.soon { opacity: 0.7; }
+  .env-chip.soon:hover { transform: none; border-color: var(--line); box-shadow: none; }
+  .env-chip.soon .ec-art { filter: grayscale(0.62) brightness(0.55); }
+  .env-chip.soon .ec-tag { color: var(--crimson); }
   .env-hint { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.04em;
     color: var(--ink-dim); margin-top: 2px; min-height: 13px; }
   html.rr-reduce-motion .env-chip { transition: none; }
@@ -3197,7 +3202,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=191" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=192" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4526,11 +4531,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=191"></script>
-<script src="game.js?v=191"></script>
-<script src="jukebox.js?v=191"></script>
-<script src="catalog.js?v=191"></script>
-<script src="multiplayer.js?v=191"></script>
+<script src="assets/fx/fx-player.js?v=192"></script>
+<script src="game.js?v=192"></script>
+<script src="jukebox.js?v=192"></script>
+<script src="catalog.js?v=192"></script>
+<script src="multiplayer.js?v=192"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -6508,19 +6513,20 @@
   function chip(e) {
     var b = document.createElement('button');
     b.type = 'button';
-    b.className = 'env-chip' + (e.id === selectedEnvId ? ' sel' : '') + (e.locked ? ' locked' : '');
+    b.className = 'env-chip' + (e.id === selectedEnvId ? ' sel' : '') + (e.locked ? ' locked' : '') + (e.comingSoon ? ' soon' : '');
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', e.id === selectedEnvId ? 'true' : 'false');
     b.dataset.env = e.id;
     if (e.accent) b.style.setProperty('--ec', e.accent);
     var artBg = e.cover ? ("background-image:url('" + e.cover.replace(/'/g, '') + "');") : '';
     var ini = (e.name || '?').trim().charAt(0).toUpperCase();
-    var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'QUICK PLAY' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
+    var tag = e.isRandom ? 'RANDOM STAGE' : e.isDefault ? 'QUICK PLAY' : e.comingSoon ? 'COMING SOON' : ((e.boss ? 'BOSS · ' : '') + (e.theme || '').toUpperCase());
     b.innerHTML =
       '<div class="ec-art" style="' + artBg + '">' + (e.cover ? '' : '<span class="ec-ini">' + ini + '</span>') +
         (e.locked ? '<span class="ec-lock">🔒</span>' : '') + '</div>' +
       '<div class="ec-body"><div class="ec-name">' + escAttr(e.name) + '</div><div class="ec-tag">' + escAttr(tag) + '</div></div>';
     b.addEventListener('click', function () {
+      if (e.comingSoon) { setHint('“' + e.name + '” is coming soon — still in design.'); return; }
       if (e.locked) { setHint('Unlock “' + e.name + '” in the Store, or play it in the Campaign.'); return; }
       select(e.id);
     });
@@ -6530,7 +6536,13 @@
     var L = window.RhythmLevels;
     var list = (L && L.environments) ? L.environments() : [{ id:'__default', name:'Default', isDefault:true, accent:'#ff1f2e' }];
     var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
-    list.forEach(function (e) { e.locked = !!(e.paid && !dev); });
+    // BETA gate: only FINISHED levels are pickable as environments; the rest are Coming Soon (independent of dev,
+    // to match the Levels screen). Quick Play + Random Stage are always available. Keep in sync with LVL_FINISHED.
+    var FINISHED = { 'carnival-boss':1, 'melody-boss':1, 'frac-01':1, 'bone-daddy':1 };
+    list.forEach(function (e) {
+      e.comingSoon = !(e.isDefault || e.isRandom) && !FINISHED[e.id];
+      e.locked = !!((e.paid && !dev) || e.comingSoon);
+    });
     row.innerHTML = '';
     var frag = document.createDocumentFragment();
     list.forEach(function (e) { frag.appendChild(chip(e)); });
