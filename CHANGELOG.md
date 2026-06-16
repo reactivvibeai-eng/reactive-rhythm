@@ -1107,6 +1107,24 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v196 — Bone Daddy level glow-up: combo cutaways + score juice + beat-reactive skull  ✅
+Playtest-driven upgrade to Bone Daddy's "Get Busy" graveyard level (it had the ambient loop + fate cards + skull
+mechanic but NO combo drama):
+- **Two combo cutaways** — the level's missing "you triggered it" moment: **(1) skeletons claw out of the graves &
+  dance, then sink back; (2) a graveyard twister** tears across the cemetery & dissipates. Seedance matched-frame
+  (start = end = the static graveyard → travels out from + back to the still scene; first-vs-last PSNR 32 / 24 dB),
+  720p, audio stripped. Wired as `intenseVideos[]` (random no-repeat, like Carnival; carries to campaign + MP via the
+  env synthesis). Fires on combo milestones + Overdrive; the v191 crossfade smooths the cut.
+- **Score juice:** the HUD score now PUNCHES on milestones — a scale + gold-glow pop on each combo-streak milestone
+  (bigger every 100) + on Overdrive (`_scorePop` + `#hud-score.pop/.pop-big`). The count-up rolls underneath.
+- **Beat-reactive skull:** the Bone Daddy skull mechanic now lip-syncs / pulses to the LIVE music — jaw bobs open, eye
+  sockets + gold glow flare, the whole rig breathes on each beat (pure CSS off the existing `--rr-beat` analyser var;
+  0 under reduce-motion; layered so it never fights the idle bob or the on-hit chatter).
+- Live-verified (:8790, v196): bone-daddy carries both intenseVideos, both serve 200; skull scales with `--rr-beat`
+  (1.035 @ beat=1); score-pop CSS live; **0 console errors**; game.js node-clean. Spend: 54 credits (2 Seedance clips).
+- The cutaway FIRING on combo + the score pops + the skull reacting to live audio are in-level behaviors for the
+  user's real-machine playtest (headless can't run a full level). FULL 3D rigged Bone Daddy deferred to a hero phase.
+
 ### v194-v195 — Review-and-polish pass (5-agent code review + live smoke-test): critical Random-Stage gate + teardown + hygiene  ✅
 A multi-agent adversarial static review across 5 dimensions plus a full live smoke-test. Fixes, highest-impact first:
 - **CRITICAL — Quickplay "Random Stage" bypassed the beta gate.** The DEFAULT play path (pick a song → play; env=`__random`)

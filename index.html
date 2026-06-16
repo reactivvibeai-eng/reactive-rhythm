@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=195" />
+<link rel="stylesheet" href="jukebox.css?v=196" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1050,6 +1050,13 @@
     opacity: 0.22; mix-blend-mode: screen;
     animation: rrm-smolder 3.1s ease-in-out infinite; }   /* always half-awake */
   .rrm-skull.big .rrm-skull-eyes { animation: rrm-eyes 0.9s ease; }
+  /* build51: BEAT-REACTIVE — Bone Daddy lip-syncs / pulses to the LIVE music. --rr-beat (0..1) is set on <html>
+     during play (and stays 0 under reduce-motion → inert). Layered so it never fights the idle bob (.rrm-skull)
+     or the on-hit chatter (.hit/.big keyframes override these briefly, then they resume). */
+  .rr-mech-skull { transform: scale(calc(1 + var(--rr-beat, 0) * 0.035)); transform-origin: 50% 3%; }
+  .rr-mech-skull .rrm-skull-jaw { transform: translateY(calc(var(--rr-beat, 0) * 6%)); }
+  .rr-mech-skull .rrm-skull-cranium { filter: drop-shadow(0 10px 26px rgba(224,169,63, calc(0.34 + var(--rr-beat, 0) * 0.5))); }
+  .rr-mech-skull .rrm-skull-eyes { filter: brightness(calc(1 + var(--rr-beat, 0) * 1.7)); }
   @keyframes rrm-skull-bob {
     0%, 100% { transform: translateY(0) rotate(-1.5deg); }
     50%      { transform: translateY(13px) rotate(1.5deg); } }
@@ -1586,6 +1593,17 @@
   .gauge-badge, .mhud .m-score, .mhud .m-acc { font-family: 'Oxanium', sans-serif; letter-spacing: 0.005em; }
   #judge-flash { font-family: 'Oxanium', sans-serif; font-weight: 800; letter-spacing: 0.02em; }
   #countdown { font-family: 'Oxanium', sans-serif; }
+  /* build51: SCORE JUICE — the HUD score punches on milestones (scale + gold glow; the count-up rolls underneath) */
+  #hud-score { display: inline-block; transform-origin: left center; will-change: transform; }
+  #hud-score.pop { animation: rrScorePop 0.22s ease-out; }
+  #hud-score.pop-big { animation: rrScorePopBig 0.4s cubic-bezier(.2,1.5,.35,1); }
+  @keyframes rrScorePop { 0% { transform: scale(1); } 38% { transform: scale(1.13); } 100% { transform: scale(1); } }
+  @keyframes rrScorePopBig {
+    0%   { transform: scale(1);    text-shadow: none; }
+    28%  { transform: scale(1.34); text-shadow: 0 0 20px rgba(255,210,90,0.95), 0 0 8px rgba(255,80,90,0.85); }
+    100% { transform: scale(1);    text-shadow: none; }
+  }
+  html.rr-reduce-motion #hud-score.pop, html.rr-reduce-motion #hud-score.pop-big { animation: none; }
 
   /* angular corner brackets framing each panel — the tactical-HUD motif (vs rounded web cards) */
   .hud-panel::before, .hud-panel::after {
@@ -3202,7 +3220,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=195" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=196" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4536,11 +4554,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=195"></script>
-<script src="game.js?v=195"></script>
-<script src="jukebox.js?v=195"></script>
-<script src="catalog.js?v=195"></script>
-<script src="multiplayer.js?v=195"></script>
+<script src="assets/fx/fx-player.js?v=196"></script>
+<script src="game.js?v=196"></script>
+<script src="jukebox.js?v=196"></script>
+<script src="catalog.js?v=196"></script>
+<script src="multiplayer.js?v=196"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4765,6 +4783,7 @@
     { id:'bone-daddy', tier:'medium', title:'Get Busy', song:{ trackId:'30acfdb4-8c85-4e1a-b43d-c91587dcba16' }, theme:'bone',
       cover:'assets/levels/bonedaddy-cover.jpg', bgArt:'assets/levels/bonedaddy-bg2.jpg',
       bgVideo:'assets/levels/bonedaddy-loop.mp4',
+      intenseVideos:[ 'assets/levels/bonedaddy-intense-1.mp4', 'assets/levels/bonedaddy-intense-2.mp4' ],   // build51: combo cutaways — (1) skeletons rise & dance, (2) graveyard twister; matched-frame, random no-repeat
       guitarSkin:'assets/guitars/bone-daddy.png',
       reactiveCards:{ miss:'assets/levels/bonedaddy-card-tomb.png', hit:'assets/levels/bonedaddy-card-chalice.png' },   // build22: HIS fate-pair — the tombstone cracks on misses, the chalice fills on hits
       mechanic:{ type:'skull', art:'assets/levels/bonedaddy-skull.png', jaw:'assets/levels/bonedaddy-skull-jaw.png' },   // the baron's skull crowns the spawn — jaw chatters on hits, eyes flare on milestones

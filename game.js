@@ -1882,6 +1882,7 @@
     try { if (_odAura) { _odAura.stop(); _odAura = null; } } catch (e) {}
     bgPulse = 1; odBurst = 1; cameraShake = 10;   // odBurst → screen-flooding ignition flash + shockwave (render)
     flashJudgment('OVERDRIVE', '#ffd98a');
+    _scorePop(true);   // build51: big gold score punch when Overdrive engages
     if (odFlame) odFlame.classList.add('active');
     // build8: tell a level its big moment landed (Skully kicks the intense backdrop). No-op when unset.
     try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, true); } catch (e) {}
@@ -2072,6 +2073,7 @@
       bgPulse = 1;
       const big = combo % 100 === 0;                            // every 100 is a bigger moment
       flashJudgment(combo + (big ? ' STREAK!!' : ' STREAK'), big ? '#fff2cd' : '#ffe08a');
+      _scorePop(big);   // build51: the score punches on each streak milestone (big gold pop every 100)
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
       // build8: level-fx combo milestone hook (Skully swaps to the intense backdrop). No-op when unset.
       try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, big); } catch (e) {}
@@ -2635,6 +2637,15 @@
   window.RhythmGame.setNoteVariety = (on) => (typeof window.__rrNoteVariety === 'function') ? window.__rrNoteVariety(on) : noteVariety;
 
   // ---------- HUD ----------
+  // build51: SCORE JUICE — pop the HUD score on scoring milestones (combo streaks, overdrive). The number
+  // already rolls up (scoreDisplay); this adds a scale+glow punch so big moments READ. big=true → bigger gold pop.
+  function _scorePop(big) {
+    try {
+      const el = $('hud-score'); if (!el) return;
+      el.classList.remove('pop', 'pop-big'); void el.offsetWidth;   // restart the CSS animation
+      el.classList.add(big ? 'pop-big' : 'pop');
+    } catch (e) {}
+  }
   function updateHUD() {
     $('hud-score').textContent = Math.floor(scoreDisplay).toLocaleString();   // animated value (loop rolls it up)
     $('hud-combo').textContent = combo;
