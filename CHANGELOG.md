@@ -1107,6 +1107,14 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v199 — Multiplayer lobby: BACK button placement fix  ✅
+The VERSUS lobby's BACK button floated mid-left beside the panel instead of in the top-left corner like every other screen.
+Cause: a build11 override forced `.multiplayer-screen .hub-back` to `position:relative` (to layer it above the full-bleed
+key art), which dropped it into the centered flex flow. Fixed by removing `.hub-back` from that override — it keeps its base
+`position:absolute; top:16px; left:16px` (z-70 already clears the z-0 key art). Live-verified (:8790, v199): #mp-back is
+absolute at (16,16), top-left. Health sweep: all 3 levels carry their 2 cutaways, levels gate 4-playable, score-pop + skin
+gate intact, all JS node-clean, 0 console errors.
+
 ### v198 — Melody level: a second combo cutaway (Melanie's sweets gag)  ✅
 Added a second combo cutaway to Melody's "Highway Lover" room so it's now a random-no-repeat POOL (was a single cat-chaos
 clip): **Melanie sneaks into the empty pink room hugging an armful of candy, glances around to be sure no one's watching,

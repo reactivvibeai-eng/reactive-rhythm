@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=198" />
+<link rel="stylesheet" href="jukebox.css?v=199" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2728,7 +2728,9 @@
   .mp-bg-scrim { position: absolute; inset: 0;
     background: radial-gradient(ellipse at 50% 30%, rgba(10,6,7,0.18), rgba(10,6,7,0.72) 78%),
       linear-gradient(180deg, rgba(10,6,7,0.55), rgba(8,5,6,0.34) 30%, rgba(8,5,6,0.78) 100%); }
-  .multiplayer-screen .hub-back, .multiplayer-screen .mp-card { position: relative; z-index: 1; }
+  /* build53: keep BACK anchored top-left (its base absolute placement; z-70 already clears the z-0 key art).
+     The old `.hub-back` override to position:relative dropped it into the centered flex flow → floated it mid-left. */
+  .multiplayer-screen .mp-card { position: relative; z-index: 1; }
   .mp-card { width: min(640px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: 12px; padding: 22px 20px 26px; text-align: center; border-radius: 22px;
     background: linear-gradient(180deg, rgba(16,9,10,0.78), rgba(10,6,7,0.86));
@@ -3220,7 +3222,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=198" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=199" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4554,11 +4556,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=198"></script>
-<script src="game.js?v=198"></script>
-<script src="jukebox.js?v=198"></script>
-<script src="catalog.js?v=198"></script>
-<script src="multiplayer.js?v=198"></script>
+<script src="assets/fx/fx-player.js?v=199"></script>
+<script src="game.js?v=199"></script>
+<script src="jukebox.js?v=199"></script>
+<script src="catalog.js?v=199"></script>
+<script src="multiplayer.js?v=199"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
