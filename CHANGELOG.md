@@ -1107,6 +1107,18 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v198 — Melody level: a second combo cutaway (Melanie's sweets gag)  ✅
+Added a second combo cutaway to Melody's "Highway Lover" room so it's now a random-no-repeat POOL (was a single cat-chaos
+clip): **Melanie sneaks into the empty pink room hugging an armful of candy, glances around to be sure no one's watching,
+crams the sweets in her mouth, then bolts** — leaving the room empty. Seedance matched-frame on the room (first-vs-last
+PSNR 31.6 dB), 720p, audio stripped, wired alongside `melody-intense.mp4` as `intenseVideos[]`.
+NOTE: Seedance's content filter repeatedly refused to ANIMATE the user's Melanie character reference (3 failed jobs across
+two media configs), so she's built from a detailed text description — a recognizable neko-punk girl (pink-streaked hair,
+cat ears, glasses, plaid skirt, platform boots, tail) but NOT a pixel-match to the turnaround ref. For a faithful likeness
+the path is a hand-animated 2D sprite of the exact ref (or a gen tool that permits character-ref animation).
+Live-verified (:8790, v198): melody-boss carries both intenseVideos (serve 200), 0 console errors. Spend: ~27 credits
+(the 3 ref-based failures don't bill).
+
 ### v197 — Skully level: two combo cutaways (Skullyrae's tarot ritual + demon)  ✅
 Skully's "The World" level had a DEAD cutaway (`intenseVideo:'skully-intense.mp4'` 404'd → self-healed to the loop), so
 nothing happened on a combo. Replaced it with two real matched-frame cutaways featuring Skullyrae (already center-stage in

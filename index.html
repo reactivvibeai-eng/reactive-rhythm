@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=197" />
+<link rel="stylesheet" href="jukebox.css?v=198" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3220,7 +3220,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=197" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=198" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4554,11 +4554,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=197"></script>
-<script src="game.js?v=197"></script>
-<script src="jukebox.js?v=197"></script>
-<script src="catalog.js?v=197"></script>
-<script src="multiplayer.js?v=197"></script>
+<script src="assets/fx/fx-player.js?v=198"></script>
+<script src="game.js?v=198"></script>
+<script src="jukebox.js?v=198"></script>
+<script src="catalog.js?v=198"></script>
+<script src="multiplayer.js?v=198"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4809,7 +4809,7 @@
     { id:'melody-boss', tier:'hard', title:'Highway Lover', song:{ trackId:'7424b4a5-27e5-4b78-aad2-ac5ded73c20b' }, theme:'pink', boss:true,
       cover:'assets/levels/melody-cover.jpg', bgArt:'assets/levels/melody-bg2.jpg',
       bgVideo:'assets/levels/melody-loop.mp4',
-      intenseVideo:'assets/levels/melody-intense.mp4',
+      intenseVideos:[ 'assets/levels/melody-intense.mp4', 'assets/levels/melody-intense-2.mp4' ],   // build52: combo cutaways — (1) cat-chaos, (2) Melanie sneaks in & scoffs sweets then bolts; random no-repeat
       reactiveCards:{ miss:'assets/levels/melody-card-plush.png', hit:'assets/levels/melody-card-heart.png' },
       guitarSkin:'assets/guitars/melody-pink.png',
       mechanic:{ type:'paw', art:'assets/levels/melody-paw.png' },   // a cat paw bats each note on hit
