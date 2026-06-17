@@ -1107,6 +1107,20 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v197 — Skully level: two combo cutaways (Skullyrae's tarot ritual + demon)  ✅
+Skully's "The World" level had a DEAD cutaway (`intenseVideo:'skully-intense.mp4'` 404'd → self-healed to the loop), so
+nothing happened on a combo. Replaced it with two real matched-frame cutaways featuring Skullyrae (already center-stage in
+the backdrop), per the user:
+- **(1) Tarot ritual** — she lowers her arms, fans out glowing tarot cards + weaves a violet occult ritual circle, then
+  resets. (Doubly fitting — the level IS "The World," a tarot card, with World/Death fate-cards.)
+- **(2) The demon** — she ignites, transforms into a horned, glowing-eyed demon and LUNGES + claws at the player, then
+  snaps back to the elegant sorceress.
+Both Seedance matched-frame (start = end = her resting pose; first-vs-last PSNR **36 / 35.6 dB** — cleaner than Bone Daddy's),
+720p, audio stripped, wired as `intenseVideos[]` (random no-repeat; carries to campaign + MP via the env synthesis).
+Live-verified (:8790, v197): frac-01 carries both intenseVideos (serve 200), the dead reference is gone, 0 console errors.
+Spend: 54 credits (2 Seedance clips). (Melody's sweets cutaway is generating separately — the 3-media identity-ref config
+kept failing tonight, retried in pure reference mode.)
+
 ### v196 — Bone Daddy level glow-up: combo cutaways + score juice + beat-reactive skull  ✅
 Playtest-driven upgrade to Bone Daddy's "Get Busy" graveyard level (it had the ambient loop + fate cards + skull
 mechanic but NO combo drama):

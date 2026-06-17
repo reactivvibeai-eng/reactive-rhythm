@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=196" />
+<link rel="stylesheet" href="jukebox.css?v=197" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3220,7 +3220,7 @@
         <span>REACTIVVIBE.AI</span>
       </div>
       <div class="start-wordmark">
-        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=196" alt="REACTIVE RHYTHM"
+        <img class="rr-wordmark" src="assets/rr-wordmark.png?v=197" alt="REACTIVE RHYTHM"
              onload="this.closest('.start-wordmark').classList.add('has-wm')" onerror="this.remove()" />
         <h1 class="rr-logo" aria-hidden="true">REACTIVE<br/>RHYTHM</h1>
         <div class="rr-rule" aria-hidden="true"></div>
@@ -4554,11 +4554,11 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=196"></script>
-<script src="game.js?v=196"></script>
-<script src="jukebox.js?v=196"></script>
-<script src="catalog.js?v=196"></script>
-<script src="multiplayer.js?v=196"></script>
+<script src="assets/fx/fx-player.js?v=197"></script>
+<script src="game.js?v=197"></script>
+<script src="jukebox.js?v=197"></script>
+<script src="catalog.js?v=197"></script>
+<script src="multiplayer.js?v=197"></script>
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -4791,7 +4791,7 @@
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
-      intenseVideo:'assets/levels/skully-intense.mp4',   // build8: combo-spike backdrop (404 → self-heals to skully-loop.mp4)
+      intenseVideos:[ 'assets/levels/skully-intense-1.mp4', 'assets/levels/skully-intense-2.mp4' ],   // build52: combo cutaways — (1) Skullyrae's tarot ritual, (2) she turns demon & claws at the player; matched-frame, random no-repeat (was a dead skully-intense.mp4 404)
       reactiveCards:{ hit:'assets/levels/card-world.jpg', miss:'assets/levels/card-death.jpg' },
       guitarSkin:'assets/guitars/violet-gothic-5.png',   // build16: TRUE 5-STRING re-render (asset commit 0698670; lanes ride her measured painted strings; 404 → default)
       mods:{ speed:1.15, mirror:false }, unlock:{ stars:1 } },   // SKULLY showcase level (Lil' Clay Skullyrae)
