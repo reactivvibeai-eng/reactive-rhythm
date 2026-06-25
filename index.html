@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=319" />
+<link rel="stylesheet" href="jukebox.css?v=320" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1085,6 +1085,8 @@
   .store-buy.equip:hover, .store-buy.equip:focus-visible { box-shadow: 0 6px 20px rgba(255,31,46,0.5), inset 0 1px 0 rgba(255,255,255,0.3); }
   .store-buy.equipped { background: linear-gradient(180deg, rgba(224,169,63,0.18), rgba(224,169,63,0.10)); color: #e0a93f; border: 1px solid rgba(224,169,63,0.55); box-shadow: none; cursor: pointer; }
   .store-buy.equipped::before { content: '\2713\00a0'; }   /* gold check ✓ */
+  .store-buy.armed { background: linear-gradient(180deg, #ffd98a, #e0a93f); color: #1a0f08; box-shadow: 0 0 18px rgba(224,169,63,0.6); animation: storeArmPulse 0.9s ease-in-out infinite; }   /* build83: armed buy-confirm — gold "are you sure" state */
+  @keyframes storeArmPulse { 0%,100% { box-shadow: 0 0 14px rgba(224,169,63,0.45); } 50% { box-shadow: 0 0 24px rgba(224,169,63,0.85); } }
   @media (max-width: 560px) { .store-title { font-size: 36px; } .store-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
@@ -4767,7 +4769,7 @@
       <!-- build65: discoverable currency legend (was tooltip-only). Ethical-monetization transparency — make it obvious what
            costs real money vs what's earned by play, so nothing is hidden. -->
       <div class="store-legend" style="font-size:11.5px; color:var(--ink-dim); margin:0 auto 12px; line-height:1.55; text-align:center; max-width:520px;">
-        <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance (spend on anything or cash out) &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics or premium levels. Purchases never pay-to-win.
+        <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance (spend on anything or cash out) &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics. Purchases never pay-to-win.
       </div>
       <div class="store-banner" id="store-banner" hidden></div>
       <div class="store-grid" id="store-grid"></div>
@@ -5099,7 +5101,7 @@
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3-1 5-2 6.5C8.5 10.5 8 12 9 13c.6.6.5-1 1.5-2 .8 2 2.5 2.5 2.5 4.5a2.5 2.5 0 1 1-5 0c0-.5.1-1 .3-1.4C7 15 6 16.5 6 18.5 6 21 8.7 23 12 23s6-2 6-4.8c0-4.2-3.5-5.7-3.5-9C14.5 6 13.5 3.5 12 2z"></path></svg>
         </button>
         <div class="gauge-track"><i id="od-fill"></i></div>
-        <div class="gauge-lab">OVERDRIVE · <span class="od-key">TAP</span></div>
+        <div class="gauge-lab">OVERDRIVE · <span class="od-key">SPACE</span></div>
       </div>
 
       <!-- mobile pause button -->
@@ -5121,7 +5123,6 @@
         <button class="tap-zone" data-lane="2" aria-label="Lane 3"></button>
         <button class="tap-zone" data-lane="3" aria-label="Lane 4"></button>
         <button class="tap-zone" data-lane="4" aria-label="Lane 5"></button>
-        <button class="tap-zone" data-lane="5" aria-label="Lane 6"></button>
       </div>
 
       <div class="pause-overlay" id="pause-overlay">
@@ -5296,7 +5297,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=319"></script>
+<script src="telemetry.js?v=320"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5434,14 +5435,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=319"></script>
-<script src="game.js?v=319"></script>
-<script src="procbg.js?v=319"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=319"></script>
-<script src="catalog.js?v=319"></script>
-<script src="multiplayer.js?v=319"></script>
-<script src="share.js?v=319"></script>
-<script src="couch.js?v=319"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
+<script src="assets/fx/fx-player.js?v=320"></script>
+<script src="game.js?v=320"></script>
+<script src="procbg.js?v=320"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=320"></script>
+<script src="catalog.js?v=320"></script>
+<script src="multiplayer.js?v=320"></script>
+<script src="share.js?v=320"></script>
+<script src="couch.js?v=320"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -7834,8 +7835,22 @@
   // dedupes server-side instead of debiting real Sparks twice. Cleared on success so a later re-buy gets a fresh key.
   var _buyKeys = {};
   function _buyKey(k) { return _buyKeys[k] || (_buyKeys[k] = 'rrbuy-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)); }
+  var _armedBuy = null, _armTimer = 0;
+  function _disarmBuy() { if (_armedBuy) { try { _armedBuy.classList.remove('armed'); if (_armedBuy._origLabel != null) _armedBuy.textContent = _armedBuy._origLabel; } catch (e) {} _armedBuy = null; } if (_armTimer) { clearTimeout(_armTimer); _armTimer = 0; } }
   async function buy(btn) {
-    if (busy) return; busy = true;
+    if (busy) return;
+    // build83 (safety): real Sparks = real money — never spend on ONE unconfirmed click. First click ARMS a
+    // confirm (shows the price); a second click within 4s commits. Disarms on timeout. (Phase 2 gives this a premium home.)
+    if (_armedBuy !== btn) {
+      _disarmBuy();
+      var _it = itemById(btn.getAttribute('data-id'));
+      _armedBuy = btn; if (btn._origLabel == null) btn._origLabel = btn.textContent;
+      btn.classList.add('armed'); btn.textContent = 'Confirm · ' + (_it ? fmt(_it.price_sparks) : '') + '⚡';
+      _armTimer = setTimeout(_disarmBuy, 4000);
+      return;
+    }
+    _disarmBuy();
+    busy = true;
     var type = btn.getAttribute('data-type'), id = btn.getAttribute('data-id');
     btn.classList.add('is-busy'); btn.setAttribute('disabled', ''); var label = btn.textContent; btn.textContent = '…';
     var C = RC();

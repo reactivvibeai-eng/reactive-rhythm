@@ -91,6 +91,8 @@
 
   // ---------- STATE ----------
   let difficulty = 'medium';
+  let _firstRunEasy = false;   // build83: set when a brand-new player (no saved diff + no history) is auto-started on Easy
+  let _timingSamples = [];     // build83: per-hit signed timing error (sec) for the results early/late summary
   let provider = null;       // async () => session
   let session = null;        // { beats, duration, player, meta, live, submit }
   let player = null;         // current Player instance
@@ -2163,7 +2165,7 @@
 
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
-    counts = { perfect: 0, great: 0, good: 0, miss: 0 };
+    counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = [];
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
     _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
@@ -2270,11 +2272,22 @@
   async function runCountdown() {
     const el = $('countdown');
     screens.countdown.classList.add('active');
+    // build83: a "GET READY" beat + a "GO!" punch bracket the 3·2·1 (single-player previously had only digits;
+    // MP already cued GET READY). Words render smaller than the big digits so they fit the slot.
+    el.textContent = 'GET READY';
+    el.style.fontSize = 'clamp(26px, 7vw, 64px)';
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    await new Promise(r => setTimeout(r, 650));
+    el.style.fontSize = '';   // digits revert to the big CSS default size
     for (let i = 3; i >= 1; i--) {
       el.textContent = i;
       el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
       await new Promise(r => setTimeout(r, 700));
     }
+    el.textContent = 'GO!';
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    await new Promise(r => setTimeout(r, 320));
+    el.style.fontSize = '';
     screens.countdown.classList.remove('active');
   }
 
@@ -2440,6 +2453,27 @@
       D: 'The song collapsed. ECH0 has logged your failure as a remix prompt.',
     };
     $('results-blurb').textContent = blurbs[grade];
+    // build83: EARLY/LATE timing summary — avg signed bias + a mini histogram (the keyboard grinder's feedback loop)
+    try {
+      const _old = document.getElementById('results-timing'); if (_old) _old.remove();
+      if (_timingSamples.length >= 4) {
+        const _ms = _timingSamples.map(s => s * 1000);
+        const _avg = Math.round(_ms.reduce((a, b) => a + b, 0) / _ms.length);
+        const _ad = Math.abs(_avg);
+        const _dir = _ad < 6 ? 'DEAD ON' : (_avg > 0 ? _avg + 'ms LATE' : (-_avg) + 'ms EARLY');
+        const _col = _ad < 6 ? '#e0a93f' : (_avg > 0 ? '#ff7a4a' : '#dad7d2');
+        const _bins = new Array(9).fill(0);
+        _ms.forEach(v => { let b = Math.round(v / 20) + 4; b = Math.max(0, Math.min(8, b)); _bins[b]++; });
+        const _mx = Math.max(1, ..._bins);
+        const _bars = _bins.map((c, i) => '<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;"><div style="width:60%;height:' + Math.round(3 + c / _mx * 30) + 'px;background:' + (i === 4 ? '#e0a93f' : 'rgba(236,231,227,0.45)') + ';border-radius:2px 2px 0 0;"></div></div>').join('');
+        const _html = '<div id="results-timing" style="margin:10px auto 0;max-width:340px;">'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#b9b2ac;font-family:\'Chakra Petch\',sans-serif;"><span>Timing</span><span style="color:' + _col + ';font-weight:800;font-family:\'Oxanium\',sans-serif;">' + _dir + '</span></div>'
+          + '<div style="display:flex;gap:3px;align-items:flex-end;height:36px;margin-top:5px;">' + _bars + '</div>'
+          + '<div style="display:flex;justify-content:space-between;font-size:9px;color:#8a847d;margin-top:2px;font-family:\'JetBrains Mono\',monospace;"><span>EARLY</span><span>on-beat</span><span>LATE</span></div>'
+          + '</div>';
+        const _rb = $('results-blurb'); if (_rb && _rb.insertAdjacentHTML) _rb.insertAdjacentHTML('afterend', _html);
+      }
+    } catch (e) {}
 
     // judgment composition bar — proportional inline-block segments (fills from 0)
     const rbTotal = Math.max(1, counts.perfect + counts.great + counts.good + counts.miss);
@@ -2529,7 +2563,14 @@
     });
   });
   // restore the last-chosen difficulty so it sticks across sessions
-  try { const d = localStorage.getItem('rr_diff'); if (d && DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); } } catch (e) {}
+  try {
+    const d = localStorage.getItem('rr_diff');
+    if (d && DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); }
+    else if (!localStorage.getItem('rr_career') && !localStorage.getItem('rr_scores')) {   // build83: a TRUE first run (no saved difficulty AND no play history) → start on EASY (real on-ramp; was defaulting to Medium)
+      difficulty = 'easy'; syncDiffButtons(); _firstRunEasy = true;
+    }
+  } catch (e) {}
+  if (_firstRunEasy) setTimeout(() => { try { window.RhythmGame.showToast('Starting you on EASY — bump it up anytime in difficulty ▸', 'info'); } catch (e) {} }, 2600);
   $('resume-btn').addEventListener('click', resumeGame);
   // RESTART is gated behind a two-tap "tap again to restart" confirm so a stray click can't nuke a
   // good run. Same arm idiom as RESET CAREER / RESET ALL SETTINGS. Disarms on resume/exit/timeout.
@@ -2986,6 +3027,7 @@
     else kind = 'good';
     // signed timing error (sec): >0 = pressed LATE, <0 = pressed EARLY. Drives the early/late tick.
     const _signed = t - target.time;
+    if (_timingSamples.length < 4000) _timingSamples.push(_signed);   // build83: collect for the results early/late summary
 
     target.judged = true; target.hit = kind;
     counts[kind]++; combo++; if (combo > maxCombo) maxCombo = combo;

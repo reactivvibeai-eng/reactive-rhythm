@@ -4127,3 +4127,13 @@ A 14-agent review-+-polish swarm (each item independently verified before implem
 - **STRIKE-CONTRAST (LOW):** dark "seat" stroke under the additive strike-line + small rest-alpha bumps (0.16→0.20, 0.34→0.40) so the GH "hit here" rail stays readable on bright backdrops.
 - **COUCH-VT-COLOR (LOW):** the couch pending-screen headline uses the chrome `.vt.draw` style.
 - Verify (live ?v=319, rr-verify): cal flow completes once, Escape closes after P1, Start auto-focuses, vt.draw applied, all 3 gb keyframes present, gh-strum-status element + note hint present; `node --check` clean, **0 console errors**.
+
+### build83 — Playtest-2 roadmap, Phase 1 quick wins  ✅ (?v 319→320, game.js + index.html)
+After a 9-agent discovery swarm (personas/designers/GH-specialist/feasibility) → meeting report + 6-phase roadmap (PLAYTEST2_ROADMAP.md). Owner greenlit full execution. Phase 1 (near-free high-value):
+- **Store buy-confirm (safety):** real Sparks = real money — `buy()` no longer spends on one click. First click ARMS a gold "Confirm · N⚡" state (pulse), a second click within 4s commits, auto-disarms on timeout. (`.store-buy.armed`.)
+- **Easy first-run default:** a TRUE first run (no saved `rr_diff` + no `rr_career`/`rr_scores`) now starts on EASY (was Medium) + a one-time "Starting you on EASY ▸" nudge. Returning players' saved difficulty is respected.
+- **GET READY / GO countdown:** single-player countdown now opens with "GET READY" and closes with "GO!" (MP already had it). Words auto-shrink so they fit the digit slot.
+- **Results early/late timing summary:** collect per-hit signed error → results shows avg bias ("18ms LATE" / "DEAD ON" / "EARLY") + a 9-bin mini histogram (gold center bin), inline-styled, brand colors (no blue). The keyboard grinder's feedback loop.
+- **Cleanups:** removed the stale 6th tap-zone (5-lane game); Overdrive gauge label "TAP"→"SPACE"; fixed the Bonus-Sparks legend ("cosmetics or premium levels" → "cosmetics") to match the code.
+- Deferred within Phase 1: searchable videos → Phase 5 (needs the AI Flixs videoCard/Watch so it doesn't dead-end); winner-card RP delta → Phase 4 (with the other MP work, tested together).
+- Verify (live ?v=320, rr-verify): 5 tap-zones, SPACE label, legend fixed, `.store-buy.armed` present, Easy default fires on a cleared first-run (savedDiff/career null → Easy + nudge), `node --check` clean, **0 console errors**.
