@@ -1128,6 +1128,9 @@
       document.body.appendChild(ov);
       ov.querySelector('.fw-scrim').addEventListener('click', closeWatch);
       ov.querySelector('.fw-close').addEventListener('click', closeWatch);
+      // build93 (playtest): Esc closes the Watch overlay — the owner plays keyboard, and this was the lone
+      // modal without a keyboard dismiss. Capture-phase + open-gated so it only fires while the overlay is up.
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ov.classList.contains('open')) { e.stopImmediatePropagation(); closeWatch(); } }, true);
     }
     const v = ov.querySelector('.fw-video');
     v.poster = posterFor(track); v.src = src;
