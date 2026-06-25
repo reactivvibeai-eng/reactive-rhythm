@@ -5633,7 +5633,11 @@
       if (!_wizActive) return;
       if (lane === _wizLane) {
         _wizLane++;
-        if (_wizLane >= LANE_COUNT) { finishPadWizard(); return; }
+        if (_wizLane >= LANE_COUNT) {
+          if (laneProfile === 'gh') { savePadMap(); startCalibration(); }   // guitar: continue into strum/whammy/tilt calibration
+          else { finishPadWizard(); }                                       // standard pad: frets are enough
+          return;
+        }
         _wizListen();
       }
     };
@@ -5643,6 +5647,7 @@
   }
   function _wizCleanup() {
     _wizActive = false; onPadBound = null; padRebindLane = null;
+    _stopCalRaf(); _calStep = -1;   // stop any in-flight strum/whammy/tilt sampler
     _wizSetVisible(false);
     try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
   }
@@ -5665,7 +5670,85 @@
     try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
     try { window.RhythmGame.showToast('Controller mapped!', 'success'); } catch (e) {}
   }
-  try { window.__rrPadWizard = () => ({ active: _wizActive, lane: _wizLane, total: LANE_COUNT }); } catch (e) {}
+  // ---- GH STRUM / WHAMMY / TILT CALIBRATION (extends the wizard for guitars) -------------------
+  // After the 5 frets, the gh (5-lane guitar) profile flows into 3 capture steps that write the
+  // strum bar / whammy axis / tilt(or Select) into rr_strumcfg. Self-contained rAF samplers read
+  // navigator.getGamepads() DIRECTLY — they never touch the hot pollGamepad path. Each step has a
+  // timeout → keep-default + a Skip button, so a missing control can't strand the wizard.
+  let _calStep = -1, _calRaf = 0;
+  const CAL_STEPS = [
+    { title: 'STRUM',      prompt: 'Hit the <b>STRUM BAR</b>',                          sub: 'Strum up or down — we’ll capture it.' },
+    { title: 'WHAMMY',     prompt: 'Wiggle the <b>WHAMMY BAR</b> through its full range', sub: 'Push it all the way and release, for ~1.5s.' },
+    { title: 'STAR POWER', prompt: 'Tilt the guitar <b>UP</b> — or press <b>Select</b>',  sub: 'This becomes your Star Power / Overdrive trigger.' },
+  ];
+  function _stopCalRaf() { if (_calRaf) { try { cancelAnimationFrame(_calRaf); } catch (e) {} _calRaf = 0; } }
+  function _padsNow() { try { return navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : []; } catch (e) { return []; } }
+  function _captureNextButton(timeoutMs, cb) {
+    _stopCalRaf(); const t0 = performance.now(); let base = null;
+    const tick = () => {
+      const pads = _padsNow();
+      if (!base) { base = {}; pads.forEach(g => base[g.index] = g.buttons.map(b => b.pressed)); }
+      for (const g of pads) { const bs = base[g.index] || []; for (let b = 0; b < g.buttons.length; b++) { if (g.buttons[b].pressed && !bs[b]) { _calRaf = 0; cb(b, g.index); return; } } base[g.index] = g.buttons.map(b => b.pressed); }
+      if (performance.now() - t0 > timeoutMs) { _calRaf = 0; cb(null); return; }
+      _calRaf = requestAnimationFrame(tick);
+    };
+    _calRaf = requestAnimationFrame(tick);
+  }
+  function _sampleAxes(durationMs, thresh, cb) {
+    _stopCalRaf(); const t0 = performance.now(); const mn = {}, mx = {};
+    const tick = () => {
+      for (const g of _padsNow()) for (let a = 0; a < g.axes.length; a++) { const v = g.axes[a]; if (mn[a] == null || v < mn[a]) mn[a] = v; if (mx[a] == null || v > mx[a]) mx[a] = v; }
+      if (performance.now() - t0 > durationMs) { _calRaf = 0; let best = null, bestR = thresh; for (const k in mn) { const r = mx[k] - mn[k]; if (r > bestR) { bestR = r; best = +k; } } cb(best, best == null ? 0 : mn[best], best == null ? 0 : mx[best]); return; }
+      _calRaf = requestAnimationFrame(tick);
+    };
+    _calRaf = requestAnimationFrame(tick);
+  }
+  function _captureTilt(durationMs, cb) {
+    _stopCalRaf(); const t0 = performance.now(); let base = null; const mn = {}, mx = {};
+    const tick = () => {
+      const pads = _padsNow();
+      if (!base) { base = {}; pads.forEach(g => base[g.index] = g.buttons.map(b => b.pressed)); }
+      for (const g of pads) { const bs = base[g.index] || []; for (let b = 0; b < g.buttons.length; b++) { if (g.buttons[b].pressed && !bs[b]) { _calRaf = 0; cb({ spBtn: b }); return; } } base[g.index] = g.buttons.map(b => b.pressed); for (let a = 0; a < g.axes.length; a++) { const v = g.axes[a]; if (mn[a] == null || v < mn[a]) mn[a] = v; if (mx[a] == null || v > mx[a]) mx[a] = v; } }
+      if (performance.now() - t0 > durationMs) { _calRaf = 0; let best = null, bestR = 0.5; for (const k in mn) { const r = mx[k] - mn[k]; if (r > bestR) { bestR = r; best = +k; } } cb(best == null ? {} : { tiltAxis: best, tiltThresh: +Math.max(0.4, mn[best] + (mx[best] - mn[best]) * 0.6).toFixed(2) }); return; }
+      _calRaf = requestAnimationFrame(tick);
+    };
+    _calRaf = requestAnimationFrame(tick);
+  }
+  function _calRender(captured) {
+    const s = CAL_STEPS[_calStep]; if (!s) return;
+    const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Guitar setup — ' + s.title + ' (' + (_calStep + 1) + ' of 3)';
+    const sw = wizEl('pad-wizard-swatch'); if (sw) sw.style.background = 'var(--crimson, #ff2a30)';
+    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = captured ? ('✅ ' + s.title + ' set') : s.prompt;
+    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = captured || s.sub;
+    const dots = wizEl('pad-wizard-dots'); if (dots) { dots.innerHTML = ''; for (let i = 0; i < 3; i++) { const d = document.createElement('span'); d.className = 'wiz-dot' + (i < _calStep ? ' done' : (i === _calStep ? ' now' : '')); d.style.setProperty('--wd', '#ff3c3c'); dots.appendChild(d); } }
+    const skip = wizEl('pad-wizard-skip'); if (skip) skip.style.display = 'inline-block';
+  }
+  function startCalibration() {
+    onPadBound = null; padRebindLane = null; _wizPrevMap = null;   // frets are committed; cal can't be cancelled back to a fret remap
+    _calStep = 0; _armCalStep();
+  }
+  function _armCalStep() {
+    _calRender(null);
+    if (_calStep === 0) _captureNextButton(15000, (b) => { if (b != null) { strumCfg.btns = [b]; saveStrumCfg(); _calRender('Strum = button ' + b); } _calNext(800); });
+    else if (_calStep === 1) _sampleAxes(1600, 0.4, (axis, lo, hi) => { if (axis != null) { strumCfg.whammyAxis = axis; strumCfg.whammyMin = +(+lo).toFixed(2); strumCfg.whammyMax = +(+hi).toFixed(2); saveStrumCfg(); _calRender('Whammy = axis ' + axis); } else _calRender('Whammy = default (none found)'); _calNext(800); });
+    else if (_calStep === 2) _captureTilt(2200, (res) => { if (res && res.spBtn != null) { strumCfg.spBtn = res.spBtn; saveStrumCfg(); _calRender('Star Power = button ' + res.spBtn); } else if (res && res.tiltAxis != null) { strumCfg.tiltAxis = res.tiltAxis; strumCfg.tiltThresh = res.tiltThresh; saveStrumCfg(); _calRender('Star Power = tilt axis ' + res.tiltAxis); } else _calRender('Star Power = Select (default)'); _calNext(900); });
+  }
+  function _calNext(delayMs) { setTimeout(() => { if (_calStep < 0) return; _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }, delayMs || 600); }
+  function _calSkip() { if (_calStep < 0) return; _stopCalRaf(); _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }
+  function finishCalibration() {
+    _stopCalRaf(); _calStep = -1; _wizActive = false; saveStrumCfg();
+    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = '✅ Guitar ready — <b>fret + strum</b> to play.';
+    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = 'Whammy charges Overdrive · tilt / Select fires Star Power. Re-run anytime to remap.';
+    const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Done';
+    const skip = wizEl('pad-wizard-skip'); if (skip) skip.style.display = 'none';
+    const dots = wizEl('pad-wizard-dots'); if (dots) dots.querySelectorAll('.wiz-dot').forEach(d => { d.className = 'wiz-dot done'; });
+    const dn = wizEl('pad-wizard-done'); if (dn) dn.textContent = 'DONE';
+    try { renderDeviceStatus(); } catch (e) {}
+    try { window.RhythmGame.showToast('Guitar calibrated — fret + strum!', 'success'); } catch (e) {}
+  }
+  try { window.__rrPadWizard = () => ({ active: _wizActive, lane: _wizLane, total: LANE_COUNT, calStep: _calStep }); } catch (e) {}
+  // dev hook (strip at content-freeze): drive the strum-cal flow headless (samplers need real hardware; skip advances)
+  try { window.__rrCal = { start: () => { _wizActive = true; _wizSetVisible(true); startCalibration(); return _calStep; }, skip: () => { _calSkip(); return _calStep; }, step: () => _calStep, cfg: () => Object.assign({}, strumCfg) }; } catch (e) {}
 
   // ---- controllers & MIDI: live status + input test ----
   function updateInputsStatus() {
@@ -5861,6 +5944,7 @@
   { const gw = $('gh-setup'); if (gw) gw.addEventListener('click', startPadWizard); }
   { const gp = $('set-pad-ghpreset'); if (gp) gp.addEventListener('click', applyGhPreset); }
   { const wc = $('pad-wizard-cancel'); if (wc) wc.addEventListener('click', cancelPadWizard); }
+  { const ws = $('pad-wizard-skip'); if (ws) ws.addEventListener('click', () => { if (_calStep >= 0) _calSkip(); }); }   // skip the current strum/whammy/tilt step (keep its default)
   { const wd = $('pad-wizard-done'); if (wd) wd.addEventListener('click', () => { if (_wizActive) cancelPadWizard(); else _wizSetVisible(false); }); }
   // advanced (manual per-lane caps) disclosure toggle
   { const adv = $('set-pad-advanced-toggle'); if (adv) adv.addEventListener('click', () => {
