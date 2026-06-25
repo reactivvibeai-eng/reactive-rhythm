@@ -4199,16 +4199,19 @@
       const slX0 = nearX[0] - lw * 0.5, slX1 = nearX[LANE_COUNT - 1] + lw * 0.5;
       const slPulse = reduceMotion ? 0 : Math.max.apply(null, laneHitPulse);   // 0..1
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
+      // dark "seat" UNDER the additive strokes so the rail keeps contrast on bright video/level backdrops (STRIKE-CONTRAST)
+      ctx.strokeStyle = 'rgba(8,5,4,0.45)'; ctx.lineWidth = Math.max(2, lw * 0.16);
+      ctx.beginPath(); ctx.moveTo(slX0, nearY); ctx.lineTo(slX1, nearY); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
       // crimson underglow (soft, wide)
-      ctx.strokeStyle = 'rgba(255,42,48,' + (0.16 + slPulse * 0.30).toFixed(3) + ')';
+      ctx.strokeStyle = 'rgba(255,42,48,' + (0.20 + slPulse * 0.30).toFixed(3) + ')';
       ctx.lineWidth = Math.max(2, lw * 0.16);
       if (!fxLite && !reduceMotion) { ctx.shadowColor = '#ff2a30'; ctx.shadowBlur = 8 + slPulse * 14; }
       ctx.beginPath(); ctx.moveTo(slX0, nearY); ctx.lineTo(slX1, nearY); ctx.stroke();
       // chrome core (thin, crisp) — lerps to hot-white on a hit
       ctx.shadowBlur = (!fxLite && !reduceMotion) ? (4 + slPulse * 6) : 0;
-      const coreA = (0.34 + slPulse * 0.40).toFixed(3);
+      const coreA = (0.40 + slPulse * 0.40).toFixed(3);
       ctx.strokeStyle = slPulse > 0.4 ? 'rgba(255,238,224,' + coreA + ')' : 'rgba(236,231,227,' + coreA + ')';
       ctx.lineWidth = Math.max(1.2, lw * 0.05);
       ctx.beginPath(); ctx.moveTo(slX0, nearY); ctx.lineTo(slX1, nearY); ctx.stroke();
@@ -5675,13 +5678,13 @@
   // strum bar / whammy axis / tilt(or Select) into rr_strumcfg. Self-contained rAF samplers read
   // navigator.getGamepads() DIRECTLY — they never touch the hot pollGamepad path. Each step has a
   // timeout → keep-default + a Skip button, so a missing control can't strand the wizard.
-  let _calStep = -1, _calRaf = 0;
+  let _calStep = -1, _calRaf = 0, _calTimer = 0;
   const CAL_STEPS = [
     { title: 'STRUM',      prompt: 'Hit the <b>STRUM BAR</b>',                          sub: 'Strum up or down — we’ll capture it.' },
     { title: 'WHAMMY',     prompt: 'Wiggle the <b>WHAMMY BAR</b> through its full range', sub: 'Push it all the way and release, for ~1.5s.' },
     { title: 'STAR POWER', prompt: 'Tilt the guitar <b>UP</b> — or press <b>Select</b>',  sub: 'This becomes your Star Power / Overdrive trigger.' },
   ];
-  function _stopCalRaf() { if (_calRaf) { try { cancelAnimationFrame(_calRaf); } catch (e) {} _calRaf = 0; } }
+  function _stopCalRaf() { if (_calRaf) { try { cancelAnimationFrame(_calRaf); } catch (e) {} _calRaf = 0; } if (_calTimer) { clearTimeout(_calTimer); _calTimer = 0; } }
   function _padsNow() { try { return navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : []; } catch (e) { return []; } }
   function _captureNextButton(timeoutMs, cb) {
     _stopCalRaf(); const t0 = performance.now(); let base = null;
@@ -5733,8 +5736,8 @@
     else if (_calStep === 1) _sampleAxes(1600, 0.4, (axis, lo, hi) => { if (axis != null) { strumCfg.whammyAxis = axis; strumCfg.whammyMin = +(+lo).toFixed(2); strumCfg.whammyMax = +(+hi).toFixed(2); saveStrumCfg(); _calRender('Whammy = axis ' + axis); } else _calRender('Whammy = default (none found)'); _calNext(800); });
     else if (_calStep === 2) _captureTilt(2200, (res) => { if (res && res.spBtn != null) { strumCfg.spBtn = res.spBtn; saveStrumCfg(); _calRender('Star Power = button ' + res.spBtn); } else if (res && res.tiltAxis != null) { strumCfg.tiltAxis = res.tiltAxis; strumCfg.tiltThresh = res.tiltThresh; saveStrumCfg(); _calRender('Star Power = tilt axis ' + res.tiltAxis); } else _calRender('Star Power = Select (default)'); _calNext(900); });
   }
-  function _calNext(delayMs) { setTimeout(() => { if (_calStep < 0) return; _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }, delayMs || 600); }
-  function _calSkip() { if (_calStep < 0) return; _stopCalRaf(); _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }
+  function _calNext(delayMs) { clearTimeout(_calTimer); _calTimer = setTimeout(() => { _calTimer = 0; if (_calStep < 0) return; _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }, delayMs || 600); }
+  function _calSkip() { if (_calStep < 0) return; clearTimeout(_calTimer); _calTimer = 0; _stopCalRaf(); _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }
   function finishCalibration() {
     _stopCalRaf(); _calStep = -1; _wizActive = false; saveStrumCfg();
     const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = '✅ Guitar ready — <b>fret + strum</b> to play.';
@@ -5765,6 +5768,11 @@
       if (!navigator.requestMIDIAccess) rows.push(['MIDI', 'Unsupported browser', false]);
       else rows.push(['MIDI', midiInputs.length ? midiInputs.join(', ') : 'No device detected', midiInputs.length > 0]);
       rows.push(['Controller', pads.length ? pads[0].slice(0, 26) : 'No device detected', pads.length > 0]);
+      if (ghId) {   // GH-3: surface the calibrated strum/whammy/tilt mapping so a guitar player can confirm setup
+        rows.push(['Strum', (strumCfg.btns && strumCfg.btns.length) ? ('Button ' + strumCfg.btns.join('/')) : 'Not set', !!(strumCfg.btns && strumCfg.btns.length)]);
+        rows.push(['Whammy', strumCfg.whammyAxis != null ? ('Axis ' + strumCfg.whammyAxis) : 'Not set', strumCfg.whammyAxis != null]);
+        rows.push(['Tilt / Star Power', strumCfg.tiltAxis != null ? ('Tilt axis ' + strumCfg.tiltAxis) : ('Button ' + strumCfg.spBtn), true]);
+      }
       el.innerHTML = rows.map(r => '<div class="dev-row"><span class="dev-n">' + r[0] + '</span><span class="dev-v' + (r[2] ? ' ok' : '') + '">' + escDev(r[1]) + '</span></div>').join('');
     }
     // Guitar-Hero auto-detect badge + "set up my guitar" affordance
@@ -5772,6 +5780,8 @@
     if (badge) {
       badge.style.display = ghId ? 'flex' : 'none';
       const nm = $('gh-badge-name'); if (nm) nm.textContent = String(ghId || '').slice(0, 30);
+      // GH-1: surface that REQUIRE STRUM is active so a new guitar player doesn't think the controller is broken
+      const ss = $('gh-strum-status'); if (ss) { const on = requireStrum(); ss.textContent = on ? 'REQUIRE STRUM: ON — hold a fret + strum' : 'REQUIRE STRUM: OFF'; ss.style.color = on ? '#e0a93f' : 'var(--ink-dim)'; }
     }
     // pad-status hint near the wizard button
     const padHint = $('pad-status-hint');

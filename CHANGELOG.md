@@ -4106,3 +4106,24 @@ A 5-dimension adversarial review swarm (13 agents, each finding independently ve
 - **F1 (LOW):** the desktop multiplier-promote `@media(min-width:880px)` overlapped the mobile `@media(max-width:900px)` in an 880-900px band. Fixed: promote at `min-width:901px` (mutually exclusive). Desktop multiplier still promoted at 1280px (verified 26px).
 - **A11Y-1 (LOW):** the decorative Golden-Buzzer crown glyph lacked `aria-hidden` (the `gb-tag` carries the readable label). Fixed: `aria-hidden="true"` on the crown span.
 - Verify (live ?v=317, rr-verify): all 5 confirmed fixed, golden-buzzer still dormant (0), `node --check` clean, **0 console errors**. Smoke test (separate): all 8 subsystem globals load, all 6 library views switch, 0 console errors.
+
+### build81 — GH strum/whammy/tilt CALIBRATION WIZARD (the deferred in-Settings UI)  ✅ (?v 317→318, game.js + index.html)
+Finishes the build78 GH feature: the "Set Up Controller" wizard now, on the **gh (5-lane guitar) profile**, flows from the 5 fret steps into 3 capture steps — **STRUM → WHAMMY → STAR POWER(tilt/Select)** — writing `rr_strumcfg`. Built in a git worktree (`gh-wizard-polish`), merged into `visual-overhaul`.
+- **Self-contained rAF samplers** (`_captureNextButton` / `_sampleAxes` / `_captureTilt`) read `navigator.getGamepads()` DIRECTLY — they never touch the hot `pollGamepad` path, so keyboard/standard-pad input is untouched. Each step has a timeout → keep-default, plus a **Skip** button, so a missing control can't strand the wizard.
+- STRUM captures the next button → `strumCfg.btns`. WHAMMY samples ~1.5s, picks the largest-travel axis → `whammyAxis/min/max`. TILT captures a button (→`spBtn`) or the largest-travel axis (→`tiltAxis/tiltThresh`), whichever fires first.
+- Standard (non-gh) pad path is byte-identical (still `finishPadWizard` after frets). `_wizCleanup` stops any in-flight sampler; cal state resets on close/re-run.
+- Verify (live ?v=318, rr-verify, `__rrCal` dev hook): the flow renders STRUM→WHAMMY→TILT prompts, Skip shows during cal + hides on done, finish state "Guitar ready — fret + strum", skipped steps keep defaults; `node --check` clean, **0 console errors**. The actual button/axis CAPTURE needs the owner's physical guitar (rAF samplers read live hardware) — but the flow, UI, persistence + Skip are all proven. This replaces the console-calibration stopgap in `GH_CONTROLLER_BRIEF.md` with a guided UI.
+
+### build82 — wizard-+-polish review swarm: 2 bug fixes + 8 polish items  ✅ (?v 318→319, game.js + couch.js + jukebox.css + index.html)
+A 14-agent review-+-polish swarm (each item independently verified before implementing) returned 10 actionable items, **all confirmed real + low-risk**, 0 dismissed. Applied all 10:
+- **BUG CAL-DOUBLE-ADVANCE (HIGH):** the wizard's `_calNext` used an UNTRACKED `setTimeout`; clicking SKIP during the 0.8s post-capture window double-advanced (silently skipped a step / double-finished). Fixed: track `_calTimer`, clear it in `_calNext`/`_calSkip`/`_stopCalRaf`. (Verified: cal completes exactly once.)
+- **BUG COUCH-ESC (MED):** Escape stopped closing the claim overlay after P1 was claimed (`if(P1)return` ran before the Escape check). Fixed: test Escape FIRST; also added Enter-to-start when both ready.
+- **GH-1 (MED):** "REQUIRE STRUM: ON/OFF" status line in the gh-badge (renderDeviceStatus) so a guitar player doesn't think frets-do-nothing = broken.
+- **GH-2 (LOW):** "Set Up Controller" note now mentions guitar players also map strum/whammy/tilt.
+- **GH-3 (LOW):** live strum/whammy/tilt mapping rows in the devices panel (read from `strumCfg`, gated to guitars).
+- **COUCH-FOCUS (LOW):** focus the Start button when both players are ready (keyboard P1 can Enter).
+- **GB-ENTRANCE (LOW):** crown pop + tag fade-rise keyframes (gold) — the "earned" moment; reduce-motion via `html.rr-reduce-motion`.
+- **GB-SHINE (LOW):** slow gold breathe on the winner frame (rest state byte-identical, so non-animating browsers unchanged).
+- **STRIKE-CONTRAST (LOW):** dark "seat" stroke under the additive strike-line + small rest-alpha bumps (0.16→0.20, 0.34→0.40) so the GH "hit here" rail stays readable on bright backdrops.
+- **COUCH-VT-COLOR (LOW):** the couch pending-screen headline uses the chrome `.vt.draw` style.
+- Verify (live ?v=319, rr-verify): cal flow completes once, Escape closes after P1, Start auto-focuses, vt.draw applied, all 3 gb keyframes present, gh-strum-status element + note hint present; `node --check` clean, **0 console errors**.

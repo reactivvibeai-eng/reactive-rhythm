@@ -89,13 +89,13 @@
         '<div class="couch-note">Two highways, one screen. Same song, independent scores.</div>' +
       '</div>';
     var c = document.getElementById('couch-cancel'); if (c) c.onclick = close;
-    var st = document.getElementById('couch-start'); if (st) st.onclick = function () { if (P1 && P2) startMatch(); };
+    var st = document.getElementById('couch-start'); if (st) { st.onclick = function () { if (P1 && P2) startMatch(); }; if (P1 && P2) st.focus(); }   // focus Start when both ready so keyboard P1 can Enter — COUCH-FOCUS
   }
 
   function onClaimKey(e) {
-    // first keyboard press claims P1 (keyboard). Ignore modifier-only / Escape.
-    if (P1) return;
-    if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'Escape') { close(); return; }                       // Escape always closes (even after P1 claimed) — COUCH-ESC
+    if (e.key === 'Enter' && P1 && P2) { startMatch(); return; }        // both ready → Enter starts (keyboard-friendly) — COUCH-FOCUS
+    if (P1) return;                                                     // first keyboard press claims P1
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
     P1 = { device: 'keyboard' };
     renderClaim();
@@ -159,7 +159,7 @@
     var el = host(); el.classList.add('open');
     el.innerHTML =
       '<div class="couch-card couch-verdict">' +
-        '<div class="vt">Versus — almost there</div>' +
+        '<div class="vt draw">Versus — almost there</div>' +
         '<div class="couch-note">Both devices are claimed (P1 keyboard, P2 controller #' + (P2 ? P2.index : '?') + ').<br>' +
         'The split-screen second deck needs the engine-doubling pass before it can run — see LOCAL_VERSUS_BRIEF.md.<br>' +
         'Everything up to here (the ready-up + device capture) is live.</div>' +
