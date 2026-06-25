@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=327" />
+<link rel="stylesheet" href="jukebox.css?v=328" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -45,6 +45,10 @@
     --line: rgba(160, 40, 46, 0.32);     /* muted CRIMSON hairline — a light line over the
                                             crimson bg-glow blended to pink/"purple", so the
                                             dividers are now red-family and can never read purple */
+    /* build91: shared easing tokens — one house "arrival" curve (settle), a spring for pops, a bar fill */
+    --ease-settle: cubic-bezier(.2, 1, .3, 1);
+    --ease-spring: cubic-bezier(.2, 1.4, .3, 1);
+    --ease-bar: cubic-bezier(.2, .8, .2, 1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* accessibility: reduced motion (toggle adds .rr-reduce-motion to <html>) */
@@ -1152,10 +1156,18 @@
   @keyframes shFade{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
   @keyframes shPlinth{ from{opacity:0; transform:translateX(-50%) scaleX(.6)} to{opacity:1; transform:translateX(-50%) scaleX(1)} }
   @keyframes shBloom{ 0%{opacity:0} 40%{opacity:1} 100%{opacity:.78} }
-  #store-hero.show .sh-stage{ animation:shRise .5s cubic-bezier(.2,1,.3,1) both; }
-  #store-hero.show .sh-plinth{ animation:shPlinth .6s cubic-bezier(.2,1,.3,1) .08s both; }
-  #store-hero.show .sh-spot{ animation:shBloom .8s ease-out both; }
-  #store-hero.show .sh-info > *{ animation:shFade .42s cubic-bezier(.2,1,.3,1) both; }
+  /* build91: showroom comes alive — slow idle float + spotlight sway AFTER the one-shot entrance (overlay-only; never focused during play → keyboard byte-identical) */
+  @keyframes shIdle{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-8px) } }
+  @keyframes shIdleRot{ 0%,100%{ transform:translateY(0) rotate(-0.6deg) } 50%{ transform:translateY(-8px) rotate(0.6deg) } }
+  @keyframes shReflectIdle{ 0%,100%{ transform:translateX(-50%) scaleY(-1) translateY(0) } 50%{ transform:translateX(-50%) scaleY(-1) translateY(8px) } }
+  @keyframes shSpotDrift{ 0%,100%{ transform:translateX(-50%) translateX(-9px) } 50%{ transform:translateX(-50%) translateX(9px) } }
+  #store-hero.show .sh-stage{ animation:shRise .5s var(--ease-settle) both; }
+  #store-hero.show .sh-plinth{ animation:shPlinth .6s var(--ease-settle) .08s both; }
+  #store-hero.show .sh-spot{ animation:shBloom .8s ease-out both, shSpotDrift 9s ease-in-out .8s infinite; }
+  #store-hero.show .sh-guitar{ animation:shIdleRot 5.5s ease-in-out .5s infinite; }            /* 3D guitar: float + ~1.2deg sway */
+  #store-hero.show.is-cover .sh-guitar{ animation:shIdle 5.5s ease-in-out .5s infinite; }       /* flat cover art: float only (no spin — reads cheap) */
+  #store-hero.show .sh-reflect{ animation:shReflectIdle 5.5s ease-in-out .5s infinite; }        /* reflection tracks the float */
+  #store-hero.show .sh-info > *{ animation:shFade .42s var(--ease-settle) both; }
   #store-hero.show .sh-info > :nth-child(1){ animation-delay:.10s; }
   #store-hero.show .sh-info > :nth-child(2){ animation-delay:.16s; }
   #store-hero.show .sh-info > :nth-child(3){ animation-delay:.22s; }
@@ -1164,8 +1176,11 @@
   #store-hero.show .sh-info > :nth-child(6){ animation-delay:.40s; }
   #store-hero.show .sh-info > :nth-child(7){ animation-delay:.46s; }
   html.rr-reduce-motion #store-hero.show, html.rr-reduce-motion #store-hero.show .sh-stage, html.rr-reduce-motion #store-hero.show .sh-plinth, html.rr-reduce-motion #store-hero.show .sh-spot, html.rr-reduce-motion #store-hero.show .sh-info > *{ animation:none; opacity:1; transform:none; }
+  /* build91: kill the new idle float/sway under reduce-motion + restore each element's base transform */
+  html.rr-reduce-motion #store-hero.show .sh-guitar{ animation:none; transform:none; }
+  html.rr-reduce-motion #store-hero.show .sh-reflect{ animation:none; transform:translateX(-50%) scaleY(-1); }
   html.rr-reduce-motion #store-hero.show .sh-plinth{ transform:translateX(-50%); }
-  html.rr-reduce-motion #store-hero.show .sh-spot{ opacity:.78; }
+  html.rr-reduce-motion #store-hero.show .sh-spot{ opacity:.78; transform:translateX(-50%); }
 
   /* ============ MERCHANDISING (cards) — build84 ============ */
   :root{ --r-common:#7d736e; --r-rare:#ff7a4a; --r-epic:#ff2a38; --r-legend:#e0a93f; }
@@ -5626,10 +5641,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=327"></script>
+<script src="game.js?v=328"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=327"></script>
-<script src="catalog.js?v=327"></script>
+<script src="jukebox.js?v=328"></script>
+<script src="catalog.js?v=328"></script>
 <script src="multiplayer.js?v=324"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
