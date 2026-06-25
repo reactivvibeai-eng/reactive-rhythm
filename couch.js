@@ -73,6 +73,7 @@
   // ---- the claim / ready-up flow ----------------------------------------------------------
   function renderClaim() {
     var el = host();
+    el.classList.add('open');   // host() resets className each render — re-assert visibility so a claim doesn't hide the overlay (COUCH-1)
     el.innerHTML =
       '<div class="couch-card">' +
         '<h2 class="couch-title">Local Versus — Claim Your Player</h2>' +

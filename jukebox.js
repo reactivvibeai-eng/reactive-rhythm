@@ -127,7 +127,7 @@
     el.classList.toggle('gb-winner', gbWin);
     let crown = card.querySelector('.gb-crown');
     if (gbWin && !crown) {
-      crown = document.createElement('span'); crown.className = 'gb-crown'; crown.textContent = '♔';   // ♔
+      crown = document.createElement('span'); crown.className = 'gb-crown'; crown.textContent = '♔'; crown.setAttribute('aria-hidden', 'true');   // ♔ decorative (the gb-tag carries the readable label)
       const tag = document.createElement('span'); tag.className = 'gb-tag'; tag.textContent = 'Golden Buzzer Winner';
       card.appendChild(crown); card.appendChild(tag);
     } else if (!gbWin && crown) {

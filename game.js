@@ -2174,6 +2174,7 @@
     laneDesat = Array(LANE_COUNT).fill(0); catcherRecoil = Array(LANE_COUNT).fill(0);
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null); _mpStunUntil = 0;
+    _frets.clear();   // GH require-strum: clear held-fret state at every run boundary so a stale fret can't carry into the next run (B78-1)
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
     odActive = false; odTimer = 0; lastMult = 1; odReadyAnnounced = false;
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
@@ -5869,7 +5870,7 @@
       adv.classList.toggle('open', !open);
     }); }
   window.addEventListener('gamepadconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });
-  window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining
+  window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); _frets.clear(); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining. build79-fix(B78-2): also clear GH held-fret Set so an unplugged-mid-hold guitar can't leave phantom frets that the next strum fires.
 
   $('calib-cancel').addEventListener('click', closeCalib);
   $('calib-pad').addEventListener('click', calibTap);
