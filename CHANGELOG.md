@@ -4144,3 +4144,11 @@ Spec+design swarm (4 investigators → build sheet) → a full-screen guitar **h
 - **Reuse contract:** the hero's action button is the SAME `.store-buy` HTML; `wireBuys(root)` was generalized to a container so Buy→`buy()` (armed confirm intact), Equip→`equipSkin()`, Use-Bonus→`buyBonus()` — one code path, zero new spend logic.
 - **Merchandising:** rarity tiers (common gunmetal / rare ember / epic crimson / legendary gold — no purple/blue), legendary sheen, NEW/FEATURED corner flags (unowned only), a corner rarity gem, stronger OWNED tab + EQUIPPED banner, and emoji→**inline SVG** icons (check/lock/star/close/gem sprite). All brand-true.
 - Verify (live ?v=321, rr-verify): 20 cards all carry `data-rarity`+gem, no `🔒` glyph (SVG lock), hero opens with the full `.png` (not `-card.jpg`), reflection matches, level opens `is-cover`, all 3 close paths work (Escape via capture phase), `node --check` n/a (inline), **0 console errors**.
+
+### build85 — Phase 3 (part A): reward-surfacing + grade floor + whiff  ✅ (?v 321→322, game.js + catalog.js + index.html)
+The data was computed but never celebrated. Owner decision: keep Score dominant, ADD a BEST delta.
+- **Per-song BEST chip** (`#hud-best`, gold, under the big Score): lit at song start from `getBest(currentTrackId())`; the instant the live run passes it, flips to "★ BEAT BEST" (crimson). New `RhythmCatalog.currentTrackId()` getter feeds it. (Hidden for the demo, which persists no best — consistent.)
+- **Results "NEW BEST +X"** (gold badge with the delta over your prior best) OR, when you didn't beat it, a **next-chase CTA** ("Best 222,000 — beat it by 4,200") under the blurb.
+- **FC grade floor:** a clean full-combo run never prints below B (floors only, never caps; full_combo keys off the same `_isFC`).
+- **Whiff cue:** an empty press (no note in window) now plays a short dry tick + a half-kick catcher recoil — and crucially does NOT break combo or drain stability (keyboard-feel guardrail). Verified: empty press → score/combo delta 0.
+- Verify (live ?v=322, rr-verify): `currentTrackId()` returns the real id after launch, `getBest` feeds the chip, whiff scores nothing, `node --check` clean (game.js + catalog.js), **0 console errors**. (Remaining Phase 3: combo 11-24 dead-zone, OD-ready banner, mobile tap coachmark + outlines, unmissable How-To — build86.)

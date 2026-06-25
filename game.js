@@ -940,6 +940,19 @@
       s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
     } catch (e) {}
   }
+  // build85 (Phase 3.3): a short dry "tick" for an EMPTY press — distinct from the miss squelch, mute + SFX-mixer gated.
+  function playWhiffSfx() {
+    if (muted) return;
+    try {
+      const ac = getAC(); const now = ac.currentTime;
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = 'square'; o.frequency.setValueAtTime(150, now);
+      o.frequency.exponentialRampToValueAtTime(70, now + 0.05);
+      g.gain.setValueAtTime(Math.min(0.12, SFX_LEVEL * 0.6), now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+      o.connect(g); g.connect(ac.destination); o.start(now); o.stop(now + 0.08);
+    } catch (e) {}
+  }
   // Overdrive activation: a short synthesized power-up riser (no asset needed).
   // Gated by mute; rides at a Hit-Sound-mixer-scaled level so it accents over the music (build71: was a fixed 0.22).
   function playOverdriveSfx() {
@@ -2181,6 +2194,16 @@
     odActive = false; odTimer = 0; lastMult = 1; odReadyAnnounced = false;
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
+    // build85 (Phase 3.1): light the BEST chip from the stored per-song best (the thing to chase)
+    try {
+      const _be = $('hud-best');
+      const _id = window.RhythmCatalog && window.RhythmCatalog.currentTrackId && window.RhythmCatalog.currentTrackId();
+      const _bb = (_id && window.RhythmCatalog.getBest) ? window.RhythmCatalog.getBest(_id) : null;
+      if (_be) {
+        if (_bb && _bb.score > 0) { _be.textContent = 'BEST ' + _bb.score.toLocaleString(); _be.hidden = false; _be.classList.remove('beaten'); _be._best = _bb.score; }
+        else { _be.hidden = true; _be._best = 0; }
+      }
+    } catch (e) {}
   }
 
   let _playGen = 0;   // build57: launch-generation token — a newer beginPlay() invalidates older ones (see guards below)
@@ -2333,6 +2356,9 @@
     let grade = 'D';
     if (accShown >= 95) grade = 'S'; else if (accShown >= 88) grade = 'A';
     else if (accShown >= 75) grade = 'B'; else if (accShown >= 60) grade = 'C';
+    // build85 (Phase 3.2): FC grade FLOOR — a clean full-combo run never prints below B. Floors only, never caps.
+    const _isFC = counts.miss === 0 && total > 0;
+    if (_isFC && (grade === 'C' || grade === 'D')) grade = 'B';
 
     const results = {
       difficulty,
@@ -2342,7 +2368,7 @@
       notes_hit: hit,
       notes_total: total,
       grade,
-      full_combo: counts.miss === 0 && total > 0,
+      full_combo: _isFC,
       failed: runFailed,
       boss: bossMode,
     };
@@ -2998,7 +3024,12 @@
       const d = Math.abs(n.time - t);
       if (d < targetDiff) { targetDiff = d; target = n; }
     }
-    if (!target) { flashJudgment('—', '#8a7f86'); return; }
+    if (!target) {   // empty press — no note in window. build85: whiff cue (does NOT break combo or drain stability — keyboard-feel guardrail)
+      flashJudgment('—', '#8a7f86');
+      playWhiffSfx();
+      catcherRecoil[lane] = Math.max(catcherRecoil[lane] || 0, 0.5);   // half-kick (a real miss = 1.0)
+      return;
+    }
 
     // HAZARD: pressing a lane while a BOMB sits in its window penalizes — these are "don't hit".
     if (target.type === 'bomb') {
@@ -3795,6 +3826,9 @@
     // build70 (launch-audit P3): null-guard the early HUD dereferences (its second half already does) so a
     // missing id after the /play markup move can't throw inside the rAF loop and kill the frame.
     const _hs = $('hud-score'); if (_hs) _hs.textContent = Math.floor(scoreDisplay).toLocaleString();   // animated value (loop rolls it up)
+    // build85 (Phase 3.1): the instant the live run passes the stored best, flip the chip to "★ BEAT BEST"
+    const _be2 = $('hud-best');
+    if (_be2 && !_be2.hidden && _be2._best && score > _be2._best && !_be2.classList.contains('beaten')) { _be2.classList.add('beaten'); _be2.textContent = '★ BEAT BEST'; }
     const _hc = $('hud-combo'); if (_hc) _hc.textContent = combo;
     const _hm = $('hud-maxcombo'); if (_hm) _hm.textContent = maxCombo;
     const total = counts.perfect + counts.great + counts.good + counts.miss;

@@ -1204,9 +1204,26 @@
       saveBest(currentTrack.id, results);
       const badges = document.getElementById('results-badges');
       if (badges) {
-        if (isNewBest && !/new best/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">New Best</span>');
+        if (isNewBest) {
+          // build85 (Phase 3.1): gold "NEW BEST +X" — X = how much you beat your own prior best by (full score if first-ever)
+          const _delta = results.score - ((prevReal && prevReal.score) || 0);
+          if (!/new best/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">★ NEW BEST +' + _delta.toLocaleString() + '</span>');
+        }
         if (isGradeUp && !/grade up/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">Grade Up · ' + grade + '</span>');
       }
+      // build85 (Phase 3.1): next-chase CTA — only when this run did NOT beat the best (a beaten best already celebrates)
+      try {
+        const _blurb = document.getElementById('results-blurb');
+        const _ex = document.getElementById('results-chase'); if (_ex) _ex.remove();
+        if (!isNewBest && prevReal && prevReal.score > 0 && _blurb) {
+          const _by = (prevReal.score - results.score);
+          _blurb.insertAdjacentHTML('afterend',
+            '<div id="results-chase" style="margin:8px auto 0;max-width:340px;font-family:\'Chakra Petch\',sans-serif;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#b9b2ac;">'
+            + 'Best <b style="color:#e0a93f;font-family:\'Oxanium\',sans-serif;">' + prevReal.score.toLocaleString() + '</b>'
+            + (_by > 0 ? ' — beat it by <b style="color:var(--crimson);font-family:\'Oxanium\',sans-serif;">' + _by.toLocaleString() + '</b>' : ' — match it again')
+            + '</div>');
+        }
+      } catch (e) {}
     }
     // 3) BONUS SPARKS earn loop — award the platform-only SOFT currency for a COMPLETED run.
     // Fires exactly once per completed run: recordLocal is called once from endGame(), and the
@@ -1363,6 +1380,7 @@
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, goldenBuzzer,
     search, sortTracks, sections, getBest,
+    currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,
     // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js
     previewSpectrum, previewBinCount, previewPlaying,
