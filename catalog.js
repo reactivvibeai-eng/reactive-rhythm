@@ -1056,7 +1056,10 @@
       if (playLabel) playLabel.textContent = wsrc ? '\u25b6 Watch' : 'Coming soon';
       if (wsrc) {
         // override the play handler with Watch; return BEFORE the rhythm-engine wiring below.
-        window.RhythmGame.setMenuPlayHandler(() => { closeSheet(); openWatch(track, wsrc); });
+        // build90: tag _preview so the env-picker wrapper skips staging/clearing the level environment (Watch is not a launch).
+        const _watchFn = () => { closeSheet(); openWatch(track, wsrc); };
+        _watchFn._preview = true;
+        window.RhythmGame.setMenuPlayHandler(_watchFn);
         sheet.classList.add('open');
         return;   // Watch is preview-only \u2014 never enters the engine (isVideo guards at play handler + launchTrack remain)
       }

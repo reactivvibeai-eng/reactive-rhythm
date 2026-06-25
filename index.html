@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=326" />
+<link rel="stylesheet" href="jukebox.css?v=327" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5626,10 +5626,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=326"></script>
+<script src="game.js?v=327"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=326"></script>
-<script src="catalog.js?v=326"></script>
+<script src="jukebox.js?v=327"></script>
+<script src="catalog.js?v=327"></script>
 <script src="multiplayer.js?v=324"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
@@ -8251,8 +8251,8 @@
   window.addEventListener('focus', recheckBalance);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) recheckBalance(); });
 
-  function open() { load(); screen.classList.add('active'); try { if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event('store_open', {}); } catch (e) {} }
-  function close() { _disarmBuy(); screen.classList.remove('active'); }   // build86 (QA B83-1): clear any armed buy-confirm on close so its 4s timer can't dangle on a detached node
+  function open() { try { var _sg = $('store-grid'); if (_sg) _sg.inert = false; } catch (e) {} load(); screen.classList.add('active'); try { if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event('store_open', {}); } catch (e) {} }   // build90: belt-and-suspenders — never reopen with the grid stuck inert
+  function close() { _disarmBuy(); try { if ($('store-hero').classList.contains('show')) closeStoreHero(); } catch (e) {} screen.classList.remove('active'); }   // build86 (QA B83-1): clear armed buy-confirm; build90: also close the hero so #store-grid.inert can't leak permanently
 
   var ob = $('store-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('store-close'); if (cb) cb.addEventListener('click', close);
@@ -8665,13 +8665,18 @@
       var _origSet = RG.setMenuPlayHandler.bind(RG);
       RG.setMenuPlayHandler = function (fn) {
         var wrapped = function () {
-          try {
-            var L = window.RhythmLevels;
-            if (L) {
-              if (selectedEnvId && selectedEnvId !== '__default') L.applyEnvironment(selectedEnvId);
-              else L.clearEnvironment();
-            }
-          } catch (e) {}
+          // build90: a PREVIEW-only handler (e.g. AI Flixs "Watch") is not a game launch — it must NOT
+          // stage/clear the level environment (that would churn the menu backdrop / re-roll the random stage).
+          // Only real engine launches apply the staged stage. (See flixs-watch-env-sideeffect regression.)
+          if (!(fn && fn._preview)) {
+            try {
+              var L = window.RhythmLevels;
+              if (L) {
+                if (selectedEnvId && selectedEnvId !== '__default') L.applyEnvironment(selectedEnvId);
+                else L.clearEnvironment();
+              }
+            } catch (e) {}
+          }
           if (typeof fn === 'function') fn();
         };
         _origSet(wrapped);

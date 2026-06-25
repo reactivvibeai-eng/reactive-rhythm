@@ -466,6 +466,7 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
   gap: 16px; align-content: start;
 }
 @media (max-width: 560px) { #view-songs.poster-grid .song-list { grid-template-columns: 1fr 1fr; gap: 10px; } }
+#view-songs.poster-grid .song-list .lib-empty { grid-column: 1 / -1; }   /* build90: empty/no-match box spans the full poster grid, not one narrow cell */
 .video-card { display: flex; flex-direction: column; gap: 8px; padding: 0; background: none; border: none; cursor: pointer; text-align: left; }
 .video-card:focus-visible { outline: none; }
 .video-card:focus-visible .vc-frame { outline: 2px solid var(--crimson); outline-offset: 3px; }
