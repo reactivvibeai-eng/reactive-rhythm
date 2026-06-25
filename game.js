@@ -4346,6 +4346,29 @@
       const cY = nearY + rk * (lw * 0.10);                       // small downward kick (away from notes)
       const cCol = rk > 0.25 ? { c: '#7a6f6a', rgb: '150, 140, 134' } : LANE_COLORS[i];
       drawCatcher(nearX[i], cY, lw * 0.28, cCol, pulse, 0.4 + Math.max(bgPulse, energy) * 0.6, lanePulse[i]);
+      // build94 ONBOARDING KEY GLYPH (render-only) — for a brand-new player (_firstRunEasy) ONLY, during the first
+      // ~7s, paint the lane's REAL keyboard key on each catcher so they learn the map, then fade it out. keyForLane(i)
+      // is read LIVE so a remapped player sees their actual key. DIM by default, BRIGHTER on press (laneHitPulse[i]).
+      // Skipped on touch (tap-zone glyphs cover it) + on the GH strum profile (frets, not letters). Never touches
+      // input/scoring/timing — a ctx.fillText AFTER the button draw. keyGlyph returns '—' (U+2014) for unmapped → skip it.
+      if (_firstRunEasy && state === 'playing' && t >= 0 && t < 7 &&
+          !document.body.classList.contains('has-touch') && !requireStrum()) {
+        const _kg = keyGlyph(keyForLane(i));
+        if (_kg && _kg !== '—') {
+          const _kf = (t < 6) ? 1 : Math.max(0, 1 - (t - 6));                       // hold 0..6s, linear fade 6..7s
+          if (_kf > 0.01) {
+            const _ka = (0.42 + 0.53 * Math.min(1, (laneHitPulse[i] || 0))) * _kf;  // DIM default → BRIGHT on press
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = '800 ' + Math.max(11, Math.round(lw * 0.30)) + "px 'Oxanium', sans-serif";
+            ctx.shadowColor = 'rgba(10,5,4,0.85)'; ctx.shadowBlur = Math.max(2, lw * 0.04);   // warm-dark seat so it reads on any skin
+            ctx.fillStyle = 'rgba(236,231,227,' + _ka.toFixed(3) + ')';                       // warm chrome (NOT gold — a key hint isn't a reward)
+            ctx.fillText(_kg, nearX[i], cY);
+            ctx.restore();
+          }
+        }
+      }
       // build7: additive level-accent halo under the catcher (presentation only; skipped in Quick Play / fxLite)
       if (levelAccentRGB && !fxLite) {
         const ag = (0.10 + Math.max(pulse, Math.max(bgPulse, energy)) * 0.22);
