@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=320" />
+<link rel="stylesheet" href="jukebox.css?v=321" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1087,6 +1087,118 @@
   .store-buy.equipped::before { content: '\2713\00a0'; }   /* gold check ✓ */
   .store-buy.armed { background: linear-gradient(180deg, #ffd98a, #e0a93f); color: #1a0f08; box-shadow: 0 0 18px rgba(224,169,63,0.6); animation: storeArmPulse 0.9s ease-in-out infinite; }   /* build83: armed buy-confirm — gold "are you sure" state */
   @keyframes storeArmPulse { 0%,100% { box-shadow: 0 0 14px rgba(224,169,63,0.45); } 50% { box-shadow: 0 0 24px rgba(224,169,63,0.85); } }
+
+  /* ============ STORE HERO (showroom) — build84 Phase 2 ============ */
+  #store-hero{ position:fixed; inset:0; z-index:1200; display:none; align-items:center; justify-content:center;
+    padding:clamp(20px,4vw,56px);
+    background:
+      radial-gradient(120% 90% at 50% 8%, rgba(255,42,56,.10), transparent 46%),
+      radial-gradient(80% 70% at 50% 120%, rgba(224,169,63,.06), transparent 60%),
+      rgba(7,4,4,.86);
+    backdrop-filter:blur(14px) saturate(1.05); -webkit-backdrop-filter:blur(14px) saturate(1.05); }
+  #store-hero.show{ display:flex; animation:shScrim .28s ease both; }
+  .sh-deck{ display:flex; gap:clamp(20px,3vw,48px); align-items:center; width:100%; max-width:min(1180px,94vw); max-height:92vh; }
+  .sh-stage{ position:relative; flex:0 0 56%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-height:60vh; }
+  .sh-spot{ position:absolute; left:50%; top:-4%; transform:translateX(-50%); width:78%; height:108%; pointer-events:none; z-index:0; filter:blur(6px);
+    background:
+      radial-gradient(60% 80% at 50% 4%, rgba(255,224,196,.16), transparent 62%),
+      conic-gradient(from 180deg at 50% 0%, transparent 156deg, rgba(255,201,150,.10) 174deg, rgba(255,201,150,.10) 186deg, transparent 204deg); }
+  .sh-guitar{ position:relative; z-index:2; width:auto; height:auto; max-height:62vh; max-width:92%; object-fit:contain;
+    filter:drop-shadow(0 30px 50px rgba(0,0,0,.66)) drop-shadow(0 0 26px rgba(255,42,56,.16)); }
+  .sh-reflect{ position:absolute; z-index:1; bottom:2%; left:50%; transform:translateX(-50%) scaleY(-1); width:auto; max-height:24vh; object-fit:contain; opacity:.20; pointer-events:none; filter:blur(.5px);
+    -webkit-mask-image:linear-gradient(to bottom, rgba(0,0,0,.55), transparent 70%); mask-image:linear-gradient(to bottom, rgba(0,0,0,.55), transparent 70%); }
+  .sh-plinth{ position:absolute; z-index:0; bottom:0; left:50%; transform:translateX(-50%); width:58%; height:64px; border-radius:50%; filter:blur(2px);
+    background:
+      radial-gradient(60% 100% at 50% 0%, var(--r-ring, rgba(255,42,56,.22)), transparent 70%),
+      radial-gradient(50% 100% at 50% 30%, rgba(224,169,63,.14), transparent 72%),
+      radial-gradient(46% 100% at 50% 40%, rgba(20,9,9,.9), rgba(8,4,4,0) 75%); }
+  .sh-plinth::after{ content:''; position:absolute; left:50%; top:46%; transform:translateX(-50%); width:62%; height:2px; opacity:.5; background:linear-gradient(90deg, transparent, var(--gold), transparent); }
+  #store-hero.is-cover .sh-guitar{ max-height:60vh; max-width:84%; object-fit:cover; border-radius:14px; box-shadow:0 26px 64px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12); }
+  #store-hero.is-cover .sh-reflect{ object-fit:cover; border-radius:14px; }
+  .sh-info{ flex:1 1 44%; display:flex; flex-direction:column; gap:18px; padding-left:clamp(16px,3vw,40px); max-width:520px; border-left:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(100deg, rgba(255,31,46,.05), transparent 60%); }
+  .sh-eyebrow{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); display:flex; align-items:center; gap:8px; }
+  .sh-eyebrow-sep{ opacity:.5; }
+  .sh-info .r-gem{ width:12px; height:12px; color:var(--r-gem,var(--gold)); }
+  .sh-name{ margin:0; font-family:'Unbounded',sans-serif; font-weight:800; font-size:clamp(30px,4.2vw,46px); line-height:1.04; color:var(--ink); letter-spacing:-.01em; position:relative; padding-bottom:12px; }
+  .sh-name::after{ content:''; position:absolute; left:0; bottom:0; width:46px; height:2px; background:linear-gradient(90deg, var(--crimson), transparent); box-shadow:0 0 10px rgba(255,31,46,.6); }
+  .sh-rule{ height:1px; border:0; width:100%; margin:0; opacity:.6; background:linear-gradient(90deg, var(--gold), rgba(224,169,63,0)); }
+  .sh-lore{ margin:0; font-family:'Chakra Petch',monospace; font-weight:500; font-size:15px; line-height:1.65; color:var(--ink-dim); max-width:46ch; }
+  .sh-traits{ display:flex; flex-wrap:wrap; gap:8px; }
+  .sh-trait{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.04em; color:var(--chrome); padding:5px 10px; border:1px solid var(--line, rgba(160,40,46,.32)); border-radius:999px; background:rgba(255,255,255,.02); }
+  .sh-pricebox{ display:flex; align-items:baseline; flex-wrap:wrap; gap:14px 22px; padding:14px 18px; border-radius:14px; border:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(180deg, rgba(255,255,255,.025), rgba(0,0,0,.18)); }
+  .sh-price{ display:inline-flex; align-items:center; gap:7px; font-family:'Oxanium',monospace; font-weight:800; font-size:30px; font-variant-numeric:tabular-nums; color:var(--chrome); line-height:1; }
+  .sh-price .spk-glyph{ width:22px; height:22px; color:var(--ember,#ff7a4a); }
+  .sh-price.bonus{ color:var(--gold); }
+  .sh-price.bonus .bonus-px-glyph{ width:22px; height:22px; color:var(--gold); }
+  .sh-price-or{ font-family:'Chakra Petch',monospace; font-size:11px; letter-spacing:.18em; color:var(--ink-dim); text-transform:uppercase; align-self:center; }
+  .sh-owned-line{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:7px; }
+  .sh-owned-line .ic{ width:15px; height:15px; }
+  .sh-actions{ display:flex; gap:12px; align-items:stretch; }
+  .sh-actions .store-payline{ flex:1; display:flex; gap:12px; }
+  .sh-actions .store-buy{ flex:1; font-size:15px; letter-spacing:.12em; padding:18px 22px; border-radius:14px; }
+  .sh-actions .store-price{ display:none; }
+  .sh-reassure{ font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; color:var(--ink-dim); }
+  .sh-close{ position:absolute; top:22px; right:24px; width:42px; height:42px; border-radius:50%; border:1px solid var(--line, rgba(160,40,46,.32)); background:rgba(10,7,6,.6); color:var(--chrome); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:3; transition:border-color .12s, color .12s, transform .12s; }
+  .sh-close .ic{ width:18px; height:18px; }
+  .sh-close:hover{ border-color:var(--crimson); color:var(--ink); transform:rotate(90deg); }
+  @media (max-width:880px){
+    .sh-deck{ flex-direction:column; gap:18px; max-height:none; overflow-y:auto; }
+    .sh-stage{ flex:none; width:100%; min-height:46vh; }
+    .sh-info{ flex:none; width:100%; border-left:0; border-top:1px solid var(--line, rgba(160,40,46,.32)); padding-left:0; padding-top:18px; }
+    .sh-actions .store-buy{ padding:15px 18px; }
+  }
+  @keyframes shScrim{ from{opacity:0} to{opacity:1} }
+  @keyframes shRise{ from{opacity:0; transform:translateY(26px) scale(.97)} to{opacity:1; transform:none} }
+  @keyframes shFade{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+  @keyframes shPlinth{ from{opacity:0; transform:translateX(-50%) scaleX(.6)} to{opacity:1; transform:translateX(-50%) scaleX(1)} }
+  @keyframes shBloom{ 0%{opacity:0} 40%{opacity:1} 100%{opacity:.78} }
+  #store-hero.show .sh-stage{ animation:shRise .5s cubic-bezier(.2,1,.3,1) both; }
+  #store-hero.show .sh-plinth{ animation:shPlinth .6s cubic-bezier(.2,1,.3,1) .08s both; }
+  #store-hero.show .sh-spot{ animation:shBloom .8s ease-out both; }
+  #store-hero.show .sh-info > *{ animation:shFade .42s cubic-bezier(.2,1,.3,1) both; }
+  #store-hero.show .sh-info > :nth-child(1){ animation-delay:.10s; }
+  #store-hero.show .sh-info > :nth-child(2){ animation-delay:.16s; }
+  #store-hero.show .sh-info > :nth-child(3){ animation-delay:.22s; }
+  #store-hero.show .sh-info > :nth-child(4){ animation-delay:.28s; }
+  #store-hero.show .sh-info > :nth-child(5){ animation-delay:.34s; }
+  #store-hero.show .sh-info > :nth-child(6){ animation-delay:.40s; }
+  #store-hero.show .sh-info > :nth-child(7){ animation-delay:.46s; }
+  html.rr-reduce-motion #store-hero.show, html.rr-reduce-motion #store-hero.show .sh-stage, html.rr-reduce-motion #store-hero.show .sh-plinth, html.rr-reduce-motion #store-hero.show .sh-spot, html.rr-reduce-motion #store-hero.show .sh-info > *{ animation:none; opacity:1; transform:none; }
+  html.rr-reduce-motion #store-hero.show .sh-plinth{ transform:translateX(-50%); }
+  html.rr-reduce-motion #store-hero.show .sh-spot{ opacity:.78; }
+
+  /* ============ MERCHANDISING (cards) — build84 ============ */
+  :root{ --r-common:#7d736e; --r-rare:#ff7a4a; --r-epic:#ff2a38; --r-legend:#e0a93f; }
+  .store-item[data-rarity]{ position:relative; }
+  .store-item[data-rarity] .store-art::before{ content:''; position:absolute; inset:0; z-index:1; pointer-events:none; border-radius:inherit; box-shadow:inset 0 0 0 2px var(--r-ring, transparent); }
+  .store-item[data-rarity="common"]   { --r-ring:rgba(125,115,110,.5); --r-gem:var(--r-common); }
+  .store-item[data-rarity="rare"]     { --r-ring:rgba(255,122,74,.55); --r-gem:var(--r-rare); }
+  .store-item[data-rarity="epic"]     { --r-ring:rgba(255,42,56,.6);   --r-gem:var(--r-epic); }
+  .store-item[data-rarity="legendary"]{ --r-ring:rgba(224,169,63,.7);  --r-gem:var(--r-legend); }
+  .store-item[data-rarity="legendary"] .store-art::after{ content:''; position:absolute; inset:0; z-index:1; pointer-events:none; border-radius:inherit;
+    background: radial-gradient(ellipse at 72% 16%, rgba(255,205,120,.26), transparent 60%), linear-gradient(115deg, transparent 40%, rgba(255,233,196,.10) 50%, transparent 60%);
+    background-size:auto, 280% 280%; animation:rLegendSheen 6s ease-in-out infinite; }
+  @keyframes rLegendSheen{ 0%,100%{background-position:0 0,0% 50%} 50%{background-position:0 0,100% 50%} }
+  html.rr-reduce-motion .store-item[data-rarity="legendary"] .store-art::after{ animation:none; }
+  .store-art .r-gem{ position:absolute; top:9px; right:9px; z-index:3; width:14px; height:14px; color:var(--r-gem); }
+  .store-art .si-flag{ position:absolute; top:9px; left:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; font-family:'Chakra Petch',monospace; font-weight:700; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#fff; padding:4px 9px 4px 8px; border-radius:7px; box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18); }
+  .store-art .si-flag.new{ background:linear-gradient(180deg,#ff2a38,#b3121f); }
+  .store-art .si-flag.featured{ color:#1a0f08; background:linear-gradient(180deg,#ffd98a,#e0a93f); }
+  .store-art .si-flag .ic{ width:10px; height:10px; }
+  .store-art .si-flag.new::before{ content:''; width:5px; height:5px; border-radius:50%; background:#fff; box-shadow:0 0 8px #fff; animation:flagPulse 1.4s ease-in-out infinite; }
+  @keyframes flagPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+  html.rr-reduce-motion .store-art .si-flag.new::before{ animation:none; opacity:.85; }
+  .store-item.owned .store-art{ filter:none; }
+  .store-item.owned .store-art::before{ box-shadow:inset 0 0 0 2px rgba(224,169,63,.6); }
+  .store-item.owned .si-owned-tab{ position:absolute; bottom:9px; right:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:7px; font-family:'Chakra Petch',monospace; font-weight:700; font-size:9px; letter-spacing:.12em; color:var(--gold); background:rgba(26,15,8,.78); border:1px solid rgba(224,169,63,.5); }
+  .store-item.owned .si-owned-tab .ic{ width:11px; height:11px; }
+  .store-item.equipped{ border-color:var(--gold); box-shadow:0 10px 30px rgba(0,0,0,.5), 0 0 22px rgba(224,169,63,.3); }
+  .store-item.equipped .store-art::before{ box-shadow:inset 0 0 0 2px var(--gold), inset 0 0 26px rgba(224,169,63,.25); }
+  .store-item.equipped .si-equip-banner{ position:absolute; left:0; right:0; bottom:0; z-index:3; text-align:center; font-family:'Chakra Petch',monospace; font-weight:800; font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:#1a0f08; padding:5px 0; background:linear-gradient(180deg,#ffd98a,#e0a93f); box-shadow:0 -2px 12px rgba(224,169,63,.5); }
+  .store-item.equipped .si-equip-banner .ic{ width:10px; height:10px; vertical-align:-1px; margin-right:5px; }
+  .ic{ display:inline-block; width:1em; height:1em; color:currentColor; vertical-align:-2px; }
+  .store-buy.equipped .ic{ width:13px; height:13px; margin-right:6px; }
+  .store-art .si-locked .ic{ width:12px; height:12px; }
   @media (max-width: 560px) { .store-title { font-size: 36px; } .store-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
   /* ---- Level Picker v2 (hero header, per-tier bars, initial-art, polished states) ---- */
   .lv-hero { display: flex; align-items: center; gap: 18px; width: 100%; max-width: 880px; margin: 4px auto 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(135deg, rgba(255,31,46,0.06), rgba(255,122,74,0.03) 60%, transparent), rgba(10,7,6,0.4); }
@@ -4737,6 +4849,36 @@
        (Lovable adds meta.linked_pack_id); for now this shows + spends + flips Owned.
        ============================================================ -->
   <div class="screen store-screen" id="store-screen">
+    <!-- build84: inline SVG icon sprite (referenced via <use href="#…">) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <symbol id="ic-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M4 12.5 9.5 18 20 6.5"/></symbol>
+      <symbol id="ic-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15.5" r="1.5" fill="currentColor"/></symbol>
+      <symbol id="ic-star" viewBox="0 0 24 24"><path fill="currentColor" d="m12 2 2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21l1.18-6.88-5-4.87 7.1-1.01z"/></symbol>
+      <symbol id="ic-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6 18 18M18 6 6 18"/></symbol>
+      <symbol id="ic-gem" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 22 12 12 22 2 12z"/></symbol>
+    </svg>
+    <!-- build84: STORE HERO (showroom) — populated by openStoreHero() -->
+    <div id="store-hero" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sh-name">
+      <button class="sh-close" type="button" aria-label="Close"><svg class="ic"><use href="#ic-close"/></svg></button>
+      <div class="sh-deck">
+        <div class="sh-stage">
+          <div class="sh-spot" aria-hidden="true"></div>
+          <img class="sh-guitar" alt="">
+          <img class="sh-reflect" alt="" aria-hidden="true">
+          <div class="sh-plinth" aria-hidden="true"></div>
+        </div>
+        <div class="sh-info">
+          <div class="sh-eyebrow"><svg class="r-gem"><use href="#ic-gem"/></svg><span class="sh-rarity"></span><span class="sh-eyebrow-sep">·</span><span class="sh-type"></span></div>
+          <h2 class="sh-name" id="sh-name"></h2>
+          <hr class="sh-rule">
+          <p class="sh-lore"></p>
+          <div class="sh-traits"></div>
+          <div class="sh-pricebox"></div>
+          <div class="sh-actions"></div>
+          <div class="sh-reassure"></div>
+        </div>
+      </div>
+    </div>
     <div class="store-card">
       <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// SPARKS SHOP</div>
       <img class="store-logo" id="store-logo" src="assets/lbd/store-wordmark.png" alt="STORE"
@@ -5297,7 +5439,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=320"></script>
+<script src="telemetry.js?v=321"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5435,14 +5577,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=320"></script>
-<script src="game.js?v=320"></script>
-<script src="procbg.js?v=320"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=320"></script>
-<script src="catalog.js?v=320"></script>
-<script src="multiplayer.js?v=320"></script>
-<script src="share.js?v=320"></script>
-<script src="couch.js?v=320"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
+<script src="assets/fx/fx-player.js?v=321"></script>
+<script src="game.js?v=321"></script>
+<script src="procbg.js?v=321"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=321"></script>
+<script src="catalog.js?v=321"></script>
+<script src="multiplayer.js?v=321"></script>
+<script src="share.js?v=321"></script>
+<script src="couch.js?v=321"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -7697,6 +7839,18 @@
     var fb = it && STORE_ART[String(it.item_id)];
     return fb || '';
   }
+  // build84 (Phase 2 showroom): full-image hero source — skins → uncropped guitar PNG, levels → cover art.
+  function heroArt(it) { return isSkin(it) ? (skinSrcFor(it) || artUrl(it)) : artUrl(it); }
+  function rarityOf(it) {
+    if (it && it.free) return 'rare';
+    var p = Number(it && it.price_sparks) || 0;
+    if (isSkin(it)) return p >= 80 ? 'epic' : (p > 0 ? 'rare' : 'common');
+    return 'legendary';   // premium levels = apex tier
+  }
+  function rarityLabel(r) { return ({ common: 'COMMON', rare: 'RARE', epic: 'EPIC', legendary: 'LEGENDARY' })[r] || 'RARE'; }
+  var STORE_FEATURED = { deadkin: 1, sasoka: 1, kitsune: 1 };
+  var STORE_NEW = { triemrys: 1, wormfeast: 1, razor: 1, shorty_skin: 1 };
+  function flagOf(it) { var id = String(it && it.item_id); return STORE_FEATURED[id] ? 'featured' : (STORE_NEW[id] ? 'new' : ''); }
 
   var items = [], balance = 0, signedIn = false, owns = {}, busy = false;
   // equipped skin tracked by item_id (so the right card shows "Equipped"); the guitar PNG is applied via RhythmGame.equipGuitarSkin.
@@ -7707,11 +7861,13 @@
     try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(src); } catch (e) {}
     toast('Equipped ' + (it.title || 'guitar'));
     render();   // refresh Equip/Equipped states across the grid
+    if (_heroItem) renderHero(_heroItem);   // build84: keep an open hero in sync
   }
   function unequipSkin() {
     try { localStorage.removeItem('rr_skin_id'); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(null); } catch (e) {}
     toast('Default guitar restored'); render();
+    if (_heroItem) renderHero(_heroItem);   // build84
   }
 
   function typeLabel(t) { var m = { skin: 'Guitar', level: 'Level', theme: 'Theme', pack: 'Pack', addon: 'Theme', boss: 'Level' }; return m[String(t || '').toLowerCase()] || (t ? String(t) : 'Item'); }
@@ -7753,7 +7909,7 @@
       if (isSkin(it)) {
         var on = equippedSkinId() === String(it.item_id);
         return on
-          ? '<button class="store-buy equipped" data-act="unequip" data-id="' + esc(it.item_id) + '">Equipped</button>'
+          ? '<button class="store-buy equipped" data-act="unequip" data-id="' + esc(it.item_id) + '"><svg class="ic"><use href="#ic-check"/></svg>Equipped</button>'
           : '<button class="store-buy equip" data-act="equip" data-id="' + esc(it.item_id) + '">Equip</button>';
       }
       return '<button class="store-buy owned" disabled>Owned</button>';
@@ -7783,9 +7939,18 @@
   function itemHtml(it) {
     var owned = isOwned(it);
     var soon = !storeFinished(it);
-    return '<div class="store-item' + (owned ? ' owned' : '') + (soon ? ' soon' : '') + '" data-key="' + esc(ownKey(it)) + '">' +
-      '<div class="store-art">' + artHtml(it) + '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span>' +
-        (soon ? '<span class="store-soon">🔒 COMING SOON</span>' : '') + '</div>' +
+    var equipped = owned && isSkin(it) && equippedSkinId() === String(it.item_id);
+    var r = rarityOf(it), flag = flagOf(it);
+    return '<div class="store-item' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '') + (soon ? ' soon' : '') +
+        '" data-rarity="' + r + '" data-key="' + esc(ownKey(it)) + '">' +
+      '<div class="store-art">' + artHtml(it) +
+        '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span>' +
+        (flag && !owned ? '<span class="si-flag ' + flag + '">' + (flag === 'featured' ? '<svg class="ic"><use href="#ic-star"/></svg>FEATURED' : 'NEW') + '</span>' : '') +
+        '<svg class="r-gem"><use href="#ic-gem"/></svg>' +
+        (owned && !equipped ? '<span class="si-owned-tab"><svg class="ic"><use href="#ic-check"/></svg>OWNED</span>' : '') +
+        (equipped ? '<span class="si-equip-banner"><svg class="ic"><use href="#ic-check"/></svg>EQUIPPED</span>' : '') +
+        (soon ? '<span class="store-soon si-locked"><svg class="ic"><use href="#ic-lock"/></svg> COMING SOON</span>' : '') +
+      '</div>' +
       '<div class="store-body">' +
         '<div class="store-item-t">' + esc(it.title || it.item_id || 'Item') + '</div>' +
         '<div class="store-item-d">' + esc(blurb(it)) + '</div>' +
@@ -7805,11 +7970,12 @@
     if (!signedIn) banner('Browsing as a guest. <b>Sign in on ReactivVibe</b> to spend Sparks and keep your unlocks.');
     else banner(null);
     wireBuys();
+    wireCards();   // build84: clicking a card (not its buy button) opens the hero showroom
   }
 
   function itemById(id) { for (var i = 0; i < items.length; i++) if (String(items[i].item_id) === String(id)) return items[i]; return null; }
-  function wireBuys() {
-    var btns = $('store-grid').querySelectorAll('.store-buy');
+  function wireBuys(root) {
+    var btns = (root || $('store-grid')).querySelectorAll('.store-buy');
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', function () {
         var act = this.getAttribute('data-act');
@@ -7822,6 +7988,74 @@
       });
     }
   }
+
+  // ---- build84 (Phase 2): STORE HERO / showroom ----------------------------------------------
+  var _heroItem = null, _heroPrevFocus = null;
+  function $h(sel) { return $('store-hero').querySelector(sel); }
+  function openStoreHero(it) {
+    if (!it) return;
+    _heroItem = it; _heroPrevFocus = document.activeElement;
+    var hero = $('store-hero');
+    var r = rarityOf(it);
+    hero.setAttribute('data-rarity', r);
+    hero.classList.toggle('is-cover', !isSkin(it));
+    var src = heroArt(it);
+    var g = $h('.sh-guitar'), rf = $h('.sh-reflect');
+    if (src) { g.src = src; g.style.display = ''; rf.src = src; rf.style.display = ''; }
+    else { g.removeAttribute('src'); g.style.display = 'none'; rf.style.display = 'none'; }
+    $h('.sh-rarity').textContent = rarityLabel(r);
+    $h('.sh-type').textContent = typeLabel(it.item_type);
+    $h('.sh-name').textContent = it.title || it.item_id || 'Item';
+    $h('.sh-lore').textContent = blurb(it);
+    var traits = [rarityLabel(r), typeLabel(it.item_type).toUpperCase()];
+    if (it.free) traits.push('FREE'); else if (bonusPriceFor(it) > 0) traits.push('SPARKS · BONUS');
+    $h('.sh-traits').innerHTML = traits.map(function (t) { return '<span class="sh-trait">' + esc(t) + '</span>'; }).join('');
+    renderHero(it);
+    hero.classList.add('show'); hero.setAttribute('aria-hidden', 'false');
+    var cb = $h('.sh-close'); if (cb) try { cb.focus(); } catch (e) {}
+  }
+  function renderHero(it) {
+    if (!it || !_heroItem) return;
+    var soon = !storeFinished(it);
+    var pb = $h('.sh-pricebox'), ac = $h('.sh-actions'), rea = $h('.sh-reassure');
+    if (soon) { pb.innerHTML = '<span class="sh-price-or">COMING SOON</span>'; ac.innerHTML = ''; rea.textContent = ''; return; }
+    if (isOwned(it)) {
+      pb.innerHTML = '<span class="sh-owned-line"><svg class="ic"><use href="#ic-check"/></svg>' + (isSkin(it) ? (equippedSkinId() === String(it.item_id) ? 'EQUIPPED' : 'OWNED') : 'OWNED') + '</span>';
+      ac.innerHTML = buyBtnHtml(it); rea.textContent = '';
+    } else {
+      var line = '<span class="sh-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>';
+      var bp = bonusPriceFor(it);
+      if (bp > 0) line += '<span class="sh-price-or">OR</span><span class="sh-price bonus">' + BONUS_PX_SVG + fmt(bp) + '</span>';
+      pb.innerHTML = line;
+      ac.innerHTML = footHtml(it, false);
+      rea.textContent = signedIn ? '' : 'SIGN IN ON REACTIVVIBE TO SPEND SPARKS';
+    }
+    wireBuys($('store-hero'));
+  }
+  function closeStoreHero() {
+    var hero = $('store-hero');
+    hero.classList.remove('show'); hero.setAttribute('aria-hidden', 'true');
+    _heroItem = null;
+    if (_heroPrevFocus && _heroPrevFocus.focus) try { _heroPrevFocus.focus(); } catch (e) {}
+  }
+  function wireCards() {
+    var cards = $('store-grid').querySelectorAll('.store-item');
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].addEventListener('click', function (e) {
+        if (e.target.closest('.store-buy')) return;   // let the buy/equip button do its own thing
+        var key = this.getAttribute('data-key'); if (!key) return;
+        var id = key.slice(key.indexOf(':') + 1);
+        var it = itemById(id); if (it) openStoreHero(it);
+      });
+      cards[i].style.cursor = 'pointer';
+    }
+  }
+  (function wireHeroOnce() {
+    var hero = $('store-hero'); if (!hero || hero._wired) return; hero._wired = true;
+    hero.querySelector('.sh-close').addEventListener('click', closeStoreHero);
+    hero.addEventListener('click', function (e) { if (e.target === hero) closeStoreHero(); });   // backdrop
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && hero.classList.contains('show')) { e.stopPropagation(); e.stopImmediatePropagation(); closeStoreHero(); } }, true);   // capture-phase so it wins over the global Escape router
+  })();
 
   function openSite(url) { try { window.open(url, '_blank', 'noopener'); } catch (e) {} }
   function openGetSparks() { pendingTopup = true; openSite(SITE_SPARKS); }
@@ -7866,6 +8100,7 @@
       if (bought && isSkin(bought)) { equipSkin(bought); toast(res.deduped ? 'Already owned' : 'Unlocked & equipped!'); }
       else toast(res.deduped ? 'Already owned' : 'Unlocked!');
       render();   // flip the card to owned/equip (handles the dual-price footer cleanly)
+      if (_heroItem) renderHero(_heroItem);   // build84: hero buy → flips to Equip live
       refreshEntitlements();
       return;
     }
@@ -7915,6 +8150,7 @@
       if (bought && isSkin(bought)) { equipSkin(bought); toast(res.deduped ? 'Already owned' : 'Unlocked with Bonus Sparks & equipped!'); }
       else toast(res.deduped ? 'Already owned' : 'Unlocked with Bonus Sparks!');
       render();   // flip the card to owned / equip
+      if (_heroItem) renderHero(_heroItem);   // build84
       return;
     }
     btn.classList.remove('is-busy'); btn.removeAttribute('disabled');

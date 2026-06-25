@@ -61,3 +61,4 @@ node --check after every JS edit · headless verify on rr-verify (8790) · 0 con
 
 ## Progress log
 - 2026-06-25: roadmap created, owner greenlit full execution. Starting Phase 1. (Current build base: 77ed6e1 / ?v=319 on visual-overhaul, pushed to origin.)
+- 2026-06-25: **Phase 1 DONE** (build83, commit 450ebbf, ?v=320). Shipped 1.2 buy-confirm, 1.3 Easy first-run, 1.4 GET READY/GO, 1.1 results timing summary, 1.7 cleanups. **Moved 1.6 searchable-videos → Phase 5** (needs videoCard/Watch to not dead-end). **Moved 1.5 winner-card RP delta → Phase 4** (with the MP work). Next: **Phase 2 — Store showroom** (reuse the jukebox two-zone "NOW FOCUSED" deck for a full-screen guitar hero; assets on disk in assets/guitars/*-card.jpg + STORE_ART).
