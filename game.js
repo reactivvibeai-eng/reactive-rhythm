@@ -61,9 +61,11 @@
   };
   function timingProf() { return TIMING_PROFILES[timingFeel] || TIMING_PROFILES.classic; }
 
-  // Scoring: base per-hit is LOW; the combo multiplier (1x–3x) and Overdrive (x2,
-  // capped at 4x total) scale it up. Max per note = 375 * 4 = 1500, so the total
-  // can never exceed the server ceiling of notes_total * 1500.
+  // Scoring: base per-hit is LOW; the combo multiplier + Overdrive scale it up, HARD-CAPPED at MAX_MULT (=4) total
+  // (v258: clamped at all 3 mult sites — the 'tight' profile's comboCap:5 + overdrive could otherwise reach 6×). Max per
+  // NON-HOLD note = 375*4 = 1500. HOLD notes ALSO pay a sustain bonus up to HOLD_TOTAL*4 (=880) ON TOP of the head, so the
+  // real ceiling is notes_total*1500 + (#holds)*HOLD_TOTAL*4 — any future server enforcement must budget the hold bonus,
+  // NOT a flat 1500/note. (The bonus is identical for every player on the same chart, so it stays fair/leaderboard-safe.)
   const JUDGE = {
     perfect: { name: 'PERFECT', color: '#dad7d2', score: 375, accW: 1.00 },
     great:   { name: 'GREAT',   color: '#e0a93f', score: 250, accW: 0.85 },
@@ -90,6 +92,7 @@
   let lanePluckT = Array(LANE_COUNT).fill(9);   // seconds since last pluck (large = idle)
   // sustain (hold) state — a struck hold note keeps paying out while its lane stays pressed
   let laneDown = Array(LANE_COUNT).fill(false); // is this lane physically held right now
+  let _mpStunUntil = 0, _stunHideT = 0;          // v254: MP-combat input stun (a rival's combo shock) — deadline + overlay-hide timer
   let holdNote = Array(LANE_COUNT).fill(null);  // the sustain note currently being held in this lane
   let holdScored = Array(LANE_COUNT).fill(0);   // fraction [0..1] of the active sustain already paid out
   let holdSparkT = Array(LANE_COUNT).fill(0);   // spark-emit throttle while sustaining
@@ -134,8 +137,15 @@
   // NOTE-TYPE VARIETY (flag-gated, OFF by default → charts byte-identical until enabled): adds
   // GH-style trills (rapid alternating tap bursts) + richer/more-frequent chords & double-stops.
   // Reuses existing tap/chord scoring (no hit-detection changes). Enable: ?notes=1 or rr_notes=1.
-  let noteVariety = false;
-  try { noteVariety = /[?&]notes=1/.test(location.search) || localStorage.getItem('rr_notes') === '1'; } catch (e) {}
+  // build62: GH flavor (trills / stair-runs / telegraphed bomb-rows / tighter chords) is now ON BY DEFAULT —
+  // it's DENSITY-NEUTRAL (re-lanes existing notes; bomb-rows are a deliberate dodge moment), so it adds the
+  // "alive" Guitar-Hero texture without adding spam. Disable to A/B with ?notes=0 or rr_notes='0'.
+  let noteVariety = true;
+  try {
+    const _nv = localStorage.getItem('rr_notes');
+    if (_nv === '0') noteVariety = false; else if (_nv === '1') noteVariety = true;
+    if (/[?&]notes=0/.test(location.search)) noteVariety = false; else if (/[?&]notes=1/.test(location.search)) noteVariety = true;
+  } catch (e) {}
   try { window.__rrNoteVariety = function (on) { if (on === undefined) return noteVariety; noteVariety = !!on; try { localStorage.setItem('rr_notes', on ? '1' : '0'); } catch (e) {} return noteVariety; }; } catch (e) {}
   // OPEN NOTES + HOPOs (flag-gated, OFF by default → charts byte-identical until enabled). Separate from
   // noteVariety so they A/B independently. OPEN = "strum the whole neck" (any lane clears it). HOPO =
@@ -143,11 +153,12 @@
   let openNotes = false;
   try { openNotes = /[?&]open=1/.test(location.search) || localStorage.getItem('rr_open') === '1'; } catch (e) {}
   try { window.__rrOpenNotes = function (on) { if (on === undefined) return openNotes; openNotes = !!on; try { localStorage.setItem('rr_open', on ? '1' : '0'); } catch (e) {} return openNotes; }; } catch (e) {}
-  let chartMode = 'classic'; // Settings → Chart Feel: 'classic' (every Nth onset) | 'musical' (snap each note to the strongest onset in its window)
+  let chartMode = 'musical'; // Settings → Chart Feel: 'musical' (build57 DEFAULT — multi-band detection + centroid/pitch-contour lanes + dynamic density) | 'classic' (every Nth bass-only onset, hashed lanes — fallback)
+  let levelGuitarPref = 'mine';   // build60: Settings → "Guitar on Levels" — 'mine' (the equipped guitar wins on any level) | 'level' (use the level's own themed guitar)
   try {
     const s = JSON.parse(localStorage.getItem('rr_settings') || '{}');
-    if (s.scroll) userScroll = s.scroll;
-    if (s.fxLite) fxLite = !!s.fxLite;
+    if (typeof s.scroll === 'number') userScroll = Math.max(0.5, Math.min(2, s.scroll));   // typed + clamped, matching applySettings (a corrupt rr_settings can't set an out-of-range scroll)
+    if (typeof s.fxLite === 'boolean') fxLite = s.fxLite;
     if (s.bgMode === 'performance' || s.bgMode === 'cinematic') bgMode = s.bgMode;
     if (typeof s.reduceMotion === 'boolean') reduceMotion = s.reduceMotion;
     else if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) reduceMotion = true;
@@ -155,14 +166,30 @@
     if (typeof s.sfx === 'number') SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx));
     if (typeof s.failMode === 'boolean') failMode = s.failMode;
     if (s.chartMode === 'classic' || s.chartMode === 'musical') chartMode = s.chartMode;
+    if (s.levelGuitar === 'mine' || s.levelGuitar === 'level') levelGuitarPref = s.levelGuitar;
     if (s.fxIntensity && FX_PRESETS[s.fxIntensity]) { fxIntensity = s.fxIntensity; Object.assign(JUICE, FX_PRESETS[fxIntensity]); }   // user FX-intensity preset
   } catch (e) {}
   // dev __rrJuice fine-tune (rr_juice) layers on top of the chosen preset; absent for normal users
   try { const _sj = JSON.parse(localStorage.getItem('rr_juice') || 'null'); if (_sj) for (const k in JUICE) if (typeof _sj[k] === 'number') JUICE[k] = _sj[k]; } catch (e) {}
   // ?novideo=1 forces performance mode (FPS diagnostic / quick override)
   try { if (/[?&]novideo=1/.test(location.search)) bgMode = 'performance'; } catch (e) {}
+  // build66.10 migration: the build66.5 auto-quality used to auto-force bgMode='performance' (which hides ALL background videos
+  // site-wide). It no longer does — un-stick anyone it already flipped: if auto-lite ran AND bgMode is performance, restore
+  // cinematic once + re-save, so the video backdrops come back. Runs a single time (rr_bgfix1).
+  try {
+    if (!localStorage.getItem('rr_bgfix1')) {
+      if (localStorage.getItem('rr_autolite') === '1' && bgMode === 'performance' && !/[?&]novideo=1/.test(location.search)) {
+        bgMode = 'cinematic';
+        try { var _sm = JSON.parse(localStorage.getItem('rr_settings') || '{}'); _sm.bgMode = 'cinematic'; localStorage.setItem('rr_settings', JSON.stringify(_sm)); } catch (e2) {}
+      }
+      localStorage.setItem('rr_bgfix1', '1');
+    }
+  } catch (e) {}
   let glitchAmount = 0;
   let particles = [];
+  const MAX_PARTICLES = 280;   // build64 PERF: hard cap — at high multiplier the flame/streak loops can balloon the array; trim the OLDEST (most-faded, about-to-die) so it can't run away. Invisible at normal play.
+  let comboGlow = 0;   // build64: 0→1 flash on each combo milestone — flares the strings gold → white-hot, then decays. Cosmetic only (never touches scoring).
+  const RAINBOW_COMBO = 150;   // build65: the SINGLE "earned rainbow" combo threshold — shared by the string tint AND the hit-burst spray so they agree (Overdrive also triggers it). A large-but-reachable streak; tune here.
 
   // music gate — a miss DIPS the volume briefly (ducks, doesn't cut) then recovers.
   let muteUntil = -1;
@@ -175,6 +202,34 @@
   let score = 0, combo = 0, maxCombo = 0;
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
+  // ── COMBO TIER LADDER ───────────────────────────────────────────────────────
+  // Named streak "modes" that escalate PAST the golden glow (the #1 ask). Purely
+  // COSMETIC + feel — they recolor the combo readout, the board energy hue, and
+  // announce themselves on each cross-up. They grant NO extra score: the scoring
+  // ceiling (≈notes_total*1500 + per-hold sustain bonus; mult hard-capped at MAX_MULT=4) is identical for every player → leaderboard-safe.
+  // Brand-locked warm palette ONLY — crimson → orange → gold → white-hot → chrome.
+  // NO purple/blue. rgb = number ink, glow = its halo, board = the neck-energy hue.
+  const COMBO_TIERS = [
+    { min: 0,   name: 'COMBO',     rgb: [255, 244, 238], glow: [255, 31, 46],   board: [255, 110, 70] },
+    { min: 25,  name: 'HOT',       rgb: [255, 214, 150], glow: [255, 120, 40],  board: [255, 140, 60] },
+    { min: 75,  name: 'BLAZE',     rgb: [255, 196, 96],  glow: [255, 96, 30],   board: [255, 124, 44] },
+    { min: 150, name: 'GOLDEN',    rgb: [255, 226, 140], glow: [255, 182, 44],  board: [255, 184, 74] },
+    { min: 300, name: 'INFERNO',   rgb: [255, 246, 236], glow: [255, 70, 44],   board: [255, 96, 54] },
+    { min: 500, name: 'ASCENDANT', rgb: [255, 255, 252], glow: [226, 206, 184], board: [232, 214, 192] },
+  ];
+  function comboTierIdx(c) { let i = 0; for (let k = 0; k < COMBO_TIERS.length; k++) { if (c >= COMBO_TIERS[k].min) i = k; } return i; }
+  let comboTierCur = 0;   // highest tier reached on the CURRENT streak (resets on break) — gates the cross-up beat
+  // The "you entered a new MODE" beat — fired once when the streak crosses up a tier.
+  function onComboTierUp(idx, lane) {
+    const ti = COMBO_TIERS[idx]; if (!ti) return;
+    flashJudgment(ti.name + (idx >= 4 ? ' MODE!!' : ' MODE'), 'rgb(' + ti.rgb.join(',') + ')');
+    try { playStingSfx(idx >= 4 ? 'big' : ''); } catch (e) {}   // v257: a rising sting on each combo-tier cross-up
+    scanT = scanDur = 0.55; scanTier = idx + 2;                 // a fuller sweep than a plain milestone
+    bgPulse = 1; cameraShake = Math.max(cameraShake, 9 + idx * 2);
+    try { const cd = $('combo-display'); if (cd) { cd.classList.remove('tierpop'); void cd.offsetWidth; cd.classList.add('tierpop'); } } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(idx >= 4 ? [16, 26, 16, 26, 16] : [14, 22, 14]); } catch (e) {} }
+    try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, idx >= 3); } catch (e) {}
+  }
   let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
   // --- VISUAL-ONLY feedback timers (no scoring/timing impact) ---
   let missFlash = 0;                 // crimson edge-vignette pulse on any miss/break (decays)
@@ -321,9 +376,19 @@
       const bound = [0];
       for (let i = 0; i < LANE_COUNT - 1; i++) bound.push((cx[i] + cx[i + 1]) / 2);
       bound.push(1);
-      for (let i = 0; i < LANE_COUNT; i++) {
-        zones[i].style.left = (bound[i] * 100) + '%';
-        zones[i].style.width = ((bound[i + 1] - bound[i]) * 100) + '%';
+      // build65 (cycle-3): THUMB FLOOR. On portrait phones the cover-fit bunches the string fan toward the center, so the
+      // midpoint columns can collapse to ~33px (below the 44px touch target — 3 of 5 lanes barely tappable). If the narrowest
+      // midpoint lane would drop below 60% of an even column, fall back to EVEN columns so every lane stays thumbable.
+      // (Keeps the nicer string-tracking whenever the fan is spread enough — i.e. desktop / landscape.)
+      let minW = 1; for (let i = 0; i < LANE_COUNT; i++) minW = Math.min(minW, bound[i + 1] - bound[i]);
+      if (minW < 0.6 / LANE_COUNT) {
+        const w = 1 / LANE_COUNT;
+        for (let i = 0; i < LANE_COUNT; i++) { zones[i].style.left = (i * w * 100) + '%'; zones[i].style.width = (w * 100) + '%'; }
+      } else {
+        for (let i = 0; i < LANE_COUNT; i++) {
+          zones[i].style.left = (bound[i] * 100) + '%';
+          zones[i].style.width = ((bound[i + 1] - bound[i]) * 100) + '%';
+        }
       }
     } else {
       // canvas not sized yet (e.g. still on the menu) — even columns as a safe default
@@ -524,6 +589,36 @@
   }
   try { window.__rrLaneMode = applyLaneProfile; window.__rrGetLaneMode = () => laneProfile; } catch (e) {}
 
+  // ---- GUITAR-HERO CONTROLLER SUPPORT --------------------------------------------------------
+  // Detect a GH/Rock-Band/Clone-Hero style guitar by gamepad id, and a "5-fret preset" that maps
+  // the common fret button indices to lanes as a starting point. The Set-Up-Controller WIZARD is the
+  // reliable path for ANY controller (it captures whatever button you press); the preset/detection are
+  // convenience on top. NOTE on button indices: the standard HTML Gamepad mapping for the popular
+  // Xbox-360 / PS3 GH & Rock Band guitars exposes the 5 frets as the face/shoulder buttons —
+  // GREEN=0, RED=1, YELLOW=3, BLUE=2, ORANGE=4 (a common layout for these as seen by the browser).
+  // Cheap clones (Santroller / Raphnet adapters / Wii) vary, so this is BEST-EFFORT — tune freely;
+  // the wizard always rescues a mismatch. Order below is fret-1(green)..fret-5(orange) -> lane 0..4.
+  const GH_ID_RE = /guitar|gh\b|guitar\s*hero|red\s*octane|harmonix|rock\s*band|rockband|wii.*guitar|santroller|raphnet|clone\s*hero|world\s*tour|les\s*paul|stratocaster/i;
+  const GH_PRESET_BTN = [0, 1, 3, 2, 4];   // green, red, yellow, blue, orange  ->  lane 0..4 (gh profile)
+  function isGuitarPad(id) { return GH_ID_RE.test(String(id || '')); }
+  function guitarPadId() { for (const id of gamepadList()) if (isGuitarPad(id)) return id; return null; }
+  function applyGhPreset() {
+    // map the 5 GH frets to the active profile's lanes (clamped to LANE_COUNT so it's safe on standard too)
+    const m = {}; const n = Math.min(GH_PRESET_BTN.length, LANE_COUNT);
+    for (let lane = 0; lane < n; lane++) m[GH_PRESET_BTN[lane]] = lane;
+    padMap = m; savePadMap();
+    try { renderPadcaps(); } catch (e) {}
+    try { renderDeviceStatus(); } catch (e) {}
+    try { window.RhythmGame.showToast('Guitar Hero 5-fret preset applied — Test Input or run the wizard to fine-tune', 'success'); } catch (e) {}
+  }
+  // Friendly per-lane label for the active profile: GH frets get colour names, standard uses ordinals.
+  const GH_FRET_NAMES = ['GREEN', 'RED', 'YELLOW', 'BLUE', 'ORANGE'];
+  function laneFretLabel(lane) {
+    if (laneProfile === 'gh' && GH_FRET_NAMES[lane]) return GH_FRET_NAMES[lane] + ' fret';
+    return 'Lane ' + (lane + 1);
+  }
+  function laneSwatch(lane) { const c = LANE_COLORS[lane]; return (c && c.c) || '#ff3c3c'; }
+
   // ---- GUITAR SKIN LAYER (image-only swap) -------------------------------------
   // Swaps activeGuitarImg to a re-skinned guitar PNG WITHOUT touching geometry
   // (LANE_COUNT / ART.nutXF / ART.bridgeXF / aspect / fit all stay from the lane
@@ -607,6 +702,54 @@
     'assets/guitars/clockwork.png':     { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Tourbillon" clockwork — 58 rows, res 2.84px
       nutXF:    [0.4386, 0.4594, 0.4891, 0.5134, 0.5387],
       bridgeXF: [0.4080, 0.4613, 0.5058, 0.5615, 0.6130] },
+    // Alarm Clock Hero — ivory-and-gold clock-face bass (i2i from crimson-chaos-ryo: clean dark fretboard + bright strings
+    // kept, ivory body / gold clock face / Roman numerals / brass gears painted on the BODY below the strings). Gate PASSED
+    // via adaptive neck-band measure: 108 clean exactly-5 rows, res 5.89px; fit overlay-verified riding the painted strings
+    // nut→bridge. bridge span 0.275 ≈ crimson's 0.294 (aligned). Transparent cutout, aspect ≈0.560.
+    'assets/guitars/alarm-clock.png':   { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Clocked In" alarm-clock bass — 108 rows, res 5.89px
+      nutXF:    [0.4468, 0.4695, 0.4977, 0.5275, 0.5565],
+      bridgeXF: [0.3539, 0.4261, 0.4906, 0.5607, 0.6287] },
+    // Sasoka — bayou wolf-priestess bass (i2i from crimson-chaos-ryo: clean dark driftwood fretboard + bright strings kept;
+    // gnarled cypress-wood / wolf-skull / bone / feathers / violet Loa runes on the BODY). RE-MEASURED 2026-06-19 on the SHIPPED
+    // file (the first pass recorded a high-TH measure → ~3px drift vs the visual cutout that's actually drawn): 32 clean exactly-5
+    // rows, res 6.69px, overlay-verified riding the strings nut→bridge. bridge span 0.265 ≈ crimson's 0.294.
+    'assets/guitars/sasoka.png':        { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Sasoka" wolf-priestess bass — 32 rows, res 6.69px
+      nutXF:    [0.4546, 0.4768, 0.5009, 0.5239, 0.5460],
+      bridgeXF: [0.3556, 0.4234, 0.4878, 0.5554, 0.6207] },
+    // Pirate-Fox — Ryo's black-chrome pirate bass (i2i from crimson-chaos-ryo: clean dark fretboard + bright strings kept;
+    // glossy black-chrome body, fox head w/ glowing red eyes, pirate skulls + crossbones, crimson chaos energy seeping through
+    // cracks underneath, chrome chain flair). Gate PASSED: 34 clean exactly-5 rows, res 6.95px; fit overlay-verified riding the
+    // strings nut→bridge. bridge span 0.258 ≈ crimson's 0.294. For the paid High-Seas Showdown level + store.
+    'assets/guitars/pirate-fox.png':    { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Pirate Fox" black-chrome bass — 34 rows, res 6.95px
+      nutXF:    [0.4488, 0.4735, 0.4995, 0.5229, 0.5464],
+      bridgeXF: [0.3685, 0.4310, 0.4910, 0.5589, 0.6267] },
+    // Deadkin — macabre marble-ivory bass (i2i from crimson-chaos-ryo: clean dark fretboard + bright strings kept; polished
+    // marble-ivory body carved with skulls, sharp silver edges, a cut-glass crystal panel revealing a still-beating red HEART
+    // wired in, crimson circus pinstripe). RE-MEASURED 2026-06-19 after playtest flagged lanes "slightly off": 68 clean exactly-5
+    // rows, res 4.91px (was 29 rows / 6.31px — the looser first pass drifted the bridge fan ~2% of width). Overlay-verified riding
+    // the strings nut→bridge (incl. the bridge/catcher zone where you hit). Visual cutout preserves the light marble body (TH=22).
+    'assets/guitars/deadkin.png':       { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Deadkin" marble-ivory bass — 68 rows, res 4.91px
+      nutXF:    [0.4453, 0.4716, 0.4995, 0.5251, 0.5503],
+      bridgeXF: [0.3514, 0.4251, 0.4989, 0.5740, 0.6464] },
+    'assets/guitars/shorty-x.png':      { verified: true, aspect: 1520 / 2688, nutFY: 0.160, bridgeFY: 0.810,  // "Shorty X" vampire-fang bass — i2i reskin of crimson-chaos-ryo, 17 rows, res 16.65px
+      nutXF:    [0.4633, 0.4844, 0.5087, 0.5336, 0.5577],
+      bridgeXF: [0.3518, 0.4227, 0.4852, 0.5539, 0.6247] },
+    'assets/guitars/celines-razor.png': { verified: true, aspect: 1140 / 2016, nutFY: 0.160, bridgeFY: 0.810,  // "Celine's Razor" — CelinesRazor × Dion community guitar (i2i reskin of crimson-chaos-ryo), 55 rows, res 1.67px
+      nutXF:    [0.4649, 0.4867, 0.5098, 0.5335, 0.5566],
+      bridgeXF: [0.3487, 0.4214, 0.4950, 0.5723, 0.6502] },
+    // build64: three NEW store guitars — i2i reskins of crimson-chaos-ryo (strings/neck kept, body re-skinned), keyed + adaptive-measured + overlay-verified riding the strings nut→bridge.
+    'assets/guitars/razor.png':         { verified: true, aspect: 1518 / 2647, nutFY: 0.152, bridgeFY: 0.812,  // "Razor" emo-punk dark-purple bass — 164 clean rows, res 7.09px
+      nutXF:    [0.4635, 0.4842, 0.5068, 0.5301, 0.5521],
+      bridgeXF: [0.3473, 0.4198, 0.4926, 0.5677, 0.6431] },
+    'assets/guitars/wormfeast.png':     { verified: true, aspect: 1519 / 2655, nutFY: 0.156, bridgeFY: 0.814,  // "Wormfeast" skull-&-eyeball-&-worm horror bass — 109 clean rows, res 5.75px
+      nutXF:    [0.4633, 0.4843, 0.5074, 0.5323, 0.5547],
+      bridgeXF: [0.3527, 0.4227, 0.4931, 0.5648, 0.6380] },
+    'assets/guitars/kitsune.png':       { verified: true, aspect: 1514 / 2677, nutFY: 0.160, bridgeFY: 0.813,  // "Kitsune" ivory fox-fur bass (fox-ear horns + fox-skull crown) — 112 clean rows, res 14.33px
+      nutXF:    [0.4472, 0.4736, 0.5037, 0.5359, 0.5646],
+      bridgeXF: [0.3974, 0.4604, 0.5156, 0.5634, 0.6183] },
+    'assets/guitars/triemrys.png':      { verified: true, aspect: 1517 / 2646, nutFY: 0.149, bridgeFY: 0.810,  // "Triemrys" scarecrow bass — charred black, demon-crow wings, burlap+bone, axe-blade — 110 clean rows, res 7.25px
+      nutXF:    [0.4616, 0.4845, 0.5075, 0.5316, 0.5535],
+      bridgeXF: [0.3548, 0.4211, 0.4919, 0.5661, 0.6422] },
   };
   function _lerpLane(a, b, n, i) { return n > 1 ? a + (b - a) * (i / (n - 1)) : (a + b) / 2; }
   // resample a measured per-string array to the active LANE_COUNT: exact when counts match; the most
@@ -701,7 +844,9 @@
   }
   // Per-level override (temporary). Pass falsy to drop the override → back to equipped/default.
   function setGuitarSkin(src) {
-    if (src) { _levelSkinActive = true; _applySkinImg(src); }
+    // build60 (user): Settings "Guitar on Levels" — 'mine' (default) = the player's EQUIPPED guitar wins on ANY level
+    // (a level's guitarSkin is only its default); 'level' = use the level's own themed guitar. Takes effect on next launch.
+    if (src) { _levelSkinActive = true; _applySkinImg((levelGuitarPref === 'level') ? src : (equippedSkinSrc || src)); }
     else { _levelSkinActive = false; _applySkinImg(equippedSkinSrc); }
   }
   // Equip a skin globally (persisted). Pass falsy to clear the equip (back to default).
@@ -748,11 +893,12 @@
   // ---- hit SFX: a real palm-mute guitar chug, decoded once into a buffer for zero-latency,
   // overlapping playback. Replaces the old synth beep. (Falls back to the beep if it can't load.)
   let hitBuffer = null, missBuffer = null, hitSfxTried = false;
+  let _lastPct = -1, _lastSec = -1;   // build71: per-frame HUD-write change-gate (progress bar / time) — only touch the DOM when the whole-percent or whole-second changes (self-heals on restart since pct/sec differ from the prior song)
   // SFX_LEVEL is declared near the top (settings block) so persisted prefs can set it before this point.
   function loadHitSfx() {
     if (hitSfxTried) return;
     hitSfxTried = true;
-    const load = (url, set) => fetch(url).then(r => r.arrayBuffer())
+    const load = (url, set) => fetch(url).then(r => { if (!r.ok) throw new Error('sfx ' + r.status); return r.arrayBuffer(); })   // build71: a 404 would otherwise feed an HTML error page to decodeAudioData; the throw lands in the existing .catch (buffer stays null, playback already guarded)
       .then(buf => getAC().decodeAudioData(buf, set, () => {})).catch(() => {});
     load('assets/hit-chug.mp3', d => { hitBuffer = d; });
     load('assets/miss-squelch.mp3', d => { missBuffer = d; });   // GH-style "clam" on a miss
@@ -770,14 +916,14 @@
     } catch (e) {}
   }
   // Overdrive activation: a short synthesized power-up riser (no asset needed).
-  // Gated by mute; rides at a modest fixed level so it accents over the music.
+  // Gated by mute; rides at a Hit-Sound-mixer-scaled level so it accents over the music (build71: was a fixed 0.22).
   function playOverdriveSfx() {
     if (muted) return;
     try {
       const ac = getAC(); const now = ac.currentTime;
       const g = ac.createGain();
       g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(0.22, now + 0.05);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.3, SFX_LEVEL * 2.6)), now + 0.05);   // build71: scale by the Hit-Sound mixer (was fixed 0.22 → blasted even at SFX 0%; ~0.13 at default 0.05, silent at 0)
       g.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
       g.connect(ac.destination);
       // two detuned saws sweeping up = a bright riser
@@ -793,6 +939,79 @@
       });
     } catch (e) {}
   }
+  // v257 SOUND DESIGN: procedural ZAP (P-vs-P combat shock) — a noise crackle through a sweeping bandpass + a pitch-dropping
+  // square = an electric "you got shocked" hit. `incoming` (you were zapped) is harsher/longer than the sender's crackle.
+  function playZapSfx(incoming) {
+    if (muted) return;
+    try {
+      const ac = getAC(), now = ac.currentTime, dur = incoming ? 0.5 : 0.26;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.4, (incoming ? 6.8 : 4) * SFX_LEVEL)), now + 0.02);   // build71: pure mixer-scaled (was +floor 0.05 → audible at SFX 0%; identical to before at the default 0.05)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      g.connect(ac.destination);
+      const nb = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * dur)), ac.sampleRate), nd = nb.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (1 - i / nd.length);
+      const ns = ac.createBufferSource(); ns.buffer = nb;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 6;
+      bp.frequency.setValueAtTime(incoming ? 2600 : 3200, now);
+      bp.frequency.exponentialRampToValueAtTime(incoming ? 220 : 640, now + dur);
+      ns.connect(bp); bp.connect(g); ns.start(now); ns.stop(now + dur);
+      const o = ac.createOscillator(); o.type = 'square';
+      o.frequency.setValueAtTime(incoming ? 900 : 1300, now);
+      o.frequency.exponentialRampToValueAtTime(incoming ? 90 : 280, now + dur * 0.9);
+      const og = ac.createGain(); og.gain.value = 0.22; o.connect(og); og.connect(g); o.start(now); o.stop(now + dur);
+    } catch (e) {}
+  }
+  // v257 SOUND DESIGN: a bright ascending major-arpeggio STING for tier-up / rank-up / encore moments. 'big' = a longer run.
+  function playStingSfx(kind) {
+    if (muted) return;
+    try {
+      const ac = getAC(), now = ac.currentTime;
+      const notes = kind === 'big' ? [0, 4, 7, 12, 16, 19] : [0, 4, 7, 12], root = 392;   // G major-ish
+      const master = ac.createGain(); master.gain.value = Math.min(0.3, 3.6 * SFX_LEVEL); master.connect(ac.destination);   // build71: pure mixer-scaled (was +floor 0.08; ~0.18 at default, silent at 0)
+      notes.forEach((semi, i) => {
+        const t = now + i * 0.052;
+        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = root * Math.pow(2, semi / 12);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.32, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+        o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.44);
+      });
+    } catch (e) {}
+  }
+  // v259 SOUND DESIGN: procedural CROWD CHEER / applause for the encore (no asset file needed) — dense band-passed noise with
+  // sparse clap transients swelling up + a couple of rising "whoo" formants. Used when no real crowd-cheer.mp3 is loaded.
+  function playCheerSfx() {
+    if (muted) return;
+    try {
+      const ac = getAC(), now = ac.currentTime, dur = 1.9;
+      const nb = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * dur)), ac.sampleRate), nd = nb.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) { let v = Math.random() * 2 - 1; if (Math.random() < 0.0045) v *= 4; nd[i] = v; }   // applause = noise + sparse clap spikes
+      const ns = ac.createBufferSource(); ns.buffer = nb;
+      const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1900; bp.Q.value = 0.7;
+      const g = ac.createGain(), lvl = Math.max(0.0001, Math.min(0.4, 3.2 * SFX_LEVEL));   // build71: mixer-scaled (was +floor 0.16; ~0.16 at default, silent at 0; 0.0001 floor for the exponential ramp below)
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(lvl, now + 0.28);            // the crowd rises
+      g.gain.setValueAtTime(lvl, now + 1.15);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);          // ...and fades
+      ns.connect(hp); hp.connect(bp); bp.connect(g); g.connect(ac.destination);
+      ns.start(now); ns.stop(now + dur);
+      [520, 660].forEach((f) => {
+        const o = ac.createOscillator(); o.type = 'sawtooth';
+        o.frequency.setValueAtTime(f * 0.8, now + 0.1); o.frequency.linearRampToValueAtTime(f, now + 0.55);
+        const og = ac.createGain(); og.gain.setValueAtTime(0.0001, now + 0.1);
+        og.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.05, SFX_LEVEL)), now + 0.45); og.gain.exponentialRampToValueAtTime(0.0001, now + 1.05);   // build71: the "whoo" formants bypass the master gain → scale them by the mixer too (silent at SFX 0%)
+        const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1200;
+        o.connect(og); og.connect(lp); lp.connect(ac.destination); o.start(now + 0.1); o.stop(now + 1.05);
+      });
+    } catch (e) {}
+  }
+  window.RhythmGame.playZap = (incoming) => { try { playZapSfx(!!incoming); } catch (e) {} };
+  window.RhythmGame.playSting = (kind) => { try { playStingSfx(kind); } catch (e) {} };
+  window.RhythmGame.playCheer = () => { try { playCheerSfx(); } catch (e) {} };
   // first user gesture anywhere unlocks audio for the session
   ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
     window.addEventListener(ev, unlockAudio, { once: true, passive: true }));
@@ -836,10 +1055,14 @@
     setGain(v) { if (this.gain && this.ctx) { try { this.gain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.012); } catch (e) { this.gain.gain.value = v; } } }
     stop() {
       if (this.src) { try { this.src.onended = null; this.src.stop(); } catch (e) {} }
-      // do NOT close the shared context — it's reused across plays
+      // build65 (cycle-4): explicitly DISCONNECT the per-play subgraph from the shared ctx.destination (hygiene — the nodes
+      // are GC-eligible once dropped, but detach them so a stale subgraph can't linger attached). Do NOT close the shared ctx.
+      try { this.src && this.src.disconnect(); } catch (e) {}
+      try { this.gain && this.gain.disconnect(); } catch (e) {}
+      try { musicAnalyser && musicAnalyser.disconnect(); } catch (e) {}
       if (this.ctx && this.ctx.state === 'running') { try { this.ctx.resume(); } catch (e) {} }
       musicAnalyser = null; musicFreq = null;
-      this.ctx = null; this.src = null;
+      this.ctx = null; this.src = null; this.gain = null;
     }
   }
   // expose so catalog.js HlsPlayer can share the muted flag + interface contract
@@ -870,37 +1093,205 @@
   // ===========================================================================
   function buildNotes() {
     const step = DIFF_STEP[difficulty];
-    let filtered;
-    if (chartMode === 'musical') {
-      // MUSICAL: land each note on the STRONGEST onset within its step-window, so notes hit the
-      // song's actual emphasis (kicks/snares) instead of an arbitrary every-Nth onset. Same density.
-      filtered = [];
-      for (let i = 0; i < beats.length; i += step) {
-        let best = beats[i];
-        for (let j = i + 1; j < Math.min(beats.length, i + step); j++) { if (beats[j].strength > best.strength) best = beats[j]; }
-        filtered.push(best);
-      }
-    } else {
-      filtered = beats.filter((_, i) => i % step === 0);   // CLASSIC: every Nth onset (default)
-    }
-    // Guitar-Hero-style difficulty ramp: Easy uses fewer, centered strings; Medium/Hard use all 6
-    // (span 6 → inSpan is the identity, so Medium/Hard charts are unchanged).
-    const LANE_SPAN = { easy: 4, medium: 6, hard: 6 };
+    // Guitar-Hero-style difficulty ramp: Easy uses fewer, CENTERED strings; Medium/Hard use all 5
+    // (span clamps to LANE_COUNT=5 → inSpan is the identity, so Medium/Hard charts are unchanged). Defined up
+    // front so the downstream chord/bomb passes (which reference span/laneBase/inSpan) work in BOTH chart modes.
+    // build70 (launch-audit P3): Easy was span 4 → laneBase floor((5-4)/2)=0 → lanes 0..3, i.e. BOTTOM-biased with
+    // the top string dead (the "centered" comment was a lie on a 5-lane neck). span 3 → laneBase 1 → lanes 1,2,3:
+    // a genuinely centered, symmetric 3-string on-ramp. Note count is gap-driven (MINGAP), not lane-driven, so this
+    // doesn't make Easy "blanker" — it just stops scattering a beginner across an off-centre 4-wide span.
+    const LANE_SPAN = { easy: 3, medium: 6, hard: 6 };
     const span = Math.min(LANE_SPAN[difficulty] || LANE_COUNT, LANE_COUNT);   // never exceed lane count (5-string safe)
     const laneBase = Math.floor((LANE_COUNT - span) / 2);                          // centered active window
     const inSpan = (l) => laneBase + ((((l - laneBase) % span) + span) % span);    // wrap any index into the active set
+    // MUSICAL mode (build57) needs centroid-tagged onsets from analyzeMusical; if a fallback produced
+    // plain (centroid-less) onsets, degrade to the classic placer so a track is never left unplayable.
+    const musical = (chartMode === 'musical') && beats.length && (typeof beats[0].centroid === 'number');
     let last = -1, last2 = -1;
-    notes = filtered.map((b, idx) => {
-      const seed = Math.floor(b.t * 8.97 + b.strength * 3.1 + idx * 1.7);
-      let lane = laneBase + (((seed % span) + span) % span);
-      let guard = 0;
-      while ((lane === last || lane === last2) && guard < 4) { lane = inSpan(lane + 1); guard++; }
-      last2 = last; last = lane;
-      let type = 'tap';
-      if (idx > 4 && idx % 31 === 0) type = 'star';        // rare gold "surge" note
-      else if (b.strength >= 1.75) type = 'accent';        // strong beat → accented gem
-      return { time: b.t, strength: b.strength, lane, type, hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false };
-    });
+    if (musical) {
+      // DYNAMIC DENSITY: keep onsets on a difficulty-scaled min-gap, but let a clearly stronger / on-beat
+      // onset BUMP a weaker recent pick — so busy passages stay busy, quiet ones breathe, and emphasis
+      // lands on the beat. Bounded by the min-gap so it never becomes unplayable.
+      // build59: Medium dialed back from 0.235 (≈4.3 notes/sec) — playtesters found Medium too rapid/scattered.
+      // CHANGE 3a — raise every floor (was {0.45,0.33,0.155}) so the baseline chart is sparser and more readable
+      // across the board; the "barrage" complaint was largely Hard packing ~6.4 nps. Now ≈ 2 / 2.5 / 4.5 nps.
+      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.22 };   // v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. Easy/Hard unchanged.
+      // v253 (research): a CAMPAIGN BOSS stage is "Hard-MINUS", not raw Hard — the boss complaint ("I shouldn't be crying at
+      // the end of the level") is no-release + density, not speed (we're already ~5× below GH-boss NPS). When the LAUNCHED
+      // level is a boss (_levelCtx.boss, set by launchLevel→setLevelContext), widen the Hard min-gap and lower the sustained
+      // NPS ceiling so the chart breathes. Free-play Hard (no level ctx) and boss-as-free-play-environment (synthetic
+      // ctx → boss:false) are deliberately NOT eased — only the ranked campaign run.
+      let _bossStage = false; try { _bossStage = !!(_levelCtx && _levelCtx.boss); } catch (e) { _bossStage = false; }
+      const baseGap = (MINGAP[difficulty] || 0.22) * (_bossStage ? 1.18 : 1);   // v258: ANY campaign boss gets the gap ease (Hard 0.22→0.26, the medium Shorty-X 0.38→0.45) — not just Hard
+      // SECTION-AWARE density — tighten the gap in loud passages, open it in quiet breakdowns. The *tightening* floor is
+      // difficulty-scaled: Hard can pack a loud chorus (0.8×), but Medium/Easy barely tighten (0.95×/1.0×) so a loud
+      // passage can't spike a casual chart past its comfortable ceiling. Opening (quiet → sparser) is shared.
+      // CHANGE 3b — let QUIET passages open further (cap 1.5→2.0×) so breakdowns genuinely breathe instead of
+      // staying as dense as the verses; the loud-section tighten floor is unchanged.
+      let eMax = 0; for (let i = 0; i < beats.length; i++) { const e = beats[i].energy || 0; if (e > eMax) eMax = e; }
+      const tightenFloor = difficulty === 'hard' ? 0.8 : difficulty === 'medium' ? 0.97 : 1.0;   // v253: Medium 0.95→0.97 — loud choruses tighten less (kills the chorus density spike that read as "too challenging")
+      const gapFor = (b) => { const e = eMax > 0 ? (b.energy || 0) / eMax : 0.5; return baseGap * Math.max(tightenFloor, Math.min(2.0, 1.4 - 0.6 * e)); };
+      // CHANGE 5 — privilege STRONG beats: when deciding whether a new onset should bump the recent pick out of its
+      // gap-window, compare EFFECTIVE strength (downbeats ×1.6, on-grid ×1.3) — so emphasis lands on the beat, not on
+      // whatever transient happened to be loudest. Also used to pick the weakest onset to drop under the NPS cap below.
+      const effOf = (b) => (b.strength || 1) * (b.downbeat ? 1.6 : b.onGrid ? 1.3 : 1.0);
+      let filtered = [];
+      for (let i = 0; i < beats.length; i++) {
+        const b = beats[i];
+        if (!filtered.length) { filtered.push(b); continue; }
+        const prev = filtered[filtered.length - 1];
+        const gap = gapFor(b);
+        if (b.t - prev.t >= gap) filtered.push(b);
+        // build58: the strongest onset in each gap-window wins the slot. CHANGE 5: by EFFECTIVE strength (on-beat
+        // onsets are privileged), or always for a downbeat.
+        else if (effOf(b) > effOf(prev) * 1.35 || b.downbeat) filtered[filtered.length - 1] = b;
+      }
+      // CHANGE 1 — BEAT QUANTIZATION (the key readability fix). The analyzer tagged onGrid/downbeat but never MOVED a
+      // note, so each sat ±10–40 ms off the pulse → the chart never locked to the song. Snap each onset to the tempo
+      // sub-grid when it's already close (within 18% of a beat — a real onset, not a syncopation we'd be inventing).
+      // Easy snaps to 1/2-beats (eighths feel), Medium/Hard to 1/4-beats (sixteenths) so fast runs still resolve.
+      const per = beats._period || 0, ph = beats._phase || 0;
+      const sub = per / (difficulty === 'easy' ? 2 : 4);
+      if (per > 0 && sub > 0) {
+        for (let i = 0; i < filtered.length; i++) {
+          const t = filtered[i].t;
+          const g = ph + Math.round((t - ph) / sub) * sub;
+          if (Math.abs(t - g) < per * 0.18) {
+            // clone so we never mutate the shared source onset (it may be reused if buildNotes re-runs)
+            filtered[i] = Object.assign({}, filtered[i], { t: Math.round(g * 1000) / 1000 });
+          }
+        }
+        filtered.sort((a, b) => a.t - b.t);
+      }
+      // CHANGE 3c — SLIDING-WINDOW NPS CAP: even after the min-gap, a busy bar can spike past readability. In any 1.0 s
+      // window exceeding the per-difficulty cap, drop the weakest onsets (off-grid first, then lowest effective strength)
+      // until the window is within budget. This is what actually flattens the "barrage" peaks.
+      const _npsBase = { hard: 5, medium: 3, easy: 2 }[difficulty] || 3;
+      const npsCap = _bossStage ? Math.max(2, _npsBase - 1) : _npsBase;   // build62: Hard 5 NPS = teeth. v253/v258: ANY campaign boss clamps the ceiling down one notch (Hard 5→4, Medium 3→2) so a boss is never raw density.
+      if (filtered.length > npsCap) {
+        const WIN = 1.0;
+        let changed = true, guardN = 0;
+        while (changed && guardN++ < 40) {
+          changed = false;
+          for (let i = 0; i < filtered.length; i++) {
+            // count notes in [t, t+WIN)
+            let j = i, cnt = 0;
+            while (j < filtered.length && filtered[j].t < filtered[i].t + WIN) { cnt++; j++; }
+            if (cnt > npsCap) {
+              // find the weakest in this window: off-grid before on-grid, then lowest effective strength
+              let worst = -1, worstKey = Infinity;
+              for (let k = i; k < j; k++) {
+                const o = filtered[k];
+                const key = (o.onGrid || o.downbeat ? 1000 : 0) + effOf(o);   // off-grid sorts below any on-grid
+                if (key < worstKey) { worstKey = key; worst = k; }
+              }
+              if (worst >= 0) { filtered.splice(worst, 1); changed = true; break; }
+            }
+          }
+        }
+      }
+      // dev hook: the ONSET-only peak NPS (max onsets in any 1 s window AFTER the cap, BEFORE chords/holds/fillers) — i.e.
+      // proof the change-3c cap held the onset stream to budget. (__rrChartStats.peakNps reports the SCORED total incl.
+      // chord partners, which can sit higher.) Test-only, alongside __rrChartStats/__rrDebug.
+      let peakNps = 0;
+      for (let i = 0; i < filtered.length; i++) { let j = i, c = 0; while (j < filtered.length && filtered[j].t < filtered[i].t + 1.0) { c++; j++; } if (c > peakNps) peakNps = c; }
+      window.__rrPeakNps = peakNps;
+      // CENTROID → LANE: normalize brightness across the chart (5th–95th pct, min 0.15 spread) so the
+      // contour uses the full string set; low/bass → low string, bright/melody → high string. The hand
+      // now RIDES THE MELODY instead of jumping to hashed lanes.
+      const cs = filtered.map(b => b.centroid).slice().sort((a, b) => a - b);
+      const lo = cs.length ? cs[Math.floor(cs.length * 0.05)] : 0;
+      const hi = cs.length ? cs[Math.floor(cs.length * 0.95)] : 1;
+      const den = Math.max(0.15, hi - lo);
+      // build58: on a spectrally NARROW song (hi−lo small) a pure value-map collapses everything onto one string. When the
+      // brightness spread is tight, blend in a RANK map (each note placed by its centroid's quantile) so the melodic motion
+      // that DOES exist still spreads across the strings; wide-band songs stay value-driven (no exaggerated jitter).
+      const narrow = (hi - lo) < 0.15;
+      const rankOf = {};
+      if (narrow) { for (let r = 0; r < cs.length; r++) { if (rankOf[cs[r]] === undefined) rankOf[cs[r]] = r / Math.max(1, cs.length - 1); } }
+      // CHANGE 6 — SMOOTH THE CONTOUR before mapping to lanes, but CONSERVATIVELY so the lane still tracks the real pitch
+      // (verified: a blanket median-of-3 on this catalog's noisy centroids decorrelates lane from centroid — centroidLaneR
+      // crashed 0.94 → 0.63 — so we DON'T smooth every point). Instead: a SPIKE-GATED median only rewrites a sample that
+      // is a true single-frame OUTLIER (both neighbors agree and the sample shoots well past them); the steady contour is
+      // left untouched. Then a feather-light EMA + lane HYSTERESIS de-strobe the boundary without lagging the melody.
+      const rawC = filtered.map(b => (typeof b.centroid === 'number' ? b.centroid : 0.5));
+      const SPIKE = 0.28;                        // a sample must exceed both neighbors' band by this much to count as a spike
+      const med3 = rawC.map((v, i) => {
+        if (i === 0 || i === rawC.length - 1) return v;
+        const a = rawC[i - 1], c = rawC[i + 1];
+        const loN = Math.min(a, c), hiN = Math.max(a, c);
+        if (v > hiN + SPIKE || v < loN - SPIKE) {            // genuine outlier → pull to the median of (a,v,c)
+          return Math.max(loN, Math.min(hiN, v));
+        }
+        return v;                                            // in-contour sample → keep raw (preserves centroid↔lane corr)
+      });
+      // feather-light EMA (α=0.85 → new sample strongly dominates): de-jitters frame-to-frame wobble without lagging the
+      // pitch enough to decorrelate lane (measured ≥0.9 on the demo, well above the 0.85 bar).
+      const smC = new Array(med3.length);
+      let ema = med3.length ? med3[0] : 0.5;
+      for (let i = 0; i < med3.length; i++) { ema = 0.9 * med3[i] + 0.1 * ema; smC[i] = ema; }
+      const HYST_LANE = 0.18;                    // band-edge margin in LANE units — must cross this far past the previous
+                                                 // string's center before we commit a switch (prevents 2-string strobing).
+      let prevLaneF = -1;                        // previous fractional lane (continuous), for lane-level hysteresis
+      let sameRun = 0;                           // length of the current same-lane streak (for the relaxed CHANGE-6 guard)
+      notes = filtered.map((b, idx) => {
+        let n = (smC[idx] - lo) / den; n = Math.max(0, Math.min(1, n));
+        if (narrow) { const nr = rankOf[b.centroid]; if (typeof nr === 'number') n = 0.35 * n + 0.65 * nr; }
+        // LANE-LEVEL hysteresis: only move off the previous string once the (continuous) target lane clears a margin →
+        // no strobing — but the value `n` still tracks the contour, so lane↔centroid correlation is preserved.
+        let laneF = n * (span - 1);
+        if (prevLaneF >= 0 && Math.abs(laneF - prevLaneF) < HYST_LANE) laneF = prevLaneF; else prevLaneF = laneF;
+        let lane = laneBase + Math.round(laneF);
+        // CHANGE 2 — clamp the per-note lane jump on ALL difficulties (was Easy/Medium only — Hard's unclamped jumps
+        // were a big part of the "scattered/unreadable" complaint). Preserve the up/down direction, just bound the leap:
+        // Easy ±1, Medium ±2, Hard ±3 strings.
+        if (last >= 0) {
+          const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+          if (lane > last + maxJump) lane = last + maxJump;
+          else if (lane < last - maxJump) lane = last - maxJump;
+          lane = Math.max(laneBase, Math.min(laneBase + span - 1, lane));
+        }
+        // CHANGE 6 — relax the anti-repeat guard from "break a 3rd-in-a-row" to allow up to 5 same-lane notes, so
+        // genuinely repeated pitches read as jacks/runs (a real GH idiom) instead of being scattered onto a different
+        // string. Only when a run would exceed 5 do we nudge the streak off its string.
+        let guard = 0;
+        const wouldRun = (lane === last) ? sameRun + 1 : 1;
+        if (wouldRun > 5) { while (lane === last && guard < 3) { lane = inSpan(lane + 1); guard++; } }
+        sameRun = (lane === last) ? sameRun + 1 : 1;
+        last2 = last; last = lane;
+        let type = 'tap';
+        if (idx > 4 && idx % 31 === 0) type = 'star';                              // rare gold "surge" note
+        else if ((b.downbeat && b.strength >= 1.4) || b.strength >= 1.9) type = 'accent';  // on-beat / strong → accented gem
+        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (Math.floor(b.t * 97 + idx * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _centroid: b.centroid, _sustain: b.sustain || 0, _hotBands: b.hotBands || null, _onGrid: !!b.onGrid, _downbeat: !!b.downbeat };
+      });
+      // CHANGE 1 (dedupe) — snapping can collapse two onsets onto the same (time-slot, lane). Drop the collision,
+      // keeping the STRONGEST, then re-sort ascending (the engine's hit-detection early-break requires sorted time).
+      {
+        const slot = (t) => Math.round(t / 0.03);   // ~30 ms quantum = one perceptual slot
+        const seen = {};
+        const kept = [];
+        for (const nn of notes) {
+          const key = slot(nn.time) + ':' + nn.lane;
+          if (seen[key] === undefined) { seen[key] = kept.length; kept.push(nn); }
+          else { const ex = kept[seen[key]]; if ((nn.strength || 0) > (ex.strength || 0)) kept[seen[key]] = nn; }   // keep the stronger
+        }
+        kept.sort((a, b) => a.time - b.time);
+        notes = kept;
+      }
+    } else {
+      const filtered = beats.filter((_, i) => i % step === 0);   // CLASSIC: every Nth onset, hashed lanes
+      notes = filtered.map((b, idx) => {
+        const seed = Math.floor(b.t * 8.97 + b.strength * 3.1 + idx * 1.7);
+        let lane = laneBase + (((seed % span) + span) % span);
+        let guard = 0;
+        while ((lane === last || lane === last2) && guard < 4) { lane = inSpan(lane + 1); guard++; }
+        last2 = last; last = lane;
+        let type = 'tap';
+        if (idx > 4 && idx % 31 === 0) type = 'star';        // rare gold "surge" note
+        else if (b.strength >= 1.75) type = 'accent';        // strong beat → accented gem
+        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false };
+      });
+    }
     // derive HOLD notes from gaps: a beat followed by a long-enough pause becomes a
     // sustain. Be generous and SPACE them out so they actually show up regularly
     // (still ONE scored note — the head is the hit — so notes_total / anti-cheat
@@ -909,29 +1300,49 @@
     for (let i = 0; i < notes.length; i++) {
       const nx = notes[i + 1];
       const gap = nx ? (nx.time - notes[i].time) : 99;
-      if (notes[i].type !== 'star' && gap > 0.5 && (i - lastHold) >= 5) {
-        notes[i].type = 'hold';
-        notes[i].hold = Math.max(0.45, Math.min(gap * 0.62, 1.6));   // clearly long, but never overlaps the next note
-        lastHold = i;
+      const sus = notes[i]._sustain || 0;   // build58 charter-v2: measured audio sustain (the dominant band actually rang on)
+      // prefer a REAL sustained note (the song actually held there) when there's room; else the classic gap heuristic.
+      const isSustain = sus > 0.35 ? (gap > sus * 0.7) : (gap > 0.5);
+      if (notes[i].type !== 'star' && isSustain && (i - lastHold) >= 5) {
+        const want = sus > 0.35 ? sus : gap * 0.62;
+        // build66 (launch-audit P1): keep the sustain tail clear of the next onset by one hit-window so a held key can still
+        // re-press the next same-lane note. If there isn't room for a minimum playable hold, leave it a tap (no overrun).
+        const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03;
+        const tail = Math.min(want, gap - clear, 1.6);
+        if (tail >= 0.30) { notes[i].type = 'hold'; notes[i].hold = tail; lastHold = i; }
       }
     }
     // ---- CHORDS: a second simultaneous note in another lane (press two keys at once) ----
     const base = notes.slice();           // snapshot before we add to it
     const allowChord = difficulty !== 'easy';
     if (allowChord) {
-      // noteVariety packs chords tighter + adds more 3-note "double-stops"; defaults byte-identical
-      const chordGapMin = noteVariety ? 5 : 8;
-      const chordMod = noteVariety ? 3 : 4;
+      // noteVariety packs chords tighter + adds more 3-note "double-stops"; defaults byte-identical.
+      // build59: Medium gets noticeably FEWER chords than Hard — simultaneous two-key presses were a big part of why
+      // Medium felt overwhelming. Hard unchanged (8 / every-4th); Medium ≈ half as many, more spaced (14 / every-6th).
+      // v253: even with noteVariety ON, MEDIUM gets fewer/looser chords than Hard — simultaneous two-key presses were a big
+      // part of why Medium felt "too challenging". Hard keeps the tight 5/every-3rd; Medium eases to 9/every-4th.
+      const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : difficulty === 'hard' ? 5 : 7) : (difficulty === 'medium' ? 14 : 8);
+      const chordMod = noteVariety ? (difficulty === 'medium' ? 4 : 3) : (difficulty === 'medium' ? 6 : 4);
       let lastChord = -99, chordId = 0;
       for (let i = 0; i < base.length; i++) {
         const n = base[i];
         if ((n.type === 'tap' || n.type === 'accent') && (i - lastChord) >= chordGapMin && i % chordMod === 0) {
           chordId++;
-          const lanes = [n.lane];
-          let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
-          // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
-          if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
-            let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
+          let lanes;
+          // build58 charter-v2: when the AUDIO actually stacked frequencies here (≥2 bands co-fired), play THOSE bands as the
+          // chord lanes — a real "two strings at once" that matches the song — instead of the mechanical +2/+4 fan.
+          if (n._hotBands && n._hotBands.length >= 2) {
+            const set = {}; set[n.lane] = 1;
+            n._hotBands.forEach(function (bnd) { set[inSpan(laneBase + Math.max(0, Math.min(span - 1, bnd)))] = 1; });
+            const cap = difficulty === 'hard' ? 3 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord — the old lowest-N slice could drop n.lane when it was the highest hot-band member (→ a phantom lane got no note + the lead was excluded from the chord-bar centroid/connector)
+            if (lanes.length < 2) { let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl); }
+          } else {
+            lanes = [n.lane];
+            let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
+            // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
+            if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
+              let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
+            }
           }
           n.chord = true; n.chordId = chordId; n.chordLanes = lanes; n.chordLead = true;
           for (let k = 1; k < lanes.length; k++) {
@@ -942,15 +1353,24 @@
       }
     }
     // ---- BOMBS: hazards in the gaps — DON'T hit this lane while one is at the bridge ----
-    const bombGap = difficulty === 'hard' ? 11 : difficulty === 'medium' ? 15 : Infinity;   // no bombs on Easy — a clean on-ramp
+    // CHANGE 4 — scattered single bombs are now HARD-ONLY (Infinity on Medium too, was 15). Random mid-gap bombs were
+    // non-musical clutter on Medium; the telegraphed bomb-ROWS path (noteVariety) is the intended "dodge this" moment.
+    const bombGap = difficulty === 'hard' ? 11 : Infinity;   // Hard only — Medium/Easy stay clean
+    // grid-snap helper (CHANGE 4): land a hazard ON the pulse so even bombs read musically. Falls back to the raw time.
+    const _per = (beats._period || 0), _ph = (beats._phase || 0), _sub = _per / 4;
+    const snapGrid = (t) => { if (_per > 0 && _sub > 0) { const g = _ph + Math.round((t - _ph) / _sub) * _sub; if (Math.abs(t - g) < _per * 0.25) return Math.round(g * 1000) / 1000; } return t; };
     let lastBomb = -99;
     for (let i = 0; i < base.length - 1; i++) {
       const n = base[i], nx = base[i + 1];
       if (n.type === 'hold') continue;
       const gap = nx.time - n.time;
       if (gap > 0.7 && (i - lastBomb) >= bombGap) {
-        notes.push({ time: n.time + gap * 0.5, strength: 1, lane: inSpan(n.lane + 3), type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false });
-        lastBomb = i;
+        // build58: never drop a bomb onto a lane that ALREADY holds a real note within a hit-window (chords/fillers added
+        // to `notes` after the `base` snapshot could collide) — else a correct press eats a bomb penalty. >max hitWindow(0.16).
+        const bt = snapGrid(n.time + gap * 0.5), bl = inSpan(n.lane + 3);
+        let clash = false;
+        for (let q = 0; q < notes.length; q++) { const m = notes[q]; if (m.lane === bl && m.type !== 'bomb' && Math.abs(m.time - bt) <= 0.18) { clash = true; break; } }
+        if (!clash) { notes.push({ time: bt, strength: 1, lane: bl, type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false }); lastBomb = i; }
       }
     }
     notes.sort((a, b) => a.time - b.time);
@@ -998,7 +1418,7 @@
     // there are no rest gaps to host inserts. Spaced out so trills stay special. Default (flag
     // off) skips this entirely → chart byte-identical. ----
     if (noteVariety && difficulty !== 'easy') {
-      const trillMaxGap = difficulty === 'hard' ? 0.26 : 0.55;   // "fast enough to read as a trill" (per pace)
+      const trillMaxGap = difficulty === 'hard' ? 0.26 : 0.30;   // build62: medium 0.55→0.30 — trills stay a FLOURISH on medium (the loose gate over-trilled it, re-laning melody notes into mechanical alternation → tanked its centroid/melody-following 0.87→0.68)
       const minLen = 3;                                          // notes needed to call it a trill (L-R-L)
       let lastTrillT = -999, i = 0;
       const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord;
@@ -1018,7 +1438,7 @@
     // STAIR (lane sweep) or ZIPPER (bounce). DENSITY-NEUTRAL re-laning (adds none; plain tap scoring;
     // times untouched so every note stays on its onset). Spaced out. Default off → skip. ----
     if (noteVariety && difficulty !== 'easy') {
-      const patMaxGap = difficulty === 'hard' ? 0.30 : 0.60;
+      const patMaxGap = difficulty === 'hard' ? 0.30 : 0.36;   // build62: medium 0.60→0.36 (same reason as trills — keep stair-runs a flourish on medium, not a melody override)
       const minLen = 4;
       const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord && !x._trill;
       let lastPatT = -999, i = 0, patSeed = 7;
@@ -1069,27 +1489,69 @@
         if (fastFromPrev && (n.time - lastHopoT) >= 0.05) { n.hopo = true; lastHopoT = n.time; }
       }
     }
-    // ---- GAP FILL: no dead air. Insert spaced filler taps into long EMPTY stretches so a
-    // section never feels empty (esp. Pulse/medium). A hold's tail already fills its own gap,
-    // so we measure from the hold's END; bombs are skipped (left a clean lead-in). ----
-    const fillMax = difficulty === 'hard' ? 0.62 : difficulty === 'medium' ? 0.74 : 1.05;
+    // ---- GAP FILL: no dead air. ----
+    // CHANGE 4 — STOP inventing non-musical notes. Gap-fill is now DISABLED on Hard and Easy (Infinity) — Hard already
+    // packs enough real onsets, and Easy should breathe. Medium fillers fire ONLY in genuinely long rests (>2.6 s), land
+    // on the SAME lane as the preceding note (no random hashed lane), and snap to the tempo grid so they read musically.
+    const fillMax = { hard: Infinity, medium: 2.6, easy: Infinity }[difficulty];
     const fillers = [];
-    for (let i = 0; i < notes.length - 1; i++) {
-      const a = notes[i], b = notes[i + 1];
-      if (a.type === 'bomb') continue;
-      const end = a.time + (a.type === 'hold' ? a.hold : 0);   // sustain tail occupies its gap
-      const gap = b.time - end;
-      if (gap <= fillMax * 1.4) continue;                       // already busy enough
-      const segs = Math.round(gap / fillMax);
-      for (let k = 1; k < segs; k++) {
-        const t = end + (gap * k / segs);
-        const seed = Math.floor(t * 97.3 + k * 13);
-        let lane = laneBase + (((seed % span) + span) % span);
-        if (lane === a.lane) lane = inSpan(lane + 1);
-        fillers.push({ time: t, strength: 0.85, lane: lane, type: 'tap', hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _fill: true });
+    if (isFinite(fillMax)) {
+      for (let i = 0; i < notes.length - 1; i++) {
+        const a = notes[i], b = notes[i + 1];
+        if (a.type === 'bomb') continue;
+        const end = a.time + (a.type === 'hold' ? a.hold : 0);   // sustain tail occupies its gap
+        const gap = b.time - end;
+        if (gap <= fillMax * 1.4) continue;                       // already busy enough
+        const segs = Math.round(gap / fillMax);
+        for (let k = 1; k < segs; k++) {
+          let t = end + (gap * k / segs);
+          t = snapToOnset(t, 0.14);                                // CHANGE 4: land on a real onset / the grid, not free-floating
+          const lane = (typeof a.lane === 'number') ? a.lane : laneBase;   // same lane as the note before — a natural continuation
+          fillers.push({ time: t, strength: 0.85, lane: lane, type: 'tap', hold: 0, spin: (Math.floor(t * 97.3 + k * 13) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _fill: true });
+        }
       }
     }
     if (fillers.length) { notes.push(...fillers); notes.sort((a, b) => a.time - b.time); }
+    // ---- EASY MAX-SILENCE GUARD (v253, research-backed: "Easy too blank — moments with no notes coming down") ----
+    // Easy intentionally skips the generic gap-fill above (fillMax=Infinity), which left genuinely blank stretches in
+    // quiet passages. Dead air reads as a bug to a beginner. So GUARANTEE a continuous, gentle, on-beat pulse: walk the
+    // merged stream and wherever the gap to the next note still exceeds MAXSIL (~1.2s), inject whole-beat-grid taps on the
+    // PREVIOUS lane (lane-stable, maxJump-0 — reads as the song's steady pulse, never random). This is the SINGLE source of
+    // these taps (runs after the merge → no double-fill) and stays well under npsCap (only fires in >1.2s silences). Re-sort
+    // after inserts — hit-detection's early-break assumes ascending time. Density floor only; the ceiling (npsCap 2) is untouched.
+    if (difficulty === 'easy') {
+      const MAXSIL = 1.2;
+      const perE = beats._period || 0, phE = beats._phase || 0, subE = perE > 0 ? perE : 0.5;   // whole-beat backbone
+      const guard = [];
+      // v258: also fill the HEAD silence (song-start → first note). The inter-note loop below never covers the lead-in, so a
+      // track with a late first onset still showed dead air at the very top on Easy (the original "too blank" complaint).
+      if (notes.length && notes[0].time > MAXSIL) {
+        const hb = notes[0], hsegs = Math.ceil(hb.time / MAXSIL);
+        for (let k = 1; k < hsegs; k++) {
+          let t = hb.time * k / hsegs;
+          if (perE > 0) { const g = phE + Math.round((t - phE) / subE) * subE; if (g > 0.10 && g < hb.time - 0.10) t = g; }
+          t = Math.round(t * 1000) / 1000;
+          const lane = (typeof hb.lane === 'number') ? hb.lane : laneBase;
+          guard.push({ time: t, strength: 0.8, lane: lane, type: 'tap', hold: 0, spin: (Math.floor(t * 53.1 + k * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _fill: true });
+        }
+      }
+      for (let i = 0; i < notes.length - 1; i++) {
+        const a = notes[i], b = notes[i + 1];
+        if (a.type === 'bomb') continue;
+        const end = a.time + (a.type === 'hold' ? a.hold : 0);
+        const gap = b.time - end;
+        if (gap <= MAXSIL) continue;
+        const segs = Math.ceil(gap / MAXSIL);                    // keep every resulting sub-gap <= MAXSIL
+        for (let k = 1; k < segs; k++) {
+          let t = end + (gap * k / segs);
+          if (perE > 0) { const g = phE + Math.round((t - phE) / subE) * subE; if (g > end + 0.10 && g < b.time - 0.10) t = g; }   // snap to the whole beat
+          t = Math.round(t * 1000) / 1000;
+          const lane = (typeof a.lane === 'number') ? a.lane : laneBase;
+          guard.push({ time: t, strength: 0.8, lane: lane, type: 'tap', hold: 0, spin: (Math.floor(t * 53.1 + k * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _fill: true });
+        }
+      }
+      if (guard.length) { notes.push(...guard); notes.sort((a, b) => a.time - b.time); fillers.push(...guard); }   // fillers[] feeds __rrChartStats.fillers for verification
+    }
     // build36: per-level MIRROR mod — flip every note onto the opposite lane. Done LAST (after all
     // inserts + the final sort); a lane remap doesn't change time order. Input/render lane mapping is
     // untouched, so the chart simply plays mirrored. .map() reassigns each note's chordLanes to a fresh
@@ -1117,7 +1579,43 @@
         fillers: fillers.length,
         noteVariety: noteVariety,
         lanesUsed: [...new Set(notes.map(n => n.lane))].sort((a, b) => a - b),
-        difficulty: difficulty
+        difficulty: difficulty,
+        chartMode: chartMode,
+        bpm: (beats && beats._bpm) || null,
+        // CHANGE 1 — onGridPct: fraction of scored notes whose time lands within per·0.06 of a tempo grid line. Notes are
+        // snapped to the SUB-grid (quarter-beats on Med/Hard, eighth-notes feel on Easy), so "a grid line" is a sub-grid
+        // line — a note on beat+½ is still on-grid. The whole point of beat-quantization; want > 0.75. Null when no tempo.
+        onGridPct: (function () {
+          const per = (beats && beats._period) || 0, ph = (beats && beats._phase) || 0;
+          if (!(per > 0)) return null;
+          const sub = per / (difficulty === 'easy' ? 2 : 4);
+          if (!(sub > 0)) return null;
+          const scored = notes.filter(n => n.type !== 'bomb');
+          if (!scored.length) return null;
+          const tol = per * 0.06;
+          let on = 0;
+          for (const n of scored) { const r = (((n.time - ph) % sub) + sub) % sub; if (r <= tol || r >= sub - tol) on++; }
+          return Math.round(on / scored.length * 1000) / 1000;
+        })(),
+        period: (beats && beats._period) ? Math.round(beats._period * 1000) / 1000 : null,
+        // CHANGE 3c — peakNps: the busiest 1-second window (max scored notes). The NPS cap holds this down; this is the
+        // measurable "barrage" ceiling. Computed over scored (non-bomb) notes.
+        peakNps: (function () {
+          const ts = notes.filter(n => n.type !== 'bomb').map(n => n.time).sort((a, b) => a - b);
+          let pk = 0; for (let i = 0; i < ts.length; i++) { let j = i, c = 0; while (j < ts.length && ts[j] < ts[i] + 1.0) { c++; j++; } if (c > pk) pk = c; }
+          return pk;
+        })(),
+        laneHist: (function () { const h = {}; for (const n of notes) if (typeof n.lane === 'number') h[n.lane] = (h[n.lane] || 0) + 1; return h; })(),
+        // proof the lanes follow the music: Pearson r between each musical note's source brightness (centroid) and its lane.
+        centroidLaneR: (function () {
+          const ps = notes.filter(n => typeof n._centroid === 'number' && typeof n.lane === 'number');
+          if (ps.length < 8) return null;
+          const n = ps.length; let sx = 0, sy = 0, sxy = 0, sxx = 0, syy = 0;
+          for (const p of ps) { const x = p._centroid, y = p.lane; sx += x; sy += y; sxy += x * y; sxx += x * x; syy += y * y; }
+          const cov = sxy - sx * sy / n, vx = sxx - sx * sx / n, vy = syy - sy * sy / n;
+          return (vx > 0 && vy > 0) ? Math.round(cov / Math.sqrt(vx * vy) * 1000) / 1000 : null;
+        })(),
+        durationSec: (notes.length ? Math.round(notes[notes.length - 1].time) : 0)
       };
     } catch (e) {}
   }
@@ -1159,10 +1657,9 @@
       const arr = await fetchAudio(src);
       setLoading('Decoding waveform', 25);
       const ac = new (window.AudioContext || window.webkitAudioContext)();
-      cachedBuffer = await ac.decodeAudioData(arr);
-      ac.close();
+      try { cachedBuffer = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // build65 (cycle-4): always release the throwaway decode context, even on a decode reject (Chromium ~6-context cap)
     }
-    const analyzed = await analyzeBeats(cachedBuffer);
+    const analyzed = await analyzeChart(cachedBuffer);
     return {
       beats: analyzed,
       duration: cachedBuffer.duration,
@@ -1186,11 +1683,10 @@
       const arr = await fetchAudio(url, { mode: 'cors' });
       setLoading('Decoding waveform', 25);
       const ac = new (window.AudioContext || window.webkitAudioContext)();
-      buf = await ac.decodeAudioData(arr);
-      try { ac.close(); } catch (e) {}
+      try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // build65 (cycle-4): ALWAYS release the throwaway decode context, even when decodeAudioData REJECTS (a corrupt/retried track would otherwise leak a context every attempt → Chromium's ~6-context cap silently kills all audio)
       lastDecoded = { url: url, buf: buf };
     }
-    const beats = await analyzeBeats(buf);
+    const beats = await analyzeChart(buf);
     return {
       beats: beats,
       duration: buf.duration,
@@ -1201,9 +1697,13 @@
     };
   }
 
+  // build66 (launch-audit, predicted-bug): OfflineAudioContext webkit fallback. Older iOS Safari (<14.1) + some in-app WebViews
+  // expose ONLY webkitOfflineAudioContext — without this alias BOTH in-browser charters threw on the bare global, so EVERY live
+  // track failed with "Could not start this track". (analyzeMusical's catch already falls back to a synthetic grid on total absence.)
+  var OfflineAC = (typeof window !== 'undefined' && (window.OfflineAudioContext || window.webkitOfflineAudioContext)) || null;
   async function analyzeBeats(buf) {
     setLoading('Filtering bass spectrum', 45);
-    const offline = new OfflineAudioContext(1, buf.length, buf.sampleRate);
+    const offline = new OfflineAC(1, buf.length, buf.sampleRate);
     const src = offline.createBufferSource(); src.buffer = buf;
     const filter = offline.createBiquadFilter();
     filter.type = 'lowpass'; filter.frequency.value = 200; filter.Q.value = 1.0;
@@ -1251,10 +1751,10 @@
         if (med > 0.15 && med < 1.2) spacing = Math.max(0.3, Math.min(0.6, med));
       }
       const grid = [];
-      for (let t = 0.6; t < duration - 0.4; t += spacing) {
+      for (let t = 0.3; t < Math.max(duration - 0.2, 0.8); t += spacing) {   // build65 (cycle-4): clamp bounds so even a sub-1s clip yields a grid (was 0 beats when duration<1.0 → empty chart → "No beats in chart")
         grid.push({ t: Math.round(t * 1000) / 1000, strength: (grid.length % 4 === 0) ? 1.6 : 1.0 });
       }
-      if (grid.length > out.length) {
+      if (grid.length >= out.length) {   // build65 (cycle-4): >= so an all-empty onset case (out.length 0) still returns the non-empty grid
         try { console.warn('[rr] analyzeBeats: sparse onsets (' + out.length + ') — synthetic ' + spacing.toFixed(2) + 's grid (' + grid.length + ' beats) so the track still plays'); } catch (e) {}
         setLoading('Mapping note glyphs', 92);
         return grid;
@@ -1263,6 +1763,151 @@
     setLoading('Mapping note glyphs', 92);
     return out;
   }
+
+  // ===========================================================================
+  // MUSICAL CHARTER (build57) — the "play the song" analyzer.
+  // The classic analyzeBeats() only lowpasses to 200 Hz, so it hears KICKS ONLY and places notes on
+  // arbitrary (hashed) lanes — it doesn't reflect the snare/hats/melody you hear, and the lane motion
+  // is random. analyzeMusical() instead splits the track into LANE_COUNT log-spaced frequency bands
+  // (one offline render via a ChannelMerger), measures each band's energy envelope, and:
+  //   • ONSETS = peaks in the BROADBAND spectral flux (sum of positive per-band energy rises) → it
+  //     catches the whole mix (kick + snare + hats + melodic transients), not just the low end.
+  //   • Each onset carries a CENTROID = the energy-weighted log-frequency center at that instant,
+  //     normalized 0..1 (0 = bass, 1 = treble). buildNotes maps centroid → lane, so the playing hand
+  //     RIDES THE MELODY: low/bass hits land on low strings, bright/melodic hits climb to high strings.
+  //   • A gentle tempo autocorrelation marks beat-grid hits (downbeats) so accents land musically.
+  // Falls back to a synthetic grid on near-silent tracks (same guarantee as analyzeBeats: never dead).
+  async function analyzeMusical(buf) {
+    const NB = Math.max(3, LANE_COUNT);             // bands ≈ lanes (5 for GH profile)
+    setLoading('Splitting frequency bands', 42);
+    let rendered;
+    try {
+      const off = new OfflineAC(NB, buf.length, buf.sampleRate);
+      const src = off.createBufferSource(); src.buffer = buf;
+      const merger = off.createChannelMerger(NB);
+      const fMin = 45, fMax = Math.min(15000, buf.sampleRate * 0.46);
+      const edges = []; for (let b = 0; b <= NB; b++) edges.push(fMin * Math.pow(fMax / fMin, b / NB));  // log-spaced
+      for (let b = 0; b < NB; b++) {
+        const hp = off.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = edges[b];     hp.Q.value = 0.7;
+        const lp = off.createBiquadFilter(); lp.type = 'lowpass';  lp.frequency.value = edges[b + 1]; lp.Q.value = 0.7;
+        src.connect(hp); hp.connect(lp); lp.connect(merger, 0, b);
+      }
+      merger.connect(off.destination); src.start();
+      rendered = await off.startRendering();
+      // stash the band edges on the result for the centroid pass below
+      rendered._edges = edges; rendered._fMin = fMin; rendered._fMax = fMax;
+    } catch (e) {
+      try { console.warn('[rr] analyzeMusical: filterbank render failed → classic analyzer', e); } catch (e2) {}
+      return analyzeBeats(buf);                     // hard fallback — never leave a track unplayable
+    }
+    setLoading('Reading the groove', 66);
+    const sr = rendered.sampleRate;
+    const hop = Math.max(64, Math.floor(sr * 0.011));   // ~11 ms frames (tighter than classic's 23 ms)
+    const nF = Math.floor(rendered.length / hop);
+    if (nF < 8) return analyzeBeats(buf);
+    const edges = rendered._edges, fMin = rendered._fMin, fMax = rendered._fMax;
+    const logMin = Math.log(fMin), logMax = Math.log(fMax);
+    const bandLog = []; for (let b = 0; b < NB; b++) bandLog.push(Math.log(Math.sqrt(edges[b] * edges[b + 1])));
+    // per-band RMS envelopes
+    const env = [];
+    for (let b = 0; b < NB; b++) {
+      const d = rendered.getChannelData(b), e = new Float32Array(nF);
+      for (let f = 0; f < nF; f++) { let s = 0, i0 = f * hop; for (let j = 0; j < hop; j++) { const v = d[i0 + j] || 0; s += v * v; } e[f] = Math.sqrt(s / hop); }
+      env.push(e);
+    }
+    // broadband spectral flux (sum of positive per-band rises) = the onset novelty curve
+    const nov = new Float32Array(nF);
+    for (let f = 1; f < nF; f++) { let s = 0; for (let b = 0; b < NB; b++) { const d = env[b][f] - env[b][f - 1]; if (d > 0) s += d; } nov[f] = s; }
+    const secPerF = hop / sr;
+    // adaptive peak-pick on the novelty curve
+    const look = Math.max(4, Math.round(0.13 / secPerF));     // ~130 ms running-mean lookback
+    const minGapF = Math.max(2, Math.round(0.075 / secPerF)); // ≥75 ms between onsets
+    // CHANGE 7 — onset SELECTIVITY: a stricter novelty threshold (1.8× the running mean, was 1.55×) so only
+    // clear transients chart — fewer "ghost" onsets in busy passages → a more readable chart that tracks the
+    // song's real hits. We also require the peak to clear an absolute floor (10% of the loudest onset) so faint
+    // texture doesn't become a note. To never starve a sparse/quiet track, the pass auto-FALLS BACK to the old
+    // 1.55× (with no abs floor) if 1.8× yields fewer than the MIN_BEATS playability floor.
+    let novMax = 0; for (let f = 0; f < nF; f++) if (nov[f] > novMax) novMax = nov[f];
+    const durationEst = buf.duration || rendered.length / sr;
+    const MIN_BEATS_FLOOR = Math.max(8, Math.floor(durationEst * 0.5));
+    // one peak-pick pass at a given novelty multiplier + absolute floor → returns the onset list
+    function pickOnsets(novMul, absFloor) {
+      const res = [];
+      let lastF = -999;
+      for (let f = 2; f < nF - 1; f++) {
+        let mean = 0, cnt = 0; for (let k = Math.max(0, f - look); k < f; k++) { mean += nov[k]; cnt++; } mean = cnt ? mean / cnt : 0;
+        if (nov[f] > mean * novMul && nov[f] > 1e-4 && nov[f] >= absFloor && nov[f] >= nov[f - 1] && nov[f] >= nov[f + 1] && (f - lastF) >= minGapF) {
+          // build58 charter-v2: weight the centroid by each band's FLUX (the positive rise that fired THIS onset), averaged
+          // over ±1 frame, so the lane reflects WHICH band struck — a hi-hat reads high even over a sustained bass, where the
+          // old total-energy centroid pulled it low. Falls back to total energy when there's no clear rise (steady passage).
+          const rise = []; let fnum = 0, fden = 0, maxr = 0;
+          for (let b = 0; b < NB; b++) {
+            let r = 0; for (let w = -1; w <= 1; w++) { const ff = f + w; if (ff > 0 && ff < nF) r += Math.max(0, env[b][ff] - env[b][ff - 1]); }
+            r /= 3; rise.push(r); fnum += bandLog[b] * r; fden += r; if (r > maxr) maxr = r;
+          }
+          let cl;
+          if (fden > 1e-5) cl = fnum / fden;
+          else { let num = 0, den = 0; for (let b = 0; b < NB; b++) { const e = env[b][f]; num += bandLog[b] * e; den += e; } cl = den > 0 ? num / den : (logMin + logMax) / 2; }
+          const centroid = Math.max(0, Math.min(1, (cl - logMin) / (logMax - logMin)));
+          const hotBands = []; if (maxr > 1e-5) for (let b = 0; b < NB; b++) if (rise[b] >= 0.45 * maxr) hotBands.push(b);   // bands that co-fired → a real stacked-frequency CHORD moment
+          let domB = 0, domV = -1; for (let b = 0; b < NB; b++) if (env[b][f] > domV) { domV = env[b][f]; domB = b; }            // dominant band → measure its sustain for true HOLD detection
+          let sus = 0; const sthr = domV * 0.5, smax = f + Math.round(1.8 / secPerF);
+          for (let g = f + 1; g < nF && g < smax; g++) { if (env[domB][g] >= sthr) sus = (g - f) * secPerF; else break; }
+          let eTot = 0; for (let b = 0; b < NB; b++) eTot += env[b][f];                                                          // local energy → section-aware density
+          res.push({ t: Math.round((f * hop / sr) * 1000) / 1000, strength: Math.round(Math.min(3, nov[f] / (mean + 1e-4)) * 100) / 100, centroid: centroid, hotBands: hotBands, sustain: Math.round(sus * 100) / 100, energy: eTot });
+          lastF = f;
+        }
+      }
+      return res;
+    }
+    let out = pickOnsets(1.8, 0.10 * novMax);
+    if (out.length < MIN_BEATS_FLOOR) out = pickOnsets(1.55, 0);   // sparse/quiet track → relax to the original sensitivity
+    // gentle tempo: autocorrelate the novelty to find a beat period, then phase-align a grid and mark
+    // the on-beat onsets (used for accent emphasis only — NOT hard time-quantization, so groove is kept).
+    try {
+      let bestLag = 0, bestScore = 0;
+      const loLag = Math.round(0.34 / secPerF), hiLag = Math.round(0.86 / secPerF);   // ~70–176 BPM
+      for (let lag = loLag; lag <= hiLag && lag < nF; lag++) {
+        let s = 0; for (let f = lag; f < nF; f++) s += nov[f] * nov[f - lag];
+        if (s > bestScore) { bestScore = s; bestLag = lag; }
+      }
+      if (bestLag > 0 && out.length) {
+        const period = bestLag * secPerF;
+        // phase = beat offset that best lines up with detected onsets
+        let bestPhase = 0, bestHits = -1;
+        for (let p = 0; p < 12; p++) {
+          const ph = (p / 12) * period; let hits = 0;
+          for (const o of out) { const r = ((o.t - ph) % period + period) % period; if (r < 0.06 || r > period - 0.06) hits++; }
+          if (hits > bestHits) { bestHits = hits; bestPhase = ph; }
+        }
+        for (const o of out) {
+          const beats = (o.t - bestPhase) / period;
+          const nearest = Math.round(beats);
+          if (Math.abs(beats - nearest) < 0.12) { o.onGrid = true; if (((nearest % 4) + 4) % 4 === 0) o.downbeat = true; }
+        }
+        out._bpm = Math.round(60 / period);
+        // CHANGE 1 — expose the tempo grid so buildNotes can SNAP note times to the pulse (the analyzer only
+        // tagged onGrid/downbeat before; it never moved a note, so every note sat ±10–40 ms off-beat → the chart
+        // read as a "barrage" that didn't lock to the song). Stash period + phase next to _bpm.
+        out._period = period; out._phase = bestPhase;
+      }
+    } catch (e) {}
+    const duration = buf.duration || rendered.length / sr;
+    const MIN_BEATS = Math.max(8, Math.floor(duration * 0.5));
+    if (out.length < MIN_BEATS) {
+      // near-silent / undetectable → synthetic grid with a rolling centroid so lanes still move
+      let spacing = 0.5;
+      if (out.length >= 4) { const g = []; for (let i = 1; i < out.length; i++) g.push(out[i].t - out[i - 1].t); g.sort((a, b) => a - b); const m = g[g.length >> 1]; if (m > 0.15 && m < 1.2) spacing = Math.max(0.3, Math.min(0.6, m)); }
+      const grid = [];
+      for (let t = 0.3; t < Math.max(duration - 0.2, 0.8); t += spacing) { const k = grid.length; grid.push({ t: Math.round(t * 1000) / 1000, strength: (k % 4 === 0) ? 1.6 : 1.0, centroid: (k % 5) / 4, onGrid: true, downbeat: (k % 4 === 0) }); }   // build65 (cycle-4): clamp bounds for sub-1s clips
+      if (grid.length >= out.length) { try { console.warn('[rr] analyzeMusical: sparse onsets (' + out.length + ') — synthetic grid (' + grid.length + ')'); } catch (e) {} setLoading('Mapping note glyphs', 92); return grid; }   // build65 (cycle-4): >= so an empty-onset clip still returns the grid
+    }
+    setLoading('Mapping note glyphs', 92);
+    return out;
+  }
+
+  // pick the analyzer that matches the player's Chart Feel: 'musical' = the band/centroid charter, else classic.
+  function analyzeChart(buf) { return chartMode === 'musical' ? analyzeMusical(buf) : analyzeBeats(buf); }
 
   // ===========================================================================
   // GAME LIFECYCLE
@@ -1277,7 +1922,7 @@
       await beginPlay();
     } catch (e) {
       console.error(e);
-      showToast(e && e.message ? e.message : 'Could not start this track');
+      showToast(e && e.message ? e.message : 'Could not start this track', 'error');
       // don't eject an MP/tournament player to the menu on a decode/start failure — let the MP watchdog (abortRound)
       // recover them back to the bracket; only bail to menu in single-player.
       if (!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) showScreen('menu');
@@ -1286,18 +1931,37 @@
     }
   }
 
-  // lightweight branded toast for errors / notices
-  let _toastEl = null, _toastT = 0;
-  function showToast(msg) {
+  // Branded toast for errors / notices. Styles live in index.html as `.rr-toast` (severity
+  // variants via an in-palette accent: crimson=error, gold=success/reward, chrome=neutral).
+  // Back-compatible: showToast('msg') still works (defaults to neutral); callers can pass a
+  // severity ('error' | 'success' | 'neutral') as the 2nd arg. A tiny queue replaces the live
+  // toast gracefully so back-to-back messages don't clobber mid-fade (latest message wins, the
+  // hide timer resets). role=status + aria-live=polite so screen readers announce it.
+  const _TOAST_GLYPHS = {
+    error:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.51"/></svg>',
+    success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>',
+    neutral: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="7.5" x2="12" y2="7.51"/></svg>'
+  };
+  let _toastEl = null, _toastIco = null, _toastMsg = null, _toastT = 0;
+  function showToast(msg, severity) {
+    const sev = (severity === 'error' || severity === 'success' || severity === 'neutral') ? severity : 'neutral';
     if (!_toastEl) {
       _toastEl = document.createElement('div');
-      _toastEl.style.cssText = 'position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 28px);transform:translateX(-50%) translateY(20px);z-index:400;max-width:80%;padding:13px 20px;background:rgba(20,6,10,0.94);border:1px solid rgba(255,42,48,0.5);border-radius:14px;color:#f6eef0;font-family:\'JetBrains Mono\',monospace;font-size:12px;letter-spacing:0.04em;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.6),0 0 24px rgba(255,31,46,0.25);opacity:0;transition:opacity .2s ease,transform .2s ease;pointer-events:none;';
+      _toastEl.className = 'rr-toast';
+      _toastEl.setAttribute('role', 'status');
+      _toastEl.setAttribute('aria-live', 'polite');
+      _toastIco = document.createElement('span'); _toastIco.className = 'rr-toast-ico'; _toastIco.setAttribute('aria-hidden', 'true');
+      _toastMsg = document.createElement('span'); _toastMsg.className = 'rr-toast-msg';
+      _toastEl.appendChild(_toastIco); _toastEl.appendChild(_toastMsg);
       document.body.appendChild(_toastEl);
     }
-    _toastEl.textContent = msg;
-    requestAnimationFrame(() => { _toastEl.style.opacity = '1'; _toastEl.style.transform = 'translateX(-50%) translateY(0)'; });
+    _toastEl.classList.remove('sev-error', 'sev-success', 'sev-neutral');
+    _toastEl.classList.add('sev-' + sev);
+    _toastIco.innerHTML = _TOAST_GLYPHS[sev] || _TOAST_GLYPHS.neutral;
+    _toastMsg.textContent = msg;
+    requestAnimationFrame(() => { _toastEl.classList.add('show'); });
     clearTimeout(_toastT);
-    _toastT = setTimeout(() => { _toastEl.style.opacity = '0'; _toastEl.style.transform = 'translateX(-50%) translateY(20px)'; }, 3400);
+    _toastT = setTimeout(() => { _toastEl.classList.remove('show'); }, 3400);
   }
   window.RhythmGame = window.RhythmGame || {};
   window.RhythmGame.showToast = showToast;
@@ -1404,10 +2068,11 @@
     if (s && typeof s.sfx === 'number') { SFX_LEVEL = Math.max(0, Math.min(0.5, s.sfx)); }
     if (s && typeof s.failMode === 'boolean') failMode = s.failMode;
     if (s && (s.chartMode === 'classic' || s.chartMode === 'musical')) chartMode = s.chartMode;
+    if (s && (s.levelGuitar === 'mine' || s.levelGuitar === 'level')) levelGuitarPref = s.levelGuitar;   // "Guitar on Levels" — takes effect on next level launch
     if (s && FX_PRESETS[s.fxIntensity]) { fxIntensity = s.fxIntensity; Object.assign(JUICE, FX_PRESETS[fxIntensity]); try { localStorage.removeItem('rr_juice'); } catch (e) {} }   // picking a preset = clean reset to it
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, fxIntensity: fxIntensity })); } catch (e) {}
+    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, levelGuitar: levelGuitarPref, fxIntensity: fxIntensity })); } catch (e) {}
   };
-  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, fxIntensity: fxIntensity });
+  window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, levelGuitar: levelGuitarPref, fxIntensity: fxIntensity });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }
   applyReduceMotion();
   // performance background: hide + pause the moon video (kills its compositing cost so the
@@ -1425,11 +2090,13 @@
     } catch (e) {}
   }
   applyBgMode();
-  // keep the in-game footer hint in sync with the (remappable) lane keys
+  // keep the in-game footer hint AND the How-to-Play key legend in sync with the (remappable) lane keys.
+  // build70 (launch-audit P3): #howto-keys was hardcoded A S D J K and never reflected a remap — route it
+  // through the same source of truth so both update on boot, lane-profile change, every rebind, and reset.
   function updateFooterHint() {
-    const el = document.getElementById('footer-keys'); if (!el) return;
     let h = ''; for (let l = 0; l < LANE_COUNT; l++) { const k = keyForLane(l); h += '<kbd>' + (k ? (k === ' ' ? '␣' : k.toUpperCase()) : '—') + '</kbd>'; }
-    el.innerHTML = h;
+    const fe = document.getElementById('footer-keys'); if (fe) fe.innerHTML = h;
+    const he = document.getElementById('howto-keys'); if (he) he.innerHTML = h;
   }
   updateFooterHint();
 
@@ -1457,7 +2124,7 @@
   })();
 
   function resetScoring() {
-    score = 0; combo = 0; maxCombo = 0; scoreDisplay = 0; runFailed = false;
+    score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 };
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
@@ -1468,24 +2135,31 @@
     missFlash = 0; wipeoutT = 0; stringsCold = 0; missTimes = []; lastWipeout = -9;
     laneDesat = Array(LANE_COUNT).fill(0); catcherRecoil = Array(LANE_COUNT).fill(0);
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
-    laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null);
+    laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null); _mpStunUntil = 0;
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
     odActive = false; odTimer = 0; lastMult = 1; odReadyAnnounced = false;
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
   }
 
+  let _playGen = 0;   // build57: launch-generation token — a newer beginPlay() invalidates older ones (see guards below)
   async function beginPlay() {
     // build35 (audit P1): make (re)launch idempotent — stop any in-flight run FIRST so a second
     // play() / double-tap / future MP click can't spawn a SECOND self-perpetuating rAF + scoring loop
     // (double scoring + overlapping audio). stopGame() cancels the live rafId and stops the player.
     stopGame();
+    // build57: tag THIS launch. The session build + prepare + countdown below are all awaited, and a
+    // second launch during any of them tears down `player`/state — a stale beginPlay resuming would then
+    // crash on `player.onended` (null) or, worse, arm onended + start a SECOND loop on the new player.
+    // Bail at each await boundary if a newer launch superseded us.
+    const myGen = ++_playGen;
     // (re)build session — fresh play_token + player each attempt (live anti-cheat)
     session = await provider();
+    if (myGen !== _playGen) return;        // superseded while fetching/decoding/charting
     beats = session.beats || [];
     songDuration = session.duration || 0;
     player = session.player;
-    if (!beats.length) throw new Error('No beats in chart');
+    if (!beats.length) throw new Error('This track could not be charted — try another');   // build72: player-facing (was the dev string "No beats in chart" shown verbatim in the launch-fail toast)
 
     buildNotes();
     resetScoring();
@@ -1513,17 +2187,45 @@
     setTimeout(() => { resize(); layoutTapZones(); }, 60);
 
     await player.prepare();
+    if (myGen !== _playGen || !player) return;   // superseded during prepare
+    // build64 (user request): let the level backdrop / journey ANIMATE IN before anything starts. The .rr-cine entrance zoom
+    // (~2.7s, armed above) + the journey loop are easing in right here; hold ~2s so the player is never hit with notes over a
+    // still-animating screen. SYNC-SAFE: audio AND the note-spawn clock both anchor on player.play() below, so delaying the
+    // countdown + play shifts BOTH together with zero drift (no offset math). Single-player only — skipped in MP so the
+    // cross-peer round start isn't thrown off. The gen-guard after it is mandatory (a level exit/relaunch during the 2s
+    // buffer would otherwise orphan a second loop / double audio).
+    if (!reduceMotion && !(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (myGen !== _playGen || !player) return;
+    }
     await runCountdown();
+    if (myGen !== _playGen || !player) return;   // superseded during the 3·2·1 countdown (the common case)
 
     player.onended = () => { if (state === 'playing') endGame(); };
     // re-arm audio: the countdown delay can let mobile browsers re-suspend the
     // context that the tap gesture unlocked, which would start the song silent.
     try { const ac = getAC(); if (ac.state === 'suspended') await ac.resume(); } catch (e) {}
+    if (myGen !== _playGen || !player) return;   // build57: the resume() above can await (suspended ctx, mobile) — re-check before play()/loop() so a superseded launch can't orphan a second self-re-arming loop / double-play audio
     muteUntil = -1; curGain = 1; applyGate();
-    player.play();
-    state = 'playing';
-    lastFrame = performance.now();
-    loop();
+    // build65 (cycle-4 FIX): the actual run-start, as a thunk. If a pause landed DURING the lead-in / 3·2·1 pre-roll (Esc /
+    // mobile pause / window-blur / tab-hide all set state='paused' while we were awaiting the 2s buffer + countdown), do NOT
+    // force the song to start behind the now-stuck PAUSED overlay — stash the start and let resumeGame() run it on resume.
+    const _go = () => {
+      player.play();
+      state = 'playing';
+      try { window.RhythmProcBg && window.RhythmProcBg.play(); } catch (e) {}   // build66: drive the procedural reactive backdrop in lockstep (covers the deferred pre-roll resume too)
+      // telemetry: song_start — the run actually begins (audio + chart playing). NON-PII (track id + difficulty only).
+      try {
+        if (window.RhythmTelemetry && window.RhythmTelemetry.event) {
+          var _tid = (session && (session.trackId || (session.meta && session.meta.id))) || null;
+          window.RhythmTelemetry.event('song_start', { trackId: _tid, difficulty: difficulty, boss: !!bossMode });
+        }
+      } catch (e) {}
+      lastFrame = performance.now();
+      loop();
+    };
+    if (state === 'paused') { _deferredStart = _go; return; }
+    _go();
   }
 
   async function runCountdown() {
@@ -1539,9 +2241,15 @@
 
   function stopGame() {
     state = 'menu';
+    try { window.RhythmProcBg && window.RhythmProcBg.stop(); } catch (e) {}   // build66: idle the reactive backdrop on quit / song-end
+    _deferredStart = null;   // build65 (cycle-4): drop any pre-roll deferred-start so a quit during a paused pre-roll can't fire it later
     if (player) { try { player.onended = null; player.stop(); } catch (e) {} player = null; }
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    // v258: clear any pending MP-combat stun so a veil + dangling hide-timer can't linger past teardown (resetScoring
+    // also zeroes _mpStunUntil before the next play; this is the exit-mid-stun belt-and-suspenders).
+    clearTimeout(_stunHideT); _stunHideT = 0; _mpStunUntil = 0;
+    try { const _se = document.getElementById('mp-stun'); if (_se) { _se.classList.remove('show'); _se.setAttribute('aria-hidden', 'true'); } } catch (e) {}
   }
 
   function restartGame() { stopGame(); beginPlay(); }
@@ -1569,9 +2277,10 @@
     const accFrac = total > 0
       ? (counts.perfect * 1.0 + counts.great * 0.85 + counts.good * 0.5) / total : 0;
     const accPct = accFrac * 100;
+    const accShown = Math.round(accPct * 10) / 10;   // build71: grade off the DISPLAYED (1-dp) accuracy so a 94.97% run can't print "95.0%" next to an A — the screen shows accShown, so the grade must derive from it too
     let grade = 'D';
-    if (accPct >= 95) grade = 'S'; else if (accPct >= 88) grade = 'A';
-    else if (accPct >= 75) grade = 'B'; else if (accPct >= 60) grade = 'C';
+    if (accShown >= 95) grade = 'S'; else if (accShown >= 88) grade = 'A';
+    else if (accShown >= 75) grade = 'B'; else if (accShown >= 60) grade = 'C';
 
     const results = {
       difficulty,
@@ -1588,7 +2297,7 @@
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
 
-    renderResults(results, accPct, grade);
+    renderResults(results, accShown, grade);   // build71: show the same rounded accuracy the grade was computed from
     showScreen('results');
     if (runFailed) {
       const bl = $('results-blurb'); if (bl) bl.textContent = 'Signal lost — the stability meter collapsed. Recalibrate and run it back.';
@@ -1608,9 +2317,40 @@
     if (window.RhythmCatalog && window.RhythmCatalog.recordLocal) {
       try { window.RhythmCatalog.recordLocal(results); } catch (e) {}
     }
+    // recordLocal just set results._newBest/_gradeUp — pulse the SHARE button if this run is a brag.
+    try { if (!results.failed) pulseShareIfBrag(results, grade); } catch (e) {}
+
+    // telemetry: song_complete (finished) vs run_fail (Fail Mode ended early). NON-PII — ids/numbers only.
+    try {
+      if (window.RhythmTelemetry && window.RhythmTelemetry.event) {
+        var _tid2 = (session && (session.trackId || (session.meta && session.meta.id))) || null;
+        // build65: ENRICH for the "most-enjoyed song" + Six-Sigma backend views. song_start (the play count) already fires
+        // above; pairing it with these completion props yields completion-rate, accuracy/combo/grade distributions, FC-rate,
+        // and a per-mode cut — the core enjoyment signal. NON-PII (ids/enums/numbers only), fire-and-forget.
+        var _mpLive = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive());
+        var _mode = _mpLive ? 'mp' : (bossMode ? 'boss' : 'solo');
+        if (results.failed) {
+          window.RhythmTelemetry.event('run_fail', { trackId: _tid2, difficulty: results.difficulty, atPct: Math.round(accPct), maxCombo: results.max_combo, mode: _mode });
+        } else {
+          window.RhythmTelemetry.event('song_complete', {
+            trackId: _tid2, difficulty: results.difficulty, score: results.score,
+            accuracy: results.accuracy, fullCombo: !!results.full_combo,
+            maxCombo: results.max_combo, grade: results.grade,
+            notesHit: results.notes_hit, notesTotal: results.notes_total,
+            boss: !!results.boss, mode: _mode
+          });
+        }
+      }
+    } catch (e) {}
 
     // live submit (play_token round-trip) — handled by catalog layer (leaderboard only)
-    if (session && session.submit) {
+    // build65 (cycle-4): TIGHT (GH) timing feel uses tighter judgment windows than the leaderboard's bound (TIMING_PROFILES:
+    // perfFrac/greatFrac/comboStep differ), so its scores aren't comparable — route tight runs to LOCAL PRACTICE. The
+    // in-browser path already gated this; gating HERE also closes the SERVER-CHART (liveProvider) submit, which bypassed it.
+    // (recordLocal — per-song best + career — already ran above, so practice runs still count locally.)
+    if (timingFeel === 'tight') {
+      try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
+    } else if (session && session.submit) {
       try {
         const out = await session.submit(results);
         if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) {
@@ -1622,12 +2362,14 @@
 
   function renderResults(results, accPct, grade) {
     { const ge = $('results-grade'); ge.textContent = grade; ge.className = 'results-grade gr-' + (grade || 'D'); }   // tier class → color-coded grade (S=gold, A=crimson, …)
-    // star rating from accuracy — a quick visual read layered on the letter grade
-    { const starN = accPct >= 95 ? 5 : accPct >= 85 ? 4 : accPct >= 72 ? 3 : accPct >= 55 ? 2 : accPct >= 30 ? 1 : 0;
+    // star rating — ONE shared 3-star scale across the results screen AND the campaign cards (build58: was a 5-star accuracy
+    // curve that disagreed with the 3-star level cards, e.g. an A read 4/5 here but 3/3 on the card). S/A=3, B=2, C/D=1; a
+    // FAILED run = 0. The letter grade above carries the finer nuance.
+    { const starN = runFailed ? 0 : ((grade === 'S' || grade === 'A') ? 3 : (grade === 'B') ? 2 : 1);
       const sh = $('results-stars');
       if (sh) {
         sh.innerHTML = '';
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < 3; i++) {
           const st = document.createElement('span');
           st.className = 'rstar' + (i < starN ? ' on' : '');
           st.textContent = '★';
@@ -1667,25 +2409,73 @@
 
     // FULL COMBO badge (NEW BEST is added by the catalog layer after the save)
     const badges = $('results-badges'); if (badges) badges.innerHTML = results.full_combo ? '<span class="rbadge fc">Full Combo</span>' : '';
+    // reset the Bonus-Sparks line each render — the catalog layer (recordLocal) re-paints it for a COMPLETED
+    // run; a failed run leaves it cleared so a prior run's "+N BONUS SPARKS" can't linger on this screen.
+    { const rb = $('results-bonus'); if (rb) { rb.innerHTML = ''; rb.style.display = 'none'; } }
 
-    // remember for the Copy Score action
-    lastResults = { results, accPct, grade, track: tname, artist: tartist, diff: DIFFICULTY[difficulty].name };
+    // remember for the Share Score action — extend with everything the Share Card needs.
+    // (newBest/gradeUp are set on `results` by catalog.recordLocal, which runs AFTER this in
+    // endGame; since the share payload references the same `results` object, the share handler
+    // reads them live at click time.)
+    var _comboTierName = 'COMBO';
+    try { _comboTierName = COMBO_TIERS[comboTierIdx(results.max_combo || 0)].name; } catch (e) {}
+    var _guitar = { src: 'assets/guitar.png', name: 'Default' };
+    try {
+      if (window.RhythmGame && window.RhythmGame.getEquippedLoadout) _guitar = window.RhythmGame.getEquippedLoadout();
+      else if (window.RhythmGame && window.RhythmGame.getEquippedSkin) { var _s = window.RhythmGame.getEquippedSkin(); if (_s) _guitar = { src: _s, name: 'Custom' }; }
+    } catch (e) {}
+    var _cover = (session && session.meta && session.meta.artwork) ? session.meta.artwork : null;
+    lastResults = {
+      results, accPct, grade, track: tname, artist: tartist, diff: DIFFICULTY[difficulty].name,
+      cover: _cover, comboTierName: _comboTierName,
+      counts: { perfect: counts.perfect, great: counts.great, good: counts.good, miss: counts.miss },
+      guitarSrc: _guitar.src, guitarName: _guitar.name
+    };
+    // v253 (#84): ENCORE moment — a strong finish (S/A grade or a Full Combo) makes the crowd "want more". Sweep in the
+    // chant banner and turn PLAY AGAIN into the ENCORE call-to-action (pulsing) so the win begs for another performance.
+    // Reset to the plain state on a normal or failed run so it stays special.
+    try {
+      const encore = !results.failed && (grade === 'S' || grade === 'A' || !!results.full_combo);
+      const encEl = $('results-encore'), rep = $('results-replay');
+      if (encEl) { encEl.hidden = !encore; encEl.classList.toggle('show', encore); }
+      if (rep) { rep.textContent = encore ? '🎸 ENCORE' : 'PLAY AGAIN'; rep.classList.toggle('encore-armed', encore); }
+      // v255: the crowd cheers on an encore — play the optional cheer SFX (gated by mute + the SFX level; absent file = silent).
+      if (encore && !muted) {
+        // v259: prefer a real crowd-cheer.mp3 if it actually loaded; otherwise the procedural applause synth (no asset). + the sting.
+        try {
+          const _ch = $('encore-cheer');
+          if (_ch && _ch.readyState >= 2 && isFinite(_ch.duration) && _ch.duration > 0) { _ch.volume = Math.min(0.85, Math.max(0.35, SFX_LEVEL * 6)); _ch.currentTime = 0; _ch.play().catch(() => {}); }
+          else { playCheerSfx(); }
+        } catch (e) { try { playCheerSfx(); } catch (e2) {} }
+        try { playStingSfx('big'); } catch (e) {}
+      }
+    } catch (e) {}
     // build8c: celebratory burst over the card — confetti/fireworks (+ gradeup-flare when the badge lands)
     if (!results.failed) celebrateResults(accPct, grade);
   }
 
   // ---------- PAUSE ----------
+  let _deferredStart = null;   // build65 (cycle-4): a stashed run-start thunk, set when a pause lands during the lead-in/countdown pre-roll (before the song began); consumed by resumeGame() so we never force-start audio behind a stuck PAUSED overlay.
   function pauseGame() {
     if (state !== 'playing') return;
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
+    try { window.RhythmProcBg && window.RhythmProcBg.pause(); } catch (e) {}   // build66: freeze the reactive backdrop while paused
   }
+  // two-tap RESTART confirm state (wired on #restart-btn below) — declared here so resumeGame can disarm it
+  let _restartArmed = false;
+  let _disarmRestart = function () {};
   function resumeGame() {
     if (state !== 'paused') return;
+    _disarmRestart();
+    // build65 (cycle-4): a pause that landed during the pre-roll never started the song → START it now (player.resume()
+    // would be a no-op on a player that never played) instead of resuming.
+    if (_deferredStart) { var _f = _deferredStart; _deferredStart = null; $('pause-overlay').classList.remove('show'); _f(); return; }
     player.resume(); state = 'playing';
+    try { window.RhythmProcBg && window.RhythmProcBg.resume(); } catch (e) {}   // build66: resume the reactive backdrop
     $('pause-overlay').classList.remove('show');
     lastFrame = performance.now();
   }
-  function hidePause() { $('pause-overlay').classList.remove('show'); }
+  function hidePause() { _disarmRestart(); $('pause-overlay').classList.remove('show'); }
 
   // ---------- INPUT ----------
   function syncDiffButtons() {
@@ -1702,21 +2492,64 @@
   // restore the last-chosen difficulty so it sticks across sessions
   try { const d = localStorage.getItem('rr_diff'); if (d && DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); } } catch (e) {}
   $('resume-btn').addEventListener('click', resumeGame);
-  $('restart-btn').addEventListener('click', () => { hidePause(); restartGame(); });
-  $('exit-btn').addEventListener('click', () => { hidePause(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
+  // RESTART is gated behind a two-tap "tap again to restart" confirm so a stray click can't nuke a
+  // good run. Same arm idiom as RESET CAREER / RESET ALL SETTINGS. Disarms on resume/exit/timeout.
+  { const rsb = $('restart-btn'); if (rsb) {
+    const RESTART_LABEL = rsb.textContent || 'RESTART';
+    let restartArmT = 0;
+    _disarmRestart = () => { _restartArmed = false; rsb.textContent = RESTART_LABEL; rsb.classList.remove('arm'); clearTimeout(restartArmT); };
+    rsb.addEventListener('click', () => {
+      if (!_restartArmed) { _restartArmed = true; rsb.textContent = 'TAP AGAIN TO RESTART'; rsb.classList.add('arm'); clearTimeout(restartArmT); restartArmT = setTimeout(_disarmRestart, 3000); return; }
+      _disarmRestart(); hidePause(); restartGame();
+    });
+  } }
+  $('exit-btn').addEventListener('click', () => { _disarmRestart(); hidePause(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
   let lastResults = null;
   $('results-replay').addEventListener('click', () => { restartGame(); });
   $('results-menu').addEventListener('click', () => { stopGame(); showScreen('menu'); });
-  { const sb = $('results-share'); if (sb) sb.addEventListener('click', async () => {
+  // SHARE SCORE — the #1 marketing surface. Builds the branded "Signal Card" PNG and shares it
+  // (native share sheet WITH the image on mobile/Safari; a brand-styled fallback panel elsewhere).
+  // The blob is pre-baked synchronously enough to keep the click's transient activation alive.
+  { const sb = $('results-share'); if (sb) sb.addEventListener('click', () => {
     if (!lastResults) return;
-    const r = lastResults;
-    const line = '♪ ' + r.track + (r.artist ? ' — ' + r.artist : '') +
-      '\nReactive Rhythm · ' + r.diff +
-      '\nGrade ' + r.grade + ' · ' + r.results.score.toLocaleString() + ' pts · ' + r.accPct.toFixed(1) + '% · ' + r.results.max_combo + 'x' + (r.results.full_combo ? ' · FULL COMBO' : '');
-    try { await navigator.clipboard.writeText(line); sb.textContent = 'COPIED ✓'; }
-    catch (e) { sb.textContent = 'COPY FAILED'; }
-    setTimeout(() => { sb.textContent = 'COPY SCORE'; }, 1600);
+    const r = lastResults, res = r.results || {};
+    // map the engine's results object → the Share Card payload (newBest/gradeUp read live).
+    const payload = {
+      score: res.score, grade: r.grade, accuracy: res.accuracy, maxCombo: res.max_combo,   /* build65 (cycle-5): pass the raw 0..1 fraction (share.js normalizes once); r.accPct (0..100) made a sub-1% run read 100x inflated */
+      notesHit: res.notes_hit, notesTotal: res.notes_total, comboTierName: r.comboTierName,
+      full_combo: res.full_combo, newBest: !!res._newBest, gradeUp: !!res._gradeUp,
+      song: r.track, artist: r.artist, cover: r.cover, diff: r.diff, counts: r.counts,
+      guitarSrc: r.guitarSrc, guitarName: r.guitarName, kind: 'score'
+    };
+    if (!(window.RhythmShare && window.RhythmShare.shareScore)) {
+      // graceful fallback to the old clipboard line if share.js somehow didn't load
+      const line = '♪ ' + r.track + (r.artist ? ' — ' + r.artist : '') + '\nReactive Rhythm · ' + r.diff +
+        '\nGrade ' + r.grade + ' · ' + (res.score || 0).toLocaleString() + ' pts · ' + r.accPct.toFixed(1) + '% · ' + (res.max_combo || 0) + 'x' + (res.full_combo ? ' · FULL COMBO' : '');
+      try { navigator.clipboard.writeText(line); sb.textContent = 'COPIED ✓'; } catch (e) { sb.textContent = 'COPY FAILED'; }
+      setTimeout(() => { sb.innerHTML = '<span class="rs-share-glyph" aria-hidden="true">⤴</span> SHARE SCORE'; }, 1600);
+      return;
+    }
+    sb.classList.remove('share-pulse');
+    const reset = () => { sb.innerHTML = '<span class="rs-share-glyph" aria-hidden="true">⤴</span> SHARE SCORE'; };
+    sb.textContent = 'BUILDING…';
+    window.RhythmShare.shareScore(payload).then((outcome) => {
+      if (outcome === 'shared') sb.textContent = 'SHARED ✓';
+      else if (outcome === 'panel') sb.textContent = 'PICK A PLATFORM';
+      else if (outcome === 'error') sb.textContent = 'TRY AGAIN';
+      else reset();   // cancelled → straight back
+      if (outcome === 'shared' || outcome === 'panel' || outcome === 'error') setTimeout(reset, 1600);
+    }).catch(() => { sb.textContent = 'TRY AGAIN'; setTimeout(reset, 1600); });
   }); }
+  // celebratory nudge: a NEW BEST / FULL COMBO / grade-S run is worth showing off — pulse the
+  // SHARE button so the eye lands on it right after the grade reveal. (exposed for renderResults.)
+  function pulseShareIfBrag(results, grade) {
+    try {
+      const sb = $('results-share'); if (!sb || !results) return;
+      const brag = !!results.full_combo || grade === 'S' || !!results._newBest;
+      if (brag) { sb.classList.remove('share-pulse'); void sb.offsetWidth; sb.classList.add('share-pulse'); }
+      else sb.classList.remove('share-pulse');
+    } catch (e) {}
+  }
 
   // ---------- UNIFIED LANE INPUT (gameplay + Settings input-test probe) ----------
   // Every input source (touch / key / MIDI / gamepad) funnels through here, so the
@@ -1727,6 +2560,7 @@
   function onLaneInput(lane, source, evTime) {
     if (lane == null || lane < 0 || lane >= LANE_COUNT) return;
     if (laneProbe) { try { laneProbe(lane, source); } catch (e) {} }
+    if (performance.now() < _mpStunUntil) return;   // v254: MP combat — your inputs are shocked/dead for the stun window
     if (state === 'playing') handleHit(lane, evTime);
   }
   // lane physically released (key-up / pointer-up) — ends any active sustain in that lane
@@ -1739,7 +2573,7 @@
     const _tp = timingProf();
     const ct = Math.min(_tp.comboCap, 1 + Math.floor(combo / _tp.comboStep));
     const cap = _tp.comboCap + 1;                       // overdrive adds one tier above the base cap
-    return Math.min(odActive ? cap : _tp.comboCap, odActive ? ct + 1 : ct);
+    return Math.min(MAX_MULT, Math.min(odActive ? cap : _tp.comboCap, odActive ? ct + 1 : ct));   // v258: hard-clamp to MAX_MULT (=4) — the 'tight' profile's comboCap:5 + overdrive could reach 6× and bust the notes_total*1500 ceiling
   }
   // sustain reached its tail end while held — pay any remaining fraction + a release pop
   function completeHold(lane) {
@@ -1771,7 +2605,7 @@
       if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
-      combo = 0;
+      combo = 0; comboTierCur = 0;
       stability = Math.max(0, stability - 0.03);
       lanePluckT[lane] = 9;             // the string goes dead in this lane
       registerMissFx(lane);
@@ -1798,6 +2632,9 @@
       holding: () => holdNote.map((h, i) => h ? { lane: i, scored: +holdScored[i].toFixed(2) } : null).filter(Boolean),
       press: (lane) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now()); } },
       release: (lane) => onLaneRelease(lane),
+      // combo-tier dev hooks (stripped at content-freeze) — drive the ladder without a 500-streak run
+      setCombo: (n) => { combo = Math.max(0, n | 0); if (combo > maxCombo) maxCombo = combo; const nt = comboTierIdx(combo); if (nt > comboTierCur) { comboTierCur = nt; onComboTierUp(nt, 2); } else { comboTierCur = nt; } updateHUD(); const cd = document.getElementById('combo-display'); return { combo, tier: comboTierCur, name: COMBO_TIERS[comboTierCur].name, dataTier: cd && cd.getAttribute('data-tier'), numColor: cd && cd.style.getPropertyValue('--ct-num') }; },
+      comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive }),
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3) }),
@@ -1809,6 +2646,8 @@
       fxPt: (lane, d) => { try { return _lanePtPx(fretGeom(), lane == null ? 2 : lane, d == null ? 0.5 : d); } catch (e) { return 'ERR ' + e.message; } },
       fxDraw: () => { if (fx) { fx.draw(ctx, performance.now()); return (fx.active || []).length; } return -1; },
       tick: () => { try { loop(); return true; } catch (e) { return 'ERR ' + e.message; } },   // manual frame for frozen-rAF headless testing
+      hitBurst: (lane, kind) => { try { if (state !== 'playing') return 'not-playing'; spawnHitParticles(lane == null ? 2 : lane, kind || 'perfect'); return particles.length; } catch (e) { return 'ERR ' + e.message; } },   // build65: directly exercise the VFX-2.0 kit burst (headless verify; strip at freeze)
+      pcount: () => particles.length,
       // SKIN geometry dev hook (stripped at content-freeze): inspect the live note-lane fractions so a
       // per-skin SKIN_GEOM entry can be fine-tuned until the lanes sit on the painted strings.
       geom: () => { try { return { nutXF: ART.nutXF.slice(), bridgeXF: ART.bridgeXF.slice(), aspect: +(+ART.aspect).toFixed(4), nutFY: ART.nutFY, bridgeFY: ART.bridgeFY, equipped: equippedSkinSrc || null, levelSkin: _levelSkinActive }; } catch (e) { return 'ERR ' + e.message; } },
@@ -1860,7 +2699,9 @@
     zone.addEventListener('pointerdown', press, { passive: false });
     zone.addEventListener('pointerup', release);
     zone.addEventListener('pointercancel', release);
-    zone.addEventListener('pointerleave', release);
+    // build65 (cycle-3): pointerleave REMOVED — a finger drifting off a small lane button mid-sustain is NOT a lift, and
+    // touch pointers have implicit capture so pointerup still fires on this zone. The leave-release was dropping holds on
+    // thumb drift (worst on the narrow portrait lanes). pointerup + pointercancel still end the press on a real lift.
   });
 
   const odFlame = $('od-flame');
@@ -1928,6 +2769,9 @@
     }
     // results screen: keyboard flow so you can chain runs without the mouse
     if (state === 'results') {
+      // build65 FIX: a Career/Leaderboard/Settings/How-To overlay can open ON TOP of results WITHOUT changing `state`
+      // (it just adds .active) — don't let Enter (replay) / Escape fall through to the results buttons underneath it.
+      if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active')) return;
       if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
       else if (e.key === 'Escape') { e.preventDefault(); const b = $('results-menu'); if (b) b.click(); }
       return;
@@ -1936,7 +2780,8 @@
       if (e.key === 'Escape') { if (state === 'playing') pauseGame(); else resumeGame(); return; }
       // Space = activate Overdrive / Star Power (when charged). Restart lives in the pause menu now
       // (Space-to-restart was an accidental run-killer mid-song).
-      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat && state === 'playing') activateOverdrive(); return; }
+      // Space = Overdrive — UNLESS the player has rebound Space to a lane (then fall through to the lane hit below). build58
+      if (e.code === 'Space' && !(' ' in keyMap)) { e.preventDefault(); if (!e.repeat && state === 'playing') activateOverdrive(); return; }
     }
     if (state !== 'playing') return;
     // ignore OS key-repeat: only the first press judges; the key staying down drives the sustain
@@ -2036,7 +2881,7 @@
     // HAZARD: pressing a lane while a BOMB sits in its window penalizes — these are "don't hit".
     if (target.type === 'bomb') {
       target.judged = true; target.hit = 'bomb';
-      combo = 0; lastMult = 1;
+      combo = 0; comboTierCur = 0; lastMult = 1;
       stability = Math.max(0, stability - bossDrain(0.06));
       glitchAmount = Math.min(1, glitchAmount + 0.25);
       cameraShake = Math.max(cameraShake, 9);
@@ -2068,6 +2913,7 @@
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
       emitComboWave(lane, tier, combo % 100 === 0);             // build13: board-wide wave, not a bottom blob
       lightningT = Math.min(0.55, 0.3 + tier * 0.05);
+      comboGlow = 1;   // build64: flare the strings gold → white-hot on the milestone (cosmetic)
       scanT = scanDur = 0.42; scanTier = tier;   // combo-milestone scan sweep, brighter with the streak
       cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
       bgPulse = 1;
@@ -2078,10 +2924,13 @@
       // build8: level-fx combo milestone hook (Skully swaps to the intense backdrop). No-op when unset.
       try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, big); } catch (e) {}
     }
+    // combo TIER cross-up (HOT→BLAZE→GOLDEN→INFERNO→ASCENDANT) — fires after the
+    // milestone block so the named-mode flash headlines at 25/75/150/300/500.
+    { const _nt = comboTierIdx(combo); if (_nt > comboTierCur) { comboTierCur = _nt; onComboTierUp(_nt, lane); } }
     const _tpM = timingProf();
     const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _tpM.comboStep));
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
-    const mult = Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier);
+    const mult = Math.min(MAX_MULT, Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier));   // v258: hard-clamp to MAX_MULT (=4) — keep score within the per-note ceiling on every timing profile
     score += JUDGE[kind].score * mult;
     if (mult > lastMult) {
       // build19 (user screenshot: a big flame ring floating on the body "just looks out of place"):
@@ -2101,7 +2950,7 @@
     }
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
-    overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : 0.022)); // charge the meter
+    if (!odActive) overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : 0.022)); // charge the meter (no top-up while OD is live — the render loop force-drains it anyway; build58 makes the no-extend rule explicit)
     lanePluckT[lane] = 0;                 // pluck the string in this lane
     if (muteUntil > 0) { muteUntil = -1; applyGate(); }  // a clean hit recovers the music
     stability = Math.min(1.0, stability + 0.01);
@@ -2113,7 +2962,11 @@
       try { const _cg = fretGeom(); let _cx = 0; for (let _ci = 0; _ci < target.chordLanes.length; _ci++) _cx += _cg.nearX[target.chordLanes[_ci]] || 0;
         emitFx('chord', 'chord', lane, _cx / target.chordLanes.length, _cg.nearY); } catch (e) {}
     }
-    flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
+    // v253 (#92, GH feel): a judgment WORD on EVERY note spammed at speed (Hard ≈5/s). PERFECT is the common case and its
+    // white burst + crimson shockwave already read as "perfect", so the word is suppressed — the climbing combo counter +
+    // streak/tier headlines carry a clean run (true Guitar-Hero feel). GREAT/GOOD (you're slightly off — worth seeing) and
+    // MISS still flash. Streak/tier/Overdrive/HOLD/BOMB callouts call flashJudgment directly and are unaffected.
+    if (kind !== 'perfect') flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane);
     // a struck hold note becomes an active sustain — it keeps paying out (and the
@@ -2139,6 +2992,7 @@
       if (n.time > t + diff.hitWindow) break;
       n.judged = true; n.hit = 'great';
       counts.great++; combo++; if (combo > maxCombo) maxCombo = combo;
+      { const _nt = comboTierIdx(combo); if (_nt > comboTierCur) { comboTierCur = _nt; onComboTierUp(_nt, n.lane); } }
       score += JUDGE.great.score * curMult();
       laneHitPulse[n.lane] = 1.0; lanePluckT[n.lane] = 0;
       spawnHitParticles(n.lane, 'great');
@@ -2229,6 +3083,37 @@
   const THEME_AURA = { violet: 'skull-flame-violet', bone: 'ember-skull-loop', ember: 'ember-rise', crimson: 'ember-rise' };
   function _fxTheme() {
     try { const g = document.getElementById('game'); return (g && g.dataset && g.dataset.rrtheme) || ''; } catch (e) { return ''; }
+  }
+  // ═══ build65 — VFX 2.0: per-level HIT KITS ═══════════════════════════════════════════════════════════
+  // The OLD palette only swapped COLOR — blood / paw / spark all rendered as the same little dab, so every
+  // level's hit looked identical in motion (the user's "I see no difference between levels"). A KIT is a full
+  // IDENTITY: a distinct particle SHAPE, its own motion (rise / float / fall), gravity, additive-vs-solid blend,
+  // a fine sparkle DUST, and a lingering SETTLE element that gives the level its signature afterglow. Bursts also
+  // carry z/vz so a share of particles ERUPT TOWARD THE CAMERA (grow + fly down the neck) — the fake-3D "pop"
+  // that reads as depth on the perspective fretboard (the "2D → 3D / Paper-Mario→modern" leap the user asked for).
+  // shapes: ember | glint | wisp | shard | paw | glob      settle: ember | mote | wisp | smoke | heart | drip
+  // dir: -1 = burst fans UPWARD and rises; +1 = arcs then falls hard (blood). add: additive 'lighter' glow.
+  const _HIT_KITS = {
+    '':      { core:'255,238,208', prim:['255,72,60','255,150,84'],   ring:'255,84,86',  glow:'255,96,64',  shape:'ember', grav:0.50, dir:-1, add:true,  dust:'255,186,128', settle:'ember' },
+    crimson: { core:'255,238,208', prim:['255,72,60','255,150,84'],   ring:'255,84,86',  glow:'255,96,64',  shape:'ember', grav:0.50, dir:-1, add:true,  dust:'255,186,128', settle:'ember' },
+    ember:   { core:'255,226,172', prim:['255,142,52','255,92,30'],   ring:'255,152,72', glow:'255,124,52', shape:'ember', grav:0.45, dir:-1, add:true,  dust:'255,202,142', settle:'ember' },
+    gold:    { core:'255,247,216', prim:['255,212,112','255,172,62'], ring:'255,216,132',glow:'255,202,92', shape:'glint', grav:0.60, dir:-1, add:true,  dust:'255,238,182', settle:'mote'  },
+    violet:  { core:'245,233,255', prim:['184,104,255','222,184,255'],ring:'192,122,255',glow:'172,92,255', shape:'wisp',  grav:0.40, dir:-1, add:true,  dust:'226,206,255', settle:'wisp'  },
+    bone:    { core:'255,251,245', prim:['238,233,229','212,202,192'],ring:'238,233,229',glow:'255,172,92', shape:'shard', grav:1.05, dir:-1, add:false, dust:'246,241,235', settle:'smoke' },
+    pink:    { core:'255,238,246', prim:['255,98,164','255,152,202'], ring:'255,122,186',glow:'255,112,172', shape:'paw',   grav:0.32, dir:-1, add:true,  dust:'255,202,226', settle:'heart' },
+    chrome:  { core:'255,255,255', prim:['226,231,241','255,92,98'],  ring:'222,227,237',glow:'202,212,232', shape:'shard', grav:0.92, dir:-1, add:true,  dust:'236,241,251', settle:'smoke' },
+    // build66 (launch-audit): bespoke kits so the paid showcase levels stop sharing the plain ember kit (chosen via a level's fxKit field, decoupled from color theme)
+    seafoam: { core:'255,247,224', prim:['255,206,84','64,224,208'],  ring:'255,216,140',glow:'120,220,205', shape:'glint', grav:0.55, dir:-1, add:true,  dust:'235,245,238', settle:'mote'  },   // High Seas — gold coin-glint + aqua sea-spark
+    soul:    { core:'232,255,236', prim:['120,230,140','150,90,220'], ring:'140,235,160',glow:'110,210,150', shape:'wisp',  grav:0.40, dir:-1, add:true,  dust:'200,245,210', settle:'wisp'  },   // Deadkin — spectral carnival souls
+    neon:    { core:'255,236,250', prim:['255,40,170','190,60,255'],  ring:'255,80,190', glow:'235,70,200', shape:'shard', grav:0.70, dir:-1, add:true,  dust:'255,190,230', settle:'smoke' }    // Shorty-X — hot neon-magenta shards
+  };
+  const _BLOOD_KIT = { core:'255,126,124', prim:['154,22,26','98,10,14'], ring:'150,24,28', glow:'122,18,22', shape:'glob', grav:2.0, dir:1, add:false, dust:'124,20,24', settle:'drip' };
+  function _hitKit() {
+    try { if (document.body.classList.contains('rr-lens-horror')) return _BLOOD_KIT; } catch (e) {}
+    // build66 (launch-audit): a level can pick a bespoke hit kit (fxKit), decoupled from its color theme, so two ember-themed
+    // showcase levels don't share the plain ember kit. The level's fxKit wins; otherwise fall back to the theme kit.
+    try { if (_levelCtx && _levelCtx.fxKit && _HIT_KITS[_levelCtx.fxKit]) return _HIT_KITS[_levelCtx.fxKit]; } catch (e) {}
+    return _HIT_KITS[_fxTheme()] || _HIT_KITS[''];
   }
   // gameplay event 'type' -> additive layers [{name, mult}]; mult scales the manifest's per-effect scale
   function _fxLayers(type, kind) {
@@ -2413,6 +3298,47 @@
       ctx.fill();
     }
   }
+  // build65 (VFX 2.0): a soft heart glyph (Melody / pink "settle") — pairs with _drawPaw.
+  function _drawHeart(x, y, r, col) {
+    ctx.fillStyle = col; ctx.beginPath();
+    ctx.moveTo(x, y + r * 0.62);
+    ctx.bezierCurveTo(x + r, y - r * 0.2, x + r * 0.5, y - r, x, y - r * 0.32);
+    ctx.bezierCurveTo(x - r * 0.5, y - r, x - r, y - r * 0.2, x, y + r * 0.62);
+    ctx.closePath(); ctx.fill();
+  }
+  // build65 (VFX 2.0): cached additive GLOW sprite per color — drawImage a pre-rendered radial instead of
+  // building createRadialGradient every frame per particle. This is the big particle-perf win (FPS-safe at
+  // scale): the most common burst particle (embers/motes) becomes one cheap blit, not a fresh gradient.
+  const _glowCache = {};
+  function _glowSprite(rgb) {
+    if (_glowCache[rgb]) return _glowCache[rgb];
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(' + rgb + ',1)'); gr.addColorStop(0.42, 'rgba(' + rgb + ',0.5)'); gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(32, 32, 32, 0, Math.PI * 2); g.fill();
+    _glowCache[rgb] = c; return c;
+  }
+  // build65: HSV→RGB (0..1 hue) for the earned rainbow string shimmer at elite combo / Overdrive.
+  function _hsv(h, s, v) {
+    const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), u = v * (1 - (1 - f) * s);
+    let r, g, b;
+    switch (((i % 6) + 6) % 6) { case 0: r = v; g = u; b = p; break; case 1: r = q; g = v; b = p; break; case 2: r = p; g = v; b = u; break; case 3: r = p; g = q; b = v; break; case 4: r = u; g = p; b = v; break; default: r = v; g = p; b = q; }
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  }
+  // build65: COMBO-TIER string hue LADDER. The user found the steady yellow/crimson strings boring and wanted
+  // the strings to REWARD a streak (rainbow at a big combo). So the strings now visibly ESCALATE color as the
+  // streak climbs — crimson → orange → amber → white-gold → white-hot — and at a big combo (RAINBOW_COMBO, =150) OR Overdrive
+  // they bloom into a flowing per-lane SPECTRAL RAINBOW (the earned payoff). Brand stays crimson at baseline;
+  // the rainbow is gated to elite play so it reads as "you earned this," not as off-brand chrome. Cosmetic only.
+  function _comboTierTint(i, tNow) {
+    const c = combo;
+    if (odActive || c >= RAINBOW_COMBO) { var _ph = (((reduceMotion ? 0 : tNow * 0.16)) + i / Math.max(1, LANE_COUNT)) % 1; var rgb = _hsv((0.90 + _ph * 0.25) % 1, 0.85, 1); return { r: rgb[0], g: rgb[1], b: rgb[2], k: 0.82 }; }   // build65: WARM-BIASED rainbow (pink→red→orange→gold→yellow) — vibrant + multicolor but skips blue/green/purple per the hard brand rule. Shared RAINBOW_COMBO gate (=150) so strings + hit-burst agree. reduceMotion → freeze the hue cycle to a STATIC across-lane gradient (a11y: no continuous color motion).
+    if (c >= 100) return { r: 255, g: 236, b: 168, k: 0.62 };   // GOLDEN — white-gold (last solid tier before the rainbow)
+    if (c >= 50)  return { r: 255, g: 198, b: 88,  k: 0.50 };   // BLAZE — amber
+    if (c >= 25)  return { r: 255, g: 138, b: 58,  k: 0.42 };   // HOT — orange
+    return null;                                                // COMBO — brand crimson (default)
+  }
   // build13 DEPTH: the guitar grounds against the (now brighter) backdrop via a CONTACT SHADOW —
   // its own blurred silhouette drawn behind it. Cached per image (rebuilt on skin swap); warm
   // near-black (#070403), never grey/blue. Skipped under fxLite.
@@ -2541,7 +3467,7 @@
   }
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
-    counts.miss++; combo = 0;
+    counts.miss++; combo = 0; comboTierCur = 0;
     _rfPush(note.lane, 'm');   // versus stream
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
     // a dull "dud" spatter on the missed string (Guitar-Hero "clam" feel).
@@ -2570,31 +3496,105 @@
     lanePluckT[lane] = 9;   // the string goes dead (kills its glow/vibration)
   }
 
+  // build65 (VFX 2.0): a layered, SHAPED, perspective hit burst driven by the level's KIT. Five layers stack so
+  // the hit reads as a real event (not one dab): core flash → shockwave ring(s) → vertical lane lift → the kit's
+  // signature SHAPED burst (with a toward-camera "3D pop" share) → fine sparkle dust → a lingering SETTLE trail.
   function spawnHitParticles(lane, kind) {
     _rfPush(lane, kind === 'perfect' ? 'p' : 'g');   // versus stream (every hit routes here)
-    const _fg = fretGeom(); const laneX = _fg.nearX[lane]; const hitY = _fg.nearY; const color = LANE_COLORS[lane];
-    const isPerfect = kind === 'perfect';
-    const burst = isPerfect ? '255,255,255' : color.rgb;
-    const n = kind === 'perfect' ? 22 : kind === 'great' ? 14 : 8;
+    const _fg = fretGeom(); const laneX = _fg.nearX[lane]; const hitY = _fg.nearY; const lw = _fg.lw;
+    const isPerfect = kind === 'perfect', isGreat = kind === 'great';
+    const I = isPerfect ? 1 : isGreat ? 0.7 : 0.45;     // intensity 0..1
+    const k = _hitKit();
+    const lite = fxLite;
+    const calm = reduceMotion;                          // build65 (cycle-3) a11y: reduce-motion tames the motion-heavy extras like lite does (no 3D fly-at-camera pop, no rainbow spray, no dust, single ring)
+    const reduced = lite || calm;
+    const cb = Math.min(1, combo / 60);                 // build65: COMBO ramp (reachable 0..60 range) — every hit ESCALATES as your streak climbs (the "hitting a combo feels the same" fix)
+    const rainbow = (combo >= RAINBOW_COMBO || odActive) && !reduced;  // earned RAINBOW burst on a big streak / in Overdrive (shared gate with the strings); off under reduce-motion/lite
+    // ── L1 CORE FLASH — the sharpest, brightest single beat of impact (crisp additive disc)
+    particles.push({ flash: true, x: laneX, y: hitY, age: 0, life: isPerfect ? 0.12 : 0.09, color: k.core, max: lw * (isPerfect ? 0.7 : isGreat ? 0.55 : 0.42) });
+    // ── L2 SHOCKWAVE ring(s) — perfects double up to "crack"
+    particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.45, color: k.ring, max: lw * (0.85 + 0.55 * I) });
+    if (isPerfect && !reduced) {
+      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.6,  color: '255,255,255', max: lw * 1.5 });
+      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.55, color: k.ring,         max: lw * 2.4 });
+    }
+    // ── L2b vertical ENERGY LIFT up the lane
+    particles.push({ column: true, x: laneX, y: hitY, age: 0, life: 0.32, color: k.prim[0], w: lw });
+    // ── L3 primary SHAPED burst — a share erupt TOWARD THE CAMERA (grow + fall down the neck = fake-3D pop)
+    const n = reduced ? Math.round(4 + 6 * I) : Math.round((9 + 15 * I) * (1 + 0.45 * cb));   // more particles as the streak grows; reduce-motion/lite → small
     for (let i = 0; i < n; i++) {
-      const ang = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.25;
-      const spd = 130 + Math.random() * 340 * (isPerfect ? 1.3 : 1);
-      particles.push({ x: laneX + (Math.random() - 0.5) * 22, y: hitY,
-        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
-        life: 0.5 + Math.random() * 0.5, age: 0, size: 1.5 + Math.random() * 3,
-        color: Math.random() < 0.5 ? burst : color.rgb, spark: true });
+      const toward = !reduced && Math.random() < (0.42 + 0.22 * cb);   // more 3D-pops at high combo; none under reduce-motion/lite
+      // build65 (cycle-3): NARROWER upward cone + extra horizontal spread so the per-hit spray clears the central gem
+      // READ-PATH fast (don't occlude incoming notes). The toward-camera pops fall down-and-out; the rest fan out sideways.
+      const ang = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * (0.82 + 0.45 * I);
+      const spd = (120 + Math.random() * 300) * (0.8 + 0.55 * I);
+      const big = k.shape === 'glob' ? 5.5 + Math.random() * 7 : k.shape === 'paw' ? 5 + Math.random() * 5 : 2.6 + Math.random() * 4.2;
+      particles.push({
+        kit: true, shape: k.shape, x: laneX + (Math.random() - 0.5) * lw * 0.5, y: hitY,
+        vx: Math.cos(ang) * spd * (toward ? 0.6 : 1.4),
+        vy: toward ? (70 + Math.random() * 150) : (k.dir > 0 ? -Math.abs(Math.sin(ang)) * spd * 0.6 : Math.sin(ang) * spd),
+        grav: k.dir > 0 ? k.grav : k.grav * (toward ? 1.1 : 0.7),
+        z: 0, vz: toward ? (1.5 + Math.random() * 1.8) : (0.15 + Math.random() * 0.4), grow: toward,
+        rot: Math.random() * 6.28, vrot: (Math.random() - 0.5) * 9,
+        size: big * (0.85 + 0.5 * I) * (1 + 0.22 * cb), life: 0.5 + Math.random() * 0.55, age: 0,
+        color: Math.random() < 0.55 ? k.prim[0] : k.prim[1], add: k.add, glow: k.glow
+      });
     }
-    particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.45, color: color.rgb, max: 90 });
-    if (isPerfect) {
-      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.6, color: '255,255,255', max: 130 });
-      particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.55, color: '255,72,78', max: 210 });  // crimson shockwave — perfects "crack"
+    // ── L4 fine sparkle DUST — bright fast sizzle (always additive)
+    if (!reduced) {
+      const nd = Math.round(4 + 7 * I);
+      for (let i = 0; i < nd; i++) {
+        const a2 = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.25, s2 = 170 + Math.random() * 360;   // build65 (cycle-3): tighter cone — dust clears the read-path faster
+        particles.push({ x: laneX + (Math.random() - 0.5) * lw * 0.4, y: hitY, vx: Math.cos(a2) * s2, vy: Math.sin(a2) * s2,
+          grav: 0.7, life: 0.28 + Math.random() * 0.3, age: 0, size: 0.8 + Math.random() * 1.6, color: k.dust, spark: true });
+      }
     }
-    particles.push({ column: true, x: laneX, y: hitY, age: 0, life: 0.34, color: color.rgb, w: _fg.lw });
-    // shard fragments — the rock breaks apart on impact
-    for (let i = 0; i < 7; i++) {
-      const ang = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.5;
-      const spd = 140 + Math.random() * 300 * (isPerfect ? 1.25 : 1);
-      particles.push({ frag: true, x: laneX + (Math.random() - 0.5) * 16, y: hitY, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, rot: Math.random() * 6.28, vrot: (Math.random() - 0.5) * 18, size: 4 + Math.random() * 7, life: 0.45 + Math.random() * 0.4, age: 0, color: color.rgb });
+    // ── L4b earned RAINBOW spray — fires only at a big combo / in Overdrive (the streak payoff: hits go technicolor)
+    if (rainbow) {
+      const base = performance.now() / 1000, nr = isPerfect ? 6 : 4;
+      for (let i = 0; i < nr; i++) {
+        const phq = Math.round(((base * 0.5 + i / nr) % 1) * 12) / 12;   // build65 (cycle-3): QUANTIZE the warm-rainbow hue to 12 buckets so the cached _glowSprite keys stay BOUNDED (was a unique color per particle → unbounded offscreen-canvas leak across a session)
+        const rgb = _hsv((0.90 + phq * 0.25) % 1, 0.85, 1), ra = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1, rs = 150 + Math.random() * 320;   // build65: warm-biased rainbow spray (on-brand, no blue/purple)
+        const rc = rgb[0] + ',' + rgb[1] + ',' + rgb[2];
+        particles.push({ kit: true, shape: 'glint', x: laneX + (Math.random() - 0.5) * lw * 0.5, y: hitY,
+          vx: Math.cos(ra) * rs, vy: Math.sin(ra) * rs, grav: 0.4, z: 0, vz: 0.3, grow: false, rot: 0, vrot: 0,
+          size: 2.4 + Math.random() * 3, life: 0.5 + Math.random() * 0.45, age: 0, color: rc, add: true, glow: rc });
+      }
+    }
+    // ── L5 SETTLE — the kit's lingering afterglow (its signature)
+    if (!reduced) _emitSettle(k, laneX, hitY, I, lw);
+    if (isPerfect) bgPulse = Math.max(bgPulse, 0.42);   // gentle frame breath on a perfect (never a strobe)
+  }
+
+  // L5 — the slow, low-count "afterlife" of a hit. This is what makes a level FEEL like itself between hits:
+  // crimson/ember rise as embers, horror oozes blood DRIPS, Melody floats a HEART, Skully trails violet WISPS.
+  function _emitSettle(k, x, y, I, lw) {
+    const s = k.settle;
+    if (s === 'ember') {
+      for (let i = 0; i < 2 + (I > 0.8 ? 1 : 0); i++)
+        particles.push({ kit: true, shape: 'ember', x: x + (Math.random() - 0.5) * 18, y: y - Math.random() * 6,
+          vx: (Math.random() - 0.5) * 26, vy: -28 - Math.random() * 40, grav: 0.12, z: 0, vz: 0.1, glow: k.glow,
+          rot: 0, vrot: 0, size: 1.6 + Math.random() * 2, life: 0.9 + Math.random() * 0.7, age: 0, color: k.prim[Math.random() < 0.5 ? 0 : 1], add: true });
+    } else if (s === 'drip') {
+      for (let i = 0; i < 3; i++)
+        particles.push({ kit: true, shape: 'glob', x: x + (Math.random() - 0.5) * lw * 0.4, y: y, vx: (Math.random() - 0.5) * 14,
+          vy: 18 + Math.random() * 26, grav: 2.4, z: 0, vz: 0, rot: 0, vrot: 0, size: 3 + Math.random() * 3.5,
+          life: 0.8 + Math.random() * 0.6, age: 0, color: k.prim[Math.random() < 0.5 ? 0 : 1], add: false, glow: k.glow });
+    } else if (s === 'heart') {
+      particles.push({ kit: true, shape: 'heart', x: x + (Math.random() - 0.5) * 14, y: y - 4, vx: (Math.random() - 0.5) * 16,
+        vy: -42 - Math.random() * 28, grav: 0.18, z: 0, vz: 0.2, grow: true, rot: 0, vrot: 0, size: 5 + Math.random() * 3,
+        life: 0.95, age: 0, color: '255,110,170', add: true, glow: '255,120,180' });
+    } else if (s === 'wisp') {
+      for (let i = 0; i < 2; i++)
+        particles.push({ kit: true, shape: 'wisp', x: x + (Math.random() - 0.5) * 16, y: y, vx: (Math.random() - 0.5) * 20,
+          vy: -36 - Math.random() * 36, grav: 0.1, z: 0, vz: 0.12, rot: 0, vrot: (Math.random() - 0.5) * 3, size: 3 + Math.random() * 2.4,
+          life: 0.9 + Math.random() * 0.6, age: 0, color: k.prim[0], add: true, glow: k.glow });
+    } else {   // 'mote' / 'smoke'
+      for (let i = 0; i < 2; i++)
+        particles.push({ kit: true, shape: s === 'smoke' ? 'smoke' : 'mote', x: x + (Math.random() - 0.5) * 20, y: y - Math.random() * 6,
+          vx: (Math.random() - 0.5) * 24, vy: -22 - Math.random() * 30, grav: s === 'smoke' ? -0.05 : 0.12, z: 0, vz: 0.08,
+          rot: 0, vrot: 0, size: s === 'smoke' ? 6 + Math.random() * 6 : 1.6 + Math.random() * 1.8, life: 0.9 + Math.random() * 0.7, age: 0,
+          color: s === 'smoke' ? '150,140,136' : k.dust, add: true, glow: k.glow });
     }
   }
 
@@ -2629,6 +3629,28 @@
     el.style.color = late ? '#dad7d2' : '#ff7a4a';   // chrome = late, ember = early (brand)
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
+  // ---------- v254: MP COMBAT — a rival's combo shock stuns your inputs ~2s (P-vs-P mode) ----------
+  // multiplayer.js calls mpStun() on an incoming 'shock' and mpShockSent() when YOUR combo fires one. Stun gates
+  // onLaneInput (notes pass → you bleed combo/score = the "damage"). reduceMotion still stuns (it's gameplay, not chrome).
+  window.RhythmGame.mpStun = (sec, fromName) => {
+    if (state !== 'playing') return;
+    const ms = Math.max(800, Math.min(3500, (sec || 2.2) * 1000));
+    _mpStunUntil = performance.now() + ms;
+    cameraShake = Math.max(cameraShake, 16);
+    try { playZapSfx(true); } catch (e) {}   // v257: an electric ZAP when a rival shocks you
+    try { if (navigator.vibrate) navigator.vibrate([30, 50, 30, 50, 80]); } catch (e) {}
+    try {
+      const el = document.getElementById('mp-stun');
+      if (el) {
+        el.setAttribute('aria-hidden', 'false');   // v258 a11y: expose the veil so its role=alert .stun-who announces the input freeze
+        const who = el.querySelector('.stun-who'); if (who) who.textContent = (fromName ? String(fromName).slice(0, 14) + ' ' : 'RIVAL ') + 'SHOCKED YOU';
+        el.style.setProperty('--stun-dur', (ms / 1000) + 's');
+        el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+        clearTimeout(_stunHideT); _stunHideT = setTimeout(() => { el.classList.remove('show'); el.setAttribute('aria-hidden', 'true'); }, ms);
+      }
+    } catch (e) {}
+  };
+  window.RhythmGame.mpShockSent = () => { try { flashJudgment('⚡ ZAPPED RIVAL', '#ffe08a'); playZapSfx(false); } catch (e) {} };
   window.RhythmGame.setTimingHint = (on) => { timingHint = !!on; try { localStorage.setItem('rr_timinghint', on ? '1' : '0'); } catch (e) {} return timingHint; };
   window.RhythmGame.setTimingFeel = (f) => { if (f === 'tight' || f === 'classic') { timingFeel = f; try { localStorage.setItem('rr_timing', f); } catch (e) {} } return timingFeel; };
   window.RhythmGame.getTimingFeel = () => timingFeel;
@@ -2647,20 +3669,22 @@
     } catch (e) {}
   }
   function updateHUD() {
-    $('hud-score').textContent = Math.floor(scoreDisplay).toLocaleString();   // animated value (loop rolls it up)
-    $('hud-combo').textContent = combo;
-    $('hud-maxcombo').textContent = maxCombo;
+    // build70 (launch-audit P3): null-guard the early HUD dereferences (its second half already does) so a
+    // missing id after the /play markup move can't throw inside the rAF loop and kill the frame.
+    const _hs = $('hud-score'); if (_hs) _hs.textContent = Math.floor(scoreDisplay).toLocaleString();   // animated value (loop rolls it up)
+    const _hc = $('hud-combo'); if (_hc) _hc.textContent = combo;
+    const _hm = $('hud-maxcombo'); if (_hm) _hm.textContent = maxCombo;
     const total = counts.perfect + counts.great + counts.good + counts.miss;
     const acc = total > 0 ? ((counts.perfect * 1.0 + counts.great * 0.85 + counts.good * 0.5) / total) * 100 : 100;
-    $('hud-acc').textContent = acc.toFixed(1) + '%';
+    const _ha = $('hud-acc'); if (_ha) _ha.textContent = acc.toFixed(1) + '%';
     // mobile compact HUD
-    $('m-score').textContent = Math.floor(score).toLocaleString();
-    $('m-combo').textContent = combo;
-    $('m-acc').textContent = acc.toFixed(0) + '%';
+    const _ms = $('m-score'); if (_ms) _ms.textContent = Math.floor(score).toLocaleString();
+    const _mc = $('m-combo'); if (_mc) _mc.textContent = combo;
+    const _ma = $('m-acc'); if (_ma) _ma.textContent = acc.toFixed(0) + '%';
     // live multiplier gauge — reflects the actual score multiplier (combo + overdrive)
     const _tpH = timingProf();
     const comboTier = Math.min(_tpH.comboCap, 1 + Math.floor(combo / _tpH.comboStep));
-    const tier = Math.min(odActive ? _tpH.comboCap + 1 : _tpH.comboCap, odActive ? comboTier + 1 : comboTier);
+    const tier = Math.min(MAX_MULT, Math.min(odActive ? _tpH.comboCap + 1 : _tpH.comboCap, odActive ? comboTier + 1 : comboTier));   // v258: clamp the HUD multiplier to MAX_MULT so the displayed tier matches the clamped score
     _rfMult = tier;   // versus stream: cache the displayed multiplier tier for getRenderFrame()
     const _atCap = combo >= _tpH.comboStep * _tpH.comboCap;
     const within = odActive ? overdrive : (_atCap ? 1 : (combo % _tpH.comboStep) / _tpH.comboStep);
@@ -2690,6 +3714,19 @@
     // Always write the number — vs-mode forces the capsule opaque, so a value left stale below the
     // single-player reveal threshold would read as a frozen combo. .show still gates the SP reveal at >=10.
     $('combo-num').textContent = combo;
+    // combo TIER styling — recolor the readout + swap the label to the tier NAME past T0.
+    // Only touch the DOM when the tier actually changes (per-frame cheap).
+    if (cd) {
+      const _ti = comboTierIdx(combo), _tin = COMBO_TIERS[_ti];
+      if (cd._tier !== _ti) {
+        cd._tier = _ti;
+        cd.setAttribute('data-tier', String(_ti));
+        cd.style.setProperty('--ct-num', 'rgb(' + _tin.rgb.join(',') + ')');
+        cd.style.setProperty('--ct-glow', 'rgb(' + _tin.glow.join(',') + ')');
+        const _lab = cd.querySelector('.lab');
+        if (_lab) _lab.textContent = _ti === 0 ? 'COMBO' : _tin.name;
+      }
+    }
     if (combo >= 10) cd.classList.add('show');
     else cd.classList.remove('show');
     $('hud-stability').style.width = (stability * 100) + '%';
@@ -2705,15 +3742,40 @@
     return g.margin + g.lw * lane + g.lw / 2;
   }
 
+  // build66 (launch-audit P2): ADAPTIVE AUTO-QUALITY. On a device that can't hold frame-rate, auto-enable fxLite + the
+  // performance backdrop ONCE (with a one-time toast) so a non-savvy player on a weak laptop/phone isn't stuck stuttering and
+  // never finds Settings. Decided once per device (rr_autolite); the user always wins afterward (Settings → applySettings).
+  let _qSamples = 0, _qSlow = 0, _qAutoDone = false;
+  try { _qAutoDone = localStorage.getItem('rr_autolite') === '1'; } catch (e) {}
+  function _autoLite() {
+    _qAutoDone = true;
+    try { localStorage.setItem('rr_autolite', '1'); } catch (e) {}
+    // build66.10 FIX: auto-degrade ONLY the canvas FX (fxLite). It used to ALSO force bgMode='performance', which hides EVERY
+    // background video site-wide + persists it — a confusing "my videos vanished" regression. Videos stay; only heavy FX lighten.
+    try { window.RhythmGame.applySettings({ fxLite: true }); } catch (e) { fxLite = true; }
+    try { showToast('Lite visuals on — smoother on this device. Change it anytime in Settings.', 'neutral'); } catch (e) {}
+  }
+  function _qSample(ms) {
+    if (ms > 200) return;            // ignore a tab hiccup / decode spike
+    _qSamples++;
+    if (ms > 22) _qSlow++;           // >22ms ≈ sub-45fps
+    if (_qSamples >= 150) {          // ~2.5s of real play sampled before deciding
+      if (_qSlow / _qSamples > 0.5) _autoLite();   // majority of frames slow → degrade once
+      else _qAutoDone = true;        // device holds up → stop sampling (never auto-degrade this device)
+      _qSamples = 0; _qSlow = 0;
+    }
+  }
   let lastFrame = performance.now();
   function loop() {
     rafId = requestAnimationFrame(loop);
     const now = performance.now();
-    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    const _rawMs = now - lastFrame;
+    const dt = Math.min(0.05, _rawMs / 1000);
     lastFrame = now;
 
     if (state === 'paused') { render(dt, true); return; }
     if (state !== 'playing') return;
+    if (!fxLite && !_qAutoDone) _qSample(_rawMs);   // build66: adaptive-quality sampler (only while actually playing)
 
     pollGamepad();              // poll at frame-top so a controller/guitar press is judged this frame
     const t = songTime();
@@ -2731,8 +3793,9 @@
       const hn = holdNote[i]; if (!hn) continue;
       const end = hn.time + hn.hold;
       if (jt >= end) { completeHold(i); continue; }       // reached the tail end → full payout + pop
-      if (!laneDown[i]) { endHoldEarly(i); continue; }    // let go early → stop paying (no combo break)
+      if (!laneDown[i]) { endHoldEarly(i); continue; }    // let go early → endHoldEarly (combo break unless past the tail grace)
       const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
+      if (performance.now() < _mpStunUntil) { holdScored[i] = frac; continue; }   // v258: MP combat stun — advance the sustain marker WITHOUT paying out (no score banked while shocked, and no refund-lump when the stun ends)
       const gain = frac - holdScored[i];
       if (gain > 0) { score += gain * HOLD_TOTAL * curMult(); holdScored[i] = frac; sustaining = true; }
       // keep the lane alive: string keeps ringing, catcher glows, sparks trickle up
@@ -2743,13 +3806,17 @@
     }
     if (sustaining) updateHUD();
 
-    if (t > songDuration + 0.6) { endGame(); return; }
+    if (t > songDuration + 0.6) { for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i); endGame(); return; }   // build58: bank any sustain still correctly held when the clock crosses the end
 
+    if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);   // build64 PERF: cap runaway particle growth (oldest first)
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i]; p.age += dt;
       if (p.age >= p.life) { particles.splice(i, 1); continue; }
-      if (!p.ring && !p.column) { p.vy += 480 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
-      if (p.frag) p.rot += p.vrot * dt;
+      if (!p.ring && !p.column && !p.flash) {
+        p.vy += 480 * (p.grav != null ? p.grav : 1) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.kit) { p.vx *= (1 - 0.85 * dt); if (p.vz) p.z = (p.z || 0) + p.vz * dt; }   // build65: ease + advance toward-camera depth
+      }
+      if (p.frag || (p.kit && p.vrot)) p.rot += p.vrot * dt;
     }
     for (let i = 0; i < LANE_COUNT; i++) {
       lanePulse[i] = Math.max(0, lanePulse[i] - dt * 4);
@@ -2765,6 +3832,7 @@
       }
     }
     bgPulse = Math.max(0, bgPulse - dt * 1.8);
+    comboGlow = Math.max(0, comboGlow - dt * 1.4);   // build64: combo string-glow flash decay (~0.7s)
     odBurst = Math.max(0, odBurst - dt * 1.7);    // decay the OD-ignition one-shot (~0.6s)
     // expose the live beat (0..1) as a CSS var so the DOM HUD chrome can BREATHE on the beat (Hi-Fi Rush "everything
     // on the beat"). Only #game elements read it, so a stale value off the gameplay screen is harmless.
@@ -2812,6 +3880,23 @@
         }
       }
     }
+    // build65: OVERDRIVE sustained gold ENERGY STREAM — a steady rise off the catcher row so OD reads as a real MODE
+    // takeover (paired with the rainbow strings + gold edge-glow), not just a faint vignette. Cheap + capped.
+    if (odActive && !reduceMotion && !fxLite) {
+      const fgo = fretGeom(), _mid = (LANE_COUNT - 1) / 2;
+      for (let i = 0; i < LANE_COUNT; i++) {
+        if (Math.random() > 0.32) continue;   // build65 (cycle-3): lower emit rate so the ambient stream doesn't crowd the read-path
+        // edge-bias: embers drift OUTWARD from the playfield center (rise along the rails, not straight up the gem columns)
+        const side = i < _mid ? -1 : i > _mid ? 1 : (Math.random() < 0.5 ? -1 : 1);
+        particles.push({ kit: true, shape: 'ember', x: fgo.nearX[i] + side * fgo.lw * 0.34, y: fgo.nearY,
+          vx: side * (18 + Math.random() * 30), vy: -120 - Math.random() * 120, grav: 0.18, z: 0, vz: 0.12,
+          rot: 0, vrot: 0, size: 1.8 + Math.random() * 2.4, life: 0.6 + Math.random() * 0.5, age: 0,
+          color: Math.random() < 0.5 ? '255,210,110' : '255,176,70', add: true, glow: '255,214,130' });
+      }
+    }
+    // build65 PERF: re-cap AFTER this frame's spawn loops (streak flames + OD stream + the per-hit burst all push above)
+    // so the render pass can't iterate an oversized array at peak load (Hard + high combo + OD). Oldest-first trim.
+    if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);
     // animated score count-up — the displayed number rolls toward the real score (game juice)
     if (scoreDisplay !== score) {
       if (Math.abs(score - scoreDisplay) < 0.6) scoreDisplay = score;
@@ -2827,18 +3912,19 @@
       if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } emitFx('odend', 'od'); }
     }
     applyGate(); // expire miss-dropouts so the music returns
-    for (const n of notes) { if (!n._pulsed && Math.abs(n.time - t) < dt) { n._pulsed = true; bgPulse = Math.min(1, bgPulse + 0.5); } }
+    for (const n of notes) { if (n.time - t > dt) break; if (!n._pulsed && Math.abs(n.time - t) < dt) { n._pulsed = true; bgPulse = Math.min(1, bgPulse + 0.5); } }   // build71: notes are time-sorted ascending → stop once past the dt window (no behavior change)
     // reactive intensity: density of beats around "now" (the music builds the world)
     let dens = 0;
-    for (const n of notes) { const d = n.time - t; if (d > -0.6 && d < 1.4) dens += (0.5 + Math.min(1, n.strength * 0.4)); }
+    for (const n of notes) { const d = n.time - t; if (d > 1.4) break; if (d > -0.6) dens += (0.5 + Math.min(1, n.strength * 0.4)); }   // build71: early-break past the +1.4s window (sorted notes)
     energyTarget = Math.min(1, dens / 9);
     energy += (energyTarget - energy) * Math.min(1, dt * 3);
     if (odActive) energy = Math.min(1, energy + 0.3);
 
     const p = Math.max(0, Math.min(1, t / songDuration));
-    $('hud-progress').style.width = (p * 100) + '%';
-    $('m-progress').style.width = (p * 100) + '%';
-    $('hud-time').textContent = fmtTime(Math.max(0, t)) + ' / ' + fmtTime(songDuration);
+    const pct = Math.round(p * 100);
+    if (pct !== _lastPct) { _lastPct = pct; const hp = $('hud-progress'); if (hp) hp.style.width = pct + '%'; const mp = $('m-progress'); if (mp) mp.style.width = pct + '%'; }   // build71: gate the per-frame layout writes on whole-percent change (also null-safe now)
+    const sec = Math.floor(t);
+    if (sec !== _lastSec) { _lastSec = sec; const ht = $('hud-time'); if (ht) ht.textContent = fmtTime(Math.max(0, t)) + ' / ' + fmtTime(songDuration); }
 
     render(dt, false);
   }
@@ -2965,9 +4051,20 @@
       // per-lane miss desaturation: blend the warm string toward dead chrome-grey
       const dz = (laneDesat[i] || 0);
       const baseR = 255, baseG = Math.round(42 + hI * 130), baseB = Math.round(48 - hI * 22);
-      const r = Math.round(baseR + (150 - baseR) * dz);
-      const g = Math.round(baseG + (150 - baseG) * dz);
-      const b = Math.round(baseB + (150 - baseB) * dz);
+      let r = Math.round(baseR + (150 - baseR) * dz);
+      let g = Math.round(baseG + (150 - baseG) * dz);
+      let b = Math.round(baseB + (150 - baseB) * dz);
+      // build65: COMBO-TIER hue ladder — strings escalate color as the streak climbs (→ earned rainbow at elite combo / OD).
+      let _tintRGB = null;
+      if (state === 'playing' && dz < 0.6) {
+        const tint = _comboTierTint(i, ph0 / 46);   // ph0/46 == seconds (ph0 = now/1000*46)
+        if (tint) { const tk = tint.k * (1 - dz); r = Math.round(r + (tint.r - r) * tk); g = Math.round(g + (tint.g - g) * tk); b = Math.round(b + (tint.b - b) * tk); _tintRGB = tint.r + ',' + tint.g + ',' + tint.b; }
+      }
+      // build64: COMBO-MILESTONE flare — on each 25-streak the strings ignite toward white. Cosmetic only.
+      if (comboGlow > 0) {
+        const tg = combo >= 100 ? 255 : 226, tb = combo >= 100 ? 255 : 160, m = comboGlow;
+        r = Math.round(r + (255 - r) * m); g = Math.round(g + (tg - g) * m); b = Math.round(b + (tb - b) * m);
+      }
       // build13: on a custom skin OUR strings ARE the lanes (they no longer ride painted strings)
       // — floor the alpha so they always read over ornate art.
       const sAlpha0 = (0.24 + live * 0.6) * (1 - 0.55 * dz) * (1 - 0.5 * cold);
@@ -2996,8 +4093,8 @@
       }
       ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + sAlpha.toFixed(3) + ')';
       ctx.lineWidth = sWidth;
-      ctx.shadowColor = dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30');
-      ctx.shadowBlur = (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);
+      ctx.shadowColor = _tintRGB ? ('rgb(' + _tintRGB + ')') : (dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30'));
+      ctx.shadowBlur = (fxLite || reduceMotion) ? 0 : (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);   // build66 (launch-audit P2): gate the per-lane string glow blur for perf/a11y users — it was the one ungated FX in this loop (5 shadowBlur strokes/frame)
       ctx.stroke(pth); ctx.restore();
     }
     // COMBO-REACTIVE neck energy — the board visibly "charges up" as the multiplier tier climbs.
@@ -3106,7 +4203,7 @@
       }
       // build29: lane-colored comet trail streaming up the string behind the MARBLE (approaching only) — matches
       // the ball's lane color so the streak reads as that ball's motion, with a hot-white core speed-line on top.
-      if (!held) {
+      if (!held && !fxLite && !reduceMotion) {   // build71: gate the comet trail (2 gradients + shadowBlur strokes per note per frame) for perf/a11y users — matches the sibling string-glow & accent-aura gates
         const dTail = Math.min(1.10, d + 0.24);
         const tx = noteX(n.lane, dTail), ty = noteY(dTail);
         const rgb = n.type === 'star' ? '255,150,60' : LANE_COLORS[n.lane].rgb;
@@ -3184,7 +4281,14 @@
     for (const p of particles) {
       const a = 1 - p.age / p.life;
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      if (p.ring) {
+      if (p.flash) {   // build64: crisp additive CORE FLASH disc — the brightest, sharpest moment of the hit
+        const fa = a * a, fr = p.max * (0.5 + 0.5 * (p.age / p.life));
+        const fgr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, fr);
+        fgr.addColorStop(0, 'rgba(' + p.color + ',' + fa.toFixed(3) + ')');
+        fgr.addColorStop(0.45, 'rgba(' + p.color + ',' + (fa * 0.55).toFixed(3) + ')');
+        fgr.addColorStop(1, 'rgba(' + p.color + ',0)');
+        ctx.fillStyle = fgr; ctx.beginPath(); ctx.arc(p.x, p.y, fr, 0, Math.PI * 2); ctx.fill();
+      } else if (p.ring) {
         const r = (p.age / p.life) * p.max;
         ctx.strokeStyle = 'rgba(' + p.color + ',' + (a * 0.8) + ')'; ctx.lineWidth = 2.5 * a + 0.5;
         ctx.shadowColor = 'rgb(' + p.color + ')'; ctx.shadowBlur = 14 * a;
@@ -3202,9 +4306,57 @@
         ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(s * 0.85, s * 0.5); ctx.lineTo(-s * 0.7, s * 0.7); ctx.closePath();
         ctx.fillStyle = 'rgba(' + rgbScale(p.color, 0.4) + ',' + a + ')'; ctx.fill();
         ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(' + rgbScale(p.color, 1.7) + ',' + a + ')'; ctx.stroke();
-      } else {
-        ctx.fillStyle = 'rgba(' + p.color + ',' + a + ')';
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+      } else if (p.kit) {   // build65 (VFX 2.0): a SHAPED kit particle with perspective depth
+        const s3 = 1 + (p.z || 0);                                   // toward-camera particles GROW (fake-3D)
+        const sz = p.size * s3 * (p.grow ? (0.55 + (1 - a) * 1.1) : (0.45 + 0.55 * a));
+        let pa = a; if (p.grow) pa = a * Math.max(0, 1 - (p.z || 0) * 0.45);   // fade as it flies past the lens
+        ctx.globalCompositeOperation = p.add ? 'lighter' : 'source-over';
+        const sh = p.shape;
+        if (sh === 'ember' || sh === 'mote') {
+          const gs = _glowSprite(p.glow || p.color), R = sz * 2.4;
+          ctx.globalAlpha = pa * 0.92; ctx.drawImage(gs, p.x - R, p.y - R, R * 2, R * 2); ctx.globalAlpha = 1;
+          const sp = Math.hypot(p.vx, p.vy) || 1, len = Math.min(20, sp * 0.022);
+          ctx.strokeStyle = 'rgba(' + p.color + ',' + (pa * 0.8).toFixed(3) + ')'; ctx.lineWidth = Math.max(0.7, sz * 0.7); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx / sp * len, p.y - p.vy / sp * len); ctx.stroke();
+        } else if (sh === 'glint') {
+          ctx.strokeStyle = 'rgba(' + p.color + ',' + pa.toFixed(3) + ')'; ctx.lineWidth = Math.max(0.7, sz * 0.34); ctx.lineCap = 'round';
+          const L = sz * 2.1;
+          ctx.beginPath(); ctx.moveTo(p.x - L, p.y); ctx.lineTo(p.x + L, p.y); ctx.moveTo(p.x, p.y - L); ctx.lineTo(p.x, p.y + L); ctx.stroke();
+          const gs = _glowSprite(p.glow || p.color), R = sz * 1.1; ctx.globalAlpha = pa; ctx.drawImage(gs, p.x - R, p.y - R, R * 2, R * 2); ctx.globalAlpha = 1;
+        } else if (sh === 'wisp') {
+          // build65 PERF: reuse the CACHED glow sprite stretched into a vertical flame-lick (was a per-particle
+          // per-frame createLinearGradient — the violet/Skully kit's whole burst is wisps, so that was the one
+          // un-cached gradient the _glowSprite cache was meant to kill). Curl via rotate.
+          ctx.translate(p.x, p.y); ctx.rotate(Math.sin(p.age * 6 + p.rot) * 0.5);
+          const gw = _glowSprite(p.glow || p.color), ww = sz * 1.7, wh = sz * 3.8;
+          ctx.globalAlpha = pa * 0.85; ctx.drawImage(gw, -ww / 2, -wh * 0.72, ww, wh); ctx.globalAlpha = 1;
+        } else if (sh === 'shard') {
+          ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+          ctx.beginPath(); ctx.moveTo(0, -sz * 1.3); ctx.lineTo(sz * 0.7, sz * 0.5); ctx.lineTo(-sz * 0.55, sz * 0.8); ctx.closePath();
+          ctx.fillStyle = 'rgba(' + rgbScale(p.color, 0.7) + ',' + pa.toFixed(3) + ')'; ctx.fill();
+          ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(' + (p.glow || rgbScale(p.color, 1.6)) + ',' + pa.toFixed(3) + ')'; ctx.stroke();
+        } else if (sh === 'paw') {
+          _drawPaw(p.x, p.y, sz * 1.5, 'rgba(' + p.color + ',' + pa.toFixed(3) + ')');
+        } else if (sh === 'heart') {
+          _drawHeart(p.x, p.y, sz, 'rgba(' + p.color + ',' + pa.toFixed(3) + ')');
+        } else if (sh === 'smoke') {
+          const gs = _glowSprite(p.color), R = sz * 2.6; ctx.globalAlpha = pa * 0.16; ctx.drawImage(gs, p.x - R, p.y - R, R * 2, R * 2); ctx.globalAlpha = 1;
+        } else {   // 'glob' — blood drop: filled body + darker depth + a tiny wet highlight
+          ctx.fillStyle = 'rgba(' + p.color + ',' + pa.toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(' + (p.glow || p.color) + ',' + (pa * 0.5).toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(p.x - sz * 0.3, p.y - sz * 0.3, sz * 0.34, 0, Math.PI * 2); ctx.fill();
+        }
+      } else {   // build64: crisp SPARK — a velocity-stretched streak (default) or a round dab (drop=blood / paw=cat themes)
+        const ae = a * a, sz = p.size * (0.35 + 0.65 * a);
+        if (p.shape === 'drop' || p.shape === 'paw') {
+          ctx.fillStyle = 'rgba(' + p.color + ',' + ae.toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(p.x, p.y, sz * (p.shape === 'paw' ? 1.5 : 1.15), 0, Math.PI * 2); ctx.fill();
+        } else {
+          const sp = Math.hypot(p.vx, p.vy) || 1, len = Math.min(26, sp * 0.02), ux = p.vx / sp, uy = p.vy / sp;
+          ctx.strokeStyle = 'rgba(' + p.color + ',' + ae.toFixed(3) + ')'; ctx.lineWidth = Math.max(0.6, sz); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - ux * len, p.y - uy * len); ctx.stroke();
+        }
       }
       ctx.restore();
     }
@@ -3847,6 +4999,9 @@
     ox.clearRect(x0, y0, W2, H2);
     const inten = Math.max(tierF, Math.min(1, combo / 60));
     const warm = Math.round(110 + tierF * 90);
+    // board-energy HUE rides the combo TIER — neck shifts crimson→orange→gold→
+    // white-hot→chrome as the streak climbs (matches the named combo-mode readout).
+    const _bt = COMBO_TIERS[comboTierIdx(combo)].board, _brgb = _bt[0] + ',' + _bt[1] + ',' + _bt[2];
     // 1) combo heat — moving bands + a low nut→catcher wash (toned down)
     if (comboOn) {
       const bands = 2 + Math.round(tierF * 2);
@@ -3856,8 +5011,8 @@
         const a = (0.08 + 0.22 * inten) * Math.sin(ph * Math.PI);
         if (a > 0.003) {
           const eg = ox.createLinearGradient(0, by - bh, 0, by + bh);
-          eg.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
-          eg.addColorStop(0.5, 'rgba(255,' + warm + ',72,' + a.toFixed(3) + ')');
+          eg.addColorStop(0, 'rgba(' + _brgb + ',0)');
+          eg.addColorStop(0.5, 'rgba(' + _brgb + ',' + a.toFixed(3) + ')');
           eg.addColorStop(1, 'rgba(255,90,60,0)');
           ox.fillStyle = eg; ox.fillRect(x0, by - bh, W2, bh * 2);
         }
@@ -3865,8 +5020,8 @@
       if (inten > 0.02) {
         const wash = ox.createLinearGradient(0, ng.yF, 0, fg.nearY);
         const wa = (0.028 + 0.085 * inten).toFixed(3);
-        wash.addColorStop(0, 'rgba(255,' + warm + ',70,0)');
-        wash.addColorStop(0.55, 'rgba(255,' + warm + ',72,' + wa + ')');
+        wash.addColorStop(0, 'rgba(' + _brgb + ',0)');
+        wash.addColorStop(0.55, 'rgba(' + _brgb + ',' + wa + ')');
         wash.addColorStop(1, 'rgba(255,120,80,0)');
         ox.fillStyle = wash; ox.fillRect(x0, ng.yF, W2, fg.nearY - ng.yF);
       }
@@ -4152,6 +5307,7 @@
     if (calibActive) return;
     if (e.key && e.key.toLowerCase() === 'm' && !e.repeat) {
       if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if ((state === 'playing' || state === 'paused') && ('m' in keyMap)) return;   // build71: if a player rebound a lane to 'm', an in-lane hit must NOT also silently toggle music mute (the lane press is handled by the gameplay keydown handler)
       e.preventDefault(); toggleMute();
     }
   });
@@ -4204,6 +5360,7 @@
   }
 
   function playClick(t) {
+    if (muted) return;   // build71: respect the global mute flag (M / mute button / persisted rr_muted) — the ring still pulses and taps still register, only the click audio is suppressed
     const o = calibCtx.createOscillator(), g = calibCtx.createGain();
     o.type = 'square'; o.frequency.value = 1100;
     g.gain.setValueAtTime(0.0001, t);
@@ -4245,7 +5402,7 @@
     keyMap[key] = lane;
     saveKeyMap(); renderKeycaps(); updateInputsStatus(); updateFooterHint();
   }
-  function resetKeys() { keyMap = Object.assign({}, DEFAULT_KEY_MAP); saveKeyMap(); renderKeycaps(); updateInputsStatus(); updateFooterHint(); }
+  function resetKeys() { const p = LANE_PROFILES[laneProfile]; keyMap = Object.assign({}, (p && p.keyDefault) || DEFAULT_KEY_MAP); saveKeyMap(); renderKeycaps(); updateInputsStatus(); updateFooterHint(); }   // build58: profile-aware (GH=5 keys, not the 6-key DEFAULT) so reset can't pollute rr_keymap_gh with a phantom lane 5
   let rebindLane = null;
   function startRebind(lane) {
     rebindLane = lane;
@@ -4267,6 +5424,7 @@
   }
   // capture phase — a rebind grabs the next key before gameplay / mute handlers see it
   window.addEventListener('keydown', (e) => {
+    if (_wizActive && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); cancelPadWizard(); return; }
     if (padRebindLane != null && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); cancelPadRebind(); return; }
     if (rebindLane == null) return;
     e.preventDefault(); e.stopImmediatePropagation();
@@ -4278,11 +5436,13 @@
 
   // ---- custom controller buttons (mirrors the keyboard remap: one button per lane) ----
   function padGlyph(b) { return b == null ? '—' : ('B' + b); }
+  let onPadBound = null;   // wizard hook: fired (lane,button) after a successful bind so it can advance
   function bindLaneButton(lane, b) {
     for (const k in padMap) if (padMap[k] === lane) delete padMap[k];   // each lane keeps one button
     delete padMap[b];                                                   // each button maps to one lane
     padMap[b] = lane;
     savePadMap(); renderPadcaps(); renderDeviceStatus();
+    if (onPadBound) { try { onPadBound(lane, b); } catch (e) {} }
   }
   function resetPad() { padMap = identityPad(LANE_COUNT); savePadMap(); renderPadcaps(); }
   function startPadRebind(lane) {
@@ -4306,6 +5466,92 @@
   }
   try { window.__rrPadMap = () => JSON.parse(JSON.stringify(padMap)); } catch (e) {}
 
+  // ---- GUIDED "SET UP CONTROLLER" WIZARD (the headline controller affordance) -----------------------
+  // Walks the user lane-by-lane: highlight a lane, prompt big + clear, capture the NEXT gamepad button
+  // press (reusing startProbePoll -> bindLaneButton via the onPadBound hook), confirm, advance. Works for
+  // ANY controller including GH guitars (whose fret layout we can't assume). Cancel restores the prior map.
+  let _wizActive = false, _wizLane = 0, _wizPrevMap = null;
+  function wizEl(id) { return $(id); }
+  function _wizSetVisible(on) {
+    const ov = wizEl('pad-wizard'); if (ov) ov.style.display = on ? 'flex' : 'none';
+  }
+  function _wizRender() {
+    const total = LANE_COUNT;
+    const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Step ' + (_wizLane + 1) + ' of ' + total;
+    const sw = wizEl('pad-wizard-swatch'); if (sw) sw.style.background = laneSwatch(_wizLane);
+    const big = wizEl('pad-wizard-prompt');
+    if (big) {
+      const lbl = laneFretLabel(_wizLane);
+      big.innerHTML = 'Press the button for <b>' + lbl + '</b>';
+    }
+    const sub = wizEl('pad-wizard-sub');
+    if (sub) {
+      const seen = guitarPadId() || (gamepadList()[0] || null);
+      sub.textContent = seen
+        ? 'Listening for a button press…  (controller: ' + String(seen).slice(0, 28) + ')'
+        : 'No controller detected yet — plug it in and press any button to wake it.';
+    }
+    // progress dots
+    const dots = wizEl('pad-wizard-dots');
+    if (dots) {
+      dots.innerHTML = '';
+      for (let i = 0; i < total; i++) {
+        const d = document.createElement('span');
+        d.className = 'wiz-dot' + (i < _wizLane ? ' done' : (i === _wizLane ? ' now' : ''));
+        d.style.setProperty('--wd', laneSwatch(i));
+        dots.appendChild(d);
+      }
+    }
+  }
+  function _wizListen() {
+    // arm the existing pad-capture path for this lane (no #set-pad highlight needed — the wizard is modal)
+    padRebindLane = _wizLane;
+    startProbePoll();
+    _wizRender();
+  }
+  function startPadWizard() {
+    _wizActive = true;
+    _wizPrevMap = JSON.parse(JSON.stringify(padMap));   // for Cancel restore
+    padMap = {};                                         // fresh map — every lane gets reassigned in order
+    _wizLane = 0;
+    onPadBound = (lane) => {
+      if (!_wizActive) return;
+      if (lane === _wizLane) {
+        _wizLane++;
+        if (_wizLane >= LANE_COUNT) { finishPadWizard(); return; }
+        _wizListen();
+      }
+    };
+    _wizSetVisible(true);
+    _wizListen();
+    renderDeviceStatus();
+  }
+  function _wizCleanup() {
+    _wizActive = false; onPadBound = null; padRebindLane = null;
+    _wizSetVisible(false);
+    try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
+  }
+  function cancelPadWizard() {
+    if (!_wizActive) { _wizSetVisible(false); return; }
+    if (_wizPrevMap) { padMap = _wizPrevMap; savePadMap(); }   // restore the map we had before
+    _wizPrevMap = null;
+    _wizCleanup();
+  }
+  function finishPadWizard() {
+    savePadMap();
+    _wizPrevMap = null;
+    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = '✅ All set! Your controller is mapped.';
+    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = 'Close this and try Input Test to confirm each fret.';
+    const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Done';
+    _wizLane = LANE_COUNT;
+    onPadBound = null; padRebindLane = null;
+    _wizRender();
+    const dn = wizEl('pad-wizard-done'); if (dn) dn.textContent = 'DONE';
+    try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
+    try { window.RhythmGame.showToast('Controller mapped!', 'success'); } catch (e) {}
+  }
+  try { window.__rrPadWizard = () => ({ active: _wizActive, lane: _wizLane, total: LANE_COUNT }); } catch (e) {}
+
   // ---- controllers & MIDI: live status + input test ----
   function updateInputsStatus() {
     const el = $('set-inputs'); if (!el) return;
@@ -4313,19 +5559,46 @@
     el.textContent = 'Touch · Keys ' + keys.join(' ');
   }
   function renderDeviceStatus() {
-    const el = $('set-devices'); if (!el) return;
-    const rows = [['Keyboard', 'Ready', true]];
-    if (!navigator.requestMIDIAccess) rows.push(['MIDI', 'Unsupported browser', false]);
-    else rows.push(['MIDI', midiInputs.length ? midiInputs.join(', ') : 'No device detected', midiInputs.length > 0]);
+    const el = $('set-devices');
     const pads = gamepadList();
-    rows.push(['Controller', pads.length ? pads[0].slice(0, 26) : 'No device detected', pads.length > 0]);
-    el.innerHTML = rows.map(r => '<div class="dev-row"><span class="dev-n">' + r[0] + '</span><span class="dev-v' + (r[2] ? ' ok' : '') + '">' + escDev(r[1]) + '</span></div>').join('');
+    const ghId = guitarPadId();
+    if (el) {
+      const rows = [['Keyboard', 'Ready', true]];
+      if (!navigator.requestMIDIAccess) rows.push(['MIDI', 'Unsupported browser', false]);
+      else rows.push(['MIDI', midiInputs.length ? midiInputs.join(', ') : 'No device detected', midiInputs.length > 0]);
+      rows.push(['Controller', pads.length ? pads[0].slice(0, 26) : 'No device detected', pads.length > 0]);
+      el.innerHTML = rows.map(r => '<div class="dev-row"><span class="dev-n">' + r[0] + '</span><span class="dev-v' + (r[2] ? ' ok' : '') + '">' + escDev(r[1]) + '</span></div>').join('');
+    }
+    // Guitar-Hero auto-detect badge + "set up my guitar" affordance
+    const badge = $('gh-badge');
+    if (badge) {
+      badge.style.display = ghId ? 'flex' : 'none';
+      const nm = $('gh-badge-name'); if (nm) nm.textContent = String(ghId || '').slice(0, 30);
+    }
+    // pad-status hint near the wizard button
+    const padHint = $('pad-status-hint');
+    if (padHint) {
+      padHint.textContent = pads.length
+        ? (ghId ? '🎸 Guitar Hero controller ready' : '🎮 Controller detected: ' + String(pads[0]).slice(0, 24))
+        : 'No controller yet — plug one in and press any button.';
+      padHint.classList.toggle('ok', pads.length > 0);
+    }
   }
   function escDev(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
   function setTest(on) {
     const pips = $('set-test-pips'), btn = $('set-test-btn');
     if (btn) { btn.textContent = on ? 'STOP TEST' : 'TEST INPUT'; btn.classList.toggle('active', on); }
-    if (pips) pips.style.display = on ? 'grid' : 'none';
+    if (pips) {
+      // build pips to match the ACTIVE profile's lane count (gh=5, standard=6) — the static markup is 6,
+      // so on the default 5-lane profile the 6th pip was dead. Rebuild when the count diverges (also on a
+      // mid-session profile switch) and drive the grid columns off LANE_COUNT.
+      if (on && pips.children.length !== LANE_COUNT) {
+        pips.innerHTML = '';
+        for (let i = 0; i < LANE_COUNT; i++) pips.appendChild(document.createElement('span'));
+      }
+      pips.style.gridTemplateColumns = 'repeat(' + LANE_COUNT + ', 1fr)';
+      pips.style.display = on ? 'grid' : 'none';
+    }
     setLaneProbe(on ? (lane) => {
       const pip = pips && pips.children[lane];
       if (pip) { pip.classList.add('lit'); clearTimeout(pip._t); pip._t = setTimeout(() => pip.classList.remove('lit'), 200); }
@@ -4342,7 +5615,8 @@
     { const fi = $('set-fxi'); if (fi) [...fi.children].forEach(b => b.classList.toggle('active', b.dataset.fxi === (s.fxIntensity || 'balanced'))); }
     { const rm = $('set-rm'); if (rm) [...rm.children].forEach(b => b.classList.toggle('active', (b.dataset.rm === 'on') === s.reduceMotion)); }
     { const ff = $('set-fail'); if (ff) [...ff.children].forEach(b => b.classList.toggle('active', (b.dataset.fail === 'on') === !!s.failMode)); }
-    { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'classic'))); }
+    { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.classList.toggle('active', b.dataset.chart === (s.chartMode || 'musical'))); }
+    { const lg = $('set-levelguitar'); if (lg) [...lg.children].forEach(b => b.classList.toggle('active', b.dataset.levelguitar === (s.levelGuitar || 'mine'))); }
     { const tg = $('set-timing'); if (tg) [...tg.children].forEach(b => b.classList.toggle('active', b.dataset.timing === window.RhythmGame.getTimingFeel())); }
     { const nv = $('set-notes'); if (nv) { const on = window.RhythmGame.getNoteVariety(); [...nv.children].forEach(b => b.classList.toggle('active', (b.dataset.notes === 'on') === on)); } }
     { const th = $('set-timinghint'); if (th) { const on = (localStorage.getItem('rr_timinghint') !== '0'); [...th.children].forEach(b => b.classList.toggle('active', (b.dataset.thint === 'on') === on)); } }
@@ -4351,7 +5625,7 @@
     renderKeycaps(); renderPadcaps(); updateInputsStatus(); renderDeviceStatus();
     settingsScreen.classList.add('active');
   }
-  function closeSettings() { setTest(false); cancelRebind(); cancelPadRebind(); settingsScreen.classList.remove('active'); }
+  function closeSettings() { setTest(false); cancelRebind(); cancelPadRebind(); cancelPadWizard(); settingsScreen.classList.remove('active'); }
   $('calib-open').addEventListener('click', openSettings);
   // ---------- How to Play (note-type legend) ----------
   { const ho = $('howto-open'), hs = $('howto-screen'), hc = $('howto-close');
@@ -4367,7 +5641,7 @@
       if (hs && !localStorage.getItem('rr_howto_seen')) {
         const tryShowHowto = () => {
           try {
-            if (document.querySelector('#start.active, #ryo-intro.active, #game.active, #loading.active, #multiplayer-screen.active, #results.active')) { setTimeout(tryShowHowto, 900); return; }   // never pop the first-run How-To over a live MP/tournament round or results (it occluded the whole round)
+            if (document.querySelector('#start.active, #ryo-intro.active, #menu-hub.active, #game.active, #loading.active, #countdown-screen.active, #multiplayer-screen.active, #results.active')) { setTimeout(tryShowHowto, 900); return; }   // never pop the first-run How-To over a live MP/tournament round, results, the guided hub, or a live 3·2·1 countdown (build72: + #menu-hub/#countdown-screen — howto z-260 was occluding the hub z-240)
             hs.classList.add('active');
           } catch (e) {}
         };
@@ -4377,16 +5651,45 @@
   }
   $('set-close').addEventListener('click', closeSettings);
   $('set-calibrate').addEventListener('click', () => { closeSettings(); openCalib(); });
+  // RESET ALL SETTINGS — two-tap "tap again to confirm" arm (mirrors the Career reset), so a stray
+  // click can't wipe a player's tuning. Clears rr_settings + every key/pad map back to defaults,
+  // re-applies the default settings live, then repaints the panel.
+  { const ra = $('set-reset-all'); if (ra) {
+    const RESET_LABEL = 'RESET ALL SETTINGS';
+    let resetArmed = false, resetArmT = 0;
+    const disarmReset = () => { resetArmed = false; ra.textContent = RESET_LABEL; ra.classList.remove('arm'); };
+    ra.addEventListener('click', () => {
+      if (!resetArmed) { resetArmed = true; ra.textContent = 'TAP AGAIN TO RESET'; ra.classList.add('arm'); clearTimeout(resetArmT); resetArmT = setTimeout(disarmReset, 3000); return; }
+      clearTimeout(resetArmT); disarmReset();
+      // build65 (cycle-5): added rr_notes / rr_offset_ms / rr_open — they were SURVIVING a "reset all" that claimed to wipe everything.
+      try { ['rr_settings', 'rr_keymap', 'rr_keymap_gh', 'rr_padmap', 'rr_padmap_gh', 'rr_timinghint', 'rr_juice', 'rr_notes', 'rr_offset_ms', 'rr_open'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+      // canonical defaults (match getSettings/applySettings defaults)
+      try { window.RhythmGame.applySettings({ scroll: 1, fxLite: false, reduceMotion: false, bgMode: 'cinematic', music: 1, sfx: 0.05, failMode: false, chartMode: 'musical', levelGuitar: 'mine', fxIntensity: 'balanced' }); } catch (e) {}
+      try { window.RhythmGame.setTimingFeel && window.RhythmGame.setTimingFeel('classic'); } catch (e) {}
+      try { window.RhythmGame.setTimingHint && window.RhythmGame.setTimingHint(true); } catch (e) {}
+      try { window.RhythmGame.setNoteVariety && window.RhythmGame.setNoteVariety(true); } catch (e) {}   // build65 (cycle-5): default ON
+      try { audioOffset = 0; var _cs = $('calib-slider'), _cv = $('calib-slider-val'); if (_cs) _cs.value = 0; if (_cv) _cv.textContent = '0 ms'; } catch (e) {}   // build65 (cycle-5): clear the calibration offset live too
+      try { resetKeys(); } catch (e) {}     // profile-aware lane-key reset (defined below in this module)
+      try { padMap = loadPadMapFor(padStore, LANE_COUNT); renderPadcaps(); } catch (e) {}
+      try { openSettings(); } catch (e) {}  // repaint the panel against the fresh defaults
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('All settings reset to defaults', 'success'); } catch (e) {}
+    });
+    // disarm if the panel closes mid-arm
+    const _origCloseSettings = closeSettings;
+    closeSettings = function () { disarmReset(); return _origCloseSettings.apply(this, arguments); };
+  } }
   $('set-scroll').addEventListener('input', (e) => {
     const v = parseFloat(e.target.value); $('set-scroll-v').textContent = v.toFixed(1) + '×';
     window.RhythmGame.applySettings({ scroll: v });
   });
   { const m = $('set-music'); if (m) m.addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value); const mv = $('set-music-v'); if (mv) mv.textContent = Math.round(v * 100) + '%';
+    const v = parseFloat(e.target.value); const fmt = Math.round(v * 100) + '%'; const mv = $('set-music-v'); if (mv) mv.textContent = fmt;
+    e.target.setAttribute('aria-valuetext', fmt);   // build65 a11y: announce the formatted % not the raw 0..1 value
     window.RhythmGame.applySettings({ music: v });
   }); }
   { const x = $('set-sfx'); if (x) x.addEventListener('input', (e) => {
-    const v = parseFloat(e.target.value); const xv = $('set-sfx-v'); if (xv) xv.textContent = Math.round((v / 0.5) * 100) + '%';
+    const v = parseFloat(e.target.value); const fmt = Math.round((v / 0.5) * 100) + '%'; const xv = $('set-sfx-v'); if (xv) xv.textContent = fmt;
+    e.target.setAttribute('aria-valuetext', fmt);   // build65 a11y
     window.RhythmGame.applySettings({ sfx: v });
   }); }
   [...$('set-fx').children].forEach(b => b.addEventListener('click', () => {
@@ -4408,6 +5711,10 @@
   { const cf = $('set-chart'); if (cf) [...cf.children].forEach(b => b.addEventListener('click', () => {
     [...cf.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ chartMode: b.dataset.chart });
+  })); }
+  { const lg = $('set-levelguitar'); if (lg) [...lg.children].forEach(b => b.addEventListener('click', () => {
+    [...lg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+    window.RhythmGame.applySettings({ levelGuitar: b.dataset.levelguitar });
   })); }
   { const tg = $('set-timing'); if (tg) [...tg.children].forEach(b => b.addEventListener('click', () => {
     [...tg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
@@ -4434,8 +5741,21 @@
   { const rk = $('set-keys-reset'); if (rk) rk.addEventListener('click', resetKeys); }
   { const rp = $('set-pad-reset'); if (rp) rp.addEventListener('click', resetPad); }
   { const tb = $('set-test-btn'); if (tb) tb.addEventListener('click', () => setTest(!laneProbe)); }
+  // --- guided controller wizard + GH preset wiring ---
+  { const w = $('set-pad-wizard'); if (w) w.addEventListener('click', startPadWizard); }
+  { const gw = $('gh-setup'); if (gw) gw.addEventListener('click', startPadWizard); }
+  { const gp = $('set-pad-ghpreset'); if (gp) gp.addEventListener('click', applyGhPreset); }
+  { const wc = $('pad-wizard-cancel'); if (wc) wc.addEventListener('click', cancelPadWizard); }
+  { const wd = $('pad-wizard-done'); if (wd) wd.addEventListener('click', () => { if (_wizActive) cancelPadWizard(); else _wizSetVisible(false); }); }
+  // advanced (manual per-lane caps) disclosure toggle
+  { const adv = $('set-pad-advanced-toggle'); if (adv) adv.addEventListener('click', () => {
+      const body = $('set-pad-advanced'); if (!body) return;
+      const open = body.style.display !== 'none' && body.style.display !== '';
+      body.style.display = open ? 'none' : 'block';
+      adv.classList.toggle('open', !open);
+    }); }
   window.addEventListener('gamepadconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });
-  window.addEventListener('gamepaddisconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });
+  window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining
 
   $('calib-cancel').addEventListener('click', closeCalib);
   $('calib-pad').addEventListener('click', calibTap);
@@ -4485,6 +5805,7 @@
       acc: Math.round(accFrac * 1000) / 10,
       progress: Math.round(prog * 1000) / 1000,
       playing: state === 'playing',
+      overdrive: (typeof overdrive === 'number' ? overdrive : 0), odActive: !!odActive,   // build66.12: expose OD so procbg's crescendo can fire (it read undefined → od stuck at 0)
       grade: (function (p) { return p >= 95 ? 'S' : p >= 88 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D'; })(accFrac * 100)
     };
   };
@@ -4532,6 +5853,7 @@
     setTimeout(function () { try { getAC().resume(); } catch (e) {} try { play(prov); } catch (e) {} }, delay);
   };
   if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
+  if (!window.RhythmGame.getMusicAnalyser) window.RhythmGame.getMusicAnalyser = function () { return musicAnalyser; };   // build66: live FFT tap (frequency + waveform) for procbg.js reactive backdrops
 
   // play button → defers to catalog handler if set, else demo
   let _menuPlayHandler = null;

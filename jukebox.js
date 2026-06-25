@@ -13,7 +13,7 @@
     ['#8e0f1c', '#150305'], // oxblood
     ['#5f1122', '#11040a'], // wine
     ['#b5701a', '#1d1205'], // ember gold
-    ['#414b59', '#0e1116'], // chrome slate
+    ['#4a463f', '#16120e'], // chrome slate — build65: warmed (was #414b59/#0e1116, cool blue-grey = brand "reads-purple" violation; now R>=G>=B)
     ['#9a1530', '#14040c'], // crimson-violet
     ['#7a0d16', '#170306'], // deep blood
   ];
@@ -84,6 +84,7 @@
     if (!t) { el.style.display = 'none'; return; }
     el.style.display = '';
     el.dataset.idx = idx;
+    el.classList.toggle('not-ready', !RC().trackReady(t));   // build58: dim covers that can't play yet (the status CSS existed but was never wired)
     const card = el.querySelector('.cover-card');
     const refl = el.querySelector('.cover-reflect');
     setPal(card, t.id);
@@ -209,7 +210,7 @@
     jbList = RC().sections()[key] || [];
     try { var _ac = $('jb-allcount'); if (_ac) { var _n = (RC().allTracks() || []).length; _ac.textContent = _n ? ' · ' + _n : ''; } } catch (e) {}
     pos = 0; target = 0;
-    [...$('jb-tabs').children].forEach(b => b.classList.toggle('active', b.dataset.sec === key));
+    [...$('jb-tabs').children].forEach(b => { var on = b.dataset.sec === key; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });   // build71: keep ARIA tab state in sync (role=tablist/tab markup in index.html)
     layout(); settlePreview();
   }
 
@@ -237,6 +238,11 @@
     jukebox.addEventListener('pointerleave', end);
     window.addEventListener('keydown', (e) => {
       if (!$('view-jukebox').classList.contains('active') || !$('menu').classList.contains('active')) return;
+      // build65 (cycle-5): the header SEARCH input lives in the always-visible lib-bar, so view-jukebox stays .active while
+      // you type — without this guard, ArrowLeft/Right rotated the coverflow and Enter opened the centered song's sheet
+      // mid-search. Skip the rail keys whenever a text field is focused (the same exemption the rest of the app uses).
+      const ae = document.activeElement;
+      if (ae && /^(input|textarea|select)$/i.test(ae.tagName)) return;
       if (e.key === 'ArrowLeft') { goTo(Math.round(pos) - 1); }
       else if (e.key === 'ArrowRight') { goTo(Math.round(pos) + 1); }
       else if (e.key === 'Enter') { const t = jbList[Math.round(pos)]; if (t) RC().openSheet(t); }
@@ -246,17 +252,48 @@
   // =========================================================================
   // BROWSE (genre + artist tiles)
   // =========================================================================
+  // The data layer stores the catch-all genre literally as "Other"; we DISPLAY
+  // it as "Uncategorized" and pin it last, but still query byGenre('Other').
+  const UNCAT_GENRE = 'Other';       // real genre string in the track data
+  const UNCAT_LABEL = 'Uncategorized'; // friendlier display label
+
   function renderBrowse() {
+    // ---- genres: count desc, Uncategorized pinned LAST ----
+    const all = RC().genreList().slice();
+    const uncat = [], named = [];
+    all.forEach(g => { (g.name === UNCAT_GENRE ? uncat : named).push(g); });
+    named.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const genres = named.concat(uncat);   // Uncategorized always at the end
+
+    // ---- top-genres quick-pick strip (top 5 by count, skip Uncategorized) ----
+    renderTopGenreStrip(named.slice(0, 5));
+
     const gg = $('genre-grid'); gg.innerHTML = '';
-    RC().genreList().forEach(g => {
+    // ---- Videos category — music videos / films, grouped OUT of the music genres ----
+    const nVid = RC().videoCount ? RC().videoCount() : 0;
+    if (nVid > 0) {
+      const vt = document.createElement('button');
+      vt.className = 'genre-tile gt-videos';
+      vt.innerHTML = '<span class="gt-name">▶ Videos</span><span class="gt-count">' + nVid + ' video' + (nVid !== 1 ? 's' : '') + '</span>';
+      vt.addEventListener('click', () => openSongs(RC().videoTracks(), 'Videos', 'browse', '', true));
+      gg.appendChild(vt);
+    }
+    genres.forEach(g => {
+      const isUncat = g.name === UNCAT_GENRE;
+      const label = isUncat ? UNCAT_LABEL : g.name;
       const t = document.createElement('button');
-      t.className = 'genre-tile'; setPal(t, g.name);
-      t.innerHTML = '<span class="gt-name">' + RC().escapeHtml(g.name) + '</span><span class="gt-count">' + g.count + ' track' + (g.count !== 1 ? 's' : '') + '</span>';
-      t.addEventListener('click', () => openSongs(RC().byGenre(g.name), g.name, 'browse'));
+      t.className = 'genre-tile'; setPal(t, label);
+      t.innerHTML = '<span class="gt-name">' + RC().escapeHtml(label) + '</span><span class="gt-count">' + g.count + ' track' + (g.count !== 1 ? 's' : '') + '</span>';
+      t.addEventListener('click', () => openSongs(RC().byGenre(g.name), label, 'browse'));
       gg.appendChild(t);
     });
+
+    // ---- artists: multi-track keep their own tile, 1-track folded into Various Artists ----
     const ag = $('artist-grid'); ag.innerHTML = '';
-    RC().artistList().forEach(a => {
+    const artists = RC().artistList();
+    const solo = [];   // {name} of artists with exactly one track
+    artists.forEach(a => {
+      if (a.count <= 1) { solo.push(a); return; }
       const t = document.createElement('button');
       t.className = 'artist-tile';
       const av = document.createElement('span'); av.className = 'at-avatar'; setPal(av, a.name); av.textContent = initial(a.name);
@@ -265,6 +302,50 @@
       t.appendChild(av); t.appendChild(tx);
       t.addEventListener('click', () => openSongs(RC().byArtist(a.name), a.name, 'browse'));
       ag.appendChild(t);
+    });
+    if (solo.length) {
+      const label = 'Various Artists';
+      const t = document.createElement('button');
+      t.className = 'artist-tile';
+      const av = document.createElement('span'); av.className = 'at-avatar'; setPal(av, label); av.textContent = '♪';
+      const tx = document.createElement('span'); tx.className = 'at-text';
+      tx.innerHTML = '<span class="at-name">' + label + '</span><span class="at-count">' + solo.length + ' artist' + (solo.length !== 1 ? 's' : '') + '</span>';
+      t.appendChild(av); t.appendChild(tx);
+      t.addEventListener('click', () => {
+        // gather every 1-track artist's tracks into one list
+        const list = [];
+        solo.forEach(a => { RC().byArtist(a.name).forEach(tr => list.push(tr)); });
+        openSongs(list, label + ' (' + solo.length + ')', 'browse');
+      });
+      ag.appendChild(t);
+    }
+  }
+
+  // Top-genres strip: a compact horizontal chip row above the genre grid.
+  // Reuses the .genre-chips / .genre-chip styling already defined in index.html.
+  // Idempotent — rebuilt each render, never duplicated.
+  function renderTopGenreStrip(top) {
+    const gg = $('genre-grid'); if (!gg) return;
+    let strip = $('genre-top-strip');
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.id = 'genre-top-strip';
+      strip.className = 'genre-chips';
+      // .genre-chips ships a 0 20px 16px gutter for a full-bleed container; inside
+      // the already-padded .browse-scroll that double-indents the row, so flatten the
+      // side padding and align it to the grid below.
+      strip.style.padding = '0 0 12px';
+      gg.parentNode.insertBefore(strip, gg);   // sits directly above the genre grid
+    }
+    strip.innerHTML = '';
+    if (!top || !top.length) { strip.style.display = 'none'; return; }
+    strip.style.display = '';
+    top.forEach(g => {
+      const c = document.createElement('button');
+      c.className = 'genre-chip';
+      c.textContent = g.name + ' · ' + g.count;
+      c.addEventListener('click', () => openSongs(RC().byGenre(g.name), g.name, 'browse'));
+      strip.appendChild(c);
     });
   }
 
@@ -308,10 +389,12 @@
   // SONGS (searchable, sortable, lazy list)
   // =========================================================================
   let songsBase = [], songsList = [], songsRendered = 0;
+  let songsIsVideo = false;   // true ONLY for the dedicated Videos view, so currentSongs doesn't filter it empty
   const PAGE = 40;
 
-  function openSongs(list, title, ret, q) {
+  function openSongs(list, title, ret, q, isVid) {
     songsBase = list || [];
+    songsIsVideo = !!isVid;
     songsReturn = ret || 'jukebox';
     $('songs-title').textContent = title || 'All Songs';
     $('songs-search').value = q || '';
@@ -322,6 +405,7 @@
 
   function currentSongs() {
     let list = songsBase;
+    if (!songsIsVideo) list = list.filter(t => !RC().isVideo(t));   // belt-and-suspenders: keep videos out of music lists
     const q = $('songs-search').value.trim().toLowerCase();
     if (q) list = list.filter(t => (t.title || '').toLowerCase().includes(q) || (t.artist_name || '').toLowerCase().includes(q) || (RC().cleanGenre(t.genre) || '').toLowerCase().includes(q));
     return RC().sortTracks(list, $('songs-sort').value);
@@ -384,10 +468,36 @@
     songsRendered = 0;
     songsList = currentSongs();
     $('songs-count').textContent = songsList.length + '';
-    if (!songsList.length) { host.innerHTML = '<div class="lib-empty">No songs match.</div>'; return; }
+    // keep the in-field clear-× in sync with the current query (also covers openSongs seeding a query)
+    { const q0 = ($('songs-search').value || '').trim(); const sx = $('songs-search-clear'); if (sx) sx.hidden = !q0; }
+    if (!songsList.length) { renderSongsEmpty(host); return; }
     host.scrollTop = 0;
     appendSongs();
     fillViewport();
+  }
+
+  // branded empty state — echoes the query + offers a one-tap Clear (mirrors the .lib-empty box idiom)
+  function renderSongsEmpty(host) {
+    const q = ($('songs-search').value || '').trim();
+    const box = document.createElement('div');
+    box.className = 'lib-empty';
+    const glyph = '<svg class="le-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>';
+    if (q) {
+      box.innerHTML = glyph + '<div class="le-text">No songs match “' + RC().escapeHtml(q) + '”</div>' +
+        '<button class="ghost-btn le-clear" id="songs-empty-clear" type="button">Clear search</button>';
+    } else {
+      box.innerHTML = glyph + '<div class="le-text">No songs here yet.</div>';
+    }
+    host.appendChild(box);
+    const ec = $('songs-empty-clear');
+    if (ec) ec.addEventListener('click', clearSongsSearch);
+  }
+
+  function clearSongsSearch() {
+    const si = $('songs-search'); if (si) si.value = '';
+    const sx = $('songs-search-clear'); if (sx) sx.hidden = true;
+    refreshSongs();
+    if (si) si.focus();
   }
 
   // keep appending until the list overflows the viewport (so short genres look full
@@ -467,7 +577,12 @@
       const cb = $('credits-back'); if (cb) cb.addEventListener('click', () => showView('browse'));
       // songs controls
       let dbt = 0;
-      $('songs-search').addEventListener('input', () => { clearTimeout(dbt); dbt = setTimeout(refreshSongs, 160); });
+      $('songs-search').addEventListener('input', () => {
+        const sx = $('songs-search-clear'); if (sx) sx.hidden = !($('songs-search').value || '').trim();
+        clearTimeout(dbt); dbt = setTimeout(refreshSongs, 160);
+      });
+      $('songs-search').addEventListener('keydown', (e) => { if (e.key === 'Escape') { clearSongsSearch(); } });
+      { const ssx = $('songs-search-clear'); if (ssx) ssx.addEventListener('click', clearSongsSearch); }
       $('songs-sort').addEventListener('change', refreshSongs);
       $('song-list').addEventListener('scroll', onSongsScroll, { passive: true });
       window.addEventListener('resize', () => { computeCv(); layout(); });

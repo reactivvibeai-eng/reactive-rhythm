@@ -65,6 +65,36 @@
     } catch (e) { return null; }
   }
 
+  // ---------- ADMIN identity (full access for the owner; everyone else stays gated) ----------
+  // Keyed on the AUTHENTICATED session email (a signed Supabase JWT via getUser) — NOT a query param or a localStorage
+  // flag — so a normal user can't spoof it without actually logging in as one of these accounts. Admin ⇒ owns everything
+  // (all paid levels/skins), every campaign tier unlocked, multiplayer open: for pre-ship testing on the live site.
+  // Normal users keep the real gating (log in, earn ranks, purchase). This is NOT the dev (?dev=1/localhost) path.
+  const ADMIN_EMAILS = ['reactivvibeai@gmail.com'];   // owner/tester accounts — add more here as needed
+  let _isAdmin = false;
+  function isAdmin() { return _isAdmin; }
+  async function refreshAdmin() {
+    try {
+      const u = await getUser();
+      const em = (u && u.email ? String(u.email) : '').trim().toLowerCase();
+      _isAdmin = !!em && ADMIN_EMAILS.indexOf(em) >= 0;
+    } catch (e) { _isAdmin = false; }
+    return _isAdmin;
+  }
+  refreshAdmin();   // populate ASAP; index.html re-drives it on auth change for live login/logout
+  // build59: localhost is a full-access DEV context (the builder testing locally). Treat it as owning everything so the STORE
+  // + every ownsItem-based gate (equip, launch checks) match the campaign grid, which already unlocks paid levels via ||DEV.
+  // WITHOUT this, on localhost a paid level shows OWNED in the campaign but "Buy" in the store (ownsItem=false).
+  // build66 SECURITY (launch-audit P1): LOCALHOST-ONLY. The old `?dev=1 OR localhost` let /play?dev=1 unlock every paid level
+  // + premium skin in PRODUCTION — a regression: index.html's DEV was hardened localhost-only in build65, this copy was missed.
+  // Owner testing in prod uses the AUTHENTICATED ADMIN path, not a URL flag. Keep in sync with index.html's DEV + MP_DEV.
+  function _isDevUnlock() {
+    try {
+      if (/[?&]asplayer=1/.test(location.search)) return false;   // build60: "Simulate fresh player" — no dev unlock, even on localhost
+      return /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);
+    } catch (e) { return false; }
+  }
+
   // Subscribe to login/logout so the header chip updates live. Returns an unsubscribe fn (or noop).
   function onAuthChange(cb) {
     if (!supa || typeof cb !== 'function') return function () {};
@@ -94,6 +124,224 @@
     }
     return loadSparksCache();   // logged-out / backend hiccup → last cached value
   }
+
+  // ===========================================================================
+  // BONUS SPARKS — platform-only SOFT currency (the ONLY thing gameplay awards).
+  // ---------------------------------------------------------------------------
+  // CRITICAL: this is NOT the cashable Sparks balance above. Cashable Sparks
+  // (getSparks / spendSparks / 'rr_sparks' / the /sparks/* API) is REAL MONEY and
+  // gameplay must NEVER mint it — that would be an abuse/fraud vector. Bonus Sparks
+  // are earned by play and spent ONLY on cosmetics; they can never be cashed out.
+  // They live in a SEPARATE localStorage key ('rr_bonus_sparks') and have their own
+  // function family below. Keep them clearly separate from the cashable family.
+  //
+  // ▼▼▼ SWAP-SEAM ▼▼▼ — when the Lovable platform exposes a real Bonus-Sparks balance
+  // endpoint, replace these localStorage reads/writes with the API calls (e.g.
+  // GET /bonus-sparks/balance, POST /bonus-sparks/award, POST /bonus-sparks/spend).
+  // The function signatures (getBonusSparks / awardBonusSparks / spendBonusSparks)
+  // STAY THE SAME so callers (the earn loop + future cosmetic spend) don't change.
+  // Until then this is purely client-side and never hits the network.
+  // ▲▲▲ SWAP-SEAM ▲▲▲
+  // ===========================================================================
+  const BONUS_SPARKS_KEY = 'rr_bonus_sparks';
+  const BONUS_AWARD_CAP = 5000;   // sanity cap on a SINGLE award, guards against a runaway grant
+  function loadBonusSparks() {
+    try { const v = parseInt(localStorage.getItem(BONUS_SPARKS_KEY) || '0', 10); return isNaN(v) || v < 0 ? 0 : v; }
+    catch (e) { return 0; }
+  }
+  function saveBonusSparks(n) { try { localStorage.setItem(BONUS_SPARKS_KEY, String(Math.max(0, n | 0))); } catch (e) {} }
+  // current integer balance.
+  function getBonusSparks() { return loadBonusSparks(); }
+  // add max(0, floor(n)) (clamped to BONUS_AWARD_CAP) to the balance; persists; returns the new balance.
+  // No-op for n<=0. `reason` is for future telemetry / the swap-seam API body — unused locally.
+  function awardBonusSparks(n, reason) {
+    const add = Math.min(BONUS_AWARD_CAP, Math.max(0, Math.floor(Number(n) || 0)));
+    if (add <= 0) return loadBonusSparks();
+    const bal = loadBonusSparks() + add;
+    saveBonusSparks(bal);
+    return bal;
+  }
+  // cosmetic spend. Deducts only if affordable.
+  function spendBonusSparks(n) {
+    const cost = Math.max(0, Math.floor(Number(n) || 0));
+    const bal = loadBonusSparks();
+    if (bal >= cost) { const next = bal - cost; saveBonusSparks(next); return { ok: true, balance: next }; }
+    return { ok: false, balance: bal };
+  }
+  // Local BONUS-purchased entitlements. Cashable-Sparks buys grant a SERVER entitlement via
+  // spendSparks; Bonus buys are client-side (the swap-seam backend isn't live), so their
+  // FREE community unlocks — owned by EVERYONE, no purchase / no backend (the store renders "Equip", the loadout lists it). Key = "item_type:item_id".
+  var FREE_ITEMS = { 'skin:celines_razor': 1 };   // CelinesRazor × Dion guitar — gifted to the community
+  // ownership lives here and ownsItem() checks it too. Key 'rr_bonus_owns' = ["skin:deadkin", …].
+  function loadBonusOwns() {
+    try { const a = JSON.parse(localStorage.getItem('rr_bonus_owns') || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function saveBonusOwns(a) { try { localStorage.setItem('rr_bonus_owns', JSON.stringify(a)); } catch (e) {} }
+  function getBonusOwns() { return loadBonusOwns().slice(); }
+  // buy a cosmetic with EARNED Bonus Sparks (client-side, no sign-in needed). Grants local ownership.
+  function bonusBuy(item_type, item_id, price) {
+    const cost = Math.max(0, Math.floor(Number(price) || 0));
+    const key = String(item_type) + ':' + String(item_id);
+    const owns = loadBonusOwns();
+    if (owns.indexOf(key) >= 0) return { ok: true, deduped: true, balance: getBonusSparks() };
+    const res = spendBonusSparks(cost);
+    if (!res.ok) return { ok: false, error: 'insufficient_bonus', balance: res.balance };
+    owns.push(key); saveBonusOwns(owns);
+    return { ok: true, balance: res.balance };
+  }
+
+  // ===========================================================================
+  // RHYTHM WAGER (build66) — host-run tournament PRIZE POOLS: an entry-fee pool (winner takes
+  // the pot) and a parimutuel SIDE-BET (pickers split the pot). The host picks the mode + buy-in.
+  // ---------------------------------------------------------------------------
+  // ▓▓▓ OWNER DECISION — 2026-06-22: BONUS SPARKS ONLY. CASHABLE WAGERING IS OFF THE TABLE. ▓▓▓
+  // The owner decided wager tournaments run PERMANENTLY on BONUS Sparks (platform-only, NON-CASHABLE
+  // in-game points earned by play). There is NO real-money path and we are not building one. Why this
+  // is clean: gambling needs prize-of-value + chance + consideration TOGETHER. Bonus Sparks can never
+  // be converted to cash, so there is NO money prize — this is a skill points-competition (like XP /
+  // leaderboard points), not gambling. Keep it that way: NEVER let Bonus Sparks become cashable, and
+  // NEVER route a wager through cashable Sparks. (A quick attorney sign-off on the Bonus-only model is
+  // still worth getting for total comfort — see WAGER_BACKEND_BRIEF.md.)
+  //
+  // This runs ENTIRELY on a LOCAL Bonus stand-in so the full UI + pool LOGIC works + is testable TODAY.
+  // The function SIGNATURES double as a backend swap-seam: if the platform ever wants the pot escrowed
+  // SERVER-SIDE (still Bonus, just authoritative across clients), the backend can expose join/settle/
+  // refund and we read balances back — we never compute a cashable delta locally. Re-enabling a CASHABLE
+  // currency is deliberately NOT a flag flip — it would be a full regulated-operator buildout (server
+  // escrow + server-authoritative scoring + KYC/geo + legal + a high-risk processor) and is OUT OF SCOPE.
+  //
+  // ▓▓ HARD RULES (load-bearing) ▓▓
+  //  1. The client NEVER moves CASHABLE Sparks. A currency:'sparks' call is ALWAYS REFUSED, period.
+  //  2. Bonus Sparks are non-cashable and must STAY non-cashable — that is the entire legal basis.
+  //  3. LOCAL MODEL: each client moves ONLY ITS OWN Bonus balance — it debits its own buy-in on join,
+  //     and only the CHAMPION's client credits the pot on settle (each non-winner simply loses its
+  //     stake). This mirrors exactly how a server-side Bonus escrow would net out per-account.
+  // ===========================================================================
+  var WAGER_SERVER_MODE = 'local';   // 'local' (Bonus stand-in) | 'server' (Bonus escrow API, optional). Cashable is NOT a mode.
+  var WAGER_MAX_BUYIN = 100000;      // sanity clamp on a single buy-in/bet (Bonus). Raised from 5000 (build66) — Bonus is non-cashable AND wagerCanStake already clamps to the player's actual balance, so a big pot is harmless + fun.
+  function _wagerPools() { try { return JSON.parse(localStorage.getItem('rr_wager_pools') || '{}'); } catch (e) { return {}; } }
+  function _saveWagerPools(p) { try { localStorage.setItem('rr_wager_pools', JSON.stringify(p)); } catch (e) {} }
+  // credit the FULL amount to the local Bonus balance (a pot can exceed the per-award cap; this is
+  // entrant-funded REDISTRIBUTION of already-debited stakes, not a free grant — so chunk past the cap).
+  function _wagerCredit(n, reason) {
+    var left = Math.max(0, Math.floor(Number(n) || 0));
+    while (left > 0) { awardBonusSparks(Math.min(left, BONUS_AWARD_CAP), reason); left -= BONUS_AWARD_CAP; }
+    return getBonusSparks();
+  }
+  // EVERY pool is forced to BONUS — cashable wagering is off the table by owner decision, so 'sparks' is
+  // never honored regardless of WAGER_SERVER_MODE. (Even a future server mode is a Bonus escrow, not cash.)
+  function _wagerForceBonus(currency) { return 'bonus'; }
+  // can the local player stake `amount` of `currency`? Bonus only — a cashable 'sparks' stake is never allowed.
+  function wagerCanStake(amount, currency) {
+    amount = Math.max(0, Math.floor(Number(amount) || 0));
+    if (currency === 'sparks') return false;   // cashable wagering not supported — Bonus Sparks only
+    return getBonusSparks() >= amount;
+  }
+  // host opens an escrow pool for a tournament. Returns {potId,...}. Local: a record in rr_wager_pools.
+  function wagerOpenPool(tournamentId, buyIn, currency, opts) {
+    currency = _wagerForceBonus(currency);
+    buyIn = Math.max(1, Math.min(WAGER_MAX_BUYIN, Math.floor(Number(buyIn) || 0)));
+    var potId = 'pool_' + String(tournamentId || rrUuid());
+    var pools = _wagerPools(), rake = Math.max(0, Math.min(0.4, (opts && +opts.rake) || 0)), mode = (opts && opts.mode) || 'pool';
+    var p = pools[potId];
+    if (!p) {
+      p = pools[potId] = { potId: potId, tournamentId: tournamentId, mode: mode, buyIn: buyIn, currency: currency, rake: rake, paid: {}, bets: {}, pot: 0, state: 'open' };
+      _saveWagerPools(pools);
+    } else if (p.state === 'open' && !Object.keys(p.paid).length && !Object.keys(p.bets).length) {
+      // host is still configuring + nobody has staked yet → safe to update the buy-in/mode (locks the moment the first entry lands)
+      p.buyIn = buyIn; p.mode = mode; p.currency = currency; p.rake = rake; _saveWagerPools(pools);
+    }
+    return { potId: potId, buyIn: p.buyIn, currency: p.currency, pot: p.pot, state: p.state };
+  }
+  // ENTRY-FEE POOL: an entrant pays the buy-in IN. idemKey makes a refresh/replay a no-op. Local: debits Bonus.
+  function wagerJoinPool(potId, playerId, idemKey) {
+    var pools = _wagerPools(), p = pools[potId];
+    if (!p) return { ok: false, error: 'no_pool' };
+    if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };
+    if (p.paid[playerId]) return { ok: true, deduped: true, balance: getBonusSparks(), escrowed: p.buyIn, pot: p.pot };   // already paid → never double-charge (covers refresh + idemKey replay)
+    var res = spendBonusSparks(p.buyIn);
+    if (!res.ok) return { ok: false, error: 'insufficient', balance: res.balance };
+    p.paid[playerId] = { at: Date.now(), idemKey: idemKey || rrUuid() }; p.pot += p.buyIn; _saveWagerPools(pools);
+    return { ok: true, balance: res.balance, escrowed: p.buyIn, pot: p.pot };
+  }
+  // SETTLE: pay the champion the whole pot (minus rake), ONCE. Local: only the champion's OWN client credits.
+  // `myId` = the local player's id (so each client settles its own view; the host result is authoritative).
+  function wagerSettlePool(potId, championId, myId, idemKey, potOverride) {
+    var pools = _wagerPools(), p = pools[potId];
+    if (!p) return { ok: false, error: 'no_pool' };
+    if (p.state === 'settled' || p.state === 'refunded') return { ok: true, deduped: true, balance: getBonusSparks(), pot: p.pot };
+    if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };
+    // grossPot: the HOST-authoritative total (potOverride) — in the multi-client stand-in the champion's own record only holds
+    // their own buy-in, so the full pot is passed in from the replicated tour.pot. Falls back to the local record (unit tests).
+    var gross = (potOverride != null) ? Math.max(0, Math.floor(potOverride)) : p.pot;
+    var rake = Math.floor(gross * (p.rake || 0)), payout = gross - rake;
+    if (championId && myId && championId === myId && payout > 0) _wagerCredit(payout, 'wager_win');
+    p.state = 'settled'; p.settledTo = championId; p.pot = 0; _saveWagerPools(pools);
+    return { ok: true, balance: getBonusSparks(), payout: payout, rake: rake, grossPot: gross, champion: championId };
+  }
+  // REFUND: every entrant gets their buy-in back (pool dissolved pre-champion). Same drain primitive as settle.
+  // Each client refunds ITS OWN entry (its own debit).
+  function wagerRefundPool(potId, myId, idemKey) {
+    var pools = _wagerPools(), p = pools[potId];
+    if (!p) return { ok: false, error: 'no_pool' };
+    if (p.state === 'settled' || p.state === 'refunded') return { ok: true, deduped: true, balance: getBonusSparks() };
+    if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };
+    if (myId && p.paid[myId]) _wagerCredit(p.buyIn, 'wager_refund');
+    if (myId && p.bets && p.bets[myId]) _wagerCredit(p.bets[myId].stake, 'sidebet_refund');   // build66: a side-bet stake also refunds on cancel
+    p.state = 'refunded'; p.pot = 0; _saveWagerPools(pools);
+    return { ok: true, balance: getBonusSparks() };
+  }
+  // SIDE-BET (parimutuel, Bonus-only): a bettor stakes on WHO will win. idemKey-safe. Local: debits Bonus.
+  function wagerPlaceBet(potId, outcomeId, stake, bettorId, idemKey) {
+    var pools = _wagerPools(), p = pools[potId];
+    if (!p) return { ok: false, error: 'no_pool' };
+    if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };   // cashable side-bets are a hard no-go (bookmaking) — never
+    if (p.state !== 'open') return { ok: false, error: 'locked' };
+    if (p.bets[bettorId]) return { ok: true, deduped: true, balance: getBonusSparks() };    // one bet per player; replay is a no-op
+    stake = Math.max(1, Math.min(WAGER_MAX_BUYIN, Math.floor(Number(stake) || 0)));
+    var res = spendBonusSparks(stake);
+    if (!res.ok) return { ok: false, error: 'insufficient', balance: res.balance };
+    p.bets[bettorId] = { outcome: String(outcomeId), stake: stake, at: Date.now(), idemKey: idemKey || rrUuid() };
+    p.pot += stake; _saveWagerPools(pools);
+    return { ok: true, balance: res.balance, pot: p.pot };
+  }
+  // live indicative parimutuel odds per outcome: {outcomeId: {staked, oddsX}} (final odds set at lock).
+  function wagerBetOdds(potId) {
+    var pools = _wagerPools(), p = pools[potId]; if (!p) return {};
+    var WT = 0, byO = {}; for (var b in p.bets) { var e = p.bets[b]; byO[e.outcome] = (byO[e.outcome] || 0) + e.stake; WT += e.stake; }
+    var WR = Math.floor(WT * (1 - (p.rake || 0))), out = {};
+    for (var o in byO) out[o] = { staked: byO[o], oddsX: byO[o] > 0 ? +(WR / byO[o]).toFixed(2) : 0 };
+    return out;
+  }
+  // settle the side-bet: pickers of `winningId` split WR proportionally (floor; breakage discarded). Each
+  // client credits ITS OWN winnings. If nobody picked the winner → everyone is refunded their stake.
+  function wagerSettleBets(potId, winningId, myId, idemKey, totals) {
+    var pools = _wagerPools(), p = pools[potId];
+    if (!p) return { ok: false, error: 'no_pool' };
+    if (p.state === 'settled' || p.state === 'refunded') return { ok: true, deduped: true, balance: getBonusSparks() };
+    if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };
+    winningId = String(winningId);
+    // Authoritative pool-wide totals (WT = total staked, Wk = staked on the winner) come from the replicated tour state — in
+    // the multi-client stand-in each client's local p.bets holds only ITS OWN bet, so the totals must be passed in. Falls back
+    // to the local record for single-process unit tests.
+    var WT, Wk;
+    if (totals && totals.WT != null) { WT = Math.max(0, Math.floor(totals.WT)); Wk = Math.max(0, Math.floor(totals.Wk || 0)); }
+    else { WT = 0; Wk = 0; for (var b in p.bets) { WT += p.bets[b].stake; if (p.bets[b].outcome === winningId) Wk += p.bets[b].stake; } }
+    var mine = p.bets[myId];
+    if (Wk <= 0) {            // nobody picked the winner → refund my own stake (everyone is made whole)
+      if (mine) _wagerCredit(mine.stake, 'sidebet_refund');
+      p.state = 'refunded'; p.pot = 0; _saveWagerPools(pools);
+      return { ok: true, refunded: true, balance: getBonusSparks() };
+    }
+    var WR = Math.floor(WT * (1 - (p.rake || 0)));   // distributable pool after rake
+    var won = (mine && mine.outcome === winningId) ? Math.floor(mine.stake * WR / Wk) : 0;   // my proportional share if I backed the winner
+    if (won > 0) _wagerCredit(won, 'sidebet_win');
+    p.state = 'settled'; p.settledTo = winningId; p.pot = 0; _saveWagerPools(pools);
+    return { ok: true, balance: getBonusSparks(), payout: won, distributable: WR, winnerPool: Wk };
+  }
+  function wagerGetPool(potId) { return _wagerPools()[potId] || null; }
+  function wagerServerMode() { return WAGER_SERVER_MODE; }
 
   // ---------- STORE / entitlements seams (LIVE: Lovable GET /store, GET /entitlements,
   // POST /sparks/spend). All graceful when logged-out / backend dormant — never throw. ----------
@@ -126,12 +374,23 @@
   // entitlements cache so synchronous callers (Levels picker gating, Store equip state) can read ownership without awaiting.
   const _entitlements = { signed_in: false, owns: [] };
   function _setEntCache(list, signed) {
-    _entitlements.owns = Array.isArray(list) ? list.map(function (o) { return { item_type: String(o.item_type), item_id: String(o.item_id) }; }) : [];
+    // build58: normalize varied backend shapes — {item_type,item_id} | {type,id} | "level:high_seas" — so a purchased item
+    // reliably reads as OWNED (a shape mismatch otherwise hides ownership → the user gets charged twice).
+    _entitlements.owns = Array.isArray(list) ? list.map(function (o) {
+      if (typeof o === 'string') { var p = o.split(':'); return { item_type: String(p[0] || ''), item_id: String(p[1] || p[0] || '') }; }
+      var t = (o && (o.item_type != null ? o.item_type : o.type)) || '';
+      var i = (o && (o.item_id != null ? o.item_id : o.id)) || '';
+      return { item_type: String(t), item_id: String(i) };
+    }).filter(function (o) { return o.item_id; }) : [];
     _entitlements.signed_in = !!signed;
   }
   // synchronous ownership check (reads the last-fetched cache). Returns false until getEntitlements()/getStore() has run.
   function ownsItem(item_type, item_id) {
     var t = String(item_type), i = String(item_id);
+    if (FREE_ITEMS[t + ':' + i]) return true;   // FREE community unlock (e.g. CelinesRazor's guitar) — owned by everyone, no purchase, even for a fresh player
+    var _asPlayer = false; try { _asPlayer = /[?&]asplayer=1/.test(location.search); } catch (e) {}
+    if (!_asPlayer && (_isAdmin || _isDevUnlock())) return true;   // admin/dev owns everything; a fresh-player sim owns ONLY real entitlements
+    try { if (loadBonusOwns().indexOf(t + ':' + i) >= 0) return true; } catch (e) {}   // earned-Bonus-Sparks purchase (local, legit even for a fresh player)
     return _entitlements.owns.some(function (o) { return o.item_type === t && o.item_id === i; });
   }
   async function getEntitlements() {
@@ -141,16 +400,20 @@
       // build50: tolerate BOTH shapes — the live backend returns { entitlements:[…] } but the brief asks for { owns:[…] }.
       const owns = Array.isArray(out && out.owns) ? out.owns : (Array.isArray(out && out.entitlements) ? out.entitlements : []);
       _setEntCache(owns, !!(out && out.signed_in));
-      return { signed_in: !!(out && out.signed_in), owns: owns };
+      // return the NORMALIZED cache (not the raw backend list): store consumers key on {item_type,item_id},
+      // so handing back raw {type,id}/string rows would make a purchased item read as unowned → double charge.
+      return { signed_in: !!(out && out.signed_in), owns: _entitlements.owns.slice() };
     } catch (e) { return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() }; }
   }
   // POST /sparks/spend { item_type, item_id, idempotency_key } -> {ok,balance,granted,deduped}
   // 402 insufficient_sparks · 409 price_mismatch. Returns a normalized result the UI branches on.
-  async function spendSparks(item_type, item_id) {
+  async function spendSparks(item_type, item_id, idem) {
     if (!API_BASE) return { ok: false, error: 'no-api' };
     const tk = await getToken();
     if (!tk) return { ok: false, error: 'not-authed' };
-    const body = { item_type, item_id, idempotency_key: rrUuid() };
+    // build66 (launch-audit P1): reuse ONE idempotency_key per purchase intent (passed in by the caller) so a retry after a
+    // lost response dedupes server-side instead of double-charging real Sparks. Mint a fresh one only if the caller omits it.
+    const body = { item_type, item_id, idempotency_key: idem || rrUuid() };
     try {
       const out = await api('/sparks/spend', { method: 'POST', body, auth: true });
       if (out && typeof out.balance === 'number') saveSparksCache(out.balance);
@@ -244,9 +507,14 @@
         } else {
           // Native HLS (Safari) OR a direct file (wav/mp3/m4a)
           audio.src = this.url;
-          audio.addEventListener('canplay', ok, { once: true });
-          audio.addEventListener('loadeddata', ok, { once: true });
-          audio.addEventListener('error', () => fail('audio error code=' + (audio.error && audio.error.code)), { once: true });
+          // build65 (cycle-4): {once} listeners only self-remove when they FIRE — on this SHARED, reused <audio> element the
+          // two that DON'T fire persist and accumulate play-over-play. Remove ALL THREE on the first resolve OR reject.
+          var _onReady = function () { _cleanup(); ok(); };
+          var _onErr = function () { _cleanup(); fail('audio error code=' + (audio.error && audio.error.code)); };
+          var _cleanup = function () { audio.removeEventListener('canplay', _onReady); audio.removeEventListener('loadeddata', _onReady); audio.removeEventListener('error', _onErr); };
+          audio.addEventListener('canplay', _onReady);
+          audio.addEventListener('loadeddata', _onReady);
+          audio.addEventListener('error', _onErr);
           audio.load();
         }
       });
@@ -421,9 +689,11 @@
 
   let catalogLive = false;
   let catalogTracks = [];
+  let catalogVideos = [];        // music videos / films — split OUT of the music lists (their own category)
   let catalogRawCount = 0;       // total returned (incl. not-yet-ready), for display
 
   async function loadCatalog() {
+    _sectionsCache = null;   // build58: a fresh/grown catalog must recompute the rails (incl. a new Surprise + newest-first New)
     const forceMock = /[?&]mock=1/.test(location.search);
     if (API_BASE && !forceMock) {
       try {
@@ -445,17 +715,30 @@
             t.created_at = (+new Date(t.created_at)) || 0;
           });
           catalogRawCount = all.length;
-          // ONLY show songs that actually play — no dead taps, ever.
-          catalogTracks = all.filter(trackReady);
+          // ONLY show songs that actually play — no dead taps, ever. THE chokepoint:
+          // split videos OUT of the music catalog here, so every music surface (rails,
+          // browse, search, pickers) is music-only for free; videos go to their own bucket.
+          var ready = all.filter(trackReady);
+          catalogTracks = ready.filter(function (t) { return !isVideo(t); });
+          catalogVideos = ready.filter(isVideo);
           catalogLive = true;
           return;
+        } else {
+          // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
+          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Library is empty right now — showing samples', 'error'); } catch (e2) {}
         }
-      } catch (e) { console.warn('catalog fetch failed → preview catalog', e); }
+      } catch (e) {
+        console.warn('catalog fetch failed → preview catalog', e);
+        // build58: don't silently swap in fake sample songs — tell the player the live library didn't load (the refresh icon retries).
+        try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't reach the library — showing samples", 'error'); } catch (e2) {}
+      }
     }
     catalogLive = false;
     const mock = buildMockCatalog(1000);
     catalogRawCount = mock.length;
-    catalogTracks = mock.filter(trackReady);   // preview also shows only playable
+    var readyM = mock.filter(trackReady);   // preview also shows only playable
+    catalogTracks = readyM.filter(function (t) { return !isVideo(t); });
+    catalogVideos = readyM.filter(isVideo);
   }
 
   // re-fetch the catalog (the library grows constantly on the platform)
@@ -479,6 +762,29 @@
     return null;
   }
   function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
+  // ▼▼▼ SWAP-SEAM ▼▼▼ — media type (music vs video). Prefer an AUTHORITATIVE backend
+  // field (media_type / is_video). When Lovable ships it, ONLY mediaType() changes —
+  // isVideo/musicTracks/videoTracks and every caller stay put. Until then, fall back to
+  // a genre/title heuristic. Mirrors the BONUS-SPARKS seam. See VIDEO_SEPARATION_BRIEF.md.
+  // NOTE: the backend match is deliberately FUZZY (/video|film|^mv$/i) so a plausible value
+  // like 'music_video' / 'mv' / 'video/mp4' still classifies as video — an exact === 'video'
+  // would let such a value read as music (field present → heuristic skipped → silent re-leak).
+  function mediaType(t) {
+    if (!t) return 'music';
+    if (typeof t.media_type === 'string' && t.media_type) {        // backend field #1 (preferred)
+      return /video|film|^mv$/i.test(t.media_type) ? 'video' : 'music';
+    }
+    if (typeof t.is_video === 'boolean') return t.is_video ? 'video' : 'music';   // backend field #2
+    var g = String(t.genre || '').toLowerCase();                  // heuristic fallback (today)
+    if (g === 'music video' || g === 'ai film') return 'video';
+    if (/\bMV\b|music\s*video|official\s*video|visualizer|lyric\s*video/i.test(String(t.title || ''))) return 'video';
+    return 'music';
+  }
+  // ▲▲▲ SWAP-SEAM ▲▲▲
+  function isVideo(t) { return mediaType(t) === 'video'; }
+  function musicTracks() { return catalogTracks; }   // catalogTracks is already music-only post-split
+  function videoTracks() { return catalogVideos; }
+  function videoCount() { return catalogVideos.length; }
   function trackReady(t) {
     if (!t) return false;
     if (t.demo) return true;
@@ -500,15 +806,17 @@
   function rawCount() { return catalogRawCount; }
 
   // ---------- per-user best scores (localStorage now; API-backed later) --------
-  function loadScores() { try { return JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { return {}; } }
-  function gradeFor(acc) { return acc >= 0.97 ? 'S' : acc >= 0.9 ? 'A' : acc >= 0.8 ? 'B' : acc >= 0.65 ? 'C' : 'D'; }
+  let _scoresCache = null;   // build58: parse rr_scores ONCE — getBest() runs per song card (1100+), the per-call JSON.parse was the list-render hot path
+  function loadScores() { if (_scoresCache) return _scoresCache; try { _scoresCache = JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { _scoresCache = {}; } return _scoresCache; }
+  function gradeFor(acc) { return acc >= 0.95 ? 'S' : acc >= 0.88 ? 'A' : acc >= 0.75 ? 'B' : acc >= 0.60 ? 'C' : 'D'; }   // build71: align this fallback grader to the ENGINE scale (game.js endGame: S>=95/A>=88/B>=75/C>=60). Runs carry res.grade so this only affects the latent fallback (legacy rr_scores / external callers) — but a cover card and the results screen must never disagree.
   function getBest(trackId) {
     const s = loadScores(); let best = null;
     ['easy', 'medium', 'hard'].forEach(d => { const r = s[trackId + '|' + d]; if (r && (!best || r.score > best.score)) best = Object.assign({ difficulty: d }, r); });
     if (best) return best;
+    if (catalogLive) return null;   // build58: skip the O(n) catalog scan on LIVE data — _mockBest only exists in mock/preview (this scan ran per card → ~n² on a full-list render)
     const t = catalogTracks.find(x => x.id === trackId);
     // build35 (audit P1): never surface a FABRICATED mock grade/score on LIVE data — only in mock/preview.
-    return ((!catalogLive && t && t._mockBest) || null);
+    return ((t && t._mockBest) || null);
   }
   function saveBest(trackId, res) {
     if (!trackId || !res) return;
@@ -549,9 +857,15 @@
     else if (mode === 'new') a.sort((x, y) => (y.created_at || 0) - (x.created_at || 0));
     else if (mode === 'hot') a.sort((x, y) => (y.play_count || 0) - (x.play_count || 0));
     else if (mode === 'bpm') a.sort((x, y) => (x.bpm || 0) - (y.bpm || 0));
+    else if (mode === 'featured') a.sort((x, y) => ((y.featured ? 1 : 0) - (x.featured ? 1 : 0)) || ((y.play_count || 0) - (x.play_count || 0)));   // build58: was a no-op (no branch) → Featured option did nothing
     return a;
   }
-  function sections() {
+  let _sectionsCache = null;   // build58: sections() recomputed 4 full sorts + a reshuffle on EVERY coverflow tab tap. Memoize per
+  function sections() {        // catalog version (invalidated in loadCatalog) so tabbing is free and Surprise stays STABLE (no re-roll on tab-back).
+    if (_sectionsCache) return _sectionsCache;
+    return (_sectionsCache = _computeSections());
+  }
+  function _computeSections() {
     // ready tracks lead every rail so the jukebox always opens on something playable. Only lightly float
     // a couple of ready leads (stable) so each rail keeps its OWN distinct order instead of collapsing to
     // the same playable few — the 4 rails must show DIFFERENT songs even when metadata is sparse.
@@ -559,7 +873,7 @@
     // SALTED per-track hash (stable across reloads) → each rail gets an INDEPENDENT permutation, so the
     // rails stay distinct even when created_at/play_count are all empty (different salt = different order).
     const hsh = (t, salt) => { var s = salt + String(t.id || t.title || ''), h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h; };
-    const dateOf = (t) => Date.parse(t.created_at) || 0;
+    const dateOf = (t) => (typeof t.created_at === 'number' ? t.created_at : Date.parse(t.created_at)) || 0;   // build58: created_at is already normalized to ms (loadCatalog/mock) — Date.parse(number) was NaN→0, collapsing "New" to the hash order (a fresh upload never surfaced first)
     const feat = catalogTracks.filter(t => t.featured);
     // FEATURED: real featured flags first; fallback = a curated slice on the 'F' permutation.
     const featured = readyFirst((feat.length ? feat : catalogTracks.slice()).sort((a, b) => hsh(a, 'F') - hsh(b, 'F'))).slice(0, 24);
@@ -568,8 +882,9 @@
     // NEW: newest-first by created_at, then the 'N' permutation when dates tie.
     const fresh = readyFirst(catalogTracks.slice().sort((a, b) => (dateOf(b) - dateOf(a)) || (hsh(a, 'N') - hsh(b, 'N')))).slice(0, 24);
     const readyPool = catalogTracks.filter(trackReady);
-    const shuffled = (readyPool.length ? readyPool : catalogTracks).slice().sort(() => Math.random() - 0.5).slice(0, 24);
-    return { featured, hot, new: fresh, surprise: shuffled };
+    const pool = (readyPool.length ? readyPool : catalogTracks).slice();
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }   // build58: unbiased Fisher-Yates (the old comparator shuffle was non-uniform); memoized so Surprise is a STABLE pick per load
+    return { featured, hot, new: fresh, surprise: pool.slice(0, 24) };
   }
 
   // ---------- preview player (short clip when a song is focused) ---------------
@@ -684,7 +999,13 @@
 
     const playBtn = $('play-btn');
     const playLabel = playBtn ? playBtn.querySelector('span') : null;
-    if (!ready) {
+    const vid = isVideo(track);   // a music video / film \u2014 never launchable into the rhythm engine (deferred)
+    if (vid) {
+      // also protects a shared /play?trackId=<videoId> deep link (the raw /track row bypasses the catalog split)
+      $('sheet-hint').textContent = 'Music video \u2014 playable video is coming to the game soon.';
+      if (playBtn) { playBtn.disabled = true; playBtn.classList.add('not-ready'); }
+      if (playLabel) playLabel.textContent = 'Video';
+    } else if (!ready) {
       $('sheet-hint').textContent = status === 'failed'
         ? 'This track couldn\u2019t be processed for the game.'
         : 'This track is still being prepared for play \u2014 check back soon.';
@@ -700,14 +1021,23 @@
 
     // wire the play button (game.js #play-btn → _menuPlayHandler)
     window.RhythmGame.setMenuPlayHandler(() => {
-      if (!trackReady(track)) return;          // hard guard: never start a dead song
+      if (!trackReady(track) || isVideo(track)) return;   // hard guard: never start a dead song or a video
       closeSheet();
       stopPreview();
       currentTrack = track;
+      // build58: a plain free-play must NOT bank stars onto a previously-played campaign level (stale _activeLevel).
+      // build59 FIX: but the sheet's env-picker wrapper (index.html setMenuPlayHandler) STAGES the chosen environment
+      // (_isEnv) right BEFORE this fires — clearing it here is what made "Play this song in the X environment" load the
+      // DEFAULT. So only scrub when the active level is NOT a deliberately-staged env.
+      try {
+        var _stagedEnv = window.RhythmLibrary && window.RhythmLibrary.activeLevel && window.RhythmLibrary.activeLevel();
+        if (!(_stagedEnv && _stagedEnv._isEnv) && window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment();
+      } catch (e) {}
       if (liveTrack && hasServerChart(track)) {
         window.RhythmGame.play(liveProvider(track.id));               // server chart → scored + leaderboard
       } else if (liveTrack && trackAudioUrl(track)) {
         window.RhythmGame.playUrl(trackAudioUrl(track), {            // fast path → chart in-browser
+          id: track.id,                                             // carry the track id for telemetry (song_start/complete)
           title: track.title,
           artist: track.artist_credit_name || track.artist_name,
           genre: track.genre,
@@ -723,15 +1053,23 @@
   function closeSheet() { sheet.classList.remove('open'); }
 
   // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
-  function launchTrack(track) {
-    if (!track || !trackReady(track)) return false;
+  function launchTrack(track, opts) {
+    if (!track || !trackReady(track) || isVideo(track)) return false;   // never launch a video into the rhythm engine
     stopPreview();
     currentTrack = track;
+    // build59 FIX: a plain-track launch clears any stale campaign _activeLevel so its results can't false-credit a level.
+    // But launchLevel passes {keepEnvironment:true} — it has JUST set up the level's journey/skin/theme + _activeLevel, and
+    // clearing here was wiping it so EVERY authored level loaded as the default (moon-loop, no journey). Only clear for a
+    // genuine plain-track launch. (The jukebox free-play path doesn't even reach here — it clears in its own handler.)
+    if (!(opts && opts.keepEnvironment)) {
+      try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
+    }
     const liveTrack = catalogLive && track.id && track.id !== 'demo';
     if (liveTrack && hasServerChart(track)) {
       window.RhythmGame.play(liveProvider(track.id));
     } else if (liveTrack && trackAudioUrl(track)) {
       window.RhythmGame.playUrl(trackAudioUrl(track), {
+        id: track.id,   // carry the track id for telemetry (song_start/complete)
         title: track.title, artist: track.artist_credit_name || track.artist_name, genre: track.genre, artwork: track.artwork_url,
       });
     } else {
@@ -751,6 +1089,7 @@
     const c = loadCareer();
     return {
       runs: c.runs || 0, score: c.score || 0,
+      attempts: c.attempts || ((c.runs || 0) + (c.fails || 0)), fails: c.fails || 0,
       notesHit: c.notesHit || 0, notesTotal: c.notesTotal || 0,
       bestCombo: c.bestCombo || 0, fullCombos: c.fullCombos || 0,
       grades: Object.assign({ S: 0, A: 0, B: 0, C: 0, D: 0 }, c.grades || {}),
@@ -759,6 +1098,21 @@
   }
   const GRADE_ORDER = { D: 0, C: 1, B: 2, A: 3, S: 4 };
 
+  // small inline spark glyph (matches the store's SPARK_SVG path) so the results reward line is self-contained.
+  const BONUS_SPARK_GLYPH = '<svg class="bonus-spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>';
+  // Paint the "+N BONUS SPARKS" reward line on the results screen. Idempotent per run — the element
+  // is filled fresh each render. Only ever called for completed (non-failed) runs.
+  function renderBonusSparksLine(earned, balance) {
+    const el = document.getElementById('results-bonus');
+    if (!el) return;
+    el.innerHTML =
+      '<span class="rbonus-amt">+' + Number(earned).toLocaleString() + '</span>' +
+      BONUS_SPARK_GLYPH +
+      '<span class="rbonus-label">BONUS SPARKS</span>' +
+      '<span class="rbonus-total">balance ' + Number(balance).toLocaleString() + '</span>';
+    el.style.display = '';
+  }
+
   // ---------- ALWAYS-on local recorder — called by the engine on EVERY completed run,
   // including in-browser-charted tracks that have no server submit (i.e. all live tracks
   // today). This is what makes the cover-art grade chips + the Career profile reflect your
@@ -766,24 +1120,33 @@
   function recordLocal(results) {
     if (!results) return;
     const grade = results.grade || gradeFor(results.accuracy || 0);
-    // 1) lifetime career aggregate
+    const failed = !!results.failed;
+    // 1) lifetime career aggregate — a FAILED run is an attempt, not a performance. Count it under
+    // attempts/fails + timestamps only, and keep it OUT of runs/score/accuracy/grade-distribution so a
+    // bailed run can't drag your lifetime accuracy down or stuff the grade chart with phantom low grades.
     try {
       const c = loadCareer();
-      c.runs = (c.runs || 0) + 1;
-      c.score = (c.score || 0) + (results.score || 0);
-      c.notesHit = (c.notesHit || 0) + (results.notes_hit || 0);
-      c.notesTotal = (c.notesTotal || 0) + (results.notes_total || 0);
-      c.bestCombo = Math.max(c.bestCombo || 0, results.max_combo || 0);
-      if (results.full_combo) c.fullCombos = (c.fullCombos || 0) + 1;
-      c.grades = c.grades || {}; c.grades[grade] = (c.grades[grade] || 0) + 1;
-      if (currentTrack && currentTrack.id) { c.songs = c.songs || {}; c.songs[currentTrack.id] = (c.songs[currentTrack.id] || 0) + 1; }
+      c.attempts = (c.attempts != null ? c.attempts : ((c.runs || 0) + (c.fails || 0))) + 1;   // build72: back-fill legacy saves (no attempts field) from runs+fails so the lifetime attempt count isn't reset to 1 on the first post-upgrade run
       const now = Date.now();
       if (!c.firstPlay) c.firstPlay = now;
       c.lastPlay = now;
+      if (failed) {
+        c.fails = (c.fails || 0) + 1;
+      } else {
+        c.runs = (c.runs || 0) + 1;
+        c.score = (c.score || 0) + (results.score || 0);
+        c.notesHit = (c.notesHit || 0) + (results.notes_hit || 0);
+        c.notesTotal = (c.notesTotal || 0) + (results.notes_total || 0);
+        c.bestCombo = Math.max(c.bestCombo || 0, results.max_combo || 0);
+        if (results.full_combo) c.fullCombos = (c.fullCombos || 0) + 1;
+        c.grades = c.grades || {}; c.grades[grade] = (c.grades[grade] || 0) + 1;
+        if (currentTrack && currentTrack.id) { c.songs = c.songs || {}; c.songs[currentTrack.id] = (c.songs[currentTrack.id] || 0) + 1; }
+      }
       localStorage.setItem('rr_career', JSON.stringify(c));
     } catch (e) {}
-    // 2) per-song best + NEW BEST / GRADE UP badges (compare vs REAL saved scores, not the mock seed)
-    if (currentTrack && currentTrack.id && results.score > 0) {
+    // 2) per-song best + NEW BEST / GRADE UP badges (compare vs REAL saved scores, not the mock seed).
+    // A failed run isn't a best — don't let a bail overwrite your saved score or fire a NEW BEST badge.
+    if (!failed && currentTrack && currentTrack.id && results.score > 0) {
       let prevReal = null;
       try {
         const s = loadScores();
@@ -791,6 +1154,9 @@
       } catch (e) {}
       const isNewBest = !prevReal || results.score > (prevReal.score || 0);
       const isGradeUp = !!prevReal && (GRADE_ORDER[grade] || 0) > (GRADE_ORDER[prevReal.grade] || 0);
+      // thread these onto the results object so the Share Card (game.js share handler) can flag
+      // a NEW BEST / GRADE UP run without recomputing — recordLocal runs once, right after render.
+      try { results._newBest = isNewBest; results._gradeUp = isGradeUp; } catch (e) {}
       saveBest(currentTrack.id, results);
       const badges = document.getElementById('results-badges');
       if (badges) {
@@ -798,12 +1164,29 @@
         if (isGradeUp && !/grade up/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">Grade Up · ' + grade + '</span>');
       }
     }
+    // 3) BONUS SPARKS earn loop — award the platform-only SOFT currency for a COMPLETED run.
+    // Fires exactly once per completed run: recordLocal is called once from endGame(), and the
+    // `failed` guard excludes bailed/fail-out runs the same way the career aggregate above does
+    // (a failed run earns nothing). NEVER touches the cashable Sparks balance. The amount is
+    // stashed on results._bonusAwarded so the results screen can show "+N BONUS SPARKS".
+    if (!failed) {
+      const gradeBonus = { S: 50, A: 30, B: 20, C: 10 }[grade] || 0;
+      // base on final score + a grade kicker; clamp keeps a freak score from ballooning the grant.
+      const earned = Math.min(2000, Math.round((results.score || 0) / 2000) + gradeBonus);
+      if (earned > 0) {
+        const newBal = awardBonusSparks(earned, 'run_complete');
+        results._bonusAwarded = earned;
+        results._bonusBalance = newBal;
+        try { renderBonusSparksLine(earned, newBal); } catch (e) {}
+      }
+    }
     // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
     // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.
     // Tight (GH) timing feel raises the multiplier ceiling above the server's score bound, so
     // Tight runs are LOCAL PRACTICE ONLY — recorded locally (above) but never submitted to /score.
     var _tightRun = false; try { _tightRun = !!(window.RhythmGame && window.RhythmGame.getTimingFeel && window.RhythmGame.getTimingFeel() === 'tight'); } catch (e) {}
-    if (_tightRun && API_BASE && currentTrack && currentTrack.id !== 'demo' && results.score > 0 && !hasServerChart(currentTrack)) {
+    if (failed) { /* a failed run never submits to the account leaderboard — it isn't a completed score */ }
+    else if (_tightRun && API_BASE && currentTrack && currentTrack.id !== 'demo' && results.score > 0 && !hasServerChart(currentTrack)) {
       onSubmitResult({ error: 'practice' }, results);
     } else if (API_BASE && currentTrack && currentTrack.id && currentTrack.id !== 'demo'
         && results.score > 0 && !hasServerChart(currentTrack)) {
@@ -824,6 +1207,16 @@
     }
   }
 
+  // build72: catalog-side mirror of index.html's cleanName (it lives in a separate IIFE we can't reach) — scrub
+  // slur display names on the RESULTS leaderboard panel the same way the overlay board already does.
+  var LB_BADWORDS = ['nigger','nigga','faggot','retard','cunt','rape','kike','spic','chink','fuck','shit','bitch','whore','slut','dick','cock','pussy','asshole','bastard','nazi','wank','twat','jizz','coon','tranny'];
+  function scrubName(s) {
+    var raw = String(s == null ? '' : s).trim();
+    if (!raw) return 'anon';
+    var norm = raw.toLowerCase().replace(/[\s_\-.]/g, '').replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't').replace(/@/g, 'a').replace(/\$/g, 's').replace(/!/g, 'i');
+    for (var i = 0; i < LB_BADWORDS.length; i++) { if (norm.indexOf(LB_BADWORDS[i]) >= 0) return 'player'; }
+    return raw;
+  }
   // ---------- Leaderboard render (called by engine after a live server submit) ----------
   function onSubmitResult(out, results) {
     const wrap = $('results-leaderboard');
@@ -836,12 +1229,18 @@
       wrap.style.display = '';
       return;
     }
+    if (!(out.leaderboard && out.leaderboard.length)) {
+      // build72: a valid-but-empty board rendered a bare header over zero rows — show a "first to score" note instead
+      wrap.innerHTML = '<div class="lb-note">You’re the first to set a score here.' + (out.rank_global ? ' · ranked #' + out.rank_global : '') + '</div>';
+      wrap.style.display = '';
+      return;
+    }
     const rows = (out.leaderboard || []).map((r) =>
       '<div class="lb-row">' +
-        '<span class="lb-rank">#' + r.rank + '</span>' +
-        '<span class="lb-name">' + escapeHtml(r.display_name || 'anon') + '</span>' +
-        '<span class="lb-score">' + Number(r.score).toLocaleString() + '</span>' +
-        '<span class="lb-acc">' + (r.accuracy * 100).toFixed(1) + '%</span>' +
+        '<span class="lb-rank">#' + (r.rank != null ? r.rank : '–') + '</span>' +   // build72: en-dash on a missing rank (was "#undefined")
+        '<span class="lb-name">' + escapeHtml(scrubName(r.display_name)) + '</span>' +   // build72: profanity-scrub these public names (overlay board already did)
+        '<span class="lb-score">' + (isFinite(r.score) ? Number(r.score) : 0).toLocaleString() + '</span>' +   // build72: coerce a missing/non-numeric score → 0 (was NaN)
+        '<span class="lb-acc">' + (isFinite(r.accuracy) ? (Math.max(0, Math.min(1, r.accuracy)) * 100).toFixed(1) : '0.0') + '%</span>' +   // build66 (launch-audit P3): coerce a missing/non-numeric backend accuracy → 0.0% (was NaN%)
       '</div>').join('');
     wrap.innerHTML =
       '<div class="lb-head"><span>Leaderboard' +
@@ -892,15 +1291,28 @@
     } catch (e) { return { rows: [] }; }
   }
 
+  // build66: RHYTHM WAGER — host-run tournament prize pools / parimutuel side-bets (Bonus-Sparks stand-in +
+  // server swap-seam). Separate global so multiplayer.js drives it; the cashable-Sparks path is gated OFF
+  // (WAGER_SERVER_MODE='local' refuses 'sparks') until the backend escrow + server scoring + legal land.
+  window.RhythmWager = {
+    canStake: wagerCanStake, openPool: wagerOpenPool, joinPool: wagerJoinPool,
+    settlePool: wagerSettlePool, refundPool: wagerRefundPool,
+    placeBet: wagerPlaceBet, betOdds: wagerBetOdds, settleBets: wagerSettleBets,
+    getPool: wagerGetPool, serverMode: wagerServerMode, maxBuyIn: function () { return WAGER_MAX_BUYIN; }
+  };
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
     // identity + Sparks shell (UI reads these; real /sparks API later)
-    getUser, onAuthChange, getSparks,
+    getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
+    // BONUS SPARKS — platform-only soft currency (gameplay earn loop; NOT cashable). SWAP-SEAM in catalog.js.
+    getBonusSparks, awardBonusSparks, spendBonusSparks, bonusBuy, getBonusOwns,
     // store / entitlements (LIVE: GET /store, GET /entitlements, POST /sparks/spend)
     getStore, getEntitlements, spendSparks, ownsItem, _entitlements,
     fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
+    // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
+    isVideo, mediaType, musicTracks, videoTracks, videoCount,
     search, sortTracks, sections, getBest,
     preview, stopPreview,
     // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js

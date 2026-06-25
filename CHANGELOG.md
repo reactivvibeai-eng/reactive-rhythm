@@ -1107,6 +1107,959 @@ activates/skips/persists, `?novideo` kills it, no errors.
 fine-tune + per-level mechanic feel are the user's visual call (canvas screenshots time out headless).
 Dev hooks (`__rrDebug.*`, `?dev/?novideo/?ryo`, FPS meter) still present — strip at content-freeze.
 
+### v270 (build64) — NIGHT BATCH: lead-in buffer · FPS pass · hit-VFX overhaul + per-level particles + combo string-ignite · 2 MP bug fixes  ✅ node-checked + boots clean (needs real-browser playtest for feel)
+Seven fixes, planned via a 5-agent investigation then implemented.
+- **Lead-in buffer (game.js beginPlay):** music + notes used to start before the level finished animating in → missed notes. Now:
+  backdrop animates in → **2s settle** → 3·2·1 → music. SYNC-SAFE — audio and the note clock both anchor on `player.play()`, so
+  delaying it shifts both together (zero drift). Gated `!reduceMotion && !RhythmMP.isLive()` (MP keeps cross-peer start timing).
+- **FPS pass (safe, look-identical):** capped particles at 280 (trims oldest at high multiplier); GPU-promoted the horror lens
+  (`will-change/translateZ`) + converted `.hl-scan` from background-position (paint) to transform-scroll (composite); dropped the
+  Ken-Burns scale on the blurred `#bg-video-fill` + blur 14→8px (the heaviest GPU layer — user-approved). *(The bigger
+  warped-guitar re-slice cache, 128→1 draws/frame, is deferred — it's the most alignment-critical code and can't be pixel-verified
+  in the 0-width headless preview; flagged for a verified pass.)*
+- **Hit VFX overhaul (game.js):** replaced the flat orange blob with a layered additive burst — a 1-frame **core-flash disc**,
+  **velocity-stretched streak sparks** (not squares), an eased shockwave ring, size+alpha easing; Perfect > Great > Good intensity.
+- **Per-level hit particles (`_hitTheme()`):** the canvas burst is now themed off `data-rrtheme` (+ horror-lens override) —
+  Triemrys = **stylized crimson blood** (round, heavy-gravity drops), Melody/Shorty = **pink cat-paw dabs**, violet/bone/gold/
+  ember each get their own palette, default = crimson energy.
+- **Combo string-ignite:** on each 25-combo milestone the strings flare toward **gold → white-hot past 100** (`comboGlow` flash,
+  decays ~0.7s). Pure presentation — never touches the score ceiling.
+- **MP host-can't-pick FIX (multiplayer.js):** the picker gated on `matchRole==='host'`, but a ROOM host's flag is `room.isHost`
+  (matchRole is null until a match channel opens) → the host was treated as a guest. New `amPicker()` predicate everywhere +
+  broadcast picks over the room channel (with a joiner-side `song` listener) so the host can pick track/stage/difficulty live.
+- **Tournament dead-levels FIX (multiplayer.js):** `buildTourEnvRow` listed *all* levels incl. "COMING SOON" placeholders; now
+  filters to finished + owned stages (keeps Random/Arena), matching the room/song pickers.
+- Verified: `node --check` game.js + multiplayer.js, v270 boots clean, Triemrys env + lens apply, MP opens, **0 console errors**.
+
+### v266–v269 (build64) — "TRIEMRYS" — THE LAST LEVEL: a 1080p found-footage HORROR traveling level (in progress)  ✅ playable + verified
+The flagship final level, built with the user from their character art (Triemrys — a skeletal winged scarecrow) + their song
+**"Stop Staring At Me" (TriEmrys, Rock · 57285c90)**. A POV corn-maze slasher shot like a cursed camcorder tape.
+- **The visual movie (7 cinematic 1080p anchor stills, gpt_image_2, continuity-chained):** ① golden-hour CORN MAZE entrance (the
+  bait) → ② dusk path → ③ crimson moon + two crows smoking → ④ the lifeless effigy → ⑤ the hunt → ⑥ hiding → ⑦ the grave. The model
+  baked a found-footage HUD (● REC · OCT 31 1997 · climbing timestamp · 50mm) into every night frame — one continuous "tape."
+- **Triemrys guitar** — charred black body, twin demon-crow wing horns, burlap hay-sack panel, blood streaks, a rusted axe-head,
+  black-ivory bone trim. Verified play surface (110 rows, 7.25px), in the Store at 80✦.
+- **Horror-cam LENS (engine):** a per-level found-footage film layer (`lens:'horror'` → `body.rr-lens-horror` → `#horror-lens` in
+  `#game-bg` z3) — animated 35mm grain + crimson vignette + drifting VHS scanlines + chromatic-edge fringe, with a **VHS RGB-split
+  JOLT fired on every combo** (`lensJolt()` in `onCombo`). Toggles on at launch, off on teardown; reduce-motion safe; carried on
+  the env/free-play/MP path too (`lens` passthrough in `envFromAuthored` + the synthetic env).
+- **Wired playable:** `triemrys` added to `AUTHORED` (8-stop `journey`) + `RR_FINISHED_LEVELS`; FREE hard-tier boss finale; cover
+  from the effigy frame. Verified in-browser: launches, journey backdrop loads, charts the song, lens toggles clean, 0 errors.
+- **Motion — ALL 9 combo clips LIVE (Seedance 2.0, 1080p, matched start→end frames, verified):** every combo is now a moving
+  cinematic shot. The **Awakening** (combo at the effigy → lightning, eyes ignite, wings snap open, he tears off the post — a
+  TRAVEL that *lands* on the living Triemrys, stop 4b); the 6 **travels** — walk-in (sign+cars → into the maze mouth), the
+  day→night **whip-pan** (amber dusk drains to crimson moon), the dread **push-in** on the effigy, the **chase** (Triemrys lunges →
+  camera whirls & bolts into a blur sprint), the **dive-to-hide**, the **drag-to-grave** (a clawed hand seizes the lens → hauled to
+  the mound); the **walk-past** reactive (he crosses the gap as you hide); and the **grave DANCE** destination cutaway. Each
+  directed with explicit camera language and matched-frame so seams vanish; the camcorder HUD + Triemrys identity stay consistent
+  across all of them. Verified via frame sheets + in-browser reachability, 0 console errors. ~45✦/clip.
+- **Dwell LOOPS — all 8 LIVE (Seedance + `_ach_process.py` seamless xfade):** every stop now has a near-static ambient loop
+  (corn swaying, smoke curling, the moon glowing, Triemrys breathing on the post / looming alive), seamless by construction
+  (PSNR 27–42 dB). FINAL ASSET COUNT: 8 stills · 8 loops · 6 travels · 3 reactive/cutaway clips · cover · guitar. **The level is
+  100% complete:** every beat moves, every dwell breathes, 0 console errors. (Engine verification only — the 0-width headless
+  preview can't show live playback; needs a real-browser playtest to confirm in-game feel.)
+
+### v265 (build64) — THREE new store guitars: Razor · Wormfeast · Kitsune (gen → keyed → measured → verified play surfaces)  ✅ verified in-browser
+Three brand-new premium guitar skins (80✦ each), generated end-to-end and wired as real, equippable play surfaces.
+**Pipeline** (reusable): uploaded the verified template `crimson-chaos-ryo.png` as an i2i reference (media_upload → media_id) →
+`gpt_image_2` (Higgsfield), 9:16, 2k/high, i2i with a "keep the 5 strings + neck, re-skin the body/horns/headstock" prompt →
+1520×2688 renders on black → NEW keyer `assets/guitars/_aikey.py` (border flood-fill of the near-black bg → alpha, preserving
+interior darks; erode+feather) → `_measure_adaptive.py` (string fit, overlay-verified riding the strings nut→bridge) →
+`_trim_remap.py` (tight cutout + remapped fractions) → halved to ~1518px to match existing assets → `SKIN_GEOM verified:true`.
+**The three:** **Razor** — matte dark-purple emo-punk bass, chipped + sticker-bombed (Gorillaz-style graphic-novel art), chrome
+belt-buckle hardware + stainless razor-blade inlays, toxic green-neon edge glow (164 clean rows, res 7.1px). **Wormfeast** — body
+carved from interlocked skulls + wet eyeballs with worms crawling out the neck/horns, bone-grey wet-horror (109 rows, res 5.8px).
+**Kitsune** — carved ivory fox-fur body, fox-ear horns, a snarling white fox-skull crowning the headstock, Ōkami crimson linework
+(112 rows, res 14.3px — fur texture noise, fit overlay-verified). Wired: 3 `SKIN_GEOM` entries (game.js, all `verified:true`),
+3 `SKIN_GUITAR` mappings + 3 `STORE_FALLBACK` skin items + 3 `*-card.jpg` store thumbnails. Verified in-browser:
+`isSkinPlayable` true for all three, all three render in the store grid (18 cards total), 0 console errors. (Razor's green-neon
+accents are a deliberate, user-ratified asset color — the no-green rule covers UI chrome only, see green-fret exception.)
+
+### v264 (build63) — MP subtitle centering · clearer Sparks/Bonus + profile avatar · Shorty X guitar for sale · Neon-leftover block  ✅ verified in-browser
+Four screenshot-driven fixes. **(1) MP subtitle** — "Race a rival on the same track…" sat flush-left: the `<p class="mp-sub">`
+is a `max-width:460px` block inside `.mpx-step` (a 100%-wide block, NOT the flex-centering `.mp-card`), so with no
+`margin-inline:auto` it hugged the left edge. Fixed by editing only `.mp-sub` → `margin: 4px auto 10px; text-align: center;
+text-wrap: balance; max-width: 440px; line-height: 1.7` (centers the box AND the text, tidier wrap). **(2) Store balances** —
+the Sparks + Bonus pills read as two near-identical chips. Added the player's **profile avatar** (`#store-avatar`, reusing
+`getUser().avatar_url` → `<img>` with monogram/person-glyph fallback, gated guest state) anchored left of the balances so they
+read as *yours*; relabeled the Bonus pill "Bonus" → **"Bonus Sparks"**; added clarifying tooltips on both pills
+(real-balance vs earned-cosmetic). New `setStoreAvatar()` called from `render()`. **(3) Shorty X guitar for sale** — the
+`shorty-x.png` play surface (verified SKIN_GEOM) was only sold as a *level*, never as a guitar skin. Added a `{ item_type:'skin',
+item_id:'shorty_skin', title:'Shorty X', price_sparks:80, skin_url:shorty-x.png }` store item (distinct id from the level so the
+two purchases don't collide) + built `assets/guitars/shorty-x-card.jpg` (the PNG flattened on warm-black at 752×1344, matching
+the other card thumbs). **(4) Neon-leftover block** — the LIVE backend `/store` still serves `boss_neon` ("Neon Boss Level"/THE
+BREAKER) + `theme_neon` (Neon Theme), the never-built items v262 removed from the client fallback — a never-built level showing
+as buyable is a broken purchase. Added a client `STORE_HIDDEN = { boss_neon, theme_neon }` blocklist at the render filter
+chokepoint so they stay gone regardless of source (backend can't be edited from here — Lovable-owned). Verified in-browser:
+store renders 15 cards incl. the new Shorty X skin, Neon items gone, "Bonus Sparks" label + avatar logic clean, 0 console errors.
+
+### v263 (build63) — Leaderboard SHARE, integrated + always-on, with a polished MY-RANKINGS card  ✅ verified in-browser
+The leaderboard share was gated behind a *live* world rank (`youLiveRow`) — on the dormant/local board (where most players
+live) the **SHARE** button was hidden entirely. Now sharing is **always available** whenever there's anything to share: a real
+LIVE world rank still fires the gold **WORLD RANK** card; otherwise it builds a brand-new **MY-RANKINGS podium card** from the
+player's best local runs. `setYouRow` reveals the row on `youLiveRow || localRuns().length` and relabels the button
+("SHARE MY RANK" live vs "SHARE MY RANKINGS" local). `localRuns()` now also carries each run's `cover`.
+New `kind:'rankings'` card in `share.js` — reuses the full polished frame (warm-black bloom, chrome frame + crimson brackets,
+REACTIVE RHYTHM header + BETA chip, footer CTA) and the hero grade-ring + big score (the player's **MY BEST SCORE**), then:
+(a) a repurposed stat strip — **ACCURACY · TOP GRADE** (grade-colored) **· TOTAL RUNS · SONGS** (the per-note combo/notes cells
+would all read 0 on a rankings share, so they're swapped for real standings); (b) the empty judgment bar is skipped; (c) a
+gold-framed **MY TOP RUNS** podium replacing the guitar badge — #1/#2/#3 in gold/silver/bronze with score + grade. Verified by
+rendering the card in-browser (1080², decoded + eyeballed) and confirming the live un-gate (row reveals, label flips,
+board renders, 0 console errors). Brand-clean (black · crimson · chrome · gold, no purple).
+
+### v262 (build63) — Store cleanup · start-menu SETTINGS gear · MP room STAGE picker  ✅ verified in-browser
+Three screenshot-driven asks. **(1) Store** — removed the two never-built coming-soon placeholders (THE BREAKER boss +
+Neon Theme) from `STORE_FALLBACK`; the shop now lists only real, purchasable items. **(2) Start menu** — added a small
+**settings gear** to the menu-hub card (`#mh-settings`, gear SVG that spins on hover with a reduce-motion guard) wired to open
+the Settings/calibration screen via the existing `calib-open` control. **(3) Multiplayer room** — the setup step now has a
+**STAGE picker** (`#mpx-stage-row`, a radiogroup of Arena + every authored level) alongside the existing song + difficulty
+pickers, so a host can browse/choose song **and** level **and** difficulty. `sel.env` defaults to `__default` (Arena);
+`beginMatch` applies `RhythmLevels.applyEnvironment(sel.env)` (else `clearEnvironment`), `teardownMatch` clears it, and
+`resolveAndStart`'s fallback launch keeps the env when one is picked. Headless-verified (Arena + 9 levels render, selection
+broadcasts, 0 console errors); a full 2-device backdrop-apply test is left for a live playtest.
+
+### v261 (build63) — Shorty X: integrate the missing stop-1 REACTIVE clip (gets up annoyed → flops back into bed)  ✅ verified in-browser
+`assets/levels/sx-react-annoyed.mp4` (generated for the level but never wired — an expensive clip left orphaned) is now
+integrated. Added a generic **per-stop `reactive`** field to the journey engine: on a journey level, a combo at a stop that
+has a `reactive` clip plays it ONCE as a **stay-and-revert** cutaway (she glares at the cam / complains / flops back into bed
+→ reverts to the headphone-bob loop) BEFORE the next combo travels onward (the rage-chase to the kitchen). Implementation:
+`_intenseKick(forceSrc)` now accepts a specific clip; `onCombo` fires the current stop's reactive (tracked per-PLAY in
+`_reactedStops` so it never mutates the shared journey def, and guarded by `_jOn || _intenseOn` so a combo can't chop an
+in-flight clip); the reactive is added to the journey preload (warmed first). Wired `sx-stop1 reactive:` on the Shorty-X stop 1.
+Verified live: env launch → `sx-stop1-loop.mp4`, combo → swaps to `sx-react-annoyed.mp4` (reactiveFired:true), reverts, 0
+console errors. The mechanic is reusable — any traveling-level stop can now carry a stay-and-revert reactive.
+
+### v260 (build63) — STORE + CAMPAIGN wordmark PNGs + procedural CROWD CHEER for the encore  ✅ verified in-browser
+- **Wordmarks placed:** generated the STORE + CAMPAIGN wordmarks (gpt_image_2, matching the chrome+crimson LEADERBOARD treatment),
+  cropped tight + luminance-keyed to real alpha, placed at `assets/lbd/{store,campaign}-wordmark.png`. All 3 wordmark logos
+  (.lbd/.store/.levels) are now `mix-blend-mode: normal` (they have real alpha, so they composite cleanly over the video
+  backdrops instead of washing toward white on bright frames). Verified both load (1024px, `.on`, normal blend), 0 console errors.
+- **Crowd cheer (encore):** the encore now plays a CROWD CHEER — a procedural WebAudio applause synth (`playCheerSfx`: dense
+  band-passed noise + sparse clap transients swelling up, plus two rising "whoo" formants), used when no real `crowd-cheer.mp3`
+  is loaded (the encore still prefers the mp3 if you drop one in). No external asset + no audio blasted while generating. Exposed
+  `RhythmGame.playCheer`; gated by mute + SFX level. Wired alongside the existing `playStingSfx('big')` triumphant sting.
+
+### v259 (build63) — Pirates campaign song swap → "Blood Moon"  ✅ verified in-browser
+The `high-seas` Pirates level ("Across the Midnight Oceans") now plays the user-chosen **Blood Moon · Reactivvibeai** (Electronic ·
+174 BPM · 3:40, trackId `4fa302c2-a8c7-4cfc-aed2-a51ee2a618d5`) instead of the IROCK ZEE placeholder. Bonus: this track is
+`chart_status: ready` — it has a SERVER-BAKED chart, so the level loads instantly + leaderboard-safe (no in-browser charting).
+Verified against the live 1025-track catalog: track resolves, audio present, trackReady, and high-seas→trackId match. The level's
+pirate journey visuals + guitar are unchanged — only the song/chart swapped. 0 console errors.
+
+### v258 (build63) — REVIEW HARDENING: 6-dimension adversarial audit → 15 confirmed fixes (leaderboard integrity · stability · perf · brand · a11y)  ✅ verified in-browser
+Ran a 13-agent adversarial review (engine/MP/charter/UI-a11y/perf/brand, each verifying its own findings). Implemented every
+CONFIRMED + PARTIAL finding (false-positives like "combat-after-finish" and "ranking math" were correctly dismissed). 0 console errors.
+**Leaderboard integrity:** (1) score multiplier could hit **6×** under the 'tight' timing profile (comboCap:5 + overdrive),
+busting the 4×/1500-per-note ceiling — `MAX_MULT` (declared, never used!) now hard-clamps all 3 mult sites (curMult/handleHit/HUD).
+(2) **Spectators recorded a phantom LOSS** on their own ranked ladder (myFinal defaulted to 0) — gated on `!spectating`. (3) the
+"1500/note" comments were false (holds also pay a sustain bonus) — corrected to the real `notes_total*1500 + holds*HOLD_TOTAL*4`.
+**Stability/MP:** (4) the 8s settle safety-timer was never cleared → stale re-render on a fast rematch — stored + cancelled on
+settle/teardown/rematch. (5) `#mp-stun` veil + its hide-timer could linger past teardown — cleared in stopGame. (6) an active
+sustain kept scoring **during** an MP stun — now advances the marker without paying (no score, no refund-lump). (7) the boss
+charter-ease was a silent no-op for any non-Hard boss → **the medium Shorty-X got no relief**; now eases ANY campaign boss
+(verified medium-boss notes 465→355). **Perf:** (8) the 3 backdrop videos decoded forever on every screen — now `display:none` +
+`pause()` when their screen is inactive (verified the leaderboard video = display:none at boot), `position:fixed` so they don't
+scroll away, added to the `?novideo` killer, + a reduce-motion guard. **Brand:** (9) the silver podium used a cool **blue-grey**
+`#d6d8e2` (B>G>R, brand violation) → warm `--silver` (verified rgb(203,199,194)). **A11y/polish:** leaderboard tabs now set
+`aria-selected`; the stun veil is a `role=alert` live region (flips `aria-hidden`); the wordmark got real alpha (no more
+screen-blend wash over the video); combat-toggle radius matched to the pill family; loss-text contrast bumped; Easy now also
+fills the **lead-in** silence (head-gap, fillers 8→10). game.js + multiplayer.js node-checked.
+
+### v257 (build63) — POLISH: combat lightning-BOLT FX + procedural SOUND DESIGN + RANKED tag + next-level brief  ✅ verified in-browser
+Autonomous polish pass (the user's yellow + green list). 0 console errors; game.js + multiplayer.js node-checked.
+- **Combat lightning BOLT** (yellow): when YOU land a P-vs-P shock, a glowing ⚡ now streaks from your deck (bottom-center)
+  toward the rival's panel — `_spawnZapBolt()` in multiplayer.js targets `#mp-opp` (mobile card), the right half in desktop
+  split, or top-right as fallback; the rival panel does a `.zapped` strike-flash on landing. reduceMotion-gated. Verified the
+  bolt spawns with its `zbFly` animation at z-80.
+- **Procedural SOUND DESIGN** (yellow): two new no-asset WebAudio synths in game.js — `playZapSfx(incoming)` (noise-crackle
+  through a sweeping bandpass + a pitch-dropping square = an electric ZAP; harsher when you're the one hit) and
+  `playStingSfx(kind)` (a rising major-arpeggio sting). Wired: receiver stun → zap, sender → lighter zap, combo-tier cross-up →
+  sting, MP rank-up (tier change on a win) → big sting, ENCORE → big sting. All gated by mute + scaled by the SFX level.
+  Exposed `RhythmGame.playZap/playSting`. (The encore crowd-cheer still wants the optional `assets/crowd-cheer.mp3`.)
+- **RANKED tag** (yellow): a gold "RANKED" pill on the MP **PLAY NOW** button so players know Quick Match feeds the ladder
+  (survives `paintQuickBtn`'s text rewrites — it's a separate span). Verified present.
+- **Next traveling level** (green): designed + handed off as **NEXT_LEVEL.md** — "Midnight Velocity" (Ryo on a neon
+  motorcycle racing deeper through a midnight megacity), full 5-stop + 4-travel + cutaway structure, per-clip Seedance prompts,
+  guitar spec, and the drop-in level def. Build is asset-gated (needs the `mv-*` clips); wiring is ~20 min once they exist.
+  The campaign LEVELS grid already serves as the level picker.
+
+### v254 (build63) — BIG-LIST batch 2: MULTIPLAYER ranking + Quick Match + P-vs-P combat + leaderboard MP-stats/badges/image-title  ✅ verified in-browser
+The second half of the user's list — a full competitive MP layer. All verified in-browser (0 console errors):
+- **MP RANKED LADDER** (#87): local-first win/loss record in `multiplayer.js` (swap-seam for a future server ladder). Every settled
+  1v1 (Quick Match / challenge / room) records on `showWinner` — win +25 RP, draw +8, loss −12 (floored 0); a FORFEIT win (rival
+  left) counts in the W column but awards 0 pts (no farming); CPU warm-ups never record (`oppMeta.bot`). 7-tier ladder
+  UNRANKED→BRONZE→SILVER→GOLD→CRIMSON→INFERNO→ASCENDANT (brand-warm colors, no blue/purple). Verified: seeded 7W/3L/1D=340pts →
+  SILVER, 70% win, next GOLD need 10. Exposed `RhythmMP.getRank()`.
+- **Quick Match** (#87): the existing auto-pairing PLAY-NOW now feeds the ranked record + a lobby **rank chip** (tier · W/L · 🔥streak ·
+  RP), painted on every `step('lobby')`. CPU fallback stays unranked.
+- **P-vs-P COMBAT toggle** (#87): a lobby toggle (`rr_mp_combat`, host-decides via the `start` payload) — in P-vs-P, each new
+  30-combo streak broadcasts a `shock` to the rival; the receiver's inputs are **stunned ~2.2s** (game.js `mpStun` gates
+  `onLaneInput` → notes pass = the damage), with a full-board ⚡ "RIVAL SHOCKED YOU" veil + drain bar + miss SFX + shake; the sender
+  gets a "⚡ ZAPPED RIVAL" flash. P-vs-E = pure score race (default). Verified: toggle, stun overlay, mpStun/mpShockSent all safe + 0 errors.
+- **Leaderboard MULTIPLAYER tab** (#86): new tab → a rank hero card (tier · RP · progress-to-next bar · W/L/D · win% · streak · best),
+  a preview top-5 ladder (you inserted by RP among on-brand rivals; real global ladder backend-pending), recent matchups (from rank
+  history), and **badges** (MP tier + streak + first-blood/10-wins + campaign badges via `RhythmLibrary.earnedBadges`). Verified renders.
+- **Leaderboard image title** (#86): the "LEADERBOARD" text now carries an `<img>` wordmark (assets/lbd/lbd-wordmark.png) with a
+  self-healing styled-text fallback (mirrors the MP wordmark: pure-black art + mix-blend screen). Asset gen in progress.
+- **MP top-text spacing** (#87): `.mp-card` top padding 22→38px so the eyebrow clears the absolute Back/? buttons.
+- **Journey "clip replays from the beginning" flash — FIXED** (#91, v255): the real bug wasn't the transition — when a combo
+  swapped `#bg-video`'s src for the travel/cutaway clip, the load gap showed the stop's STILL (= the loop's frame 0) as the
+  poster, but the loop was mid-playback → the backdrop visibly SNAPPED from mid-loop back to frame 0 (only obvious on loops
+  with motion, hence "only a few clips"). Fix: `_holdCurrentFrame()` paints the EXACT current frame onto `#bg-image` (z-1,
+  above both video layers, same-origin → no canvas taint), HOLDS it through the load gap, then `_releaseHold()` crossfades it
+  out (0.34s, new `#bg-image` opacity transition) the instant the new clip actually paints (`_fadeVidIn` reveal callback).
+  Applied to BOTH the journey travel (`_journeyAdvance`) and the gag/boss cutaway (`_intenseKick`). No more snap-to-start.
+_Open: leaderboard wordmark PNG (generating); journey-clip smoothness (#91 — content-level, needs a Seedance re-gen of the one jarring
+Sasoka/ACH travel clip — the crossfade CODE is already maxed). MP combat balance is a first dial-in — confirm by feel in a real 2-device match._
+
+### v253 (build63) — BIG-LIST batch 1: difficulty re-tune (research-backed) + screen video bgs + env-picker cleanup + Shorty-X paid + profile/campaign theming + encore  ✅ verified in-browser
+First pass on the user's large request list. Difficulty was the #1 concern ("we need a lot of research") — ran a 5-dimension
+research workflow (easy-design / NPS targets / song-tracking / boss-ramp / accessibility, web-sourced) → synthesis → concrete
+levers, then implemented + **verified each in-browser via `__rrChartStats`**:
+- **EASY "blank moments" FIXED** (the literal cause was `fillMax.easy = Infinity` → the gap-filler path was skipped entirely).
+  Added a dedicated **max-silence guard** (single source, runs after the merge → no double-fill; re-sorts): wherever the gap to
+  the next note exceeds ~1.2 s on Easy, it injects whole-beat-grid taps on the previous lane so the lane is never empty. Verified:
+  demo Easy `fillers 0 → 8`, centroidLaneR 0.818, peakNps 2, ~1.3 NPS (kept the real-GH Easy density — fixed the FLOOR, not the
+  ceiling, per the research). Continuous gentle stream, no dead air.
+- **MEDIUM softened** ("a little too challenging"): MINGAP 0.34→0.38, tightenFloor 0.95→0.97 (loud choruses spike less), and even
+  with `noteVariety` ON, Medium now gets fewer/looser chords than Hard (chordGapMin 9 vs 5, chordMod 4 vs 3). Verified: demo Medium
+  ~550→**465 notes**, centroidLaneR **0.858** (no song-tracking regression — the old 0.68 trap avoided), peakNps 3.
+- **BOSS "I shouldn't be crying" FIXED**: campaign bosses now run a **Hard-MINUS** charter (keyed on `_levelCtx.boss`, set by
+  launchLevel) — npsCap 5→4 and Hard min-gap 0.22→0.26. Free-play Hard is UNTOUCHED (research: don't nerf it). Verified: boss-hard
+  demo peakNps **4** vs plain-hard **5**; centroidLaneR 0.88–0.89 on both. Also eased **Alarm Clock Hero** speed mod 1.12→1.06.
+  (Deeper section-aware centroid rewrite + boss sawtooth/recovery deferred — current song-tracking is already 0.82–0.89.)
+- **Screen VIDEO BACKDROPS** (#85): profile + campaign use `moon-loop.mp4`, leaderboard uses the browse `menu-loop.mp4`, behind a
+  scrim, perf-bg/onerror self-healing. Shared `.scr-vidbg`. Verified 3 present, cards lifted above.
+- **Env-picker cleanup** (#88): unfinished ("Coming Soon") environments are now **hidden** from the song→environment picker
+  (verified the 8 placeholders warm-/pulse-/frac-02/frac-boss drop out); PREMIUM finished levels stay (locked-until-owned; admin/dev
+  owns all). **Shorty-X is now PAID** (entitlement `{level:shorty_x}`, Store entry 120✦) — verified it shows as `shorty-x(paid)`.
+- **Profile equip theming** (#90): the equipped guitar's home-LEVEL art glows behind it in the trophy case (alarm_clock→ach,
+  sasoka→sasoka, deadkin→dk, pirate_fox→hs, bone_daddy, melody_pink). Verified sasoka → `sasoka-cover.jpg` on equip.
+- **Campaign guitar flair** (#89): the player's equipped guitar shows top-right on the campaign card (identity only — levels still
+  play their own themed guitar). Verified it updates to the equipped src.
+- **ENCORE moment** (#84): a strong finish (S/A grade or Full Combo) sweeps in a gold "ENCORE!" crowd-wants-more banner and turns
+  PLAY AGAIN into a pulsing **🎸 ENCORE** CTA. Verified banner + button styling apply.
+- **MP top-text spacing** (#87, partial): bumped `.mp-card` top padding 22→38 px so the eyebrow clears the absolute Back/? buttons
+  (the rest of the MP request — Quick Match, P-vs-P combat toggle, ranking — is the next batch). 0 console errors across the pass.
+_Remaining from the list: leaderboard image-title + MP stats/ranking/badges (#86), MP quick-match + combat toggle + ranking (#87),
+journey-video re-trims (#91, needs asset regen), judgment-callout timing review (#92)._
+
+### v252 (build63) — UI POLISH pass 2: overlay corner-×, branded toast, podium gold, micro-interactions (batch-2)  ✅ node-checked
+Second design-review batch (sole-editor): corner **×** close on the 4 card overlays; `role=dialog`/`aria-modal`/focus-management on
+8 overlays; branded `.rr-toast` + `showToast(msg, severity)` rewrite (backward-compatible); podium gold normalized to `#e0a93f`;
+micro-interactions on tiles/tabs/segments/grades; **RESET ALL SETTINGS** + Pause **RESTART** two-tap confirms; songs-search clear-×
++ empty state. node-checks passed (game.js/jukebox.js/catalog.js).
+
+### v251 (build62) — UI POLISH pass 1: system-layer consistency (a11y · brand · usability)  ✅ verified in-browser
+First batch from a design-review of every surface. Fixes the half-wired "system layer": (1) **overlay dismissal consistency** —
+Settings + How-to-Play now close on Escape AND backdrop-click like the other four overlays (they silently ignored Esc before);
+verified open→Esc→closed + backdrop→closed. (2) **Brand-rule fix** — success/connected UI chrome used GREEN (`.ctrl-hint.ok`
+#6fe08a, the `.gh-badge` green gradient) in violation of the no-green-in-chrome rule → recolored to the ratified gold/amber
+(verified `.ctrl-hint.ok` now rgb(224,169,63)). (3) **WCAG AA contrast** — `--ink-dim` #8a7f7c (4.33:1, failed AA on tinted
+bgs) → #a0938f (~4.7:1), still warm-dim, app-wide. (4) **Icon-button tooltips** — every header icon-btn now gets a hover
+`title` from its aria-label (mouse users had zero discoverability; 9/9 now have it). (5) **Privacy link** — the EU consent
+"Privacy" link was a dead `href="#"`+preventDefault on a legal surface → points to the real policy URL (owner to confirm the
+page exists). (6) **Settings mobile breakpoint** — `.set-row` stacks (label-above-control) <480px so the 3-button segments
+don't squeeze. 0 console errors. (Remaining review items — ARIA radio/tab state, role=dialog + focus management, reset-to-
+defaults + two-tap reset arms, search clear-× on the other 4 fields — queued for pass 2 + the menu/gameplay-surface findings.)
+
+### v250 (build62) — PLAYTEST pass: fix Medium over-trill regression (melody-following restored)  ✅ driven in-browser
+Live playtest of the deepened charter (drove playDemo + a real catalog track via __rrDebug/__rrChartStats). **Caught a regression
+from turning `noteVariety` on by default:** Medium was OVER-trilled (63 trill-notes) because the trill/stair gates for non-Hard were
+loose (0.55s / 0.60s), and trills re-lane notes into mechanical alternation → it tanked Medium's **centroidLaneR 0.87→0.68** (notes
+stopped following the melody — the exact thing we care about). Fix: tightened the non-Hard gates — trill `0.55→0.30`, stair
+`0.60→0.36` (Hard unchanged at 0.26/0.30) so the GH flavor stays a FLOURISH on Medium. Re-measured: Medium **centroidLaneR 0.68→0.863**
+restored, trills now rare, all else held (153 chords, 5 NPS, onGridPct 1.0). VERIFIED CURVE (demo): Easy taps+holds/2 NPS/no
+chords-trills-bombs · Medium 153 chords/5 NPS/0.86 centroid · Hard 274 chords/27 trills/8 bombs/7 NPS/0.88 centroid — a clean
+escalation, all beat-locked (onGridPct 1.0). Real track ("When I Face My DEMONS"): onGrid 1.0, centroidLaneR 0.79, Hard flavor
+present. LIVE LOOP verified: 7s of auto-pressed play → score climbed 0→4375 (hit→score→combo loop is live). 0 console errors.
+(60fps timing-window FEEL still wants the owner's hands-on test — headless throttles rAF.)
+
+### v249 (build62) — TELEMETRY client + EU consent gate (the "don't launch blind" piece)  ✅ verified in-browser
+The beta can now LEARN. New `telemetry.js` (`window.RhythmTelemetry`): `error(obj)` → `/clientlog`, `event(name,props)` →
+`/events` (matching TELEMETRY_BACKEND_BRIEF.md), a persisted `session_id` (`rr_sid`, crypto UUID), `app_version` (parsed from
+`?v`), best-effort non-blocking `user_id`. Transport = `navigator.sendBeacon` (survives unload) → `fetch keepalive` fallback,
+batched, flushed on pagehide/visibilitychange, **fire-and-forget + fully try/caught (never throws, never blocks gameplay)**.
+SWAP-SEAM: endpoint base from `RHYTHM_CONFIG`/`API_BASE` (no-op if absent) — repoint to the live Lovable endpoints with zero code
+change. **EU CONSENT GATE (strict):** a brand-styled dismissible bottom bar (Accept/Decline, persisted `rr_consent`, shown once,
+never a modal wall) — pre-consent EVERYTHING buffers locally (capped) and **nothing hits the network**; Accept → flush + go live;
+Decline → local `rr_errlog` only. The existing global error/unhandledrejection capture now ALSO forwards to `RhythmTelemetry.error`.
+Core funnel events wired: `load`, `song_start`, `song_complete`/`run_fail`, `store_open` (small, non-PII props). Verified: banner
+shows on first load; **before consent fetch 0 / beacon 0** (gate holds); after Accept the buffer flushes (3× sendBeacon to the
+correct URLs); a thrown test error reaches telemetry; endpoints 404 (not live yet) → silent degrade, **0 console errors**. TODO
+(owner): the Privacy-policy link is a `#` placeholder; Lovable must build `/clientlog` + `/events` (brief delivered).
+
+### v248 (build62) — Share ENTRY POINTS: a Wrapped-style CAREER card + leaderboard rank share  ✅ verified (rendered + eyeballed)
+Extends the share system beyond per-run results. New `share.js` `kind:'career'` card variant (reuses the Signal-Card bg/frame/
+wordmark/footer): a gold RANK ring (the player's rank TITLE, e.g. "RIFT WALKER"), **LIFETIME SCORE** + "N RUNS LOGGED", a
+RUNS · BEST COMBO · ACCURACY · SONGS strip, and a "CAREER SNAPSHOT — {name} · 🏅 N badges" row with the equipped guitar — a
+premium, always-available "my Reactive Rhythm career" share. Two entry points: a gold **"SHARE CAREER"** button on the Career
+profile (`#profile-share` → `getCareer()`+`getUser()`+`earnedBadges()`/`clearedTiers()` → `shareScore({kind:'career',…})`), and a
+**"SHARE MY RANK"** button on the leaderboard (`#lbd-share`, in a row that only un-hides when the LIVE board carries the player's own
+ranked `.you` row → `shareScore({kind:'leaderboard',rank,name:cleanName(…),score})`). `kind:'badge'`/`'tournament'` fall through
+gracefully (no crash) for future entry points. Verified: career card (square+story), badge/tournament/all-missing-fields all
+return valid PNGs without throwing; the career card was decoded + eyeballed (rank ring, lifetime score, stats, badges pill, loadout
+— all correct + brand-perfect); both buttons present; the rank-share row hides on a local/dormant board; 0 console errors.
+
+### v247 (build62) — MP discovery + streamer host-pacing · gameplay deepening (GH flavor on, harder ceiling)  ✅ verified
+**Multiplayer — open-room "LIVE NOW" discovery:** a LIVE NOW block now sits at the TOP of the MP lobby (above the old collapsed
+"Play with friends" disclosure) so a newcomer immediately sees joinable live tournaments/rooms — host name, room/tournament name,
+player count (e.g. 3/8), one-tap JOIN (routes through the existing joinTour/joinRoom path). Built from the existing
+toursDir/roomsDir (softPresence-fed; no new channel), filters to OPEN+joinable only, auto-promotes via openRoomCount() off the
+single updateBrowseCount() update point; empty → a "No live tournaments — 🏆 HOST ONE" CTA. **Streamer host-pacing (host-only):**
+a HOLD / PAUSE-BRACKET toggle (`tour._hostHold`) that suppresses BOTH auto-advance timers (the 45s AFK + 25s promoted-host) so a
+narrating host isn't auto-advanced; GO / START NEXT ROUND advances on the host's cue even while held; a host-selectable lead-in
+(5/10/15s, default unchanged); a per-round "N/N loaded ✓" ready indicator (reuses the existing tour._alive proof-of-life). Host-only,
+no-ops for non-hosts, inherited un-held after host migration. Verified via the dev tournament harness: LIVE NOW renders/filters/joins,
+HOLD suppresses + re-arms both timers with the round nonce intact, GO advances while held, ready indicator, host-only gating; 0
+console errors. (MP_PUBLIC stays false — full live behavior is the owner's 2-device playtest.)
+**Gameplay deepening (the "challenge GH players, not a barrage" pass):** `noteVariety` (GH trills / stair-runs / telegraphed
+bomb-ROWS / tighter chords) is now **ON BY DEFAULT** — density-neutral, so it adds GH texture without spam (A/B with `?notes=0`).
+**Hard NPS ceiling 4→5** (real teeth; bursts still peak higher). **Medium MINGAP 0.40→0.34** softens the Medium→Hard cliff.
+`openNotes`/HOPO left opt-in (`?open=1`). Verified on a Hard demo: trills 27, bomb-rows 4, chords 274, HOPOs 0 (opt-in off),
+sustained NPS 5 / peak 7, **onGridPct 1.0** (still beat-locked to the music, not scattered).
+
+### v246 (build62) — Social SHARE CARD: a generated, branded, post-ready score card  ✅ verified in-browser (rendered + eyeballed)
+The #1 marketing feature. New `share.js` (`window.RhythmShare`) renders a premium "Signal Card" to an offscreen Canvas (SQUARE
+1080×1080 + STORY 1080×1920, @2x supersample, `await document.fonts.ready`): warm-black + crimson bloom + chrome frame/corner
+brackets, REACTIVE RHYTHM wordmark, a GRADE RING (S=gold/A=crimson/B=chrome, NEW BEST flag + FULL COMBO ribbon), the big chrome
+SCORE + 3 gold stars, a 4-cell stat strip (ACCURACY · MAX COMBO · NOTES · COMBO TIER, the tier cell tinted from COMBO_TIERS),
+a judgment proportion bar, song identity (album art w/ crossOrigin + 1.5s timeout + crimson-diamond placeholder), the equipped
+guitar loadout chip, and a "PLAY FREE → reactivvibe.com/play" footer. `shareScore(data)` pre-bakes the PNG inside the click
+(transient-activation-safe) → `navigator.share({files})` on mobile; desktop/unsupported → a brand fallback panel (Download PNG ·
+Copy image · Copy caption · Share to X · Facebook). Taint-safe (re-renders without remote art so it never hard-fails). Wired into
+Results: the old "COPY SCORE" clipboard dump is now a gold "SHARE SCORE" button → `RhythmShare.shareScore(lastResults)`
+(game.js maps maxCombo/notesHit/notesTotal/accuracy/comboTierName/guitar correctly; recordLocal threads newBest/gradeUp). The
+card supports `kind:'leaderboard'` (rank plate) for future entry points. Verified: square/story/leaderboard/taint-fallback all
+produce valid PNGs; the rendered card was decoded + eyeballed (all stats + brand correct); 0 console errors.
+
+### v245 (build62) — Career PROFILE nameplate: login photo + name, with badges underneath  ✅ verified in-browser
+The Career/Controller profile now leads with the player's IDENTITY: an avatar + name row (`paintIdentity()` calls
+`RhythmCatalog.getUser()` → renders `avatar_url` as a photo, else a letter monogram; guest → person glyph + "Sign in on
+ReactivVibe to save your profile photo"). The campaign-BADGES section was MOVED directly under the nameplate, so a level win
+shows as a medal **underneath the player's name** — both of the owner's asks in one change. avatar_url was already fetched
+(it powers the library top-bar chip); this mirrors that logic. Verified: nameplate renders, guest glyph + hint show, mainOrder is
+nameplate → badges → stats (badge sits under the name), 0 console errors. (Logged-in photo path is identical to the proven
+top-bar avatar render.)
+
+### v244 (build61) — HYBRID campaign difficulty tiers (Easy/Medium open · Hard gated) + tier-master badges  ✅ verified in-browser
+Campaign restructured from one linear cross-tier spine into the user's **hybrid** model. `authoredUnlocked` is now tier-aware:
+**EASY (Warm-Up) + MEDIUM (Pulse) are OPEN tracks from the start; HARD (Fracture) unlocks only after the Medium tier is
+CLEARED.** Within each tier, levels still unlock story-mode style (clear the previous finished level in the SAME tier; the
+build60 skip-backward-past-unowned-paid guard is preserved). New `tierCleared(tierD, flat, ready)` (every OWNED finished level
+in the tier ≥1 star; unowned-paid skipped; empty tier = vacuously clear). The Fracture tier header shows
+"🔒 Clear PULSE to unlock" while gated and "✓ CLEARED" when done; the click toast names the gating tier. New
+`RhythmLibrary.clearedTiers()` → **tier-master badges** (a gold "PULSE MASTER / FRACTURE MASTER" medallion per fully-cleared
+tier) layered into the Career badges section. Verified live (fresh `?asplayer`): Pulse open (bone-daddy unlocked, shorty-x
+gated behind it), Fracture LOCKED with all 7 hard cards locked → after clearing both Pulse levels, Fracture unlocks (frac-01
+open, melody-boss still gated within-tier), Pulse shows "✓ CLEARED", and a "PULSE MASTER" badge appears (3 total badges).
+0 console errors. (Easy/Warm-Up tier stays hidden until easy levels exist in RR_FINISHED_LEVELS — author them to light it up.)
+
+### v243 (build60) — Campaign BADGES in the Career profile  ✅ verified in-browser
+Every campaign level you BEAT now earns a badge in the Career/Controller profile. Derived live from the existing
+level-progress (`rr_levelprog` / `recordLevelClear`) so it's always in sync — no parallel store. New
+`RhythmLibrary.earnedBadges()` (levels with ≥1 star, joined to title/tier/cover/theme/boss/grade/stars, newest-first) +
+`totalLevels()`. New "CAMPAIGN BADGES — N / TOTAL beaten" section: a medal per level (cover thumbnail in a theme-tinted
+ring, a grade chip, a BOSS tag, ★ rating), brand crimson/chrome/gold (theme rings, no blue/purple). Verified: seeded 2
+clears → both medals render (Noise Complaint ★★★ S boss, Get Busy ★★ B), header "2 / 17 beaten", 0 console errors.
+
+### v242 (build60) — Take money: DUAL-PRICED store + launch-hygiene polish (share meta, name filter) + ops docs  ✅ verified in-browser
+**Dual-priced store (the spend funnel):** cosmetics can now be bought with EARNED Bonus Sparks as well as real Sparks. New
+catalog.js local bonus-entitlement layer — `bonusBuy(type,id,price)` (dedups, refuses if short), `getBonusOwns()`, persisted to
+`rr_bonus_owns`; `ownsItem()` now also honors a local Bonus purchase (legit even for a fresh player). Store UI: a gold **Bonus
+Sparks balance chip** beside the crimson Sparks chip; every cosmetic shows BOTH a real-Sparks price (Buy → `spendSparks`, ready
+the instant the backend seeds SKUs) AND a Bonus price (`Use Bonus` → `bonusBuy`, works today, no sign-in needed — a real F2P
+earn→spend loop). Bonus price = real price × 30 (tunable `BONUS_RATE`); **premium LEVELS stay real-Sparks-only.** Cashable
+`spendSparks`/`/sparks/*` untouched (verified a `rr_sparks` sentinel stays null through bonus buys). Verified live: insufficient
+→ refused; sufficient → buys, deducts (3000→1500), owns + auto-equips, card flips to "Equipped"; repeat → deduped; 11 cosmetics
+dual-priced, 2 levels real-only.
+**OP.4 share meta + favicon:** `/play` now unfurls as a card — `<meta description>`, Open Graph + Twitter `summary_large_image`
+tags (pointing at `assets/share-card.png`, 1200×630 — the one asset to drop in), a self-contained inline-SVG favicon, and an
+apple-touch-icon. **OP.3 leaderboard name filter:** a beta-grade leet-normalizing profanity guard (`cleanName`) on the public
+solo-leaderboard display names → a slur can't render on the storefront (real server moderation stays a Phase-2 item).
+**Ops docs (subagent):** `MUSIC_LICENSING_CHECKLIST.md` (rights basis to embed the catalog + bundled assets in a monetized
+game — a pre-money gate), `DEPLOY_OPS.md` (rollback/kill-switch procedure + 6 beta go/no-go metrics), `TELEMETRY_BACKEND_BRIEF.md`
+(Lovable: POST /clientlog + /events + tables + rate-limiting on the public anon endpoints). 0 console errors.
+
+### v241 (build60) — Separate VIDEOS from music into their own category  ✅ verified in-browser (full leak battery)
+The platform catalog (now 1155 tracks) mixes music videos / AI films in with the songs — they ship a decodable m4a audio
+track so the game charted them as ordinary playable music and they polluted every music list. There is NO media_type field
+in the feed; videos are only weakly detectable (genre 'Music Video'/'AI Film' + titles like "…MV" / "(Music Video)"). Fix
+(designed via a 6-agent mapping/critique workflow over every track-listing surface):
+- **catalog.js media-type layer with a SWAP-SEAM:** `mediaType()/isVideo()/musicTracks()/videoTracks()/videoCount()`. Prefers
+  an authoritative backend field (`media_type`/`is_video`) the instant Lovable ships it; falls back to a genre/title heuristic
+  today. The seam match is deliberately FUZZY (`/video|film|^mv$/i`) — an exact `=== 'video'` would silently re-leak a value
+  like `media_type:'music_video'` (field present → heuristic skipped → not exactly 'video' → mis-read as music). Caught by the
+  adversarial critic; verified the regression can't happen.
+- **THE chokepoint:** loadCatalog now partitions `ready` tracks into music-only `catalogTracks` + `catalogVideos`, so every
+  music surface (coverflow rails, browse genres/artists, songs list, search, leaderboard picker) is music-only for free.
+- **Leaf guards (defense-in-depth):** launchTrack() refuses videos; openSheet() shows a deferred "Music video — coming to the
+  game soon" state (Play disabled, no engine handler — also protects a shared /play?trackId=<video> deep link); the 4 MP
+  pickers/rolls + the campaign stride pool + the leaderboard By-Song picker exclude videos; MP resolveAndStart nulls a video →
+  falls to demo.
+- **Videos category:** a distinct "▶ Videos (N)" tile in Browse (chrome-edged) opens a dedicated Videos list; the 'Music Video'
+  /'AI Film' genre tiles are gone from the music genres. Video PLAYBACK/gameplay is explicitly DEFERRED — this is grouping only.
+- **VIDEO_SEPARATION_BRIEF.md** written for Lovable (add authoritative media_type/is_video + real video_url + accurate duration
+  + optional ?media= filter). Verified live (1128 music / 10 videos): allTracks()/search/all 4 rails/genres/artists carry ZERO
+  videos; swap-seam regression tests pass (music_video/mv→video, is_video:false overrides an "MV" title, plain song→music);
+  launchTrack(video)=false; deep-link Play disabled + 0 engine calls; Videos view renders all 10. 0 console errors.
+
+### v240 (build60) — Bonus-Sparks EARN LOOP (the safe, gameplay-only soft currency)  ✅ verified in-browser
+First real monetization-foundation build. The platform has TWO currencies: cashable **Sparks** (real money — gameplay must
+NEVER mint these) and platform-only **Bonus Sparks** (the only thing play may award, spent later on cosmetics). Built the
+Bonus-Sparks side as a **local stand-in with a clear swap-seam** (catalog.js): `getBonusSparks` / `awardBonusSparks(n,reason)`
+(floors, no-ops ≤0, caps a single award at 5000) / `spendBonusSparks` (for future cosmetic spend, not yet wired), persisted to
+`rr_bonus_sparks`, exposed on `RhythmCatalog`. A prominent SWAP-SEAM comment marks where the real Lovable Bonus-Sparks endpoint
+replaces the localStorage I/O (same signatures). **Earn loop:** `recordLocal` (the single per-run recorder, called once from
+`endGame`) awards `min(2000, round(score/2000) + gradeBonus)` (S:50/A:30/B:20/C:10) on a COMPLETED run — **failed runs earn
+nothing** (same `failed` flag the career aggregate uses); the amount is stamped on the result for the screen. **Results dopamine
+line:** a `+N BONUS SPARKS` row on the results screen (chrome amount · gold spark glyph · running balance; black/crimson/chrome,
+no purple/blue/green; cleared each render so a stale line can't linger on a fail). **Cashable `getSparks`/`/sparks/*` left
+completely untouched.** Verified in-browser: award floor/cap/no-op correct; S-grade 80k run → +90; failed run → unchanged; and a
+`rr_sparks` sentinel (777) stayed 777 through every award/spend — gameplay never touches cashable value. 0 console errors.
+
+### v239 (build60) — Leaderboard visual overhaul: a real top-3 PODIUM + grade column  ✅ verified in-browser
+The board already had inline medal rows (build58); the user wanted the info "visually interpreted" better. Added a real
+elevated **top-3 podium** (2nd · 1st-raised-and-larger · 3rd, with avatar discs, medals, score, grade + accuracy) that
+headlines **every** board (global live, by-song live, and both local fallbacks), then a ranked **list for 4th+**. New
+**GRADE badge** column on list rows + podium (warm scale: S/A gold → B ember → C+ dim; no blue/purple). Relabeled the
+local fallback "Your best runs" → **"YOUR TOP RUNS"**. Normalized live + local rows through one `boardHtml()` pipeline
+(`normLive`/`podiumHtml`/`listRow`); `.lb-row` grid went 4→5 cols (rank/name/grade/score/acc), mobile grid + podium made
+responsive. By-Level champions view unchanged. Verified: seeded 4 runs → podium ordered 2-1-3, champion 184,200·S centered,
+grades S/A/B on podium + C on the 4th list row, header "YOUR TOP RUNS", 0 console errors.
+
+### v238 (build60) — COMBO TIER LADDER (a real "mode" past golden) + Browse-menu polish  ✅ verified in-browser
+**Combo tiers (the headline ask — "should there be another mode after the golden glow… develop from there"):** a named,
+escalating streak ladder — **COMBO → HOT (25) → BLAZE (75) → GOLDEN (150) → INFERNO (300) → ASCENDANT (500)**. Each tier
+recolors the big combo readout + its halo, swaps the "COMBO" label to the tier NAME, shifts the whole **board-energy hue**
+(crimson→orange→gold→white-hot→chrome — brand-locked warm palette, NO blue/purple), and fires a one-shot **"GOLDEN MODE / 
+INFERNO MODE!!" cross-up beat** (announcement + scan sweep + capsule pop + camera kick + haptics). GOLDEN+ get a steady halo;
+INFERNO a heat-shimmer; ASCENDANT a chrome digit-sweep. **Purely cosmetic by design — grants NO extra score** (the
+notes×1500, 4×-capped ceiling stays leaderboard-safe). `comboTierCur` resets on every break (miss/drop/early-release).
+Dev: `__rrDebug.setCombo(n)` / `.comboTier()`. Verified: every threshold flips tier+color+label cleanly (25→HOT … 500→
+ASCENDANT), resets to COMBO on break, 0 errors.
+**Browse-menu polish** (`jukebox.js`): the 268-track "Other" tile relabeled **"Uncategorized"** and pinned LAST; a new
+**top-5 genres quick-pick strip** above the grid; **1-track artists collapsed** into a single "Various Artists (N)" entry.
+Verified rendering on the mock catalog (top-strip = 5 chips, grid + artists render), 0 errors.
+
+### v237 (build60) — Premium env paywall backstops (browsing + multiplayer)  ✅ verified
+Reinforce "premium content must be purchased to be used." `applyEnvironment()` now hard-gates a **paid** environment on
+`ownsItem('level', id)` — an unowned paid env falls back to Arena instead of granting free premium backdrop. The env-picker
+chip lock switched from the purged `rr_dev` flag to real **ownership**. Multiplayer `hostResolveEnv` random tournament-stage
+pool now filters out `paid` stages so a paid backdrop can't leak into a free match. Verified fresh-player (`?asplayer=1`):
+`ownsItem('level','high-seas')` = false; node-checks pass; 0 console errors.
+
+### v236 (build60) — Campaign = true story mode + premium purchase-gating + custom guitar on ANY level  ✅ verified
+- **Campaign dead-end fix:** a paid level mid-spine no longer blocks the FREE level after it. `authoredUnlocked()` skips
+  backward past any unowned paid predecessor to the nearest playable one for its star-gate. Story order preserved (beat one
+  → unlock the next).
+- **`?asplayer=1` flag:** forces the true fresh-player view (DEV/ADMIN unlocks off, paid items locked) so gating can be
+  verified the way a real new user sees it.
+- **"My Guitar" vs "Level's" toggle** (Settings → `#set-levelguitar`, persisted `levelGuitar`): a player's **equipped skin
+  now rides onto ANY level** by default, or they can opt into the level's themed guitar. `setGuitarSkin` honors the pref
+  (equipped-wins unless "Level's").
+- Verified via `?asplayer=1`: only level 1 unlocked, paid levels show PAID+locked, clearing free levels before a paywall
+  unlocks the free level AFTER it; equipped deadkin skin shows on the Shorty-X level (falls back to the level guitar when
+  none equipped). 0 console errors.
+- **MONETIZATION.md** written: a prioritized revenue plan on the existing two-currency model (cashable **Sparks** vs
+  gameplay-only **Bonus Sparks**) — cosmetic store (dual-priced) → premium level "season" packs → battle pass; ethical
+  guardrails (cosmetics-not-power, no loot boxes), $0.05-anchored pricing ladder, phased beta→v1→v2 rollout, and the latent
+  `getEntitlements` `out.owns` vs `{entitlements:[]}` bug flagged as a pre-launch backend blocker.
+
+### v233 (build59) — Fix the MP coach card being un-dismissable (it blocked MP entry) + controller setup  ✅ verified
+- **Coach card stuck (blocker):** the v232 first-run MP coach card couldn't be closed — "Got it" left it stuck, locking
+  multiplayer. Cause: `.mpx-coach { display:grid }` (a class rule) OVERRODE the `hidden` attribute (`[hidden]{display:none}`
+  is the same specificity but earlier in source order, so it lost), so `dismissCoach()` set `hidden=true` but the card stayed
+  visible. Fix: `.mpx-coach[hidden] { display:none; }`. Verified hidden=false→grid (shows) / hidden=true→none (dismisses).
+- **Controller / Guitar setup (new, user-friendly):** Settings already had per-lane gamepad mapping (`padMap`/`bindLaneButton`/
+  press-to-bind), but it wasn't obvious or guitar-aware. Added a **guided "🎮 Set Up Controller" wizard** (walks lane-by-lane:
+  "press the button for Lane N" → captures the next gamepad press → advances; Cancel restores the prior map) — foolproof for any
+  controller incl GH guitars whatever their layout. Added **Guitar Hero controller auto-detect** (regex `GH_ID_RE` on the gamepad
+  id → "🎸 Guitar Hero controller detected" badge + "Set up my guitar" framed as Green/Red/Yellow/Blue/Orange frets) and a one-tap
+  **GH 5-fret preset** (`GH_PRESET_BTN=[0,1,3,2,4]`, tunable). New "Controller / Guitar Setup" section leads with the wizard;
+  manual per-lane caps moved under an **Advanced** disclosure. Keyboard rebind + MIDI + lane profiles + TEST INPUT untouched.
+  Verified: UI renders, wizard enters lane-by-lane + Cancel restores, GH preset applies/persists (`rr_padmap_gh`), 0 console errors.
+  (The live press-to-advance runs through the rAF-gated gamepad poll — code-verified end-to-end; exercises on a real controller.)
+
+### v232 (build59) — Multiplayer room-entry journey UX (research-backed, new-user-friendly)  ✅ verified
+A 4-agent swarm (confused-new-user simulation + flow audit + best-in-class MP-UX research) → 5 additive, low-risk room-journey
+wins (the MP state machine + the `MP_PUBLIC=false` public gate were intentionally left untouched — public posture is the user's
+call, pending server-authoritative scoring):
+- **Empty lobby never dead-ends:** Quick Match auto-starts a CPU warm-up after ~9s (was a 25s timeout that dumped you to an empty
+  roster), with friendly copy; "Practice vs CPU" promoted to a first-class always-visible action (was hidden/dev-gated).
+- **One dominant "▶ PLAY NOW"**; Open-a-Room / Browse / Host-a-Tournament collapsed under a "Play with friends ▸" disclosure;
+  cryptic 🜨 glyph replaced. (All existing button IDs/handlers preserved — restyle/relabel only.)
+- **Reassuring waiting states + invites:** live "Opponent is READY / Waiting…/ Both ready — starting" status; basic rooms now get
+  an "Invite a friend" button (copies a 4-letter ROOM CODE + share link) + an "Add a CPU" button so a solo host is never stuck;
+  added a `?mproom=` deep-link auto-join.
+- **Sign-in framed up front** (gentle, non-blocking, guest path intact) + a one-time dismissible **coach card** (Play Now / Play
+  with friends / Tournaments) with a "?" to reopen. Plus copy fixes (3–10 players), difficulty tooltips.
+- Verified: lobby renders PLAY-NOW-dominant, CPU fallback fires ~9s, room code + Add-a-CPU work, `__mpDev.run(3)` bracket still
+  runs, 0 console errors, no regression to campaign/levels. Full plan + deferred items in **`MP_UX_PLAN.md`**.
+
+### v231 (build59) — Charter musicality + readability overhaul (research-backed) + Shorty X → Medium  ✅ verified
+A 5-agent research swarm (GH chart design + human readability + music-information-retrieval + our-code audit) → 7 implemented
+changes to analyzeMusical/buildNotes so charts FOLLOW THE SONG and are readable (the user's "barrage I can't interpret" fix):
+- **#1 Beat-quantization (the key fix):** the analyzer already computed the tempo grid (period+phase) but only TAGGED notes —
+  it never MOVED them, so every note was ±10-40ms off the pulse. Now each kept onset SNAPS to the beat sub-grid (period/2 easy,
+  /4 med·hard, within ±18% tolerance) + dedupe. Verified onGridPct=1.0 (every note lands on the beat).
+- **Density:** MINGAP {0.50/0.40/0.22}, quiet-section easing (gap opens to 2× in soft passages), + a 1s sliding-window NPS cap
+  (hard 4 / med 3 / easy 2) so bursts can't spike. Hard ~1191→~784 notes.
+- **Lane-jumps bounded on Hard too** (maxJump 3) — no more teleporting across the neck at ~6/sec.
+- **No non-musical notes:** gap-fillers disabled on hard/easy (medium only in >2.6s rests, same-lane, grid-snapped); scattered
+  bombs Hard-only + grid-snapped. Rests breathe.
+- **Strong beats privileged** in thinning (downbeat 1.6× / on-grid 1.3×); **centroid contour smoothed** (spike-gated median + EMA
+  + lane hysteresis — centroidLaneR preserved ~0.9, a blanket median would've crashed it to 0.63); **onset selectivity** raised
+  (mean×1.8, auto-fallback 1.55). New stats: `__rrChartStats.onGridPct`/`peakNps`, `window.__rrPeakNps`.
+- **Shorty X default Hard → Medium** so the flagship's first play is fun, not a wall. Verified on her song (Pet me Por Favor,
+  124 BPM) Medium: 414 notes, onGridPct 1.0, onset-peak 3 nps, centroidLaneR 0.787, 0 fillers/bombs, 0 console errors.
+
+### v230 (build59) — Fix the song-sheet "play in environment" picker loading the default  ✅ verified in-browser
+Picking a song + selecting a level's ENVIRONMENT (e.g. "Noise Complaint") in the song sheet loaded the plain crimson arena
+instead of that environment. Root cause: the sheet's `setMenuPlayHandler` wrapper (index.html) STAGES the chosen env
+(`applyEnvironment` → `_activeLevel._isEnv` + journey + skin) right before catalog.js's free-play handler runs — and that
+handler's build58 `clearEnvironment()` (added so a plain free-play can't false-credit a stale campaign level) WIPED the just-
+staged env. Fix: the clear is now conditional — skip it when `RhythmLibrary.activeLevel()._isEnv` (a deliberately-staged env);
+a plain free-play still clears. catalog.js. Verified: staging the Noise Complaint env → `_isEnv:true`, journey + her guitar
+applied, bg = `sx-stop1-loop`, `wouldClear:false`; 0 console errors. (3rd instance of the clearEnvironment-wipes-the-env bug
+class — see the v226 launchTrack `keepEnvironment` fix.)
+
+### v229 (build59) — Shorty X "Noise Complaint" level COMPLETE + playable  ✅ verified in-engine
+Built the whole free campaign level end-to-end this session — all art generated by me via the Higgsfield MCP (gpt_image_2
+stills + **seedance_2_0** 1080p video, per the user's model rules), each asset frame-verified by subagents:
+- **6 stills** (`sx-cover` + `sx-stop1..5`, gpt_image_2 2k, her ref attached for the 3 character shots — all confirmed her likeness).
+- **11 videos** (seedance_2_0 1080p): 5 near-static loops, 4 travels (start+end frames → matched-frame chaining, each lands on
+  its next still), the destination space-suit cutaway, + a bonus annoyed-tantrum cutaway (saved; parked for a v1.1 engine hook).
+- **Guitar**: gpt_image_2 from-scratch came out **6-string** (wrong for the 5-lane game) → re-done as an **i2i reskin of
+  `crimson-chaos-ryo`** keeping the 5 fanning strings, theme on the body only → verified **5-string**, cut out (AI bg-removal —
+  flood-fill fails on the dark-on-dark body), measured `SKIN_GEOM verified:true` (17 rows, overlay rides the strings).
+- **Wiring**: `AUTHORED` entry + `RR_FINISHED_LEVELS['shorty-x']` + `SKIN_GUITAR.shorty_x` + `SKIN_GEOM['…/shorty-x.png']`.
+  Journey = 5 stops + 4 travels + `intenseVideos:[sx-cutaway]` (proven Deadkin structure). Song pinned: "Pet me Por Favor"·Shorty_X.
+- **Verified in-engine (rr-verify, ?dev):** campaign shows 9 cards incl "Noise Complaint", it launches on her song, opens on the
+  bedroom backdrop, a combo advances bedroom→rage-chase travel (journey works), `activeGuitarSkin = shorty-x.png`. **0 console errors.**
+- Spend ≈ 800 credits (1783→~1000 left). Full storyboard/asset-map/job-ids in `SHORTY_X_LEVEL.md`.
+
+### v228 (build59) — Shorty X "Noise Complaint" level SCAFFOLD (free, in progress)  ✅ verified boots clean
+New free campaign level for platform artist **Shorty_X**, song **"Pet me Por Favor"** (`trackId 70ebe07f-…`, Pop, decodable).
+A masked hot-pink cyber-goth cat-girl rage-comedy: combo escalates her tantrum bedroom → kitchen → police standoff → chaos
+summon → space (magical-but-outrageous; weapons are her pink energy, not real, to clear the content filter + stay on-brand).
+- Scaffolded the `AUTHORED` entry (id `shorty-x`, theme `pink`, 5-stop journey + destination cutaway, `guitarSkin` shorty-x,
+  free `unlock:{stars:1}`) and the `SKIN_GUITAR` map entry. **NOT in `RR_FINISHED_LEVELS`** yet → inert (doesn't render/launch)
+  until the `sx-*` assets exist, so the missing-asset refs can't break anything. Verified: boots clean at v228, track resolves
+  to her real song, campaign still shows 8 cards (shorty-x hidden), 0 console errors.
+- Build bible: **`SHORTY_X_LEVEL.md`** (storyboard, asset checklist + exact filenames, all gen prompts, phased plan, wiring TODO).
+- Next: USER generates Phase-0 (guitar + 6 stills) → measure guitar into SKIN_GEOM → build proof leg → finale → flip RR_FINISHED.
+
+### v227 (build59) — Paid levels read as owned for the local dev/owner (Store + every ownsItem gate)  ✅ verified in-browser
+Follow-up to v226: the owner reported "the paid for levels are still locked for me." Root cause: on localhost the CAMPAIGN
+grid already unlocked paid levels (it gates via `ownsEntitlement(...) || DEV`), but `ownsItem()` in catalog.js honored only
+`_isAdmin` + the entitlements cache — NOT the localhost/`?dev` dev context. So every **ownsItem-based** surface (the Store,
+skin-equip checks) treated paid content as un-owned for the builder on localhost → High Seas / Melody showed **"Buy"** and
+read as locked. Fix: `ownsItem()` now returns true for `_isAdmin` OR `_isDevUnlock()` (localhost / `?dev=1`), matching the
+campaign. catalog.js. NOT a production backdoor — localhost is runtime-only and `?dev` is query-only, so a deployed visitor
+gets neither and stays gated. Verified on bare localhost v227: `ownsItem('level','high_seas')=true`; the **Store shows 0 "Buy"
+buttons** (all Owned/Equip); the High Seas campaign card reads **OWNED**, unlocked, and launches **hs-stop1-loop.mp4** (its
+own journey). 0 console errors.
+
+### v226 (build59) — TWO level-launch blockers fixed + admin-race hardening (owner couldn't play authored levels)  ✅ verified in-browser
+Owner report: "browse songs, pick a level — it doesn't load, just loads the default, and the other levels are locked."
+Root-caused to TWO separate bugs, both fixed + verified on the rr-verify preview (8790), 0 console errors. A 5-agent trace
+workflow independently confirmed the diagnosis + that v226 resolves it (8/8 unlocked, each level loads its own pinned track).
+
+- **All authored levels locked on bare localhost.** `authoredUnlocked()` returns false when `!LIVE`, and `LIVE = DEV ||
+  CAMPAIGN_PUBLIC || ADMIN`. But `DEV` was `?dev=1`-ONLY (the build58 security pass dropped localhost from it) while
+  `MP_DEV` still honored localhost — so opening a plain `localhost:8787` left the WHOLE campaign locked (even level 1).
+  Fix: `DEV = ?dev=1 OR localhost/127.0.0.1/[::1]` (matches MP_DEV). localhost is runtime-only — a deployed visitor is
+  never on localhost — so it can't leak to production the way the old PERSISTED `rr_dev` flag did (that's still removed).
+  index.html. Verified: bare localhost now shows **0 locked / 8 unlocked** (incl. paid High Seas + Melody).
+- **Launching a level loaded "the default."** `launchTrack()` (catalog.js) called `clearEnvironment()` UNCONDITIONALLY — a
+  build58 guard meant for jukebox free-play (so a free run can't false-credit a campaign level). But `launchLevel()` calls
+  that same `launchTrack` right after setting the level's journey/skin/theme/`_activeLevel`, so it **wiped the level it just
+  set up** → every non-boss authored level (deadkin, sasoka, high-seas, frac-01, alarm-clock-hero) played as a plain
+  default (moon-loop bg, no journey). Fix: `launchTrack(track, {keepEnvironment})` — `launchLevel` passes it so the level
+  launch skips the clear; plain free-play (no opt) still clears. catalog.js + index.html. Verified: launching deadkin keeps
+  `_activeLevel='deadkin'` and loads **dk-stop1-loop.mp4** (its journey), not moon-loop; a BOSS level (carnival-boss) loads
+  **carnival-loop.mp4** too (boss levels fall through to the same launchTrack since `bossProviderFor` is unimplemented, so
+  they were equally affected); and a subsequent plain free-play still clears the stale level (build58 protection intact).
+- **Admin-race hardening (deployed site).** On reactivvibe.com `DEV=false`, so a logged-in owner relies on `ADMIN`, which
+  resolves async via `GET /me`. `applyAdmin()` now repaints the campaign when the grid is showing (not only when ADMIN
+  *flips*) and retries once if `/me` is slow/hiccups — so the owner can't be left on a momentarily- or persistently-locked
+  grid. Normal-user gating is untouched (a non-admin email still resolves `_isAdmin=false`). index.html.
+- NOTE: the symptom also reproduced via the STALE v59 worktree (the default `rhythm-rift` preview / a cached pre-225 build);
+  always serve the main dir (serve.py from v2, or the rr-verify 8790 preview) and hard-reload to ?v=226.
+
+### v224 (build59) — Admin full-access + Medium difficulty rebalance  ✅ verified in-browser
+Two user asks from a playtest: (1) the owner should have everything unlocked to test the live site pre-ship while normal
+users stay gated, and (2) Medium felt as hard/scattered as Hard.
+
+**Admin full-access (gated on the AUTHENTICATED session, not a backdoor).** New `ADMIN_EMAILS` allowlist in catalog.js
+keyed on the signed Supabase session email (`getUser().email`). `isAdmin()` + `refreshAdmin()` exported; `ownsItem()`
+returns true for an admin (so every paid level/skin reads as owned). index.html folds `ADMIN` into `LIVE` +
+`DEV_UNLOCK_ALL` (every campaign tier unlocked) and the MP gate (`!MP_PUBLIC && !MP_DEV && !ADMIN`), re-resolved on every
+login/logout via `applyAdmin()`. Store `isOwned()` consults `ownsItem` so admin sees Equip/Owned, never Buy. A normal
+logged-in user is unaffected — a query param or localStorage flag can't grant it; you must actually be signed in as an
+allowlisted account. Verified in-browser as a GUEST: `isAdmin=false`, paid level + skin both read **unowned/locked**.
+(Note: this is the client-side owner-test convenience; per-user paid enforcement still needs the server gate — `BETA_GATE_BRIEF.md`.)
+
+**Medium difficulty rebalance (charter, musical mode).** Medium was ≈4.3 notes/sec with full-neck lane scatter and
+Hard-level chord frequency — it played like Hard. Three levers, Medium-only (Hard unchanged, Easy gentler):
+- **Rate:** `MINGAP.medium` 0.235 → **0.33** (≈3 notes/sec ceiling); Easy 0.40 → 0.45. Section-aware *tightening* floor is
+  now difficulty-scaled (Hard 0.8×, Medium 0.95×, Easy 1.0×) so a loud chorus can't spike a casual chart past its ceiling.
+- **Scatter:** new lane-jump clamp on Easy/Medium — each note stays within `maxJump` strings of the previous (Easy 1,
+  Medium 2), so the hand rides the melody instead of teleporting. Hard unclamped.
+- **Chords:** Medium chord frequency ~halved (`chordGapMin` 8→14, `chordMod` 4→6). Hard unchanged.
+- Verified on the demo track: Medium **550 notes / 54 chords** vs Hard **1191 / 308** — a real tier gap (was near-parity);
+  `centroidLaneR` held at **0.87** on both, so lanes still track the melody (smoothing didn't flatten the contour), and
+  Medium's laneHist is visibly more centered. 0 console errors.
+
+### v223 — Pre-launch client polish batch (build58): settings/career/store correctness  ✅
+Worked the remaining browser-verifiable client items in `PRELAUNCH_AUDIT.md` (no backend, no credit-spend).
+All four landed + verified in-browser on the `rr-verify` server (8790), 0 console errors:
+- **D2 — Input-Test pips now match the profile.** `setTest()` rebuilt the pip row from `LANE_COUNT` (and drives the
+  grid columns off it) instead of the static 6-span markup, so on the default 5-string GH profile there's no dead 6th
+  pip. Verified: TEST INPUT shows **5 pips, 5 columns**. game.js.
+- **E1 — failed runs no longer pollute career stats.** `recordLocal` splits the lifetime aggregate: a **failed** run
+  counts only under new `attempts`/`fails` + timestamps; a **cleared** run still drives runs/score/accuracy/grade-dist/
+  best-combo. A bail also no longer overwrites a per-song best, fires a NEW-BEST badge, or submits to the account
+  leaderboard. `getCareer()` exposes `attempts`/`fails`. Verified in-browser: fail → runs +0, fails +1, no phantom D;
+  clear → runs +1, grade A +1, score banked. catalog.js.
+- **G3 — entitlement double-charge guard.** `getEntitlements()` now returns the **normalized** ownership cache
+  (`{item_type,item_id}` strings) rather than the raw backend list, so the Store's `item_type:item_id` keying can't
+  miss a `{type,id}`- or string-shaped row and show an owned paid level as unowned (→ charge twice). catalog.js.
+- **D1/D4 — settings hardening + stale markup.** Boot settings loader now uses the same **typed + clamped** guards as
+  `applySettings` for `scroll`/`fxLite` (a corrupt `rr_settings` can't set an out-of-range scroll). Corrected the static
+  Settings markup to the real default profile: **Lane Mode = 5-String · Guitar** active, **Inputs = A S D · J K**
+  (was the legacy 6-lane "standard" / "A S D · J K L"). game.js + index.html.
+
+### v222 — MP feel polish (build58): between-rounds wait + tournament labeling  ✅
+From the user's "keep polishing MP feel (the between-rounds wait, labeling)":
+- **Live between-rounds banner.** `_bracketWaitBanner()` shows "Run banked — X / Y duels resolved · still playing: A
+  vs B …" after you finish a round but the bracket is still settling, so a waiting player isn't staring at a dead
+  screen wondering if it hung. Called from `trySettlePair` (when a pair isn't ready) and `onTourSongEnd`.
+- **Bracket-size honesty.** `joinTour` caps joins at the host's chosen size (`Math.min(TOUR_MAX, meta.size)`) and
+  `advertiseTour` advertises that real `max` (was always `TOUR_MAX`). Tournament button reads "🏆 Host a Tournament …
+  3–10 players". multiplayer.js + index.html.
+
+### v220–v221 — Sane pricing · MP unlocked for building · trophy case · MP journey reviewed + hardened (build58)  ✅
+From the user's testing pass (Sparks = $0.05 each; "stop locking me out of MP"; trophy-case polish):
+- **Repriced everything to reality.** Sparks are $0.05 each, so the old 800–3500-Spark items were **$40–$175** (absurd).
+  Repriced: guitar skins **50✦ ($2.50)** / premium showcase skins **80✦ ($4)**; levels **High Seas 140✦ ($7)**,
+  **Melody/Breaker 100✦ ($5)**; Neon theme **20✦ ($1)**. Affordable without being a giveaway.
+- **Multiplayer is open for the builder.** On **localhost** (the dev/test env) or `?dev=1`, clicking MULTIPLAYER now enters the
+  lobby directly — no more "opens soon" toast. The **deployed public** site stays gated (`MP_PUBLIC=false`) until scores are
+  server-authoritative. Verified: on localhost with NO `?dev`, the MP screen activates.
+- **Career trophy case — dark display case.** The showcase is now a proper lit case (spotlight cone + warm floor pool) on a dark
+  backdrop, so **black-background guitar art blends in instead of showing a "broken box" on the left**, and transparent cutouts
+  pop. Min-height keeps the guitar large. Verified with Violet Gothic (a black-bg guitar) — clean.
+- **MP journey: REVIEWED (9-agent swarm) + hardened.** Verdict: the journey is genuinely well-built end-to-end — finding/joining
+  rooms, hosting + joining a **tournament**, the **bracket** progressing round→round through duels to a **champion**, with strong
+  resilience (host-migration election, reconnection, forfeit guards, a start watchdog). Fixed the real gaps it surfaced:
+  - **Quick Match no longer hangs forever** on an empty lobby — a 25 s timeout drops "Searching…" with a helpful nudge (and on
+    the builder path, falls back to a practice duel vs a bot so MP is always testable solo).
+  - **Host-migration between-rounds dead-end fixed** — a promoted heir now correctly rebuilds the next round + reveals START NEXT
+    ROUND (the await branch was shadowed because `state` stays `'live'` during the wait), so the bracket can't hang.
+  - **AFK-host failsafe** — if a host never taps START NEXT ROUND, the round auto-advances after 45 s (25 s for a migrated heir).
+  Remaining (tracked): make the locked tile *read* as locked on the public site, bracket-size cap, a few labeling nits. `?v=221`.
+
+### v217–v219 — Career trophy case · clean campaign · sellable store · competitive leaderboard (build58, user-directed)  ✅
+Four product upgrades from the user's testing pass, each verified in-browser (0 console errors):
+- **Career "trophy case" (v218).** The profile/Career overlay is now a two-column layout with a large **equipped-guitar
+  showcase on the left** — the full guitar PNG, lit in a glow case. Hovering any loadout tile previews that guitar large;
+  leaving reverts to the equipped one; tapping equips it. Verified: equipped→deadkin shows deadkin.png; hover sasoka →
+  sasoka.png; leave → back to equipped; click pirate-fox → equips + preview swaps.
+- **Campaign shows only REAL levels (v217).** Dropped every stride-fill catalog placeholder + unfinished authored stub +
+  empty tier. The Levels grid now renders exactly the 8 BUILT levels (Pulse: Get Busy; Fracture: The World, Highway Lover,
+  Carnival of Souls, Clocked In, Moonlight on Hollow Ridge, Across the Midnight Oceans, Bottomless Concessions) — no "Coming
+  Soon" clutter, empty Warm-up tier hidden, totals recomputed from real levels. Fully playable/testable via `?dev=1`
+  (CAMPAIGN_PUBLIC stays false for the public build).
+- **Store sells our finished paid levels (v217).** `STORE_FINISHED_NONSKIN` now enables **High Seas Showdown (3,500)** and
+  **Melody Boss (2,200)** as purchasable (they were stuck on "Coming Soon"); the unbuilt THE BREAKER + Neon Theme stay
+  Coming-Soon. As admin you already own them; a fresh signed-in user sees Buy + price. Also hardened the entitlement read
+  (`_setEntCache` normalizes `{item_type,item_id}` / `{type,id}` / "level:high_seas" shapes) so a real purchase reliably
+  shows as OWNED (was a latent double-charge risk). The actual charge + server-side ownership enforcement is the Lovable
+  backend's `/sparks/*` + entitlement API.
+- **Competitive leaderboard (v219).** Top-3 **podium medals** (🏆 gold #1 row / 🥈 / 🥉) on every board; a new **"By Level"
+  tab** = champions per built level ("who topped each level" — local best today, the real champion when the backend board is
+  live); the personal Global/By-Song boards from v216 stay. Wrote **`LEADERBOARD_BACKEND_BRIEF.md`** so the Lovable agent can
+  light up live cross-player rankings (the UI then shows real other-player scores with zero client changes). Verified: medals
+  on top-3, By Level lists all 8 levels with "You · score" on played ones, "unclaimed" on the rest.
+- Hold-tail grace left forgiving (per the user). `?v=219`.
+
+### v216 — Progression + leaderboards (build58, user-directed)  ✅
+Three decisions from the user, applied + verified:
+- **Campaign unlock = clear it from the Levels grid.** `starsForLevel` no longer falls back to `rr_scores`, so free-playing a
+  level's *song* in the jukebox can't bank its campaign star — you must actually play the level (via the grid → `recordLevelClear`
+  → `rr_levelprog`) to unlock the next one and its other modes.
+- **One star scale everywhere.** The results screen used a 5-star *accuracy* curve while the campaign cards used a 3-star *grade*
+  curve (an A read 4/5 on results but 3/3 on the card). Unified to the single 3-star grade scale (S/A = 3, B = 2, C/D = 1, fail = 0)
+  used by the cards, `recordLevelClear`, and `starsFor`; the big letter grade still carries the finer nuance.
+- **Hold-tail grace stays forgiving** (per the user) — no change.
+- **Leaderboards fixed up.** The overlay was solid but its LOCAL fallback (the current state — the backend boards aren't live yet)
+  was a single "You" row. Now it's a real **personal leaderboard**: the Global tab shows **"Your best runs"** — every run from
+  `rr_scores` across all songs, ranked by score (title · difficulty · grade · score · acc); By-Song shows your best on **each
+  difficulty**, ranked. The live backend board still takes over the moment `/leaderboard/*` returns rows. Verified in-browser:
+  seeded 3 runs → ranked board, top row = highest score, 0 errors. `?v=216`.
+
+### v215 — Catalog + UI polish pass (build58)  ✅
+Low-risk, browser-verified refinements from the audit:
+- **Jukebox rails memoized** — `sections()` recomputed 4 full sorts + a reshuffle on EVERY coverflow tab tap; now computed once
+  per catalog version. Side benefit: **Surprise is stable on tab-back** (was a fresh biased shuffle each time) — now an unbiased
+  Fisher-Yates picked once per load. Verified: Surprise[0] identical across repeated `sections()` calls.
+- **Songs-view "Featured" sort** — was a silent no-op (no branch in `sortTracks`); now sorts featured-first then by plays.
+- **Catalog fetch failure is no longer silent** — a toast ("Couldn't reach the library — showing samples") instead of quietly
+  swapping in fake sample songs.
+- **Coverflow "not-ready" cue wired** — covers that can't play now dim (the CSS existed but targeted a `display:none` element and
+  was never class-toggled; fixed both).
+- **Brand-regression landmine removed** — the misleading design tokens `--cyan / --green / --purple` (which held warm silver /
+  gold / crimson values) are renamed to `--silver / --gold / --red-deep` across all 32 call sites + the defs. Values unchanged →
+  **rendering is pixel-identical** (verified `--silver` → rgb(203,199,194)); a future "fix --cyan to actual cyan" can't inject blue.
+- **START CTA pulse** pulled in to ~2 s (was ~3 s of dead, static button on first load).
+0 console errors. `?v=215`. Remaining low-priority polish (font-role drift, `transition: all`, hold-tail grace as a design call,
+loading skeleton) tracked in `PRELAUNCH_AUDIT.md`.
+
+### v214 — MP robustness pass (build58): the contained correctness fixes  ✅
+Four multiplayer fixes that don't require touching the host/migration state machine (so safe to ship without 2-device
+verification; `node --check` clean):
+- **1v1 challenge timeout + zombie reconcile** — a challenged player who crashes/ignores no longer leaves a permanent
+  "WAITING…" that blocks all other duels: a 12s timeout clears it, and the pending challenge is dropped the moment the target
+  leaves the lobby.
+- **`onTourRound` per-emission nonce** — round dedup now keys on the unique `atMs` token, not the round NUMBER, so a promoted
+  host's legitimate re-issue of a round launches (was permanently swallowed) while true self-echoes still dedup (no double-launch).
+- **Rival-deck lead bar** — the puck and the +/- delta now come from the SAME raw score difference; the old `score / progress`
+  pace blew up near song start (÷0.02) and could contradict the number shown.
+- (Plus the per-bracket `_lastSnapV` snapshot-version fix from v212.)
+The remaining MP items (round-can-hang edge case, room-handoff auto-arm, host-departure UI, ghost-stall affordance) touch the
+host/migration state machine and are flagged in `PRELAUNCH_AUDIT.md` for a **2-device smoke test** (`MP_SMOKE_TEST.md`) before
+shipping — blind changes there can hang a live bracket. `?v=214`.
+
+### v213 — CHARTER v2: push the notes even closer to the song (build58)  ✅
+Building on the user's "can it hug the song even more?" — four audio-driven upgrades to `analyzeMusical`/`buildNotes`:
+- **Flux-weighted lanes** — the lane is now driven by which band actually STRUCK (the energy *rise* that fired the onset,
+  averaged over ±1 frame), not the steady-state spectrum. So a hi-hat reads HIGH even over a sustained bass, where the old
+  total-energy centroid pulled it low. Measured payoff: "Dissonance" pitch↔lane **r 0.845 → 0.915**; "Dopamine" stable at 0.895.
+- **Sustain-aware HOLDS** — holds now land where the audio genuinely sustains (the dominant band rings on ≥0.35 s) with the
+  hold length set to the *measured* sustain, instead of being derived purely from time-gaps (Dopamine holds 54 → 75).
+- **Musical CHORDS** — when ≥2 frequency bands co-fire at an onset (a real stacked-frequency moment), the chord plays THOSE
+  bands as its lanes ("two strings at once" that matches the song) instead of a mechanical +2/+4 fan.
+- **Section-energy density** — the note min-gap now scales with a local-energy envelope, so the chart tightens in loud
+  choruses and breathes in quiet breakdowns instead of one flat ceiling.
+Verified in-browser on 2 tracks, 0 console errors. `?v=213`. (Remaining charter idea: a full per-band onset split so a
+simultaneous kick+hat become two SEPARATE notes — tracked in `PRELAUNCH_AUDIT.md`.)
+
+### v212 — PRE-LAUNCH HARDENING pass 1 (build58): audit swarm + high-severity fixes  ✅
+Ran an **11-dimension adversarial audit swarm** (22 agents) over every surface — journey/levels, multiplayer, scoring, charter,
+catalog, store, settings, progression, UI/brand, resilience/beta — each hunting correctness bugs AND polish/refinement, then
+adversarially verifying the serious finds. Then fixed the high-severity set (each `node --check`'d; charter + journey re-verified
+in-browser, 0 console errors):
+- **Journey video SEAM (the user's named bug)** — clips no longer flash their first frame before loading. Root cause: travel/loop
+  clips were never preloaded, and the blurred `#bg-video-fill` mirror had no poster + no fade, so it painted the new clip's cold
+  frame-1 during the decode gap. Fix: **preload every journey clip** (staggered in playback order — verified all 9 Deadkin clips
+  reach `readyState 4`/fully buffered), **mirror the stop's still as a poster onto the fill**, and **gate the reveal** on real
+  playback (`readyState≥3`/`currentTime>0`) instead of a blind 650 ms. Verified: advance cycle clean, poster mirrors, 0 errors.
+- **Scoring (HIGH)** — a gap-bomb could spawn onto a lane already holding a real note within the hit-window (a correct press ate the
+  penalty); now collision-checked. Plus: **bank a sustain still held when the song-end clock crosses** (was lost), OD meter no longer
+  dead-charges during Overdrive, corrected a misleading hold comment.
+- **Settings (2× HIGH)** — a lane rebound to **Space** was dead (Overdrive stole it) → now falls through when Space is a lane;
+  **Reset Lane Keys** restored the 6-key map in 5-lane GH mode (polluting `rr_keymap_gh`) → now profile-aware.
+- **Catalog (HIGH)** — the **"New" rail** never sorted newest-first (`Date.parse(number)`→NaN→0) → fixed; **getBest()** did a
+  JSON.parse + O(n) scan PER song card (~1.2M comparisons on a full 1111-track render) → scores cached + the live-data scan dropped.
+- **Multiplayer (HIGH)** — the snapshot-version floor `_lastSnapV` was a session-global never reset → a **2nd tournament** + a
+  **promoted (migrated) host** had their snapshots starved/rejected. Moved the floor onto the tour object (per-bracket) + reset on
+  host change.
+- **Progression (HIGH)** — a stale `_activeLevel` let an **unrelated free-play song bank stars onto the last campaign level** (false
+  unlock). Free-play launch now clears the environment first.
+- **Security** — **`?dev=1` no longer persists** (`rr_dev` localStorage write removed + purged on boot). It was a permanent backdoor:
+  one `/play?dev=1` visit forever-unlocked every level + multiplayer on that device. Now query-only, like `?fps`/`?align`.
+- **Store** — removed **Crimson Chaos** from the shop: it resolved to the *free default* guitar, so the 2,000-Spark purchase showed
+  no visible change (scam-feeling).
+- **Charter refinement** (toward the user's "push it further" ask) — fixed a **dynamic-density dead zone** that silently dropped a
+  strong/on-beat onset landing in `[0.7·gap, gap)`, and added **rank/quantile lane mapping for spectrally-narrow songs** so the
+  contour still uses all strings. Re-verified: "Dopamine" centroid↔lane **r = 0.896** (up from 0.879), 0 errors.
+- A full **`PRELAUNCH_AUDIT.md`** tracks every finding (done + the prioritized remaining: deeper charter v2, the rest of the MP
+  robustness set, catalog/UI polish, and the launch-time items — server-side paid-level gating + the dev-hook strip). `?v=212`.
+
+### v209 — MUSICAL CHARTER: notes that actually play the song (build57)  ✅
+The charting rewrite the user asked for ("the marbles aren't musically intelligent"). Two root problems fixed:
+- **Detection was bass-only.** The classic analyzer lowpasses to 200 Hz → it only hears KICKS, missing snare/hats/melody. New
+  `analyzeMusical()` splits the track into `LANE_COUNT` log-spaced frequency bands (one offline render via a `ChannelMerger`),
+  takes the **broadband spectral flux** (sum of positive per-band energy rises) as the onset novelty → it catches the WHOLE mix.
+- **Lanes were random.** The classic placer hashes `time·strength·idx` → the string a note lands on has nothing to do with the
+  music. New placer reads each onset's **spectral centroid** (energy-weighted log-frequency = brightness, 0..1) and maps it to a
+  lane: bass → low strings, melody/hats → high strings. The hand now **rides the melodic contour** instead of jumping randomly.
+- Plus **dynamic density** (difficulty-scaled min-gap with a strength/downbeat override → busy passages stay busy, quiet ones
+  breathe, emphasis lands on the beat) and a **gentle tempo autocorrelation** (marks downbeats for accents; ~70–176 BPM).
+- **Made the default** (Settings → Chart Feel → Musical, was Classic). Classic stays as a one-tap fallback. Falls back to the
+  classic analyzer automatically if the filterbank render ever fails (a track is never left unplayable).
+- **Verified in-browser on real catalog tracks.** On "Dopamine" (medium): musical → **centroid↔lane Pearson r = 0.879** (lanes
+  track pitch), 1192 notes, **136 BPM detected**, all 5 lanes used with a contour-shaped histogram `{139,194,315,346,198}`. Same
+  track in classic → r = **null**, lane histogram nearly **flat** `{117,102,113,112,113}` (random), 557 notes, no tempo — a clean
+  before/after. Robustness sweep (4 genres, Hard): r **0.845–0.905**, ~4.6–5.1 notes/sec, BPM detected on all, all 5 lanes, no
+  degenerate charts. 0 console errors. (`__rrChartStats` gained `centroidLaneR/laneHist/bpm/chartMode` — dev hook.)
+- **Bonus robustness fix (`beginPlay` launch-race, build57).** A stress sweep surfaced a PRE-EXISTING crash: launching a second
+  track *during* the first's setup/countdown tears down `player`, and the stale `beginPlay` resumed onto `player.onended` (null) —
+  or worse, armed a SECOND game loop. Added a launch-generation token (`_playGen`): each `beginPlay` tags itself and bails at every
+  await boundary if a newer launch superseded it. Verified: clean single launch still reaches `playing`; a mid-setup supersession
+  now resolves to ONE coherent playing state, no crash, no double-loop. A 4-agent adversarial review of the whole charter then
+  confirmed `analyzeMusical` + the `buildNotes` musical path **clean** (lanes always in range, never zero notes, fallbacks always
+  playable, perf fine) and caught the ONE remaining gap: a 4th `beginPlay` await (`ac.resume()`, mobile suspended-context only) had
+  no gen-recheck — closed it so all four boundaries are guarded. `?v=211`.
+
+### v208 — Playtest fixes: guitar lane re-alignment + catalog/charting diagnosis  ✅
+Playtest feedback (3 items):
+- **Guitar lanes sat "slightly off" the painted strings (Deadkin).** ROOT CAUSE: the SKIN_GEOM for `deadkin` (and, smaller,
+  `sasoka`) was recorded from a *high-threshold* measuring cutout, but the SHIPPED png is the *low-threshold visual* cutout — the
+  two put the strings at slightly different pixel positions, so the lane-aligner rode the wrong fan. Deadkin's drift was big (~20px
+  at measure scale on the bridge fan → clearly visible). **FIX:** re-measured BOTH on their SHIPPED files and overlay-verified the
+  cyan fit rides the strings nut→bridge (incl. the catcher zone). `deadkin` 29→**68 rows**, res 6.31→**4.91px**; `sasoka` 22→**32
+  rows** (re-pinned to the drawn strings). `alarm-clock` + `pirate-fox` were already measured on their shipped files (byte-identical
+  on re-measure) → unchanged. In-browser: `setGuitarSkin('…/deadkin.png')` applies with **0 "not verified" warnings**. `?v=208`.
+- **"Catalog shows ~600 but the site has 1000+."** Investigated live: the API now returns **1127** tracks and the current build's
+  readiness filter passes **1111** (verified both by a direct API query AND in-browser: `RhythmCatalog.rawCount()=1127`,
+  `totalCount()=1111`). Only **16** are hidden — all HLS-only Mux `.m3u8` streams the in-browser charter can't decode. So the "~600"
+  is a **stale deployed build** (the catalog grew 852→1127; an older build likely capped the paged fetch), NOT a bug in this build —
+  deploying current resolves it. The only true gap is those 16 HLS tracks (need a decodable audio_url OR a server chart from Lovable).
+- **Note choreography "not musically intelligent."** Diagnosed (not yet changed): onset detection is **bass-only** (200 Hz lowpass →
+  only catches kicks, misses snare/hats/melody) and lane assignment is a **deterministic hash** of time/strength/idx (effectively
+  random — lanes don't follow the music's pitch contour). Plan pending the user's steer: broadband/multi-band onset detection +
+  frequency/brightness-driven lanes (bass→low strings, melody→high strings) + optional tempo-grid/dynamic-density. Classic stays as a fallback.
+
+### v206 — DEADKIN "Carnival of Nightmares": a FREE 1080p evil-carnival CYCLE  ✅
+The first traveling level that **loops back on itself** — an endless nightmare-carnival cycle with a curtain-reveal device.
+Built from the user's Deadkin concept: **① the eerie TICKET BOOTH** under a blood-red moon → combo: a ticket spits, the camera
+glides into the big-top and the grand red **CURTAINS sweep OPEN** on **② Act I — a masked tightrope AERIALIST** → combo: curtains
+close/open on **③ Act II — undead ZOMBIE TIGERS + their top-hat clown handler** → combo: curtains close/open on **④ Act III —
+FIRE CLOWNS & showgirls** → combo: a giant **CANNON** blasts them out and they fly **back to ① the ticket booth** (the ride begins
+anew). At the destination, a combo brings out **DEADKIN the dark ringmaster** — he strides out, throws his arms wide, the whole
+carnival ERUPTS in fireworks & flame, then settles back. The curtain close/open between acts makes every hop feel staged.
+- **10 Seedance 1080p clips** (5 dwell loops + 4 curtain-reveal travels + the ringmaster cutaway) at **54 cr/clip**. Matched-frame
+  chained: arrival seams **49.8–50.6 dB**; loops crossfade-seamed (**29.7–41.1 dB**; the fire act is lowest — high-motion flames —
+  but the loop boundary is frame-matched by construction). The 1080p loop OOM resurfaced once on the booth loop at session-resume
+  (transient) and cleared on retry. 4 carnival anchors (booth/aerialist/tigers/fire) generated on-style; 2 NSFW re-rolls on the
+  aerialist (drop body-horror phrasing → "masked harlequin aerialist") cleared it.
+- **Deadkin guitar** — marble-ivory bass, silver-sharp skull carvings, a cut-glass translucent body with a still-beating heart
+  wired in, a touch of circus flair; verified play surface (29 rows, res 6.31 px). In the loadout + shop (2,800 Sparks).
+- Wired as `deadkin` (theme `ember`, boss). **FREE campaign level** (`unlock:{ stars:1 }`, no entitlement — matches Sasoka/ACH).
+  Promoted to `RR_FINISHED_LEVELS`. **Verified in-browser via the real `showReactive` path:** opens on the booth loop, combos
+  advance through all 5 stops landing (never reverting) — booth→aerialist→tigers→fire→booth — and the destination combo fires the
+  Deadkin ringmaster cutaway which plays then **reverts** to the final loop and **repeats** on each subsequent combo; **0 console
+  errors** across the full traversal. `?v=207`. Spend: ~540 cr (10×54 clips) + the carnival anchor & guitar image gens.
+
+### v205 — HIGH SEAS SHOWDOWN: first PAID, first 1080p traveling level (Ryo + Kunning vs Vex)  ✅
+The first **paid** store level and the first at **1080p** (the user flagged 720p as soft — see the 1080p memory). A 5-stop
+**story** journey built from the user's character sheets + storyboards (Ryo/Rekkor the fox-tailed rogue, Kunning the fox-girl
+pirate swordswoman, Vex the evil captain): **① Ryo sailing → combo: camera swings to ② Kunning playing guitar → combo: Vex's
+dark ship RAMS + he backflips on deck → ③ the STANDOFF → combo: ④ the BRAWL → combo: Ryo's huge kick sends Vex OVERBOARD → ⑤
+VICTORY.** Destination combo fires the 🍾 **PARTY** cutaway (champagne, celebrate, settle back to sunbathing).
+- **10 Seedance 1080p clips** (5 dwell loops + 4 travels + the party cutaway). **1080p = 54 cr/clip** (confirmed on the first
+  clip). 3-character consistency held across all scenes via the character-sheet refs (QC'd at the anchor stage — no re-rolls).
+  Matched-frame chained: arrival seams **~50 dB**; loops crossfade-seamed. **1080p loop fix:** the xfade crossfade OOM'd at
+  1920×1080, so loop processing now runs single-threaded with a 0.6 s crossfade (baked into `_ach_process.py`).
+- **Pirate-Fox guitar** — black chrome, fox head w/ glowing red eyes, pirate skulls + crossbones, crimson chaos energy seeping
+  through cracks; verified play surface (res 6.95 px). In the loadout + shop (2,800 Sparks).
+- Wired as `high-seas` (theme `ember`, boss). **PAID** — `unlock.entitlement{level:high_seas}`, listed in the store at 3,500
+  Sparks. Promoted to `RR_FINISHED_LEVELS` (so it's not Coming-Soon; still purchase-gated). Verified in-browser: guitar
+  playable, 5-stop journey armed, opens on Ryo sailing, combo advances; 0 console errors. `?v=205`. Spend: ~547 cr (10×54 +7 imgs).
+
+### v204 — SASOKA: the second traveling level — "Loa Den Priestess"  ✅
+The second full traveling level (built collaboratively from the user's Sisoka/"Sasoka" references — a bayou wolf-priestess,
+Keeper of the Wolf Loa). Song: **"Moonlight on Hollow Ridge" by Sisoka** (decodable .wav). The journey:
+**① a peaceful moonlit WOLF DEN** (Sasoka asleep among the pack) → combo: they wake and **bound out to ② the CLIFFSIDE** over a
+foggy cypress-swamp valley → combo: they **LEAP off into ③ a SKYDIVE** through moonlit clouds → combo: they **LAND on ④ the
+violet BATTLEGROUND**, a bone army rising. At the destination, a combo fires the **BONE WAR** cutaway (skeletons surge, Sasoka
+slams down a violet Loa-lightning blast, the wolves tear into the horde) then settles back. Reuses the build53 journey engine.
+- **8 Seedance clips** (4 dwell loops + 3 travels + the cutaway), matched-frame chained: arrival stills are the travels' exact
+  last frames (**45–46 dB**), loops crossfade-seamed (30–35 dB). 4 scene anchors generated from the character ref (Sasoka
+  consistent across all). Color arc moonlit-blue → violet at the climax. Montage-checked: every travel + the Bone War read
+  cleanly. (Cutaway revert 22.5 dB — the chaotic battle doesn't fully reset, but it dissolves back to the battleground loop via
+  the engine's 650 ms crossfade.)
+- **Sasoka guitar** — gnarled cypress-driftwood + wolf skull + bone + feathers + violet Loa runes; verified play surface at
+  **res 1.06 px** (tightest yet; body-preserving TH=16 cutout, precise-measure geometry). Added to the **shop** (2,600 Sparks) +
+  the profile loadout.
+- Wired as `sasoka` (theme `violet`, boss), **promoted to `RR_FINISHED_LEVELS`**. Verified in-browser: guitar playable, 4-stop
+  journey armed, opens on the den loop, combo advances; 0 console errors. `?v=204`. Spend: ~218 cr (8 clips + 6 images).
+
+### v203 — Alarm Clock Hero: destination boss cutaway + guitar joins the shop  ✅
+Two follow-ups after the level shipped:
+- **Destination cutaway (the "boss spawns" at journey's end).** Once you reach the clock world, the journey can't advance — so
+  now a combo there fires a one-shot **Clock-Titan** cutaway *over* the clock world and settles back to it (revert pattern, like
+  the other levels' gag cutaways). Engine: `onCombo` does `if(journey){ if(!_journeyAdvance()) _intenseKick(); }` — i.e. once the
+  journey is exhausted, combos kick the `intenseVideos` pool. Clip: a colossal clockwork titan of brass gears + clock-faces rises
+  from the gear-landscape, looms against the clock-moon, then sinks back (matched start=end on the clock-world still, 29.7 dB
+  revert). Verified: at the final stop a combo loads `ach-stop4-cutaway.mp4`; reverts to `ach-stop4-loop.mp4`.
+- **The alarm-clock guitar is now a STORE skin.** Added to `SKIN_GUITAR` + the profile loadout `SKINS` + `STORE_FALLBACK`
+  ("Alarm Clock Hero", 2,600 Sparks, card = the guitar render). Passes `storePlayable` (SKIN_GEOM verified:true → not
+  Coming-Soon) and equips client-side. Verified `isSkinPlayable` true. The store keeps growing.
+All JS node-clean, ?v=203.
+
+### v202 — ALARM CLOCK HERO: the full 4-stop traveling level ships  ✅
+"Clocked In" is now a complete, playable traveling level — the first of its kind. Across the song the world journeys through
+four distinct locations, each combo milestone carrying you to the next and never reverting:
+**① a crimson masquerade club** (she clutches the glowing alarm clock) → **② TIME FREEZES** (camera pushes into the clock, hands
+spin, dancers lock mid-leap, glass shards suspend in icy blue) → **③ the floor gives way → a FALLING SKY of clocks** (plunge into
+a golden dimension of raining pocket-watches) → **④ the CLOCK WORLD** (she lands on a vast clockwork-gear planet, a clock-moon on
+the horizon, and rises to survey it). Plays the ivory-and-gold alarm-clock guitar.
+- **5 dwell loops + 3 travels** (Seedance i2v, matched-frame chained). Every dwell loop is near-static per the backdrop LAW
+  (only the clock-light, drifting clocks, a swaying cape breathe); the travels carry all the motion. Every arrival is the prior
+  travel's EXACT last frame (seams **43–46 dB**); loops crossfade-seamed. The frozen-time loop was NSFW-rejected once (the
+  "horror"/"statues" wording) → refunded + re-rolled neutral.
+- **Pacing:** combo milestones advance you; a song-% floor (poll `getLiveStats().progress`, gates at 1/N·2/N·3/N) force-advances
+  stragglers so EVERY player reaches the clock world by song's end.
+- **Verified end-to-end in-browser:** open→combo→travel→land × 4 stops, all real loops decode + play, no-op at the destination,
+  every transition coherent (montage-checked), 0 console errors. **Promoted to `RR_FINISHED_LEVELS`** (playable; the journey
+  survives the env/MP path too). Spend: 8 video clips (~216 cr incl. one refunded NSFW) + ~2 cr guitar i2i.
+
+### v201 — Journey feature: adversarial review hardening (4 fixes, 1 critical)  ✅
+A multi-agent adversarial review of the build53 journey feature (4 dimensions: engine edge-cases, regressions to existing
+levels, MP/env/beta-gate integration, backdrop-LAW/guitar/brand) surfaced 11 confirmed issues (0 false positives). Fixed the
+4 actionable ones, each re-verified in-browser:
+- **CRITICAL — leaked floor interval.** showReactive() didn't tear down the prior FX closure before re-arming, so the
+  launchLevel +650ms re-assert (and the MP per-round / random re-apply path) orphaned the first closure's journey-floor
+  `setInterval` — a stale, uncancellable timer that polls forever and can hijack #bg-video on a LATER song. Fix: showReactive()
+  now calls the previous `RhythmLevelFx.cancel()` at the top. Instrumented proof: 3 re-applies → exactly **1** live interval
+  (was 3), and **0 leaked** after teardown.
+- **MEDIUM — stale media handlers.** `_journeyArrive` now nulls the travel's `onended`+`onerror` before `_setBackdropLoop`
+  reloads src, so a 404/short ambient loop can't re-fire the landing (mirrors `_intenseRevert`).
+- **MEDIUM — loop self-heal.** `_setBackdropLoop` gained an `onerror` fallback to the stop's still (parity with
+  applyLevelTheme) — a missing/404 stop loop now degrades to its still instead of a dead frozen-poster video. Proven: with the
+  not-yet-rendered stop-2 loop 404ing, the backdrop self-heals to `ach-stop2.jpg`.
+- **LOW (defense-in-depth) — launchLevel beta gate.** launchLevel now fail-closes on `RR_FINISHED_LEVELS` (exempting env
+  synthetics + ?dev), so an unfinished level can't leak via the campaign "NEXT LEVEL" path when the campaign goes public.
+All JS node-clean, 0 console errors.
+
+### v200 — TRAVELING LEVELS: the journey engine + Alarm Clock Hero's first leg  ✅ (one leg PROVEN end-to-end)
+The first **traveling level** — a level where the combo cutaway isn't a looping gag that reverts, but a **travel clip** that
+carries the world to the NEXT location and LANDS there. Across a song you move through distinct places and never snap back.
+
+**Journey engine (`build53`, `showReactive`).** New `L.journey[]` = ordered stops `{bgArt, loop?, travelIn?}`. On a combo
+milestone (or a song-% FLOOR so a weak player who never lands a 25-combo still reaches the destination), the world plays the
+next stop's `travelIn` one-shot, then **lands** on that stop's ambient loop — or, for a loop-less stop, settles on its static
+still (matched-frame: the travel's last frame already == the still, so no jump). Reuses the proven crossfade/guard machinery;
+perf/`?novideo` skips the decode; clean teardown clears the floor + guard timers. Carried `journey` onto the env/MP/random
+synthetic-level path so traveling levels also work outside campaign.
+- **Two real bugs caught by an in-browser state-machine test** (driving `RhythmLevelFx.onCombo` via `applyEnvironment`):
+  (1) `showReactive`'s `if(!hasCards && !mech) return` bailed *before* the journey armed — every existing cutaway level has
+  cards/a mechanic so none hit it, but a journey-only level did → the whole feature was silently dead. Guard now also
+  recognises `journey`/`intenseVideos`. (2) `applyEnvironment`'s synthetic object dropped `journey`. Both fixed + re-verified:
+  open on stop-0 loop → combo → travel clip (one-shot) → land on stop-2 still → 2nd combo at the final stop is a correct no-op.
+
+**Alarm Clock Hero guitar** (`assets/guitars/alarm-clock.png`). i2i from `crimson-chaos-ryo`: clean dark fretboard + bright
+strings kept; ivory body, gold clock face, Roman numerals + brass gears painted on the BODY below the strings. First pass put
+ornament on the *fretboard* (16–22px measure residual, would clutter notes) — re-rolled to a clean neck. Gate PASSED: 108
+clean 5-string rows, **res 5.89px**, overlay rides the painted strings; `SKIN_GEOM` `verified:true`; engine `isSkinPlayable`
+true, applies with 0 console errors. Level cover cut from the masquerade key art.
+
+**Level wired** as `alarm-clock-hero` → "Clocked In" by **Alarm Clock Hero** (Pop; confirmed decodable `.wav`). Held OUT of
+`RR_FINISHED_LEVELS` until the full 4-stop journey lands (now COMPLETE — see v202).
+
+**LEG ONE PROVEN with the real clips.** Stop-1 ambient loop (masquerade) + Travel 1→2 (camera pushes into the alarm clock →
+hands spin → TIME FREEZES → dancers locked mid-leap, glass shards suspended). Post-processing: loop made seamless via a 1s
+crossfade (start==end frame by construction); the landing still `ach-stop2.jpg` IS the travel's exact last frame → **ARRIVE
+seam 43.3 dB** (perfect). Drove the leg in-browser with the real assets: masquerade loop → combo → travel clip (decoded
+1280×720) → lands on the frozen-time tableau, video hidden, 0 console errors. The Seedance video farm was wedged ~80 min
+(jobs charged + queued, never resubmitted to avoid a double-charge) — cleared on its own. Spend: 54 cr (the 2 clips).
+**Next (Phase C, ~135 cr):** extend to the full 4 stops — Frozen Time → Falling Sky → Clock World — + a frozen-time ambient
+loop and travels 2→3, 3→4, then promote to finished.
+
 ### v199 — Multiplayer lobby: BACK button placement fix  ✅
 The VERSUS lobby's BACK button floated mid-left beside the panel instead of in the top-left corner like every other screen.
 Cause: a build11 override forced `.multiplayer-screen .hub-back` to `position:relative` (to layer it above the full-bleed
@@ -2528,3 +3481,567 @@ Wire more of the asset agent's 31-effect union + make RYO the startup intro. All
   in-session `done` guards back-to-menu replay, `?ryo=off` disables. Bump ?v 96→97.
 Verified headless: themed hits → paw-poof/soul-burst-violet/bone-shatter; overdrive → shockwave+explosion;
 ember-skull-loop aura live in Bone Daddy play; overdrive-aura on activate; intro fires every load; no errors.
+
+### v99 — OVERNIGHT: VFX 2.0 + combo/Overdrive feel + bug sweep + analytics  ✅ (?v 270→272)
+Autonomous overnight pass against the user's go-to-bed brief. A recon+research swarm (10 agents) confirmed
+the root causes; built in priority order; every JS edit `node --check`-clean, booted with **0 console errors**,
+kit bursts + rainbow strings exercised live via `__rrDebug.hitBurst`/`setCombo`/`tick`. *Feel* of the visual
+work needs the user's real-browser eyes (headless is 0-width, can't watch the canvas).
+
+**MARQUEE — hit-particle VFX 2.0 (`game.js`).** The old per-level "themes" only swapped COLOUR — blood/paw/spark
+all rendered as the same dab, so levels looked identical (the user's "no difference"). Replaced with real per-level
+**KITS**: distinct SHAPE + motion + blend + a lingering SETTLE trail. `_HIT_KITS` (ember/glint/wisp/shard/paw) +
+`_BLOOD_KIT` (horror lens → crimson globs+drip). New shape renderers (`_drawHeart`, cached `_glowSprite` — the perf
+win: one blit instead of a per-frame gradient). Layered burst: core flash → shockwave ring(s) → lane lift →
+SHAPED burst with a **toward-camera z-projection** (a share of particles grow + fly down the neck = fake-3D pop,
+the "Paper-Mario→modern" leap) → sparkle dust → settle. Bursts now **scale with the live combo** (more/bigger as
+the streak climbs) and bloom into an **earned rainbow spray** at combo ≥100 / Overdrive.
+
+**Strings combo-tier hue LADDER (`game.js`).** The steady yellow strings were "boring." Strings now escalate
+crimson→orange→amber→white-gold→white-hot as the streak climbs, and bloom into a flowing per-lane **spectral
+rainbow** at elite combo (300+) OR Overdrive — gated to elite play so brand stays crimson at baseline. `_comboTierTint`
++ `_hsv`. Cosmetic only; the leaderboard-safe score ceiling (MAX_MULT=4) is untouched.
+
+**Combo + Overdrive FELT (`game.js`).** Combo/OD "felt the same." Now: every hit escalates with the live combo;
+the earned rainbow burst; and a sustained **gold ENERGY STREAM** rises off the catchers the whole time Overdrive
+is live, so OD reads as a real MODE takeover (paired with the rainbow strings + gold edge-glow). *(Deferred, needs
+the user awake to hear it: an OD music low-pass/filter sweep — can't ship an audio change I can't verify by ear.)*
+
+**Bug sweep (swarm-pinpointed):**
+- **Store "COMING SOON" on a finished level** → `index.html` `STORE_FINISHED_NONSKIN` now whitelists `level:shorty_x`
+  (the lone finished level wrongly suppressed; high_seas/melody were already in). Shorty X is buyable (120 Sparks).
+- **Admin "everything unlocked"** → the profile Guitar Loadout `SKINS` array was missing 5 shipped, verified guitars
+  (Shorty X / Razor / Wormfeast / Kitsune / Triemrys). Added all 5 → 18 equippable guitars; ids match the store skin
+  item_ids. (Store ownership already short-circuits for the admin email; the gap was purely the loadout list.)
+- **Journey "jumps to the first frame"** → the journey video LANDING swap (`_setBackdropLoop` travel→loop) was the one
+  backdrop swap with no captured-frame hold, so `v.load()` exposed frame-0. Mirrored the proven `_journeyAdvance`/
+  `_intenseKick` hold: snapshot the travel's true last frame, hold it until the loop actually paints → no snap.
+- **MP "can't select PvE/PvP"** → the misleading "P-vs-P / P-vs-E" combat toggle (which only toggles the combo-SHOCK
+  mechanic) is relabeled **"COMBAT ON/OFF"** (a match modifier, not the opponent type). The room's opponent choice is
+  now explicit — **👤 VS PLAYER** / **🤖 VS CPU** (over the existing invite / add-CPU wiring). Tournament setup gained a
+  one-line clarifier (a tournament IS a PvP bracket; solo CPU practice lives in a 1-v-1 room). *(A solo-vs-CPU
+  tournament mode is a real follow-up but needs the user's live MP smoke-test + a ranked=false guard — not shipped
+  unverified overnight.)*
+
+**Analytics (`game.js` + `TELEMETRY_BACKEND_BRIEF.md`).** Enriched the existing `song_complete`/`run_fail` events with
+maxCombo/grade/notesHit/notesTotal/boss/mode (NON-PII; `song_start` already fires = the play count). Updated the
+backend brief contract and added **Part 4 — the website "Six-Sigma" enjoyment views** (`mv_song_enjoyment` with
+completion_rate/replays/quit_rate/enjoyment_index + catalog-wide z-score ±2σ control bands; `mv_funnel_daily`).
+
+**Store polish (`index.html`).** Added a discoverable currency LEGEND (Sparks = real / Bonus Sparks = earned;
+"all purchases cosmetic — never pay-to-win") — was tooltip-only.
+
+Dev hook added for verification (strip at content-freeze with the others): `__rrDebug.hitBurst(lane,kind)` + `.pcount()`.
+
+### v100 — OVERNIGHT cycle 2: regressions + leaderboard / brand / perf / a11y sweep  ✅ (?v 272→273)
+A 7-agent adversarial QA swarm self-reviewed cycle-1's code + audited fresh surfaces. It also CONFIRMED the warm-rainbow
+is on-brand (dropped a stale "off-brand rainbow" claim). All fixes node-checked + boot-verified, 0 console errors.
+
+**Regressions / bugs fixed:**
+- **`NEXT LEVEL ▶` dead-end (HIGH)** — `RhythmLibrary.nextLevel` built its chain from `authoredByTier` (ALL authored levels,
+  incl. unfinished stubs) instead of the grid's `RR_FINISHED_LEVELS`-filtered chain, so advancing could land on a stub
+  ("coming soon" + nothing loads). Now builds the chain finished-only, identical to the rendered grid. (index.html ~6868)
+- **Results ENTER under an overlay** — a Career/Leaderboard/Settings overlay opens on top of Results without changing
+  `state`, so ENTER fell through and restarted the run. Added an overlay guard to the Results keydown branch. (game.js ~2705)
+- **Share card had no album art** — `localRuns()` read non-existent cover fields; catalog tracks expose art as `artwork_url`.
+  Added it as the primary field → the MY-TOP-RUNS card shows real covers. (index.html ~7154)
+- **"SHARE MY RANK" card showed all-zero stats** — the leaderboard payload omitted per-run stats (which rr_scores doesn't
+  store anyway). Gave `kind:'leaderboard'` its own credible strip (WORLD RANK / SCORE / ACCURACY / TOP GRADE) + enriched the
+  payload with the player's real accuracy + grade. (share.js drawStatStrip, index.html ~7373)
+- **Leaderboard SHARE row stale on the MP tab** — `renderMp` never reset it, so it shared the wrong card. Now hidden on MP.
+- **Campaign progress ring /0 guard** — latent NaN% if a tier-filtered build had no finished levels. Guarded. (index.html ~6741)
+
+**Brand:** jukebox "chrome slate" cover palette `#414b59`/`#0e1116` was a cool blue-grey (B>G>R = the "reads-purple" case the
+brand rule bans) — warmed to `#4a463f`/`#16120e` (R≥G≥B). (jukebox.js:16) Also warm-biased the combo rainbow itself (pink→
+red→orange→gold→yellow) so it skips blue/purple while staying vibrant; unified the string + hit-burst rainbow on ONE shared
+`RAINBOW_COMBO=150` gate (was 300 vs 100 — now they agree, a reachable "large combo" + Overdrive).
+
+**Perf:** moved the particle cap to AFTER the per-frame spawn loops (streak flames + OD stream + burst) so render never iterates
+an oversized array at peak load; replaced the violet/Skully **wisp**'s per-particle per-frame `createLinearGradient` with the
+cached glow sprite (the one un-cached gradient left in the burst); `encore-cheer` audio → `preload="none"` (no boot fetch).
+
+**A11y:** Music/Hit-Sound sliders now announce the formatted % (`aria-valuetext`) not the raw 0..1 value; the calibration
+slider got an `aria-label`.
+
+**Deferred (documented, not risked overnight):** the warped-guitar one-blit cache (the biggest remaining FPS win) — the swarm
+produced a verified-safe plan (cache key = src+gw×gh+gwarp+fxLite, guard on materialize-done; notes/strings don't ride this
+loop so alignment can't drift) but it's alignment-critical and wants an eyes-on byte-identical check on a real browser. The OD
+audio low-pass sweep (DemoPlayer only) needs tuning by ear. "RESET CAREER also clears campaign badges?" needs a product call.
+
+### v101 — OVERNIGHT cycle 3: SECURITY + mobile/a11y/combat/readability launch sweep  ✅ (?v 273→274)
+A 7-agent launch-critical QA swarm (gameplay feel, mobile/touch, onboarding, MP combat, VFX cross-setting, ship-readiness).
+All node-checked + boot-verified, 0 console errors; portrait tap-floor confirmed live at 384px.
+
+**🔴 CRITICAL SECURITY:** `?dev=1` was un-gated and reached production — `/play?dev=1` set `DEV_UNLOCK_ALL=true` (free-unlock of
+every PAID level) AND tripped the MP dev gate (bypassing `MP_PUBLIC=false`). Gated DEV + both MP_DEV copies (index.html ×2 +
+multiplayer.js) to **localhost only**. Owner pre-ship testing uses the authenticated ADMIN path (unaffected). `?dev` on a
+deployed host is now inert. (Verified: the localhost regex returns false for `reactivvibe.com`.)
+
+**Mobile / touch (web launch):** portrait phones collapsed 3 of 5 touch lanes to ~33px (below the 44px floor) — added a THUMB
+FLOOR to `layoutTapZones` (falls back to even ~20% columns when the string-fan bunches; confirmed 5×20% at 384px). The mobile
+Overdrive gauge said "press SPACE" (no keyboard on a phone) → now "TAP". Dropped the `pointerleave` hold-release (thumb drift
+mid-sustain was dropping holds; touch implicit-capture keeps pointerup firing).
+
+**A11y:** reduce-motion now tames the VFX 2.0 burst (no toward-camera 3D pops, no rainbow spray, single ring, lite count) —
+completing the a11y story alongside the already-frozen string rainbow. Fixed the song-sheet's first instruction ("four lanes"
+→ "each lane" — the game is 5-lane). How-To overlay gained a TOUCH line + a COMBO explainer (the multiplier + the
+strings-on-fire/rainbow payoff were never explained) + "tap the flame" for Overdrive.
+
+**Combat (the user hadn't reviewed it):** added a receive-side STUN COOLDOWN (4s) so back-to-back combo-shocks can't chain-lock
+a rival into a no-comeback state. Leaderboard-safe (combat gates input timing, never the score ceiling). Final cadence = a
+playtest feel call.
+
+**Perf / readability:** the rainbow spray keyed a NEW cached glow-sprite per unique hue → unbounded canvas growth across a
+session; QUANTIZED the hue to 12 buckets so the cache stays bounded. Biased the per-hit burst (narrower cone + outward spread)
+and the ambient Overdrive stream (lower rate + edge-bias outward) AWAY from the central gem read-column so FX don't occlude
+incoming notes (the readability payoff still wants the user's real-display confirmation).
+
+**SHIP-BLOCKER CHECKLIST surfaced for the user (NOT auto-done — deploy/freeze/user actions):** ① the dev-gate fix above (DONE);
+② deploy hygiene — origin is the STAGING repo on `visual-overhaul`, not the Lovable deploy repo; 88 tracked .md briefs + 36
+`_cap_*` test captures + `assets/**/*.py` would publish on a naive push → need a deploy ALLOWLIST (index.html, game.js,
+jukebox.js, catalog.js, multiplayer.js, share.js, telemetry.js, jukebox.css, assets/ minus .py) → branch→PR→merge; ③ one-time
+USER GitHub auth for reactiv435/reactivvibeailive; ④ beta posture (BETA_API empty = fails OPEN; fine for public free-play,
+not for a private invite beta); ⑤ telemetry sink not wired (CLIENTLOG_URL/EVENTS_URL unset → events buffer, never send);
+⑥ MISSING OG assets — `assets/share-card.png` (1200×630) + `assets/app-icon-180.png` (180×180) are referenced but absent →
+every social unfurl 404s day 1 (user-generate the images, agent wires them); ⑦ the dev-hook STRIP list (incl the new
+`__rrDebug.hitBurst/pcount`) — at content-freeze only, NOT before (the hooks are still load-bearing for verification).
+
+### v102 — OVERNIGHT cycle 4: correctness / leaks / a regression I introduced  ✅ (?v 274→275)
+A 6-agent correctness deep-sweep (leaks, lifecycle edges, failure paths, scoring integrity, re-audit of cycle1-3 code). It
+**CONFIRMED the high-stakes surfaces are CLEAN**: the MAX_MULT=4 score ceiling is airtight across every timing profile + OD
+(the old v258 tight+OD 6× bust stays closed); the build65 cosmetics (kits/rainbow/combo-scaled bursts/OD stream) do NOT touch
+score/combo/mult; MP combat can't alter score; particles are capped; rAFs/intervals/listeners are cleaned. All fixes
+node-checked + verified, 0 console errors.
+
+- **🔴 REGRESSION I introduced (HIGH) — pause during the new 2s lead-in.** My cycle-1 lead-in buffer + the 3·2·1 countdown are
+  awaited while state is nominally 'playing', so an Esc / mobile-pause / window-blur / tab-hide during the pre-roll set
+  state='paused' but the post-await tail then FORCE-STARTED the song behind a stuck PAUSED overlay. Fixed: the run-start is now
+  a thunk that DEFERS when a pause landed during the pre-roll; resumeGame() runs it on resume (start, not resume() which is a
+  no-op on an un-started player); stopGame clears it. VERIFIED end-to-end: pause mid-pre-roll → stays paused, song deferred →
+  RESUME → song starts + clock advances + overlay clears. (game.js beginPlay/pauseGame/resumeGame/stopGame)
+- **Tight (GH) timing-feel on SERVER-charted tracks bypassed the practice gate** → would submit a differently-judged score to
+  the real leaderboard. Now tight runs route to LOCAL PRACTICE in endGame (closes the server-chart path the in-browser gate
+  didn't cover). Latent today (no server charts yet) but the path is wired. (game.js endGame)
+- **AudioContext leak on decode failure** — `decodeAudioData` reject left the throwaway context open; a corrupt/retried track
+  leaked one per attempt → Chromium's ~6-context cap silently kills ALL audio. Wrapped both decode sites in try/finally.
+- **Sub-second decodable clip → empty chart → "No beats"** — the synthetic-grid fallback produced 0 beats when duration<1s.
+  Clamped the grid bounds + relaxed the empty-case guard in analyzeBeats AND analyzeMusical (honors the "no dead song" promise).
+- **Hygiene (low):** HlsPlayer's `{once}` canplay/loadeddata/error listeners orphaned on the shared `<audio>` → now removed on
+  first resolve/reject; DemoPlayer.stop() now disconnect()s the per-play subgraph; fixed the stale "rainbow at 300+" comment
+  (it's RAINBOW_COMBO=150).
+
+### v103 — OVERNIGHT cycle 5: fresh-surface sweep (FINAL cycle)  ✅ (?v 275→276)
+A 6-agent sweep of the surfaces the prior 4 cycles hadn't deeply covered (jukebox/search, campaign grid, career/results,
+settings/calibration, brand cohesion). Its synthesis verdict was **"wind down — the high-severity well is dry"** (only the 2
+launch-blockers below + polish/dead-code nits; nothing threatens scoring/progression/brand). Shipped the safe batch, routed the
+3 user-decision items to the handoff, and STOPPED fresh QA cycles per that call. All node-checked + verified, 0 console errors.
+
+- **Jukebox search keyboard hijack (HIGH).** The header search lives in the always-visible lib-bar, so view-jukebox stays
+  `.active` while you type → Arrow keys rotated the coverflow and Enter opened the centered song's sheet mid-search. Added the
+  standard input-focus guard to the rail keydown handler. (jukebox.js)
+- **App icon (was a day-1 404).** Exported `assets/app-icon-180.png` (180×180) from the existing on-brand `rr-icon-both.png`
+  (blood-moon guitar) — the apple-touch-icon resolves now. *(The 1200×630 `share-card.png` still wants a proper gen — prompt is
+  in `OVERNIGHT_HANDOFF.md`.)*
+- **Campaign "✓ CLEARED" next to a 50% bar.** The per-tier progress bar counted unowned PAID levels in its denominator while
+  `tierCleared` skips them. The bar now counts only CLEARABLE levels (mirrors the paid-lock check) → 3/3 = 100% next to CLEARED.
+- **"RESET ALL SETTINGS" wasn't wiping everything** — Note Variety / Calibration offset / Open Notes survived. Added the three
+  keys + reset their live state.
+- **How-To overlay clipped** the CALIBRATE / GOT-IT buttons on short viewports (it auto-shows to first-run players) → added
+  `max-height:92vh; overflow-y:auto` (mirrors the Settings panel).
+- **Share accuracy 100×-inflated on a sub-1% run** — results passed `accPct` (0..100) into share.js's "≤1 ⇒ ×100" normalizer.
+  Now passes the raw 0..1 fraction so it normalizes once.
+- **Polish:** the Note-Speed slider range now matches the engine clamp ([0.5,2.0]); the MP **VS PLAYER / VS CPU** opponent
+  buttons are restyled as a primary match-type choice (were the tiny refresh-pill idiom; VS CPU reads as the crimson accent).
+
+**Overnight run complete: 5 review/critique/polish cycles, ~55 fixes, the marquee VFX redo, build at ?v=276, 0 console errors
+throughout. See `OVERNIGHT_HANDOFF.md` for what needs the user's eyes/ears/decisions + the ship-blocker checklist.**
+
+### build66 — Spark WAGER tournaments: host-run prize pools (Bonus-Sparks stand-in + server swap-seam)  ✅ (?v 276→277)
+The user asked for tournaments where players stake Sparks — an entry-fee prize pool the winner takes, a side-bet on who
+wins, or free — on the platform's cash-redeemable Spark economy. A 5-agent research/design swarm produced the legal map,
+the escrow architecture, and the exact code anchors. Built the **full working logic + UI now on BONUS Sparks** (non-cashable,
+zero legal exposure), with a clean swap-seam so the real cashable escrow drops in later. Real cashable Sparks stay **gated OFF**
+(`WAGER_SERVER_MODE='local'` physically refuses them) until the backend escrow + server-authoritative scoring + legal clearance land.
+
+- **`RhythmWager` money-core (catalog.js)** — `openPool / joinPool / settlePool / refundPool / placeBet / settleBets`. Integer
+  minor-units; idempotency-key-safe; settle & refund are the SAME drain primitive (no money-leak path); the **client never moves
+  cashable Sparks** (the hard rule). **Verified headless:** join debits, pot conserves, **champion-only credit of the full
+  authoritative pot**, no double-charge on replay, refund restores, parimutuel side-bet split correct. 0 console errors.
+- **Tournament integration (multiplayer.js + index.html)** — host STAKES control (Free / Prize Pool / Side-bet) + buy-in; the
+  buy-in + **host-verified paid roster** + live pot replicate to every entrant via the `t-snapshot` (survive host migration);
+  entrant buy-in confirm; the START gate blocks until **everyone has paid**; the champion is paid the pot at the crown ("WON N ◆");
+  refund-on-cancel (state-guarded so a completed pot can't double-pay). Payment is **host-verified, not self-asserted**.
+- **`WAGER_BACKEND_BRIEF.md`** — the Lovable escrow/pool/payout API (double-entry ledger, idempotency, settlement state machine
+  that DEFAULTS TO NOT PAYING) + the hard gates (server re-judge, no cashable spectator betting, no bots in cash mode) + a
+  **state-by-state legal/compliance checklist** flagged for a real attorney — incl. the critical finding that **Stripe bans
+  skill-prize games and routing cash entry through the platform's main processor could terminate its whole payment stack.**
+- **Side-bet:** the parimutuel money-math is built + unit-verified; the full multi-client side-bet UX (outcome-pick + global-tally
+  settle) is the documented next iteration. **The entry-fee POOL is the complete end-to-end vertical slice** (needs the user's
+  live 2-device smoke test, like all MP). Dev hook: `window.RhythmWager` (strip at content-freeze).
+
+### build66.1 — OWNER DECISION: BONUS SPARKS ONLY, cashable wagering OFF THE TABLE  ✅ (?v 277→278)
+The owner decided wager tournaments run **permanently on Bonus Sparks** (non-cashable in-game points) — **no real-money path,
+not building one.** Locked it down: `_wagerForceBonus()` now **always returns `'bonus'`** and `wagerCanStake(_, 'sparks')` is
+**always `false`** — cashable is no longer a mode regardless of `WAGER_SERVER_MODE` (a future server mode would be a *Bonus*
+escrow only). Recorded the decision + legal rationale (gambling needs prize-of-value + chance + consideration *together*; a
+non-cashable points award = no money prize = a skill points-competition, not gambling) in the `RhythmWager` header, the
+index.html markup comment, and a 🟢 banner atop `WAGER_BACKEND_BRIEF.md` (the cashable-escrow/legal machinery is retained only
+as *why-we-said-no* reference). **Verified live at v278:** `serverMode:'local'`, `canStake(_,'sparks')===false`,
+`openPool(currency:'sparks')` forced to `'bonus'`, full Bonus pool flow correct (200 debit → champion credited the full 600
+authoritative pot → pool drained to 0, replay no-double-charge), **0 console errors.**
+
+### build66.2 — launch-audit swarm + first fix batch (4×P1 + 1×P2)  ✅ (?v 278→279)
+Ran a **64-agent launch-readiness swarm** (10 dimension reviewers + 3 bug-predictors + asset-integrity + 8 per-level polish
+analysts → dedup → adversarial verification of every P0/P1/P2 → synthesis). Verdict: engine is robust (no confirmed crash, no
+real-money NaN path, no base-asset 404, clean console); **0 P0 crashes, 1 P0 content gap, 5 P1, 24 P2, 38 P3** (4 findings killed
+as false-positives by the verifier). Full report → `LAUNCH_OVERHAUL_AUDIT.md`. Fixed the safe, live-now P1s this pass:
+- **P1 `?dev=1` prod paywall bypass (catalog.js `_isDevUnlock`)** — the build65 localhost-only hardening never reached catalog.js,
+  so `/play?dev=1` unlocked every paid level + premium skin in production. Now **localhost-only** (matches index.html DEV/MP_DEV;
+  owner prod-testing uses the authenticated ADMIN path). *Heads-up: `?dev=1` no longer unlocks on the deployed site.*
+- **P1 hold-note tail overrun (game.js buildNotes)** — the `Math.max(0.45,…)` floor defeated the gap cap, writing a 0.45s sustain
+  that overlapped a note ~0.30s away → an unfair, uncontrollable DROPPED + combo break. Now the tail is capped to clear the next
+  onset by one hit-window; if there's no room for a ≥0.30s hold it stays a tap (no overrun). Verified: Easy demo still charts 61 holds.
+- **P1 store Sparks double-charge (catalog.js `spendSparks` + index.html `buy`)** — a fresh `idempotency_key` was minted every call,
+  so a lost-response re-click double-debited real Sparks. Now **one key per purchase intent**, reused across retries (server dedupes),
+  cleared on success.
+- **P1 MP dev harness shipped to prod (multiplayer.js `__mpDev` + `RhythmMP.__tour.send`)** — arbitrary unauthenticated broadcasts
+  onto a live bracket (forge/self-credit). Now **gated behind `if (MP_DEV)`** (localhost-only; still available to the builder, gone
+  in production). Confirmed present on localhost, absent off-localhost.
+- **P2 brand** — MP "ready/all-set" success text `#7be0a0` (green) → `var(--gold,#e0a93f)` (3 sites).
+Verified live at v279: catalog.js?v=279, `_isDevUnlock` localhost-only, `spendSparks` 3-arg, MP harness MP_DEV-gated, Easy chart
+builds clean, **0 console errors**. `node --check` clean on all three JS files.
+
+### build66.3 — P0 Easy-tier on-ramp shipped + beta gate → public (owner decisions)  ✅ (?v 279→280)
+- **P0 FIX — the campaign now has a real Easy on-ramp.** `warm-01/02/03` were stubs on a non-deterministic `stride%len` song
+  binding and were missing from `RR_FINISHED_LEVELS`, so the whole Warm-Up tier was hidden. Pinned each to a real, gentle,
+  **server-charted** catalog track (leaderboard-safe) + added them to `RR_FINISHED_LEVELS`: First Light → *Mermaid Dreams*
+  (Evanwayne), Steady Hands → *Silver Anchor* (Melanie Heart), Ember Drift → *Backroad Firelight* (Sisoka). Verified live: all
+  three resolve `status:ready`. Per owner: medium `pulse-*` / hard `frac-02`/`frac-boss` stay a **follow-up content track**
+  (intentionally still gated, not cut). *(Swap any `trackId` to re-cast a song.)*
+- **Beta gate → PUBLIC FREE LAUNCH (owner decision).** The gate FAILED OPEN in prod after a 404 on the non-existent
+  `/beta/status` (brief overlay flash). Now **disabled** — opens instantly, no overlay, no backend dependency. The invite-only
+  enforcement is preserved as commented code + a re-enable recipe (ship `/beta/status`+`/beta/redeem`, set `BETA_API`+`BETA_REQUIRED`,
+  fail CLOSED). Verified live: `#beta-gate` is `display:none` on boot, **0 console errors** at v280.
+
+### build66.4 — full SIDE-BET (parimutuel) tournament UX  ✅ (?v 280→281)
+The third wager mode is now complete (was mis-wired to behave like a prize pool — champion took all — despite the "pickers
+split" copy). Side-bet is a real **parimutuel**: each entrant stakes the buy-in on **WHO they think wins**, and at the crown the
+**players who backed the champion split the pot proportionally**. Still Bonus-Sparks-only (cashable refused).
+- **`catalog.js`** — `wagerSettleBets(...,totals)` now takes the authoritative pool-wide totals (WT total-staked, Wk staked-on-winner)
+  from the replicated tour state (each client's local record only holds its own bet), mirroring `settlePool`'s `potOverride`;
+  returns my `payout`. `wagerRefundPool` also refunds a side-bet stake on cancel.
+- **`multiplayer.js`** — `tour.bets` (bettorId→pick) added to nullTour + the t-snapshot whitelist + applyTourSnapshot merge (survives
+  host migration). New explicit **WHO-WINS picker** flow (`_openBetPicker`/`_placeBet`) instead of the pool auto-prompt, so you can
+  wait for the roster to fill before betting; the pick is **host-verified** via the existing `t-paid` fan-in (now carries `pick`).
+  `_wagerSettle()` branches pool-vs-sidebet; at the crown EVERY client settles its own bet and any non-champion who backed the
+  winner is toasted their winnings; the START gate (everyone-staked) is reused.
+- **`index.html`** — a "🎲 PLACE YOUR BET" prompt + a branded picker overlay (`#mpx-bet-overlay`, roster list, warm-dark/gold CSS).
+- **Verified headless:** 3-bettor parimutuel split exact (stake 100, WT 300 / Wk 200 → payout **150**), refund-when-nobody-backs-champ
+  (stake returned), cancel-refund of a bet (returned), replay no-double-charge, cashable refused; markup present; `node --check`
+  clean; **0 console errors** at v281. **The full multi-client flow still needs the user's live 2-device test (like all MP).**
+
+### build66.5 — launch-audit P2/P3 batch: perf + economy + brand + meta  ✅ (?v 281→282)
+A safe, decision-free sweep of verified audit findings:
+- **PERF — adaptive auto-quality** (game.js loop) — samples real frame time while playing; if a majority of ~150 frames run
+  >22ms (sub-45fps) it auto-enables fxLite + the performance backdrop ONCE with a one-time toast, decided per device (`rr_autolite`)
+  and always user-overridable. The single biggest low-end FPS win — a non-savvy player on a weak device no longer just stutters.
+- **PERF — string glow `shadowBlur` gated** (game.js) — the one ungated FX in the neon-string loop (5 blurred strokes/frame) now
+  respects fxLite/reduceMotion. **PERF — hold-frame JPEG encode downscaled** (index.html `_holdCurrentFrame`) — the synchronous
+  full-1080p `toDataURL` that fired at a combo-travel peak now encodes at ≤960px / q0.72 (no main-thread spike).
+- **ECONOMY — wager pot integrity on kick** (multiplayer.js `hostKick`) — removing a staked entrant during open registration now
+  drops them from the host-authoritative paid roster + bets AND decrements the pot once (was: champion over-credited + START gate
+  passed trivially); the leaver still self-refunds, host re-broadcasts the corrected snapshot.
+- **BRAND — warm-dark sweep** (index.html) — every cool near-black `rgba(7,6,10)` / `#07060a` (B>R → read as cool/purple) →
+  warm `rgba(10,7,6)` / `#0a0706` (R≥G≥B), incl. the start screen + mobile theme-color. **META — share-card 404 fixed** — the
+  og:image/twitter:image pointed at a non-existent `assets/share-card.png` (blank unfurl); dropped the image refs + switched to a
+  `summary` card (documented upgrade path to restore `summary_large_image` once a real 1200×630 card ships).
+- **P3 — leaderboard NaN% guard** (catalog.js) — a missing/non-numeric backend accuracy printed `NaN%`; now coerced + clamped → `0.0%`.
+Verified live at v282: theme-color `#0a0706`, start-screen `rgb(10,7,6)`, no og:image, `twitter:card=summary`; `node --check`
+clean on game/catalog/multiplayer; **0 console errors**.
+
+### build66.6 — PROCEDURAL music-reactive level backdrops (the 3 Easy levels)  ✅ (?v 282→283)
+The user's idea: turn the 3 placeholder Easy levels into something worth keeping by GENERATING their backgrounds live from
+the music — the literal "ReactivVibe" identity. New **`procbg.js`** module: a full-bleed canvas behind the highway that reads the
+engine's live `AnalyserNode` (FFT spectrum + waveform) + your combo and renders one of three pluggable effects, quality auto-scaled
+(DPR cap + fxLite/reduceMotion; the fractal even drops to every-other-frame compute under lite):
+- **First Light → `fractal`** — a living crimson **Julia set** (low-res + bloomed = 60fps full-screen), breathing with the bass,
+  its hue climbing the combo ladder (crimson → gold → white-hot).
+- **Steady Hands → `waveform`** — a glowing **oscilloscope** of the actual audio (mirrored) over a faint spectrum floor; combo
+  drives glow/thickness.
+- **Ember Drift → `ember`** — a beat-reactive **ember flow field** (curl-noise advected particles, a living fire-wind); turbulence
+  pulses with the bass, embers brighten + shift hue with combo.
+- **Wiring:** `#bg-procedural` canvas in `#game-bg` (z above video, below accent/scrim); `applyLevelTheme` reads a new `L.procBg`
+  field (hides the video/image layers; `bgArt` stays a safe fallback if the module loads late); game.js exposes
+  `getMusicAnalyser()` + drives `RhythmProcBg.play/pause/resume/stop` from the play lifecycle (incl. the deferred pre-roll resume).
+- **Verified live (v283):** module loads, all 3 types registered, `set()`/clear toggle the canvas, unknown types rejected, and a
+  `tick()` self-test ran each renderer end-to-end → `'ok'` with real pixels drawn (fractal-aspect blowup capped); `node --check`
+  clean; **0 console errors**. *(The actual on-screen look needs the user's eyes on a real device with audio — like all canvas FX.)*
+  Dev hook: `RhythmProcBg.tick()` (harmless; strip with the others at content-freeze). Pluggable: add an effect to `RENDERERS`.
+
+### build66.7 — bucket #4 hardening: iOS charting + mobile preload + per-level FX kits  ✅ (?v 283→284)
+- **`OfflineAudioContext` webkit fallback (game.js)** — both in-browser charters used the bare global, so older iOS Safari (<14.1)
+  + some in-app WebViews (which expose only `webkitOfflineAudioContext`) failed EVERY live track with "Could not start this track."
+  Now `var OfflineAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;` used at both sites — that whole device class
+  can chart again. (predicted-bug watchlist item, now fixed.)
+- **Journey video preloader cap (index.html)** — a 5-/7-stop journey warmed ~9-16 clips at `preload='auto'` (full multi-MB
+  download each), saturating cellular / the iOS decoder budget. Now only a WINDOW gets `'auto'` (desktop 8 / mobile 3 / save-data
+  or slow-network 1); the rest use `'metadata'` (still kills the cold frame-1 seam, no full download). Device/network detected via
+  `navigator.connection` + UA/pointer:coarse.
+- **Per-level FX kits (game.js + index.html)** — the two PAID showcase journeys shared the plain ember hit kit. Added a per-level
+  **`fxKit`** field consulted first by `_hitKit()` (decoupled from color theme) + three bespoke kits: **High Seas → `seafoam`**
+  (gold coin-glint + aqua sea-spark), **Deadkin → `soul`** (spectral carnival souls), **Shorty-X → `neon`** (hot neon-magenta
+  shards, its own identity vs Melody's paw kit). All reuse the existing shape/settle vocabulary.
+Verified live at v284: webkit alias + both `new OfflineAC(...)` call sites, the 3 kit defs + the `_hitKit` consult, the preloader
+window + the 3 `fxKit` fields all present; `node --check` clean on game/catalog/procbg; **0 console errors**.
+
+### build66.8 — wager buy-in/bet cap raised 5,000 → 100,000 (owner request)  ✅ (?v 284→285)
+The owner wanted to stake bigger pots. `WAGER_MAX_BUYIN` 5,000 → **100,000** (catalog.js) + the `#mpx-tour-buyin` input `max`
+(index.html). Safe: Bonus Sparks are non-cashable AND `wagerCanStake` already clamps every bet to the player's real balance, so the
+ceiling is just a sanity clamp. Verified live: `RhythmWager.maxBuyIn()===100000`, input max 100000.
+
+### build66.9 — reactive-backdrop POLISH pass (6-agent design swarm → implemented)  ✅ (?v 285→286)
+The owner said the 3 new reactive backgrounds "need polish." A 6-agent design swarm (per-renderer + design-director + music-reactivity)
+produced a concrete Canvas-2D plan; implemented the shared engine + the top per-renderer changes. Through-line: **obey the Backdrop
+Law (dark calm center, energy at the edges), make every beat a visible PUNCH, turn the combo/Overdrive climb into a white-hot crescendo.**
+- **Shared engine:** a cached **center-vignette** (multiply) every effect ends with — keeps the falling-notes lane dark + readable
+  (the #1 fix); a real **spectral-flux onset detector** (adaptive mean/std threshold + refractory) → a snappy `beatPunch` + a slower
+  `beat` (snares/stabs now land, sustained bass stops re-triggering); **fast-attack/slow-release band envelopes + per-band auto-gain**
+  (`bassN/midN/trebleN` — quiet tracks no longer limp, loud tracks have crescendo headroom); reads **OVERDRIVE** + an eased combo
+  ramp that pushes the hue white-hot; a shared **`_punch()`** beat/OD flash (dark-center radial so it never blows out the lane;
+  edge-strips under fxLite; skipped under reduce-motion).
+- **Fractal:** smooth-iteration coloring (kills banding) + an orbit-trap glowing crimson interior (no more dead-black slab); combo
+  zoom-in + white-hot bleed + growing bloom; beat-shoved Julia constant + micro-zoom kick; treble adds filigree.
+- **Waveform:** moved OFF-center into two scopes anchored at the top/bottom thirds + per-x center-dim (frees the note lane);
+  downsampled to ~96 smoothed control points (quadratic curve — no more flicker); loudness/beat drive amp/width + a white-hot core
+  on strong beats; spectrum floor mirrored inward from both edges, center-faded.
+- **Ember:** edge-biased U-shaped respawn + per-ember center-mask (calmer middle); per-ember **z-depth/parallax** (sorted once);
+  true **curl-noise** flow (coherent vortices, the vertigo cue); combo heat (desaturate→white-hot); discrete **beat sparks** burst
+  on each onset.
+Every change has a cheap `_lite()` path; DPR/particle/res still auto-scale. **Verified live (v286):** all 3 renderers pass the
+`tick()` self-test (5 frames each → `'ok'`, real pixels) through the full new pipeline (beat detector + `_punch` + `_vignette`); a
+new dev probe `RhythmProcBg.procAudio()` / `window.__rrProcAudio()` exposes the live signals; `node --check` clean; **0 console
+errors**. *(The on-screen feel needs the owner's eyes on a real device with audio — strip `tick`/`procAudio` at content-freeze.)*
+
+### build66.10/.11 — CRITICAL video-backdrop regression fix + backgrounds RETHOUGHT (crisp + vertigo)  ✅ (?v 287→289)
+**🔴 ROOT CAUSE of "my video backgrounds vanished on multiple levels":** the build66.5 adaptive auto-quality, when it tripped on a
+slow frame (the heavy fractal was a prime trigger), called `applySettings({fxLite:true, bgMode:'performance'})` — and **performance
+mode hides EVERY background video site-wide AND persists it** (`html.rr-perf-bg #bg-video{display:none}`). So one slow moment killed
+all video backdrops permanently. **Fix:** `_autoLite()` now degrades **fxLite ONLY** (videos always stay) + a one-time boot
+**migration** restores `cinematic` for anyone already flipped. Verified: migration flips a seeded stuck state back to cinematic,
+`rr-perf-bg` gone. *(I'd been verifying with `?novideo=1` — which hid videos — so I missed this. Now verifying with video ON.)*
+**Backdrop fallback chain (P0b):** `#game-bg` got a warm branded radial-gradient base (never a flat dark void), and a level whose
+video AND static art both fail now falls back to a **living procedural** ('ember') instead of darkness.
+**The 3 reactive backgrounds were a blurry/sparse miss → REBUILT crisp + with VERTIGO toward the player (owner direction):**
+- **First Light** — the blurry low-res Julia is **cut**; replaced with `warp`: a crisp hyperspace light-streak **tunnel** flying at
+  you (sharp strokes, no upscale-blur), speed = bass/beat, a "first light" glow at the vanishing point, hue climbs the combo.
+- **Steady Hands** — the flat centered scope → a **rotating RADIAL oscilloscope** with concentric echo rings **expanding outward**
+  (vertigo); hue fades with treble + combo; glow/width punch on beats; center stays clear for the notes.
+- **Ember Drift** — sparse dots → a **dense pro particle field** (~380): ember streaks + petals on a curl-noise flow, per-particle
+  **z-depth/parallax** (near rises faster/bigger = vertigo), brightness pulsing to audio, beat-driven, combo heat.
+Verified live (v289): all 3 pass the `tick()` self-test through the full pipeline; numeric probe shows dense, varied content (warp
+~51% lit / ember ~35% / waveform ~33%); the visual feel needs the owner's eyes (the headless capture round-trip is too lossy to
+trust). `node --check` clean; **0 console errors**. Dev `RhythmProcBg._feed()` added for headless frame injection (strip at freeze).
+
+### build66.12 — backdrops made genuinely BUSY/full + the "black box" + 3 swarm bugs  ✅ (?v 289→293)
+Owner feedback on .11: *"weird black box in the middle that kills the effect… the amber scene feels completely blank… the waveform top
+looks empty… they're still looking quite flat… scour the internet… get more clever."* Researched Canvas-2D techniques (3D-projection
+warp streaks, time/freq-domain bars, LFO geometry morph, curl-noise flow, **cached glow-sprite particles**) and applied them.
+- **🔴 The "black box" was the canvas sizing.** `_resize()` forced an inline `cv.style.width = Wpx` measured **before** `#game-bg` was
+  laid out → the canvas displayed as a small centered box. Fix: drop the inline px (CSS `inset:0;width/height:100%` keeps it full-bleed),
+  measure `cv.clientWidth`, auto-correct in `_frame`. Verified: no inline style, full-bleed by construction.
+- **WAVEFORM rebuilt** → full-screen **spectrum CURTAINS** streaming in from **every edge** (top falls down — the empty top is gone),
+  bar heights from the live FFT, plus **3 slow LFOs that morph the geometry** (lean / block↔needle / reach) through the song, + a faint
+  mid oscilloscope. Numeric probe: top/bottom curtains ~63–90% lit; center stays readable.
+- **EMBER rebuilt** → a dense particle **STORM** that populates **everywhere** (the center-killing `centerMask` is gone), **bursts**
+  outward on every beat, **grows→peaks→dims** over each particle's life, **morphs hue**, and now **falls as well as rises** (petals
+  fall, embers rise). Fullness via a **cached warm glow-sprite** `drawImage`'d per particle (cheap GPU blit). Coverage went from a
+  blank **~2%** → **~34% idle / ~76% during play** (center 37–46%). Glow enabled in **lite** too (was the sparse path) so a throttled
+  machine still gets a full storm (lite ~57%).
+- **WARP** densified (150→200 streaks) and the per-stroke `shadowBlur` (an fps risk on 200 strokes) removed — additive blend + bright
+  heads carry the glow. The shared center-vignette softened (it was double-dimming with the game's own scrim).
+- **3 full-site-swarm bugs fixed:** (1) `getLiveStats()` now exposes `overdrive`/`odActive` so procbg's OD crescendo actually fires
+  (it read undefined → stuck at 0); (2) `clearLevelTheme()` now calls `RhythmProcBg.set(null)` on level exit so the canvas **hides**
+  (not just suspends) — no more procedural canvas covering the restored video / bleeding onto menus; (3) `DEPLOY_OPS.md` allowlist now
+  includes `procbg.js` (+ `share.js`, `telemetry.js`) — a deploy that followed it verbatim would have 404'd the backdrops.
+- **Testing note for future me:** the headless preview reports `fxLite:true`, so early pixel probes measured the **lite** path and read
+  falsely "sparse"; and `_feed({w})` reassigns `cv.width` each call which **clears** the canvas (defeating accumulation). Real verify =
+  feed `w` ONCE, force `applySettings({fxLite:false})`, then accumulate. Verified live (v293): all 3 tick clean, **0 console errors**,
+  full + lite both busy. Visual taste is the owner's call on a real 60fps screen — the density knobs (`N`, glow `gd`, curtain `reach*`)
+  are easy to dial.
+
+### build66.13 — owner screenshots: the REAL "rectangle" + warp rotation + waveform scroll/hue + ember perf  ✅ (?v 293→294)
+Owner played all three on a real screen: *"First Light still shows a black tangle — I'd want the whole effect to rotate/twist/turn to
+the music. Steady Hands is better but I still see that ugly rectangle and the background isn't solid black — generate a solid black… also
+change hue more / scroll left→right / more dimension. Ember I actually like the look — but performance issues while playing."* **Last
+attempt** to land these.
+- **🔴 The "ugly rectangle" was NEVER the canvas** (that was full-bleed). It was `#game-bg::before` (side "dead-strip" gradients) +
+  `#game-bg::after` (edge scrim) rendering **above** the canvas (z4/z3), darkening the sides into a bright-center box — on top of the warm
+  (non-black) `#game-bg` radial-gradient base. **Fix:** a new `#game.rr-procbg` class (added in `applyLevelTheme` for procBg levels, removed
+  for video/static/exit) makes the base **solid `#060504`**, sets `::before` to `none`, and softens `::after` to one gentle wide vignette.
+  Verified via computed styles: base `rgb(6,5,4)`, dead-strips gone. Solves both "rectangle" + "not solid black."
+- **First Light (warp)** → a real **vortex that ROTATES to the music**: the whole streak field spins (`_state.rot` accelerates with
+  bass/beat/combo/OD) and each streak **spirals** (a 3-segment arc whose angle twists with radius; twist grows with combo/beat). Wider
+  center glow so there's no dark central tangle.
+- **Steady Hands (waveform)** → the curtains now **scroll left→right** (the spectrum sample index travels), a slow **hue cycle** moves
+  through the fire band (deep-red→gold, owner: "change hue a bit more"; stays warm — no blue/purple), and a dimmer **parallax back-layer**
+  adds **dimension**.
+- **Ember (owner liked it) → kept the look, cut the cost:** particles 560→440 (lite 320→260), far/dim particles are **glow-only** (skip the
+  crisp core draw — ~40% fewer stroke/arc ops, near-invisible), glow halos a touch smaller, and procbg canvas **DPR capped 1.25→1.1**
+  (a soft backdrop doesn't need full res — ~23% less pixel/overdraw). Auto-quality still drops it to the lighter lite path on slow frames.
+  Coverage held: ember ~64% / warp ~56% / waveform ~45%, all tick clean, **0 console errors**. The look is now the owner's call on real HW.
+
+### build66.14 — owner playtest: KALEIDOSCOPE + bulletproof black base ("lines and blocks I can't stand")  ✅ (?v 294→295)
+Owner played First Light and flagged horizontal **"blocks"** in the back + disliked the streak **"lines"**, and asked for the geometric
+levels to **"change geometry mid-song — think of a kaleidoscope."**
+- **🔴 The "blocks" = the scrim/dead-strips were STILL showing** — proof the `#game.rr-procbg` class wasn't reliably reaching gameplay
+  (cache or a launch path that set the canvas without `applyLevelTheme`). **Bulletproofed:** `RhythmProcBg.set()` now toggles
+  **`html.rr-procbg-on`** itself, so the solid-black base applies on EVERY path that activates the canvas. Keyed the CSS off that (with
+  `!important`): `#game-bg` → solid `#050403`, `::before` → `none` (side dead-strips gone), `::after` → one soft radial vignette (no
+  horizontal linear bands). Verified live: base `rgb(5,4,3)`, dead-strips `none`, class auto-removed on `set(null)`.
+- **NEW `kaleido` / `kaleido2` renderers** — a real **kaleidoscope**: glowing particle "motifs" (reusing the loved ember glow sprite, NOT
+  lines) reflected in **N-fold rotational + MIRROR symmetry**; the whole thing spins to the music; and the **segment count snaps to a new
+  value on a strong section onset, then EASES there** (smooth, not jarring) = "change geometry mid-song." Music-reactive (FFT bands drive
+  each motif's radius/brightness; beat pulses; combo spins + brightens). Both stay warm (crimson `kaleido` / gold `kaleido2`, no blue/purple).
+- **The two geometric Easy levels now use it:** First Light → `kaleido` (crimson, faster), Steady Hands → `kaleido2` (gold, more segments,
+  slower). **Ember Drift stays `ember`** (owner likes it). `warp`/`waveform` remain registered for future use. Perf: ~11 motifs × ≤12
+  segments × 2 mirrors, glow gated to bright motifs — lighter than ember. Verified live (v295): both fill to the corners (kaleido ~57% /
+  kaleido2 ~62%, center ~100%), tick clean, **0 console errors**.
+  are easy to dial.
+
+### build66.15 — PURE-BLACK backdrop: killed the last warm wash ("without solid black it takes away from the effect")  ✅ (?v 295→297)
+Owner played the kaleidoscope (it renders — the jewel ring is visible) but a **warm-brown wash** behind it still bugged them. The base was
+already black; the warmth was two layers sitting ABOVE the canvas: (1) the kaleidoscope's own soft **center bloom** (added so the core
+wasn't a dark hole), and (2) the per-level **`.bg-accent` warm wash** (z2, opacity 0.14, painted over every themed level). Fixes:
+`#game-bg` → pure `#000`; `html.rr-procbg-on #game-bg .bg-accent { opacity:0 }`; the kaleido center bloom removed (replaced by a brief,
+tight **beat-only flash** so drops still punch but rest = black); and the kaleido trail recolored `rgba(6,5,4)` → **`rgba(0,0,0)`** so empties
+decay to true black. Verified live (v297): at rest the corners between jewels read **luma ~1** (was ~5), base `rgb(0,0,0)`, accent opacity 0,
+both flavors tick clean, **0 console errors**. The jewels now pop on solid black.
+
+### build66.16 — the warm was DESKTOP-ONLY layers my 6px test never rendered + kaleido scale-pulse  ✅ (?v 297→298)
+Owner marked the warm "rectangle" with a red pen. **🔴 The root cause: I'd only ever tested the preview at 6px wide — so the desktop
+layout (`@media min-width:901px`) NEVER rendered, and its warm layers were invisible to me.** Resized the preview to **1600×900** and
+scanned every element's computed background: found three warm layers the black `#game-bg` doesn't cover — the **`<body>` crimson top-glow**
+(`radial-gradient … rgba(163,6,15,0.18)`) and the **two HUD side-panels** (`.hud-panel.left/.right`, warm `rgb(14,7,8)→rgb(20,10,11)`
+gradient = the brown "gutters"). **Fix:** `html.rr-procbg-on body { background:#000 }` + `html.rr-procbg-on #game .hud-panel
+{ background: linear-gradient(#000 .92 → #000 .5) }`. Re-scanned at 1600×900: **`warmRemaining: []`** — zero warm elements, body
+`rgb(0,0,0)`, panels black. (The horizontal band the owner marked is the OLD `::after` scrim from a **cached** build — the desktop app
+caches hard; needs a full restart, not just a reload.) **Also (owner's "scale up/down → vertical feel"):** the kaleidoscope now
+**zooms/breathes** with the music (`breathe = 0.82 + 0.20·sin + bass·0.26 + beatPunch·0.16`) so the whole pattern scales in/out on the beat.
+`node --check` clean, **0 console errors**. **LESSON: always verify procbg/backdrop work with `preview_resize` to ≥901px — the 6px headless
+window hides the entire desktop layout (gutters, stage, HUD panels).**
+
+### build67 — FIRST community guitar: "Celine's Razor" (CelinesRazor × Dion), free unlock  ✅ (?v 298→299)
+A community member (CelinesRazor / Dion) sent a photo of his custom DION bass and wanted it in the game. Built it as a real
+selectable/equippable guitar skin, gifted FREE.
+- **🔴 The 6-string mistake (owner caught it):** I first generated the guitar **from scratch** with gpt_image_2 — it rendered **6 strings**
+  (image models always do, no matter the prompt), and I presented it without counting. Our own past notes say **always i2i-reskin the
+  template** (`crimson-chaos-ryo.png`) which forces exactly 5 strings + the measurable fanning geometry. Re-did it the right way, and added
+  a permanent **string-count GATE** (`assets/guitars/_count_strings.py` — detects the green strike-zone strings, clusters them, asserts ==5)
+  that now runs on every guitar. The i2i reskin came back **5 strings** (gate-confirmed, centers 0.34/0.41/0.49/0.57/0.64) and kept his whole
+  identity: purple neon, CELINES RAZOR tag, crown/hearts/stars/pentagram/dripping-smiley graffiti, PARENTAL ADVISORY, DJ-turntable speakers,
+  VOLUME/TONE, the STREAK display, the eye, and the **DION / FAMILY OVER EVERYTHING ♥** bridge plate.
+- **Pipeline:** i2i reskin (gpt_image_2, ref = crimson-chaos-ryo) → `_aikey.py` cutout → resize to 1140×2016 (2.7 MB) → `_measure_adaptive.py`
+  on the SHIPPED file = **55 clean 5-string rows, 1.67px residual**, overlay-verified riding the strings. Card = `_count_strings`-clean PNG
+  flattened on warm-black 752×1344.
+- **Wired:** `SKIN_GEOM` verified:true (game.js) · `SKINS` loadout + `SKIN_GUITAR` map + `STORE_FALLBACK` item (index.html) · **FREE_ITEMS**
+  set in catalog.js so `ownsItem('skin','celines_razor')` is true for everyone → the store renders **"Equip" with no price** (free), and the
+  loadout lists it. Verified live (v299): `isSkinPlayable` true, equips with **0 "not verified" warnings**, both assets serve 200, **0 console
+  errors**. Cost ~15 credits (a couple wasted on the from-scratch attempts; lesson logged).
+
+### build68 — reactive backdrops REDESIGNED from an 8-agent design swarm (cleaner, intense, distinct, section-aware)  ✅ (?v 299→301)
+Owner: the 3 Easy backdrops read as "particle soup" — two looked like the same level, the kaleidoscope didn't read as a kaleidoscope,
+reactivity wasn't legible, and they wanted color/scale/spin that changes (and **reverses**) with the music. Ran an 8-agent Workflow
+(6 critique lenses → synthesis → adversarial harden); the harden pass caught **4 load-bearing bugs** in the draft (a dead-code section
+detector, a LIVE yellow-green hue leak, center-lane wash from diagonal-radius anchoring, NaN-poison from uninit state). Implemented the
+full hardened spec (11 changes), all via the Edit tool, verified by `_feed`/`tick` + pixel probes:
+- **Engine:** a cheap **section/tempo detector** in `_drawOnce` (NOT `_readAudio`, which the fed path skips) → a persistent **`_spinDir` ±1**
+  + one-shot `_secPulse`; a fast-attack **`_kick`** env; a shared **`_warmHue` 0..58 budget** (`_heatL`/`_heatS` route lightness as the loud
+  axis) that FIXED a live brand leak (Steady Hands hue reached ~82 = yellow-green at high energy). `set()` resets the section state per level.
+- **Two distinct kaleidoscope FAMILIES (kills "same level twice"):** First Light = a sharp **odd-fold crimson STAR** (segOpts 5/7/9, spike
+  jewels, faster spin); Steady Hands = a woven **even-fold gold LATTICE** (8/10/12, leaf jewels, 3 concentric rings, slower bigger breathe).
+  Both gained a real **mandala skeleton** (radial spokes on the seams + per-band rings + a bass hub), **chiral jewels** (teardrop/spike whose
+  mirror negates the perpendicular so the symmetry seam READS), a signed **eased spin that decelerates through 0 and counter-rotates on a
+  section change** (+ seg-count + palette snap on the SAME event), a morph **shockwave**, phrase **hue-travel**, and a radial **spectrum EQ**.
+  All radii **cy-anchored** (half-height, not the diagonal) so the note lane stays readable (verified: center 13% lit vs edge 66%).
+- **Ember → an authored FIRE:** spawn biased low+central (updraft column, narrow at center), net **buoyancy**, a floor **ember-bed**, beat
+  bursts **erupt up from the floor**, the curl flow **reverses on a section change** (`_spinDir`) + a one-shot floor eruption, **OD white-hot
+  crescendo**, and a **thermal gradient** (white-hot base → crimson tips via `_warmHue`).
+- **Perf:** seg/EQ/particle caps + a **soft-lite frame-time watchdog** (`_soft`) that drops the EQ ring after 30 slow frames. Verified live
+  (v301): all 3 tick clean in full AND lite, **section flip works** (spinDir 1→-1, secPulse fires), **0 green/blue px** at max combo,
+  center readable, **0 console errors**. The aesthetic feel is the owner's call on a real screen — every knob (segOpts, spinMul, breatheAmp,
+  EQ B, detector 0.18/5.5s thresholds) is a one-line dial.
+
+### build68.1 — owner playtest: ember "box" + spin too fast  ✅ (?v 301→303)
+- **The ember box (only ember, not the kaleidos):** two causes. (1) its trail was still `rgba(6,5,4)` (a faint WARM rectangle vs the
+  pure-black gutters) where the kaleidos use `rgba(0,0,0)` → fixed to pure black. (2) the bigger one: the fire was a near-UNIFORM haze
+  (row luma 38–43 top-to-bottom = a flat lit rectangle), whereas the kaleido reads as structure. Added a **FLAME envelope** (`flameY` dark
+  at top→bright at floor, `flameX` central column) so ember ramps **21 (top) → 72 (floor)** = a real flame, not a box. Verified by row profile.
+- **Spin too fast/jarring:** base spin speed ~halved (`0.25+…` → `0.08+…`), `spinMul` 1.1/0.8 → 0.85/0.55 (First Light/Steady Hands), the
+  section "whip" `*6` → `*2.5`, ease `dt*2.2` → `dt*1.8`. At full energy ~0.7 rad/s (≈9s/rotation) vs the old ~1.9 (≈3.4s). Steady Hands is
+  now genuinely stately. `node --check` clean, all 3 tick in full+lite, **0 console errors**.
+
+### build69 — MP combat (PvP/PvE) reframed: host-decided per ROOM, not a confusing lobby switch  ✅ (?v 303→304)
+Owner: the page-level COMBAT toggle reads like a global lobby switch ("can anyone flip it for everyone?") and its effect on
+rooms/tournaments is unclear. Ran a 4-agent Workflow to map the wiring. **What it actually was:** `combatOn` is a LOCAL pref that only
+becomes a match value when YOU host (maybeStart → `start{combat}`; the rival adopts it). So already host-per-match, just badly surfaced —
+AND rooms re-read the host's *live* localStorage at start (inconsistent), and the swarm found combat **can't fire in a tournament at all
+today** (the shock transport is `matchCh`-gated; `matchCh` is null mid-bracket — a separate latent bug).
+- **Implemented (verified single-client, low-risk):** (1) the lobby chip is **relabeled + rescoped** — "COMBAT default: OFF · you host →
+  …", title says "your default when YOU host … NOT a lobby-wide switch"; banner copy updated. (2) **Per-ROOM combat**: `room.combat` is a
+  canonical field on all 5 room literals, set from a new `#mpx-room-combat` segmented row at **openRoom** (the host's choice), **advertised**
+  in room-meta, **adopted** by joiners (`!!meta.combat`), and the match start now reads `room.isHost ? room.combat : combatOn` so **every
+  match in a room is consistent** (was re-reading live localStorage). (3) **CPU/Practice** sets `matchCombat=false` explicitly (no stale leak).
+  Reuses the existing (working) `matchCh` shock transport for rooms. Verified: chip relabel live, room combat row shows + toggles, node-check
+  clean, **0 console errors**.
+- **DEFERRED (flagged) — per-TOURNAMENT combat:** the swarm produced a full spec (tour.combat in nullTour/openTour/snapshot/t-track/t-round +
+  a NEW `t-shock` transport on tour.ch with self-echo + multi-pair targeting guards + host-migration survival). It's the riskiest MP code and
+  is **2-device-only verifiable** (can't be exercised headless), so it was NOT landed tonight to avoid an unverifiable sync regression. The
+  spec + the adversarial sync checklist are saved; next step is to wire it WITH a real 2-peer test. (Note: tournament combat doesn't fire today
+  regardless, so deferring it is no regression.)
+
+### build70 — polish & playtest pass: a11y + correctness micro-batch (owner picked "Polish & playtest tuning")  ✅ (?v 304→305)
+Re-audited the launch-readiness report's still-open P2/P3 items against the *current* tree first — and most were **already closed** by
+earlier passes (start-screen/scrim warm-dark, MP success-green→gold, `calibActive` re-entry guard, the per-lane string `shadowBlur`
+fxLite/reduceMotion gate, the 1080p hold-frame encode downscale to ~960px, the leaderboard `NaN%` coerce). So this batch is the genuinely
+remaining safe, single-client-verifiable polish — no taste/feel calls (those need an owner playtest), no dev-hook stripping (that waits for
+content-freeze).
+- **How-to-Play key legend now live-syncs to remaps.** `#howto-keys` was a hardcoded `A S D J K` literal that never reflected a rebind.
+  Routed it through the existing `updateFooterHint()` (game.js) — the same source of truth that drives `#footer-keys` — so both update on
+  boot, lane-profile change, **every rebind, and reset**. Proven live: clobbered both legends to a sentinel, hit Settings → Reset, both
+  snapped back to the 5 lane keys.
+- **Footer key hint shipped a stale 6-key default** (`A S D J K L`) on a 5-lane game — corrected the static markup to `A S D J K` (the
+  dynamic sync already overwrote it at boot, but the pre-sync flash was wrong).
+- **Countdown is now announced to screen readers** — `#countdown` (the 3·2·1) gained `role="timer" aria-live="assertive" aria-atomic`.
+- **`updateHUD()` early block null-guarded.** Its first ~6 HUD writes dereferenced ids with no guard (its second half already used the
+  `const el=$(id); if(el)` pattern); a missing id after the `/play` markup move would have thrown inside the rAF loop and killed the frame.
+  Converted to the guarded pattern — purely additive safety, identical behavior when the ids exist (cheap pre-deploy insurance).
+- Verify: `node --check game.js` clean; live read at ?v=305 — footer 5 kbd, howto 5 kbd + reset-resync proven, countdown role/aria present,
+  RhythmGame booted, **0 console errors**.
+- **Deferred (need an owner playtest, NOT blind-tuned):** lane-centering for Easy (`LANE_SPAN.easy` uses lanes 0–3, bottom-biased on a
+  5-lane neck), partial-chord combo-break fairness (±2-lane partner clamp), and any difficulty/SFX-volume/reactive-backdrop *feel* dial-ins —
+  these change how the game plays and should be tuned against your ears/eyes, not guessed.
+
+### build71 — owner: "take care of all those + keep polishing + find any bugs/misses" → 21-fix verified batch  ✅ (?v 305→307)
+Took the deferred feel items + ran a **10-lens adversarial bug-hunt Workflow** (33 agents: 10 finders in 2 waves → triage → 34 verifiers → synthesis) over the live build. 23 raw → 21 triaged → **20 confirmed safe-to-ship** + the Easy lane-centering. Every fix is node-checked and 0-console-error verified on Easy/Medium/Hard demos; the SFX changes are byte-identical at the default mixer level (they only fix the extremes), so nothing audible changed by guess.
+- **Easy lane-centering** (`game.js` LANE_SPAN.easy 4→3): was lanes {0,1,2,3} (top string dead, bottom-biased — the "centered" comment was a lie on a 5-lane neck). Now `laneBase=1` → lanes **{1,2,3}**, genuinely centered/symmetric. Note count is gap-driven not lane-driven, so Easy isn't "blanker." Verified via `__rrChartStats.laneHist`; Medium/Hard still {0,1,2,3,4}.
+- **MULTIPLAYER (`multiplayer.js`):** **[P1] Wager refund-after-play exploit** — `closeTour()` refunded the buy-in on *every* exit; `wagerRefundPool` only blocks once a pool is settled/refunded (which only happens for the champion), so a player who **left a LIVE staked bracket reclaimed their full stake** → guaranteed loser stake-back that deflated the champion pot. Now refunds only when the bracket dissolves **before** going live (`tour.state==='open'`). · **[P2]** `startTour()` re-asserts the everyone-paid gate **in code** (was enforced only by the disabled button — a state-sync race could click through). · **[P3]** softPresence header comment corrected (10s heartbeat / 75s sweep, was 5s/13s).
+- **AUDIO/SFX (`game.js`) — the Hit-Sound slider now actually controls every SFX (silent at 0%, default level unchanged):** Overdrive riser was a fixed 0.22 (blasted even at 0%) → mixer-scaled · zap/sting/cheer had additive floors (audible at 0%) → pure mixer scaling, incl. the cheer "whoo" formants that bypassed the master gain · calibration metronome click now respects the global **mute** flag · `loadHitSfx` now checks `response.ok` so a 404 can't feed an HTML error page to `decodeAudioData`.
+- **INPUT (`game.js`):** rebinding a lane to **'m'** no longer also silently toggles music-mute on every hit in that lane · a **gamepad unplugged mid-hold** now releases all lanes + clears the dead pad's stale edge-state (was a stuck/auto-sustaining fret).
+- **CHARTING/SCORING (`game.js`):** the `_hotBands` chord could **slice the struck lead lane out** of `chordLanes` (phantom lane got no note + lead excluded from the chord-bar centroid/connector) → lead is now always kept · results **accuracy now grades off the displayed (1-dp) value** so a 94.97% run can't print "95.0%" next to an A.
+- **PERF (`game.js`, all gated/no-behavior-change):** comet-trail (2 gradients + shadowBlur strokes/note/frame) now gated by `fxLite`/`reduceMotion` like its siblings · the two per-frame full-note scans early-break on the sorted-notes invariant · progress-bar/time HUD writes are change-gated to whole-percent/second (and now null-safe).
+- **A11y / UI (`index.html` + `jukebox.js`):** jukebox section tabs got `role=tablist`/`tab` + live `aria-selected` (via the `setSection` chokepoint) · 5 search inputs got real `aria-label`s (placeholder isn't an accessible name) · mobile combo readout no longer sits under the round pause button (`.m-right` padding) · static HUD difficulty label "PULSE — Normal" → "PULSE — Medium" (real tier name) · dropped a dead `repeat(6,1fr)` grid-template on the 5-lane `.tap-zones` (a footgun).
+- **CATALOG (`catalog.js`):** cover-card fallback `gradeFor()` aligned to the engine grade scale (S≥95/A≥88/B≥75/C≥60 on accPct; was 97/90/80/65 on the 0..1 fraction) so a cover badge and the results screen can't disagree.
+- Verify: `node --check` clean on game.js/multiplayer.js/catalog.js/jukebox.js; live at ?v=307 — Easy {1,2,3}/Medium {0,1,2,3,4} charts, Hard built 281 chords clean, tab ARIA + search labels + HUD label confirmed in the DOM, **0 console errors** across Easy/Medium/Hard + reload.
+- **Bug-hunt false alarm — RESOLVED, no change (owner-confirmed 2026-06-23):** the auth / Get-Sparks / Privacy deep-links point at **reactivvibeai.com** while the game front is **reactivvibe.com** (index.html ~7576/7810/7856/7970/8854). The hunt flagged a possible mismatch, but the owner confirmed the auth/Sparks/privacy service **genuinely lives on reactivvibeai.com** — the links are CORRECT and were left untouched. (Future audits will re-flag this; it is intentional — see the [[reactivvibe-domain-split]] memory.)
+
+### build72 — round-2 bug-hunt (deeper lenses) → 21-fix verified batch  ✅ (?v 307→308)
+Second 10-lens adversarial hunt (35 agents) over the areas round 1 under-covered, with all build70/71 fixes excluded so it couldn't re-find them: 29 raw → 23 triaged → **22 confirmed** (21 applied, 1 deliberately skipped). Dominant theme: the two public-leaderboard surfaces hardened inconsistently, and the env/free-play/MP synthetic-level path dropping showcase fields + mis-routing results buttons. All node-checked + 0-console-error verified at ?v=308.
+- **Leaderboard hardening (catalog.js results panel ↔ index.html overlay parity):** results panel was printing **"#undefined" rank / "NaN" score** and bypassing the **profanity filter** the overlay already applied → added a catalog-side `scrubName` mirror of `cleanName` + rank/score coercion + a "you're the first to score" empty-board note. Overlay `normLive` now isFinite-clamps accuracy (no "NaN%") and defaults a missing rank to array position (podium/list desync).
+- **Env / free-play / MP synthetic-level path (`index.html`):** now carries **`procBg`** (Easy warm-ups were rendering a static poster instead of their reactive backdrop on this path — verified: `applyEnvironment('warm-01')` → `rr-procbg-on` + `RhythmProcBg.active()`) and **`fxKit`** (paid showcases lost their signature hit particles). Results **RETRY/NEXT** no longer misfire on an `_isEnv` synthetic (NEXT hidden, RETRY falls through to free-play replay — `recordLevelClear` already early-returned on `_isEnv`, so this closed the matching half).
+- **Career/progression (`index.html`):** badge denominator now counts only **finished** levels (was "N / 18" that could never complete; verified `totalLevels()` = 13 = finished count); `recordLevelClear` no longer **overwrites the persisted grade/timestamp on a FAILED run** (it preserved the star count but clobbered the grade — a contradiction); `recordLocal` **back-fills `attempts`** from runs+fails for legacy saves (was resetting lifetime attempts to 1 post-upgrade).
+- **Catalog resilience (`catalog.js`):** a 200-but-**empty** library response now shows a "showing samples" toast (was silently swapping in 1000 mock songs with no signal).
+- **Store/economy (`index.html`):** legend copy fixed ("cosmetics **or premium levels**" — it sells content, not only cosmetics); Bonus-Sparks pricing dropped for **`theme`** items (no equip path yet).
+- **Brand/a11y/UX:** deleted the dead **`#__bundler_thumbnail`** template (the only purple `#1a0628` in shipped CSS, zero refs); **g-D** grade color `#6f6a64`→`#8a847d` (was ~3.55:1, now ≈5:1 AA); the redundant desktop **library search icon** hidden (one affordance per width); player-facing **launch-failure** message (was the dev string "No beats in chart"); first-run **How-To** no longer pops over the guided hub or a live countdown.
+- **Misc:** telemetry `app_version` fallback `v248`→`v308` (added to the ?v checklist); the two phantom `bgVideo` refs (`pulse-loop.mp4` / `boss-loop.mp4`, files absent) dropped from the gated pulse-02 / frac-boss defs so they can't 404 if promoted.
+- **Skipped (1, deliberate):** the env-picker `chip()` `comingSoon` branch — unreachable today (`rebuild()` filters those out) but it's a correct fallback if that filter ever changes, so removing it would reduce robustness for no real gain.
+- Verify: `node --check` clean (game/catalog/telemetry/jukebox.js); live at ?v=308 — env procBg activation, career denom 13, store legend, bundler-template removal, 18 envs carrying procBg/fxKit all confirmed; **0 console errors**.

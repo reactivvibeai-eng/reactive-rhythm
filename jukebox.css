@@ -103,6 +103,8 @@
   cursor: pointer; white-space: nowrap; transition: all 0.14s ease;
 }
 .jb-tab.active { color: var(--ink); border-color: rgba(255,31,46,0.5); background: rgba(255,31,46,0.1); box-shadow: 0 0 16px rgba(255,31,46,0.18); }
+/* micro-interaction: inactive tabs lift + warm on hover (reduce-motion neutralizes the transform via the global) */
+.jb-tab:not(.active):hover { color: var(--chrome); border-color: rgba(224,218,214,0.3); transform: translateY(-1px); }
 
 /* the 3D stage */
 .jukebox {
@@ -201,7 +203,10 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
   font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 15px;
   background: rgba(7,6,10,0.8); border: 1px solid currentColor;
   backdrop-filter: blur(4px);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
+.cover-grade:hover { transform: translateY(-1px); box-shadow: 0 0 10px currentColor; }
+.cover-grade:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 /* AI-radio badges (top-right, opposite the personal-grade chip). Driven by the backend `badges` field per
    BADGES_BACKEND_BRIEF.md — Golden Buzzer = gold star, judge_grade = tier-colored letter, hot = crimson HOT. */
 .cover-badges { position: absolute; top: 10px; right: 10px; z-index: 4; display: none; flex-direction: column; align-items: flex-end; gap: 5px; }
@@ -320,12 +325,18 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
   padding: 12px; text-align: left;
   background: linear-gradient(150deg, var(--c1,#c2182a), var(--c2,#1e0407));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.16);
-  transition: transform 0.1s ease;
+  transition: transform 0.12s ease, border-color 0.12s ease;
 }
+.genre-tile:hover { border-color: rgba(224,218,214,0.4); transform: translateY(-1px); }
 .genre-tile:active { transform: scale(0.97); }
+.genre-tile:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 .genre-tile::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255,255,255,0.22), transparent 60%); pointer-events: none; }
 .genre-tile .gt-name { position: relative; z-index: 2; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .genre-tile .gt-count { position: relative; z-index: 2; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); margin-top: 3px; letter-spacing: 0.1em; }
+/* Videos category tile — distinct from the genre color-tiles: dark warm body, chrome edge, gold count */
+.genre-tile.gt-videos { background: linear-gradient(150deg, #2a0d10, #120607); border-color: rgba(218,215,210,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 0 18px rgba(194,24,42,0.28); }
+.genre-tile.gt-videos .gt-name { color: #f0e9e4; }
+.genre-tile.gt-videos .gt-count { color: rgba(224,169,63,0.95); }
 
 .artist-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
 .artist-tile {
@@ -354,14 +365,18 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
   position: relative; z-index: 5;
   display: flex; gap: 8px; padding: 0 18px 12px; flex-shrink: 0;
 }
+.songs-search-wrap { position: relative; flex: 1; display: flex; }
 .songs-search {
-  flex: 1; height: 44px; padding: 0 14px;
+  flex: 1; min-width: 0; height: 44px; padding: 0 38px 0 14px;
   background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 12px;
   color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 13px;
   outline: none;
 }
 .songs-search::placeholder { color: var(--ink-dim); }
 .songs-search:focus { border-color: rgba(255,31,46,0.5); }
+/* in-field clear-× — mirrors the header search's .lib-search-x, positioned inside the field */
+.songs-search-x { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); }
+.songs-search-x:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 /* MOBILE: 16px text input so iOS Safari won't auto-zoom on focus (desktop keeps 13px above). */
 @media (max-width: 640px) { .songs-search { font-size: 16px; } }
 .songs-sort {
@@ -389,12 +404,19 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
 .g-A { color: #ff6b78; }
 .g-B { color: #dad7d2; }
 .g-C { color: #a8a29c; }
-.g-D { color: #6f6a64; }
+.g-D { color: #8a847d; }   /* build72: was #6f6a64 (~3.55:1, fails WCAG AA); #8a847d ≈5:1, still the dimmest warm grey (R>=G>=B, below g-C) */
 
 /* live now-playing waveform — a <canvas> driven by the actual preview audio (real FFT) */
 .jb-eq { height: 42px; margin: 4px auto 0; position: relative; z-index: 5; width: 100%; max-width: 760px; }
 .jb-wave { display: block; width: 100%; height: 100%; }
-.lib-empty { text-align: center; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 40px 20px; }
+.lib-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  text-align: center; color: var(--ink-dim);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 44px 20px;
+}
+.lib-empty .le-glyph { width: 30px; height: 30px; color: rgba(218,215,210,0.45); }
+.lib-empty .le-text { line-height: 1.5; max-width: 280px; }
+.lib-empty .le-clear { min-width: 0; padding: 9px 18px; font-size: 11px; }
 
 /* ===== credits ===== */
 .credits-link {
@@ -429,8 +451,8 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
 #lib-refresh-btn.spinning svg { animation: rr-spin 0.6s linear infinite; }
 @keyframes rr-spin { to { transform: rotate(360deg); } }
 
-/* coverflow: non-ready covers dim + carry a status tag */
-.jb-cover.not-ready .cover-face { filter: saturate(0.5) brightness(0.62); }
+/* coverflow: non-ready covers dim + carry a status tag (build58: target .cover-card — .cover-face was display:none, so this never applied) */
+.jb-cover.not-ready .cover-card { filter: saturate(0.5) brightness(0.62); }
 .cover-status {
   position: absolute; top: 12px; right: 12px; z-index: 3;
   padding: 4px 9px; border-radius: 999px;

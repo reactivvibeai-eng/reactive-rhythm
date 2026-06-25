@@ -74,9 +74,14 @@
   var matchCh = null;             // private match channel
   var matchId = null;
   var matchRole = null;           // 'host' (challenger) | 'guest'
+  // build64 FIX: the picker (track / stage / difficulty) must be enabled for whoever OWNS the selection — the match-channel
+  // host OR the ROOM host. room.isHost is true the instant you open a room, long before matchRole flips to 'host' (which only
+  // happens when a match channel opens). The old gates checked only matchRole==='host', so a room host (matchRole still null)
+  // was treated as a guest and couldn't pick the track/stage/difficulty in the waiting room. amPicker() fixes every gate.
+  function amPicker() { return matchRole === 'host' || !!(room && room.id && room.isHost); }
   var oppMeta = null;             // {id,name,avatar}
   var oppPresent = false, oppLeft = false;
-  var sel = { trackId: null, title: null, artist: null, art: null, difficulty: 'medium', demo: false };
+  var sel = { trackId: null, title: null, artist: null, art: null, difficulty: 'medium', demo: false, env: '__default' };   // v262: env = the room's chosen STAGE/level (host picks; rides the song payload; applied on match start). __default = plain Arena.
   var meReady = false, oppReady = false;
   var matchLive = false, finishedLocal = false;
   var myFinal = null, oppFinal = null;
@@ -89,15 +94,23 @@
   var _countdownRaf = 0;          // the 1v1 lead-in 3·2·1·GO! loop (off shared atMs)
   var _tourCdRaf = 0, _verdictT = 0;   // the tournament cinematic-countdown loop (own rAF so it can't cancel the 1v1 one) + verdict auto-hide timer
   var _mountT = 0;                // deferred split-screen mount timer (beginMatch/onTourRound) — cleared on teardown so a mid-lead-in abort can't resurrect vs-mode
+  var _settleSafetyT = 0;         // v258: the 8s "opponent never reported" settle safety-timer (stored so settle/teardown/rematch can cancel a stale fire)
   var _startWatchdog = 0;         // "did the round actually start?" watchdog — fail loud + recover instead of hanging silently
   var _botRampT = 0;              // dev: drives bot scores UP over the round so a spectator can watch the race (not instant)
   var oppPanel = null, oppRaf = 0, _lastSend = 0;
   var pendingOut = null;          // {toId,mid} a challenge I sent, awaiting answer
+  var _chalT = null;              // build58: challenge-timeout — a crashed/ignoring opponent must not leave a permanent "WAITING…"
   var incoming = {};              // id -> {mid} (challenges TO me)
   var activeNow = false;          // is #multiplayer-screen currently .active
+  // ---- v254: P-vs-P COMBAT state (the MP ranked-record model lives just below the helpers) ----
+  var combatOn = false;           // local toggle: P-vs-P combat (your combos SHOCK the rival ~2.2s) vs P-vs-E (pure score race)
+  try { combatOn = localStorage.getItem('rr_mp_combat') === '1'; } catch (e) {}
+  var matchCombat = false;        // EFFECTIVE combat mode for the live match (the host decides; broadcast in `start`)
+  var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
+  var _rankRecorded = false;      // guard: record each settled result exactly once (CPU warm-ups never record — oppMeta.bot)
   // ---- build8: rooms + quick-match state ----
-  var room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null,
-               members: {}, p1: null, p2: null };   // current room (host or joined/spectating)
+  var room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null,
+               members: {}, p1: null, p2: null };   // current room (host or joined/spectating). build69: combat = the host's per-room modifier (set at openRoom, advertised, adopted by joiners)
   var roomsDir = {};              // rid -> {rid,name,priv,hostId,hostName,count,max,at} (browser directory)
   var QM = { looking: false, t: 0 };   // quick-match: am I in the queue?
   var spectating = false;         // joined a match purely as a watcher
@@ -111,25 +124,30 @@
   var toursDir = {};                         // tid -> {tid,name,hostId,hostName,count,max,state,at}
   var _tourRaf = 0, _tourLastSend = 0;
   // ---- DEV NPC harness (solo + stress test; on the strip-before-launch list) ----
-  var MP_DEV = /[?&]dev=1/.test(location.search) || (function () { try { return localStorage.getItem('rr_dev') === '1'; } catch (e) { return false; } })();
-  var _devBots = {}, _devAuto = false, _devSpectate = false, _devN = 0;
+  // build58: keep in sync with index.html's MP_DEV — the BUILDER (localhost or ?dev=1) gets the full MP + the solo test harness.
+  var MP_DEV = /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname);   // build65 SECURITY (cycle-3 P0): LOCALHOST-only. The old `?dev=1 OR localhost` let /play?dev=1 trip the MP dev harness + bypass the MP_PUBLIC gate in production. Keep in sync with index.html's MP_DEV.
+  var _devBots = {}, _devAuto = false, _devSpectate = false, _devN = 0, _awaitAutoT = 0;
   var BOT_NAMES = ['Riff', 'Vex', 'Shred', 'Nova', 'Kai', 'Zed', 'Echo', 'Lux', 'Jinx', 'Onyx', 'Pyre', 'Mara', 'Drift', 'Crash', 'Bolt', 'Ora'];
   function nullTour() {
     return { id: null, name: null, isHost: false, hostId: null, ch: null, members: {}, state: 'open',
       round: 0, alive: [], pairs: [], byes: [], sel: null, finals: {}, settled: {}, _settleT: {},
       rival: null, meIn: false, history: [], champ: null, awaiting: false, _next: null,
       size: 8, envPool: ['__random'], envName: 'Random',
-      version: 0, _joinAt: 0, _alive: {}, _awaitWinners: null, env: null, atMs: 0 };   // host config + (build42) snapshot/migration/liveness fields
+      version: 0, _joinAt: 0, _alive: {}, _awaitWinners: null, env: null, atMs: 0,
+      stakes: 'free', buyIn: 0, currency: 'bonus', potId: null, paid: {}, bets: {}, pot: 0,   // build66: WAGER — host-run prize pool. stakes: free|pool|sidebet; paid: id->{at,idemKey} (HOST-verified roster); pot mirrors the escrow for display. Real cashable Sparks stay OFF (currency locked to 'bonus' client-side; see RhythmWager swap-seam).
+      _lastSnapV: -1, _snapHost: null, _roundTok: null, _hostHold: false };   // build58: snapshot-version FLOOR lives per-bracket (was a session-global that starved the 2nd tournament + rejected a promoted host's low-versioned snapshots); _roundTok = per-emission round nonce. build61: _hostHold = streamer pause of the auto-advance timers (host-only; a promoted heir starts un-held)
   }
   var _pendingTourJoin = null;   // build11: ?mpjoin=<tid> deep link — join once the lobby is up
   try { var _mj = location.search.match(/[?&]mpjoin=(t[a-z0-9]+)/); if (_mj) _pendingTourJoin = _mj[1]; } catch (e) {}
+  var _pendingRoomJoin = null;   // build60: ?mproom=<rid> deep link — join the friend's room once the lobby is up
+  try { var _mr = location.search.match(/[?&]mproom=([a-z0-9]+)/i); if (_mr) _pendingRoomJoin = _mr[1]; } catch (e) {}
 
   // ===================== SOFT PRESENCE (build9 foundation fix) =====================
   // VERIFIED against the live project: Realtime BROADCAST round-trips fine, but native
   // PRESENCE never syncs (track() acks "ok", zero presence_state/sync events — project-side).
   // So every "who's here" surface rides this broadcast-heartbeat layer instead:
-  //   hb {meta} every 5s + instant hello-back when a newcomer appears + bye on leave +
-  //   13s expiry sweep for crashes. Deterministic, project-independent, ≤10 peers/channel.
+  //   hb {meta} every 10s + instant hello-back when a newcomer appears + bye on leave +
+  //   75s expiry sweep for crashes. Deterministic, project-independent, ≤10 peers/channel.
   function softPresence(ch, getMeta, onChange) {
     var peers = {}, hbT = 0, sweepT = 0;
     function selfMeta() { var m = getMeta() || {}; if (!m.at) m.at = Date.now(); return m; }
@@ -176,6 +194,101 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function newMatchId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function safeUrl(u) { return String(u == null ? '' : u).replace(/["\\]/g, ''); }
+  // ---- v254: MP RANKED LADDER (local-first; SWAP-SEAM for a future server ladder) ----
+  // 1v1 quick-match / challenge / room results record here on settle. Points: win +25, draw +8, loss -12 (floored 0); a
+  // FORFEIT win (rival left) counts in the W column but awards 0 points (so leaving can't farm rank). CPU warm-ups never
+  // record (oppMeta.bot). Rank tier is derived from points. The leaderboard MULTIPLAYER tab + the lobby rank chip read
+  // getRank(). NOTE: like all peer-broadcast MP scoring here, the result is client-trusted — a real competitive ladder
+  // needs server adjudication (same gate as MP_PUBLIC). This is the honest local record + UX; the seam is server-ready.
+  var MP_RANK_TIERS = [
+    { n: 'UNRANKED',  min: -1,   c: '#8a7f7c' },
+    { n: 'BRONZE',    min: 1,    c: '#c8854f' },
+    { n: 'SILVER',    min: 150,  c: '#c9c4bf' },
+    { n: 'GOLD',      min: 350,  c: '#e0a93f' },
+    { n: 'CRIMSON',   min: 600,  c: '#ff4a52' },
+    { n: 'INFERNO',   min: 950,  c: '#ff7a4a' },
+    { n: 'ASCENDANT', min: 1400, c: '#fff2cd' }
+  ];
+  function mpRankLoad() {
+    try { var r = JSON.parse(localStorage.getItem('rr_mp_rank') || 'null'); if (r && typeof r === 'object') return r; } catch (e) {}
+    return { wins: 0, losses: 0, draws: 0, points: 0, streak: 0, best: 0, history: [] };
+  }
+  function mpRankTier(points) { var t = MP_RANK_TIERS[0]; for (var i = 0; i < MP_RANK_TIERS.length; i++) if (points >= MP_RANK_TIERS[i].min) t = MP_RANK_TIERS[i]; return t; }
+  function mpRankNext(points) { for (var i = 0; i < MP_RANK_TIERS.length; i++) if (MP_RANK_TIERS[i].min > points) return MP_RANK_TIERS[i]; return null; }
+  function getRank() {
+    var r = mpRankLoad(), t = mpRankTier(r.points), nx = mpRankNext(r.points);
+    return { wins: r.wins, losses: r.losses, draws: r.draws, points: r.points, streak: r.streak || 0, best: r.best || 0,
+      games: r.wins + r.losses + r.draws, winPct: (r.wins + r.losses) ? Math.round(r.wins / (r.wins + r.losses) * 100) : 0,
+      tier: t.n, color: t.c, next: nx ? { tier: nx.n, at: nx.min, need: Math.max(0, nx.min - r.points) } : null,
+      history: (r.history || []).slice(0, 15) };
+  }
+  function recordMpResult(result, info) {   // result: 'win' | 'loss' | 'draw'; info: { op, song, my, ops, forfeit }
+    var r = mpRankLoad(); info = info || {}; var _beforeTier = mpRankTier(r.points).n;
+    if (result === 'win') { r.wins++; if (!info.forfeit) r.points += 25; r.streak = (r.streak > 0 ? r.streak : 0) + 1; }
+    else if (result === 'draw') { r.draws++; r.points += 8; r.streak = 0; }
+    else { r.losses++; r.points = Math.max(0, r.points - 12); r.streak = (r.streak < 0 ? r.streak : 0) - 1; }
+    if (r.points > (r.best || 0)) r.best = r.points;
+    if (result === 'win' && mpRankTier(r.points).n !== _beforeTier) { try { window.RhythmGame && window.RhythmGame.playSting && window.RhythmGame.playSting('big'); } catch (e) {} }   // v257: rank-up sting
+    r.history = r.history || [];
+    r.history.unshift({ result: result, op: String(info.op || '').slice(0, 18), song: String(info.song || '').slice(0, 40), my: info.my || 0, ops: info.ops || 0, ff: !!info.forfeit, at: Date.now() });
+    if (r.history.length > 30) r.history.length = 30;
+    try { localStorage.setItem('rr_mp_rank', JSON.stringify(r)); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('rr-mp-rank', { detail: getRank() })); } catch (e) {}
+    return r;
+  }
+  var _lastStunAt = 0;
+  function onShock(p) {   // v254: a rival's combo milestone zapped you → brief gameplay stun (combat mode, human-only)
+    if (!matchLive || !matchCombat || (oppMeta && oppMeta.bot)) return;
+    // build65 (cycle-3): RECEIVE-SIDE COOLDOWN — back-to-back shocks (a rival on a hot streak fires every 30 combo) could
+    // chain-lock you with no comeback path. Ignore a new shock within 4s of the last. Cosmetic to scoring (it gates input
+    // timing, never the score ceiling) → leaderboard-safe. Exact cadence is a feel call; this guard prevents the runaway.
+    var now = Date.now();
+    if (now - _lastStunAt < 4000) return;
+    _lastStunAt = now;
+    try { window.RhythmGame.mpStun && window.RhythmGame.mpStun(2.2, (p && p.from) || 'RIVAL'); } catch (e) {}
+  }
+  function _reduceMo() { try { var s = window.RhythmGame && window.RhythmGame.getSettings && window.RhythmGame.getSettings(); return !!(s && s.reduceMotion) || document.documentElement.classList.contains('rr-reduce-motion'); } catch (e) { return false; } }
+  function _spawnZapBolt() {   // v257: a visible lightning bolt streaking from your deck toward the rival's when YOU land a combat shock
+    if (_reduceMo()) return;
+    try {
+      var host = document.getElementById('game'); if (!host) return;
+      var opp = document.getElementById('mp-opp'), hr = host.getBoundingClientRect();
+      var tx, ty;
+      if (opp) { var orc = opp.getBoundingClientRect(); tx = orc.left + orc.width / 2 - hr.left; ty = orc.top + orc.height / 2 - hr.top; }
+      else if (_vsMode) { tx = hr.width * 0.75; ty = hr.height * 0.30; }   // desktop split → the rival half
+      else { tx = hr.width - 56; ty = 56; }                                 // fallback → top-right
+      var sx = hr.width * 0.5, sy = hr.height * 0.82;                       // from your deck (bottom-center)
+      var bolt = document.createElement('div');
+      bolt.className = 'mp-zap-bolt'; bolt.textContent = '⚡';
+      bolt.style.left = sx + 'px'; bolt.style.top = sy + 'px';
+      bolt.style.setProperty('--zx', (tx - sx) + 'px'); bolt.style.setProperty('--zy', (ty - sy) + 'px');
+      host.appendChild(bolt);
+      setTimeout(function () { try { bolt.parentNode && bolt.parentNode.removeChild(bolt); } catch (e) {} }, 600);
+      if (opp) setTimeout(function () { try { opp.classList.add('zapped'); setTimeout(function () { opp.classList.remove('zapped'); }, 480); } catch (e) {} }, 300);   // strike-flash on the rival panel as it lands
+    } catch (e) {}
+  }
+  function paintRankChip() {   // v254: the lobby rank chip (tier · W/L · RP) — reads the local ladder
+    var el = $('mpx-rank-chip'); if (!el) return;
+    var r = getRank();
+    el.style.setProperty('--rk', r.color);
+    el.innerHTML = '<span class="rk-tier" style="color:' + r.color + '">' + r.tier + '</span>' +
+      '<span class="rk-wl">' + r.wins + 'W&nbsp;·&nbsp;' + r.losses + 'L' + (r.streak >= 2 ? '&nbsp;·&nbsp;🔥' + r.streak : '') + '</span>' +
+      '<span class="rk-pts">' + r.points + ' RP</span>';
+    el.hidden = false;
+  }
+  function paintCombatToggle() {   // v254: the P-vs-P / P-vs-E combat toggle in the lobby
+    var t = $('mpx-combat-toggle'); if (!t) return;
+    t.setAttribute('aria-pressed', combatOn ? 'true' : 'false');
+    t.classList.toggle('on', combatOn);
+    var lab = t.querySelector('.ct-state'); if (lab) lab.textContent = combatOn ? 'COMBAT default: ON · you host → combos shock' : 'COMBAT default: OFF · you host → score race';
+  }
+  function toggleCombat() {
+    combatOn = !combatOn;
+    try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {}
+    paintCombatToggle();
+    // build69: this is your DEFAULT when YOU host (quick-match) + the prefill for the Room dialog — NOT a lobby-wide switch.
+    banner('mpx-lobby-msg', combatOn ? '⚡ Combat default ON — when YOU host a match your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. Nobody can flip combat for the whole lobby.' : 'Combat default OFF — pure score race when you host. Pick Combat per room when you create one.');
+  }
   function myPresence(inMatch) {
     return { id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch,
       lf: !!QM.looking, room: (room.id || null), hostRoom: (room.id && room.isHost ? room.id : null),
@@ -189,6 +302,8 @@
     ['lobby', 'rooms', 'tour', 'setup', 'go', 'winner'].forEach(function (s) {
       var el = screen.querySelector('.mpx-step-' + s); if (el) el.hidden = (s !== name);
     });
+    if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows
+    if (name === 'setup') { try { renderStageRow(); } catch (e) {} }   // v262: render the room STAGE picker when the setup step shows
   }
   function banner(id, txt) { var el = $(id); if (!el) return; if (txt) { el.textContent = txt; el.hidden = false; } else { el.hidden = true; el.textContent = ''; } }
   // close any transient full-screen overlay that could occlude a starting round (the first-run How-To at z-260 was
@@ -211,6 +326,9 @@
     if (!matchLive && !matchCh && !tour.id) step('lobby');   // don't reset a returning winner overlay or a live bracket (build9)
     banner('mpx-lobby-msg', '');
     paintQuickBtn(); updateBrowseCount();           // build8
+    try { paintRankChip(); paintCombatToggle(); } catch (e) {}   // v254: rank chip + combat toggle
+    // build60: collapse the friends disclosure on entry, surface the sign-in note, and show the one-time coach card.
+    try { toggleFriends(false); refreshSigninNote(); if (!mpSeen()) showCoach(); } catch (e) {}
     joinLobby();
   }
   function leaveAll() {
@@ -234,6 +352,7 @@
       else { av.style.backgroundImage = ''; av.textContent = initial(ME.name); }
     }
     var nm = $('mpx-you-name'); if (nm) nm.textContent = ME.name + (ME.signedIn ? '' : ' (guest)');
+    try { refreshSigninNote(); } catch (e) {}   // build60: hide the sign-in note once identity resolves
   }
 
   // ===================== LOBBY (presence) =====================
@@ -265,6 +384,14 @@
             if (_pendingTourJoin && !tour.id) { var tid = _pendingTourJoin; _pendingTourJoin = null; joinTourDirect(tid); }
           }, 5000);
         }
+        // build60: room invite deep-link — ask the host to re-advertise; onRoomMeta auto-joins when it lands.
+        if (_pendingRoomJoin) {
+          try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+          banner('mpx-lobby-msg', 'Joining the room you were invited to…');
+          setTimeout(function () {
+            if (_pendingRoomJoin && !room.id) { banner('mpx-lobby-msg', 'That room isn\'t open anymore — hit PLAY NOW, or open your own room.'); _pendingRoomJoin = null; }
+          }, 6000);
+        }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         banner('mpx-lobby-msg', 'Could not reach the live lobby. Check your connection and reopen.');
       }
@@ -274,6 +401,9 @@
 
   function onLobbySync() {
     if (!lobbyCh) return;
+    // build58: if the player I'm WAITING on has left the lobby (soft-presence dropped them), clear the dead challenge so
+    // their row stops showing a permanent "WAITING…" and I can challenge someone else.
+    if (pendingOut && !lobby[pendingOut.toId]) { pendingOut = null; if (_chalT) { clearTimeout(_chalT); _chalT = null; } }
     // `lobby` is maintained by the soft-presence layer (broadcast heartbeats)
     // host election: smallest `at`, tie-broken by id (deterministic across clients)
     var ids = Object.keys(lobby);
@@ -334,6 +464,8 @@
     pendingOut = { toId: toId, mid: newMatchId() };
     lobbyCh.send({ type: 'broadcast', event: 'challenge', payload: { fromId: ME.id, fromName: ME.name, toId: toId, mid: pendingOut.mid } });
     banner('mpx-lobby-msg', 'Challenge sent — waiting for a reply…');
+    if (_chalT) clearTimeout(_chalT);   // build58: auto-clear a dead challenge so the lobby never locks on a stuck WAITING…
+    _chalT = setTimeout(function () { if (pendingOut && pendingOut.toId === toId) { pendingOut = null; banner('mpx-lobby-msg', 'No response — try another player.'); onLobbySync(); } }, 12000);
     onLobbySync();
   }
   function onChallenge(p) {
@@ -354,6 +486,7 @@
   }
   function onChallengeAns(p) {
     if (!p || p.toId !== ME.id || !pendingOut || p.mid !== pendingOut.mid) return;
+    if (_chalT) { clearTimeout(_chalT); _chalT = null; }   // build58: answered → cancel the timeout
     if (p.ok) {
       var opp = lobby[p.fromId];
       var mid = pendingOut.mid; pendingOut = null;
@@ -381,6 +514,7 @@
     matchCh.on('broadcast', { event: 'state' }, function (m) { onState(m.payload); });   // versus ghost-deck stream (additive)
     matchCh.on('broadcast', { event: 'final' }, function (m) { onFinal(m.payload); });
     matchCh.on('broadcast', { event: 'rematch' }, function () { resetForRematch(); });
+    matchCh.on('broadcast', { event: 'shock' }, function (m) { onShock(m.payload); });   // v254: P-vs-P combat — the rival's combo zapped you
     matchCh.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         matchSP.start();
@@ -393,8 +527,15 @@
   function enterSetup() {
     step('setup');
     var _rcx = $('mpx-roomctx'); if (_rcx) _rcx.hidden = true;   // build8: hide room strip by default; enterRoomWaiting re-shows it
+    // build60: invite bar is room-only — hide it by default (enterRoomWaiting re-shows it); seed a duel waiting line.
+    var ib = $('mpx-invitebar'); if (ib) ib.hidden = true;
+    var ws = $('mpx-waitstatus');
+    if (ws) {
+      if (oppPresent) { ws.hidden = true; }
+      else { ws.hidden = false; ws.classList.remove('ready'); ws.textContent = 'Waiting for your opponent to join…'; }
+    }
     var dot = $('mpx-dot-opp'); if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = oppMeta ? (oppMeta.name || 'OPPONENT').slice(0, 12) : 'WAITING…'; }
-    var isHost = matchRole === 'host';
+    var isHost = amPicker();
     var pick = $('mpx-pick'); if (pick) pick.disabled = !isHost;
     var chev = $('mpx-pick-chev'); if (chev) chev.style.visibility = isHost ? '' : 'hidden';
     var diff = $('mpx-diff'); if (diff) [].forEach.call(diff.children, function (b) { b.disabled = !isHost; });
@@ -423,27 +564,64 @@
     var wasPresent = oppPresent;
     oppPresent = others.length > 0;
     var opp = oppPresent ? all[others[0]] : null;
+    var oppName = (opp && opp.name) || (oppMeta && oppMeta.name) || 'Your opponent';
     var dot = $('mpx-dot-opp');
     if (oppPresent) {
-      if (dot) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp && opp.name ? opp.name : (oppMeta && oppMeta.name) || 'OPPONENT').slice(0, 12); }
+      if (dot) { dot.setAttribute('data-state', 'here'); dot.textContent = oppName.slice(0, 12); }
       oppLeft = false;
       if (matchRole === 'host' && sel.trackId && !wasPresent) broadcastSong();   // late-join catch-up
+      if (!wasPresent) paintWaitStatus(oppName + ' joined — ' + (matchRole === 'host' ? 'pick a track and hit READY.' : 'the host is choosing a track.'));   // build60: announce the arrival
     } else if (wasPresent) {
       oppLeft = true;
       if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
       if (matchLive) { markOppGone(); settleIfReady(); }
-      else { oppReady = false; banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); }
-    } else if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; }
+      else { oppReady = false; banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }
+    } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…'); }
     refreshReadyEnabled();
+  }
+  // build60: a single place to drive the explicit, updating waiting-room status line (duels + rooms).
+  function paintWaitStatus(txt, isReady) {
+    var ws = $('mpx-waitstatus'); if (!ws) return;
+    if (txt == null) { ws.hidden = true; return; }
+    ws.hidden = false; ws.classList.toggle('ready', !!isReady); ws.textContent = txt;
   }
 
   // ---- song selection (host) ----
-  function broadcastSong() { if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: sel }); }
+  function broadcastSong() { if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: sel }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: sel }); }
   function onSong(p) {
     if (!p) return;
     sel = p; paintSelection();
     meReady = false; oppReady = false; setReadyBtn(); refreshReadyEnabled();
-    var rs = $('mpx-readystate'); if (rs) rs.textContent = matchRole === 'host' ? 'Track locked. Hit READY.' : 'Host locked a track. Hit READY when set.';
+    var rs = $('mpx-readystate'); if (rs) rs.textContent = amPicker() ? 'Track locked. Hit READY.' : 'Host locked a track. Hit READY when set.';
+  }
+  // v262: the room STAGE (level/environment) options — Arena + every FINISHED level the player OWNS. No Random in MP (the host
+  // must pick a concrete stage so BOTH sides apply the identical backdrop/journey — a per-side random roll would desync).
+  function _stageList() {
+    try {
+      var L = window.RhythmLevels; if (!L || !L.environments) return [];
+      var fin = window.RR_FINISHED_LEVELS || {};
+      return L.environments().filter(function (e) {
+        if (e.isRandom) return false;
+        if (e.isDefault) return true;
+        if (!fin[e.id]) return false;
+        if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.id)); } catch (x) { return false; } }
+        return true;
+      });
+    } catch (e) { return []; }
+  }
+  function renderStageRow() {
+    var row = $('mpx-stage-row'); if (!row) return;
+    var list = _stageList(), host = amPicker(), cur = sel.env || '__default';
+    row.innerHTML = '';
+    list.forEach(function (e) {
+      var b = document.createElement('button'); b.type = 'button';
+      b.className = 'mpx-stage-chip' + (cur === e.id ? ' sel' : '');
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', cur === e.id ? 'true' : 'false'); b.disabled = !host;
+      if (e.accent) b.style.setProperty('--ec', e.accent);
+      b.textContent = e.isDefault ? 'Arena' : (e.name || 'Stage');
+      b.addEventListener('click', function () { if (!amPicker()) return; sel.env = e.id; broadcastSong(); renderStageRow(); });
+      row.appendChild(b);
+    });
   }
   function paintSelection() {
     var t = $('mpx-pick-t'); if (t) t.textContent = sel.title || 'Host picks a track';
@@ -454,6 +632,7 @@
       else { art.style.backgroundImage = ''; art.textContent = '♪'; }
     }
     var diff = $('mpx-diff'); if (diff) [].forEach.call(diff.children, function (b) { b.classList.toggle('active', b.getAttribute('data-diff') === sel.difficulty); });
+    try { renderStageRow(); } catch (e) {}   // v262: keep the stage picker in sync with the broadcast selection
   }
 
   // ---- ready check ----
@@ -461,7 +640,7 @@
     var ok = oppPresent && !!sel.trackId;
     var rb = $('mpx-ready'); if (rb) rb.disabled = !ok;
     var rs = $('mpx-readystate'); if (!rs) return;
-    if (!sel.trackId) rs.textContent = matchRole === 'host' ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
+    if (!sel.trackId) rs.textContent = amPicker() ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
     else if (!oppPresent) rs.textContent = 'Waiting for your opponent…';
   }
   function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady); b.textContent = meReady ? 'READY ✓' : 'READY'; }
@@ -469,9 +648,23 @@
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
     matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id } });
+    // build60: reflect my own ready alongside the opponent's so both sides stay legible.
+    var oppName = (oppMeta && oppMeta.name) || 'Opponent';
+    if (meReady && oppReady) paintWaitStatus('Both ready — starting…', true);
+    else if (meReady && !oppReady) paintWaitStatus('You\'re READY — waiting for ' + oppName + '…', true);
+    else if (!meReady && oppReady) paintWaitStatus(oppName + ' is READY — tap READY to start.', true);
+    else paintWaitStatus(sel.trackId ? 'Tap READY when you\'re set.' : 'Waiting for a track…');
     maybeStart();
   }
-  function onReady(p) { oppReady = !!(p && p.ready); maybeStart(); }
+  function onReady(p) {
+    oppReady = !!(p && p.ready);
+    // build60: make the opponent's READY visibly land so the wait never reads as frozen.
+    var oppName = (oppMeta && oppMeta.name) || 'Opponent';
+    if (oppReady && !meReady) paintWaitStatus(oppName + ' is READY — tap READY to start.', true);
+    else if (oppReady && meReady) paintWaitStatus('Both ready — starting…', true);
+    else if (!oppReady && sel.trackId) paintWaitStatus('Waiting for ' + oppName + ' to ready up…');
+    maybeStart();
+  }
   function maybeStart() {
     // build8: in the ROOM WAITING AREA (no match channel yet), the host's start rides the ROOM
     // channel via room-start; both seated players then open the same rr-match-<mid>. Once that
@@ -480,11 +673,12 @@
     if (room.id && room.isHost && !matchCh && meReady && oppReady && sel.trackId) { startRoomMatch(); return; }
     if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
-      matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel } });
+      matchCombat = (room.id && room.isHost) ? !!room.combat : !!combatOn;   // build69: a ROOM match uses the room's FIXED modifier (every match in the room is consistent); quick-match/challenge uses the host's default
+      matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel, combat: matchCombat } });
       beginMatch(atMs, sel);
     }
   }
-  function onStart(p) { if (p && p.atMs) beginMatch(p.atMs, p.sel || sel); }
+  function onStart(p) { if (p && p.atMs) { matchCombat = !!p.combat; beginMatch(p.atMs, p.sel || sel); } }   // v254: adopt the host's combat mode
 
   // ===================== SYNCHRONIZED MATCH =====================
   // 3·2·1·GO! painted in the centered #mpx-go-num card during the lead-in. Every client computes
@@ -654,8 +848,9 @@
       if (lead) lead.style.opacity = '1';
       if (delta) { delta.textContent = 'EVEN'; delta.classList.remove('ahead', 'behind', 'flip'); delta.style.opacity = '1'; }
     } else {
-      var myPace = stt.score / Math.max(myP, 0.02), opPace = _oppEase.sc / Math.max(opP, 0.02);
-      var lv = Math.max(-1, Math.min(1, (myPace - opPace) / (myPace + opPace + 1)));
+      // build58: drive the lead puck from the SAME raw score diff the delta text uses (normalized by half the leader's
+      // score) — the old score/progress "pace" exploded near song start (÷0.02) and could contradict the +/- number.
+      var lv = Math.max(-1, Math.min(1, (stt.score - _oppEase.sc) / (Math.max(stt.score, _oppEase.sc, 1) * 0.5)));
       if (!frozen) _leadEase = _lerp(_leadEase, lv, 0.2);
       var mag = Math.min(0.5, Math.abs(_leadEase) * 0.5);
       if (fill) {
@@ -822,9 +1017,12 @@
     sel = s || sel;
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
+    _lastShockCombo = 0; _rankRecorded = false;   // v254: fresh combat-shock + ranked-record state per match
     step('go'); startCountdown(atMs);   // synced 3·2·1·GO! in the centered card, off the shared atMs
     // register one-shot song-end handler BEFORE launch
     window.RhythmGame.onSongEnd(onLocalSongEnd);
+    // v262: apply the room's chosen STAGE (level/env) on BOTH sides before launch so the backdrop/journey matches. Arena → clear.
+    try { if (window.RhythmLevels) { if (sel.env && sel.env !== '__default') window.RhythmLevels.applyEnvironment(sel.env); else window.RhythmLevels.clearEnvironment(); } } catch (e) {}
     // resolve provider + start synced. The engine surface stays minimal: resolve the
     // track and reuse the SAME launch paths the rest of the app uses (byte-identical play).
     resolveAndStart(sel, atMs);
@@ -852,6 +1050,7 @@
   function resolveAndStart(s, atMs) {
     var RC = window.RhythmCatalog;
     var t = (RC && RC.allTracks) ? RC.allTracks().filter(function (x) { return x.id === s.trackId; })[0] : null;
+    if (t && RC && RC.isVideo && RC.isVideo(t)) t = null;   // defense-in-depth: never start a video in MP → falls to demo
     var prov = null;
     try {
       if (s.demo || !t) {
@@ -879,7 +1078,7 @@
       setTimeout(function () {
         try { if (window.RhythmGame.getAC) window.RhythmGame.getAC().resume(); } catch (e) {}
         try {
-          if (t && RC && RC.launchTrack) RC.launchTrack(t);
+          if (t && RC && RC.launchTrack) RC.launchTrack(t, (sel.env && sel.env !== '__default') ? { keepEnvironment: true } : undefined);   // v262: keep the applied stage env on the fallback launch path
           else if (window.RhythmGame.playDemo) window.RhythmGame.playDemo();
           else throw new Error('no provider, track, or demo available to launch');
         } catch (e) { console.error('[mp] fallback launch failed', e); }
@@ -954,6 +1153,18 @@
         _lastSend = now;
         matchCh.send({ type: 'broadcast', event: 'tick', payload: { score: stt.score, combo: stt.combo, acc: stt.acc, prog: stt.progress, name: ME.name } });
       }
+      // v254: P-vs-P combat — your combo milestones SHOCK the rival (each new 30-streak fires once; re-arms on a combo break).
+      if (matchCombat && matchLive && matchCh && stt && !(oppMeta && oppMeta.bot)) {
+        var _c = stt.combo || 0;
+        if (_c < _lastShockCombo) _lastShockCombo = 0;                       // combo broke → re-arm
+        var _ms = Math.floor(_c / 30) * 30;
+        if (_ms >= 30 && _ms > _lastShockCombo) {
+          _lastShockCombo = _ms;
+          try { matchCh.send({ type: 'broadcast', event: 'shock', payload: { from: ME.name, combo: _c } }); } catch (e) {}
+          try { window.RhythmGame.mpShockSent && window.RhythmGame.mpShockSent(); } catch (e) {}   // "⚡ ZAP" feedback on your deck
+          try { _spawnZapBolt(); } catch (e) {}   // v257: a lightning bolt streaks from your deck toward the rival's
+        }
+      }
       // versus split-screen: additive high-rate render stream for the opponent ghost deck (~13/s).
       // getRenderFrame() DRAINS the hits buffer → call it ONCE here, cache as _myRf, reuse for YOUR HUD.
       if (_vsActive && matchCh && now - _lastStateSend > 72) {
@@ -992,13 +1203,14 @@
     myFinal = s;
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'final', payload: Object.assign({ name: ME.name }, s) });
     settleIfReady();
-    setTimeout(function () { settleIfReady(true); }, 8000);   // safety if opponent never reports
+    _settleSafetyT = setTimeout(function () { _settleSafetyT = 0; settleIfReady(true); }, 8000);   // safety if opponent never reports (v258: handle stored so teardown/rematch can cancel it)
   }
   function onFinal(p) { if (p) oppFinal = p; settleIfReady(); }
   function settleIfReady(force) {
     if (!matchLive || !finishedLocal) return;
     if (!oppFinal && !force && !oppLeft) return;
     matchLive = false;
+    if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: settling now — cancel the stale 8s safety fire so it can't re-render an already-settled match
     unmountOppPanel();
     setLobbyInMatch(false);
     showWinner();
@@ -1022,6 +1234,13 @@
     else if (me.score < op.score) win = false;
     else draw = true;
     if (v) { v.className = 'mpx-verdict ' + (draw ? 'draw' : win ? 'win' : 'lose'); v.textContent = draw ? 'DRAW' : win ? 'YOU WIN' : 'YOU LOSE'; }
+    // v254: record the RANKED result (1v1 HUMAN matches only — CPU warm-ups never count). A forfeit (rival left) is a W with 0 pts.
+    if (!_rankRecorded && !spectating && !(oppMeta && oppMeta.bot)) {   // v258: a SPECTATOR's myFinal defaults to {score:0} → would record a phantom LOSS on their own ladder; gate it out
+      _rankRecorded = true;
+      var _res = draw ? 'draw' : win ? 'win' : 'loss', _ff = !op || oppLeft;
+      try { recordMpResult(_res, { op: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival', song: (sel && sel.title) || '', my: (me && me.score) || 0, ops: (op && op.score) || 0, forfeit: (_res === 'win' && _ff) }); } catch (e) {}
+      try { paintRankChip(); } catch (e) {}
+    }
     step('winner');
     screen.classList.add('active');   // re-raise over the engine's results screen (showScreen stripped us)
     activeNow = true;
@@ -1035,6 +1254,7 @@
     // Without this, .vs-mode + #vs-seam linger → mountVsHud's idempotent guard skips the re-init and
     // round 2 lerps score plates from the PRIOR final, carries stale delta-sign + leftover ghost sparkles.
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }
+    if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: kill the prior round's settle safety-timer before a rematch
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
     step('setup'); paintSelection(); refreshReadyEnabled();
@@ -1044,7 +1264,9 @@
 
   function teardownMatch() {
     stopTick(); stopCountdown(); unmountOppPanel();
+    try { if (window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // v262: drop the room's stage env so it can't leak into the next match / solo
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }           // kill any pending deferred split-mount (abort mid-lead-in)
+    if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: cancel the 8s settle safety-timer on teardown
     if (_npcRaf) { cancelAnimationFrame(_npcRaf); _npcRaf = 0; }   // stop the NPC ghost-drive loop
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
@@ -1065,15 +1287,31 @@
     if (!supa || !lobbyCh) { banner('mpx-lobby-msg', 'Sign in to play online — quick-match needs a connection.'); return; }
     QM.looking = !QM.looking; QM.t = Date.now();
     paintQuickBtn(); reannounce();
-    banner('mpx-lobby-msg', QM.looking ? 'Looking for a match — pairing you with the next available rival…' : '');
-    if (QM.looking) tryQuickPair();
+    if (QM._timer) { clearTimeout(QM._timer); QM._timer = null; }
+    if (!QM.looking) { banner('mpx-lobby-msg', ''); return; }
+    banner('mpx-lobby-msg', 'Looking for a player… we\'ll pair you the moment someone\'s free.');
+    QM.t = Date.now(); QM._t0 = QM.t; paintQuickBtn();
+    tryQuickPair();
+    // build60: never dead-end an empty lobby (the realistic beta state). After ~9s of no humans, auto-fall-back to a
+    // real CPU duel — friendly copy, and the user is in a playable split-screen match instead of bounced to an empty roster.
+    // (The 25s silent-timeout-to-nothing is gone; a lone first-timer always gets a match fast.)
+    QM._timer = setTimeout(function () {
+      if (!QM.looking || matchCh || matchLive) return;
+      QM.looking = false; QM._timer = null; paintQuickBtn(); reannounce();
+      if (typeof devVsNpc === 'function') {
+        banner('mpx-lobby-msg', 'No one around yet — here\'s a warm-up vs CPU. We\'ll pair you with a human the moment one appears.');
+        try { devVsNpc(); } catch (e) { banner('mpx-lobby-msg', 'No rivals online right now — open a room and invite a friend, or try Practice vs CPU.'); }
+      } else {
+        banner('mpx-lobby-msg', 'No rivals online right now — open a room and invite a friend, or try Practice vs CPU.');
+      }
+    }, 9000);
   }
   function paintQuickBtn() {
     var b = $('mpx-act-quick'); if (!b) return;
     b.setAttribute('aria-busy', QM.looking ? 'true' : 'false');
     var t = b.querySelector('.a-t'), d = b.querySelector('.a-d');
-    if (t) t.textContent = QM.looking ? '⚡ Searching…' : '⚡ Quick Match';
-    if (d) d.textContent = QM.looking ? 'Tap to cancel' : 'Auto-pair a random rival';
+    if (t) t.textContent = QM.looking ? '⏳ Looking for a player…' : '▶ PLAY NOW';
+    if (d) d.textContent = QM.looking ? 'Tap to cancel · CPU warm-up in a few seconds' : 'Instantly matched 1‑on‑1 · CPU if nobody\'s around';
   }
   // Deterministic proposer: of the two queued ids, the lexicographically-smaller one emits the pair.
   // Both sides receive qm-pair and route into the SAME match channel — no race, no double match.
@@ -1113,8 +1351,10 @@
       if (cr) cr.setAttribute('data-mode', isTour ? 'tour' : 'duel');
       var ttl = $('mpx-create-title'); if (ttl) ttl.textContent = isTour ? '🏆 OPEN A TOURNAMENT' : 'OPEN A ROOM';
       var go = $('mpx-room-create-go'); if (go) go.textContent = isTour ? 'OPEN TOURNAMENT' : 'OPEN ROOM';
-      var msg = $('mpx-room-create-msg'); if (msg) msg.textContent = isTour ? 'Single-elimination bracket · 5–10 players · winners advance until one remains.' : "Public rooms appear in everyone's browser.";
+      var msg = $('mpx-room-create-msg'); if (msg) msg.textContent = isTour ? 'Single-elimination bracket · 3–10 players · winners advance until one remains.' : "Public rooms appear in everyone's browser.";
       var pv = $('mpx-room-priv'); if (pv) pv.style.display = isTour ? 'none' : '';
+      var cc = $('mpx-room-combat'); if (cc) { cc.style.display = isTour ? 'none' : ''; [].forEach.call(cc.children, function (b) { b.classList.toggle('active', (b.getAttribute('data-combat') === 'on') === !!combatOn); }); }   // build69: room-only combat row (tournaments use their own); seed the host's default
+      var cch = $('mpx-room-combat-hint'); if (cch) cch.style.display = isTour ? 'none' : '';
       var nm = $('mpx-room-name'); if (nm) { nm.value = ''; nm.placeholder = isTour ? 'Bracket name (e.g. Friday Showdown)' : 'Room name (e.g. Friday Shred)'; setTimeout(function () { nm.focus(); }, 30); }
     }
     else { try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} renderRooms(); }
@@ -1125,7 +1365,8 @@
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     var nm = ($('mpx-room-name') && $('mpx-room-name').value || '').trim().slice(0, 28) || (ME.name + "'s Room");
     var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
-    room = { id: newRoomId(), name: nm, priv: priv, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
+    var rcb = screen.querySelector('#mpx-room-combat button.active'); var combat = !!(rcb && rcb.getAttribute('data-combat') === 'on');   // build69: the host's per-room combat choice (the source of truth for every match in this room)
+    room = { id: newRoomId(), name: nm, priv: priv, combat: combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
     joinRoomChannel(room.id, 'p1');
     reannounce();
     enterRoomWaiting();
@@ -1135,12 +1376,12 @@
     if (!lobbyCh || !room.id || !room.isHost) return;
     var count = 1 + (room.p2 ? 1 : 0);
     lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
-      rid: room.id, name: room.name, priv: room.priv, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now() } });
+      rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now() } });
   }
   function closeRoom(silent) {
     if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
     leaveRoomChannel();
-    room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
+    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
     spectating = false; reannounce();
     if (!silent) { step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
   }
@@ -1153,6 +1394,7 @@
     room.ch = ch;
     roomSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }; }, onRoomPeers);
     ch.on('broadcast', { event: 'room-start' }, function (m) { onRoomStart(m.payload); });
+    ch.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });   // build64: the room host's live track/stage/difficulty picks reach the joiner in the waiting room
     ch.subscribe(function (status) {
       if (status === 'SUBSCRIBED') { roomSP.start(); }
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { banner('mpx-rooms-msg', 'Could not reach that room. Back out and retry.'); }
@@ -1192,12 +1434,22 @@
     if (!supa || !lobbyCh) return;
     var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
     if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
-    room = { id: rid, name: meta.name, priv: meta.priv, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id };
+    room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id };   // build69: adopt the host's advertised room combat
     spectating = !!asSpec;
     joinRoomChannel(rid, room.seat);
     reannounce();
     enterRoomWaiting();
   }
+
+  // ---- build60: short, memorable ROOM CODE derived deterministically from the room id (no backend needed) ----
+  function roomCode(rid) {
+    var s = String(rid || ''); var h = 0;
+    for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    h = Math.abs(h); var A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', out = '';   // no ambiguous 0/O/1/I
+    for (var k = 0; k < 4; k++) { out += A.charAt(h % A.length); h = Math.floor(h / A.length); }
+    return out;
+  }
+  function roomInviteLink(rid) { return location.origin + location.pathname + '?mproom=' + encodeURIComponent(rid); }
 
   // ---- waiting-room view (reuses the setup step shell) ----
   function enterRoomWaiting() {
@@ -1207,6 +1459,17 @@
     var pv = $('mpx-roomctx-priv'); if (pv) pv.textContent = room.priv ? '· PRIVATE' : '· PUBLIC';
     var closeBtn = $('mpx-room-close');
     if (closeBtn) closeBtn.textContent = room.isHost ? 'CLOSE ROOM' : 'LEAVE ROOM';
+    // build60: surface the invite bar + room code so a host can pull a friend in; the host also gets "Add a CPU".
+    var bar = $('mpx-invitebar'), codeRow = $('mpx-invite-code-row'), codeEl = $('mpx-invite-code'), addCpu = $('mpx-add-cpu');
+    if (bar) bar.hidden = false;
+    if (room.isHost && room.id) {
+      if (codeRow) codeRow.hidden = false;
+      if (codeEl) codeEl.textContent = roomCode(room.id);
+      if (addCpu) addCpu.hidden = false;
+    } else {
+      if (codeRow) codeRow.hidden = true;
+      if (addCpu) addCpu.hidden = true;
+    }
     paintRoomWaiting();
   }
   function paintRoomWaiting() {
@@ -1218,12 +1481,27 @@
       if (opp) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp.name || 'OPPONENT').slice(0, 12); }
       else { dot.setAttribute('data-state', 'waiting'); dot.textContent = spectating ? 'WATCHING' : 'WAITING…'; }
     }
+    // build60: explicit, updating waiting status (announces arrivals so the wait never reads as frozen).
+    var ws = $('mpx-waitstatus');
+    if (ws) {
+      ws.hidden = false; ws.classList.remove('ready');
+      if (opp) { ws.textContent = (opp.name || 'Your opponent') + ' joined — pick a track and you\'re both set.'; }
+      else if (spectating) { ws.textContent = 'Watching this room — the match starts when the host begins.'; }
+      else if (room.isHost) { ws.textContent = 'You\'re hosting — waiting for 1 player. Share the code, or add a CPU to start now.'; }
+      else { ws.textContent = 'Waiting for the host to start…'; }
+    }
   }
 
   // ---- room directory (browser) ----
   function onRoomMeta(p) {
-    if (!p || !p.rid || p.priv) return;   // private rooms are not listed (invite/qm only)
+    if (!p || !p.rid) return;
     if (p.hostId === ME.id) return;
+    // build60: an invite deep-link (?mproom=) auto-joins its target the moment the host's meta arrives — even private rooms.
+    if (_pendingRoomJoin && p.rid === _pendingRoomJoin && !room.id) {
+      _pendingRoomJoin = null; roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
+      banner('mpx-lobby-msg', ''); joinRoom(p.rid, false); return;
+    }
+    if (p.priv) return;   // private rooms are not listed in the browser (invite/qm only)
     roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
     renderRooms(); updateBrowseCount();
   }
@@ -1240,6 +1518,54 @@
   function updateBrowseCount() {
     var n = openRoomCount();
     var el = $('mpx-act-browse-n'); if (el) el.textContent = n ? ('(' + n + ')') : '';
+    renderLiveNow();   // build61: keep the lobby LIVE NOW surface in sync with the directory (single update point)
+  }
+
+  // ===================== BUILD61: LIVE NOW (open-bracket discovery at the top of the lobby) =====================
+  // Surfaces OPEN tournaments + rooms from the EXISTING toursDir/roomsDir (softPresence-fed — no new channel).
+  // Each entry one-taps into the SAME join path as ?mpjoin=/?mproom= and the room-code input. Auto-promoted
+  // whenever openRoomCount() > 0; otherwise a tasteful "host one" CTA. Only painted while the lobby step is up.
+  function renderLiveNow() {
+    var wrap = $('mpx-livenow'); if (!wrap) return;
+    // only meaningful on the lobby step (the directory is irrelevant inside a match/room/bracket)
+    var card = screen.querySelector('.mp-card'), stepName = card && card.getAttribute('data-mp-step');
+    if (stepName && stepName !== 'lobby') { wrap.hidden = true; return; }
+    var list = $('mpx-livenow-list'), empty = $('mpx-livenow-empty'), nEl = $('mpx-livenow-n');
+    // OPEN tournaments lead (joinable only while still filling), then OPEN public rooms with a seat free.
+    var tids = Object.keys(toursDir).filter(function (tid) { var r = toursDir[tid]; return r && r.state !== 'live' && r.state !== 'done'; });
+    var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && (r.count || 1) < (r.max || 2); });
+    wrap.hidden = false;
+    var total = tids.length + rids.length;
+    if (nEl) nEl.textContent = total ? (total + (total === 1 ? ' open' : ' open')) : '';
+    if (!total) {
+      if (list) { list.innerHTML = ''; list.hidden = true; }
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (!list) return;
+    list.hidden = false;
+    var tourHtml = tids.map(function (tid) {
+      var r = toursDir[tid], cnt = r.count || 1, max = r.max || TOUR_MAX, full = cnt >= max;
+      return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
+        '<span class="mpx-rc-spark tour">🏆</span>' +
+        '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Bracket') + '</span>' +
+        '<span class="mpx-rc-sub"><span class="mpx-rc-tag tour">BRACKET</span> host ' + esc(r.hostName || 'host') +
+        ' · <span class="mpx-rc-count">' + cnt + '/' + max + '</span></span></span>' +
+        '<span class="mpx-rc-act"><button class="mpx-rc-join" data-ln-jt="' + esc(tid) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button></span></div>';
+    }).join('');
+    var roomHtml = rids.map(function (rid) {
+      var r = roomsDir[rid], cnt = r.count || 1, max = r.max || 2;
+      return '<div class="mpx-roomcard">' +
+        '<span class="mpx-rc-spark">🎸</span>' +
+        '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
+        '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span> host ' + esc(r.hostName || 'host') +
+        ' · <span class="mpx-rc-count">' + cnt + '/' + max + '</span></span></span>' +
+        '<span class="mpx-rc-act"><button class="mpx-rc-join" data-ln-join="' + esc(rid) + '">JOIN</button></span></div>';
+    }).join('');
+    list.innerHTML = tourHtml + roomHtml;
+    [].forEach.call(list.querySelectorAll('[data-ln-jt]'), function (b) { b.addEventListener('click', function () { joinTour(b.getAttribute('data-ln-jt')); }); });
+    [].forEach.call(list.querySelectorAll('[data-ln-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-join'), false); }); });
   }
   function renderRooms() {
     var host = $('mpx-roomlist'); if (!host) return;
@@ -1321,7 +1647,8 @@
     if (!supa || !lobbyCh) return;
     var meta = toursDir[tid]; if (!meta) { banner('mpx-rooms-msg', 'That bracket just closed.'); return; }
     if (meta.state === 'live') { banner('mpx-rooms-msg', 'That bracket is already underway.'); return; }
-    if ((meta.count || 1) >= TOUR_MAX) { banner('mpx-rooms-msg', 'Bracket is full (10 max).'); return; }
+    var _cap = Math.min(TOUR_MAX, meta.size || TOUR_MAX);   // build58: honor the host's chosen bracket size (was cosmetic — always capped at 10)
+    if ((meta.count || 1) >= _cap) { banner('mpx-rooms-msg', 'Bracket is full (' + _cap + ' max).'); return; }
     tour = nullTour(); tour.id = tid; tour.name = meta.name; tour.isHost = false; tour.hostId = meta.hostId;
     joinTourChannel(tid);
     reannounce(); enterTourRoom();
@@ -1330,9 +1657,10 @@
     if (!lobbyCh || !tour.id || !tour.isHost) return;
     lobbyCh.send({ type: 'broadcast', event: 'tour-meta', payload: {
       tid: tour.id, name: tour.name, hostId: ME.id, hostName: ME.name,
-      count: Object.keys(tour.members).length || 1, max: TOUR_MAX, size: tour.size, state: tour.state, at: Date.now() } });
+      count: Object.keys(tour.members).length || 1, max: (tour.size || TOUR_MAX), size: tour.size, state: tour.state, at: Date.now() } });
   }
   function closeTour(silent) {
+    try { if (tour.stakes && tour.stakes !== 'free' && tour.state === 'open') _wagerRefundMine(); } catch (e) {}   // build71: WAGER — only refund a buy-in when a STAKED bracket dissolves BEFORE it goes live (state still 'open'). Once 'live'/'done' the only legit credit is settlement (champ payout / side-bet win) — a leaver must NOT reclaim their stake. (The old unconditional refund was an exploit: losers never settle, so refundPool's settled/refunded state guard never blocked them → guaranteed stake-back that deflated the champion pot.)
     if (tour.id && tour.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'tour-gone', payload: { tid: tour.id } }); } catch (e) {} }
     try { if (tour.id && window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // build11: drop the bracket's stage theme
     stopTourHeartbeat(); clearPersistedTour();   // build42: stop the snapshot heartbeat + drop the reconnect pointer
@@ -1365,6 +1693,7 @@
     ch.on('broadcast', { event: 't-result' }, function (m) { onTourResult(m.payload); });
     ch.on('broadcast', { event: 't-finalverdict' }, function (m) { onTourFinalVerdict(m.payload); });
     ch.on('broadcast', { event: 't-champ' },  function (m) { onTourChamp(m.payload); });
+    ch.on('broadcast', { event: 't-paid' },   function (m) { onTourPaid(m.payload); });   // build66: WAGER — an entrant paid their buy-in (HOST fans it into the authoritative paid roster + pot)
     ch.on('broadcast', { event: 't-await' },  function (m) { onTourAwait(m.payload); });
     ch.on('broadcast', { event: 't-kick' },   function (m) { onTourKick(m.payload); });
     ch.subscribe(function (status) {
@@ -1408,7 +1737,7 @@
   //              proof-of-life forfeit guard · score sanitation. All ADDITIVE — the working bracket flow is
   //              untouched; these add self-healing + failover on top. Server-authoritative re-judge (the real
   //              MP_PUBLIC=true gate) is a backend job — see MP_SERVER_SCORING_BRIEF.md. ============
-  var _tourHbT = 0, _lastSnapV = -1;
+  var _tourHbT = 0;   // build58: the snapshot-version floor moved onto the tour object (tour._lastSnapV) — see nullTour()
   var MAX_PLAUSIBLE_SCORE = 20000000;   // client sanity clamp only — NOT anti-cheat (a client owns its number; real validation is server-side)
 
   function bumpTour() { tour.version = (tour.version || 0) + 1; }
@@ -1421,7 +1750,8 @@
     return { tid: tour.id, v: tour.version || 0, state: tour.state, round: tour.round, alive: tour.alive,
       pairs: tour.pairs, byes: tour.byes, settled: tour.settled, finals: fl, sel: tour.sel, env: tour.env || null,
       envName: tour.envName, size: tour.size, atMs: tour.atMs || 0, awaiting: !!tour.awaiting,
-      awaitWinners: tour._awaitWinners || null, champ: tour.champ || null, hostId: tour.hostId, hostAt: tour._joinAt || 0 };
+      awaitWinners: tour._awaitWinners || null, champ: tour.champ || null, hostId: tour.hostId, hostAt: tour._joinAt || 0,
+      stakes: tour.stakes, buyIn: tour.buyIn, currency: tour.currency, potId: tour.potId, paid: tour.paid, bets: tour.bets, pot: tour.pot };   // build66: WAGER — replicate the buy-in + the HOST-verified paid roster to every entrant (and to a promoted heir on host migration)
   }
   function broadcastSnapshot() {
     if (!tour.ch || !tour.isHost || !tour.id) return;
@@ -1449,12 +1779,22 @@
         banner('mpx-tour-msg', tourName(s.hostId) + ' is hosting the bracket.');
       } else { return; }
     }
-    if (!isRestore && s.v != null && s.v <= _lastSnapV) return;   // older/equal → idempotent no-op
-    if (!isRestore && s.v != null) _lastSnapV = s.v;
+    if (s.hostId && s.hostId !== tour._snapHost) { tour._snapHost = s.hostId; tour._lastSnapV = -1; }   // build58: host changed (migration) → accept the new host's stream from its low start
+    if (!isRestore && s.v != null && s.v <= tour._lastSnapV) return;   // older/equal → idempotent no-op
+    if (!isRestore && s.v != null) tour._lastSnapV = s.v;
     tour.hostId = s.hostId || tour.hostId;
     if (s.sel) tour.sel = s.sel;
     if (s.envName != null) tour.envName = s.envName;
     if (s.size) tour.size = s.size;
+    // build66: WAGER fields — buy-in/mode/currency + the HOST-verified paid roster + the live pot. Merge paid{} (never
+    // shrink an entrant's view of who's in). A promoted heir inherits potId + paid, so settlement survives host migration.
+    if (s.stakes) tour.stakes = s.stakes;
+    if (s.buyIn != null) tour.buyIn = s.buyIn;
+    if (s.currency) tour.currency = s.currency;
+    if (s.potId) tour.potId = s.potId;
+    if (s.paid) tour.paid = Object.assign({}, tour.paid || {}, s.paid);
+    if (s.bets) tour.bets = Object.assign({}, tour.bets || {}, s.bets);   // build66: side-bet picks (bettorId -> outcomeId) replicate so every client can settle parimutuel + a promoted heir inherits them
+    if (s.pot != null) tour.pot = s.pot;
     if (s.champ) tour.champ = s.champ;
     if (s.awaitWinners) tour._awaitWinners = s.awaitWinners;
     if (s.finals) tour.finals = Object.assign({}, tour.finals, s.finals);     // host-computed truth → a promoted host can resume
@@ -1471,6 +1811,7 @@
     if (s.state === 'done' && tour.state !== 'done') { tour.state = 'done'; clearPersistedTour(); }
     try { paintTourRoom(); renderTourBoard(); renderTourBracket(); } catch (e) {}
     if (!tour.isHost) persistTour();
+    try { setTimeout(_wagerMaybePay, 350); } catch (e) {}   // build66: WAGER — once the staked snapshot lands, prompt the entrant to pay their buy-in (deferred out of the render path; self-guards against re-prompting)
   }
 
   // RECONNECTION: persist a small pointer + the latest snapshot; rejoin in place on reload (< 90s).
@@ -1514,6 +1855,18 @@
   }
   function resumeHostDuties() {
     if (!tour.isHost) return;
+    // build58 FIX: handle the BETWEEN-ROUNDS (await) window FIRST. During await, tour.state is still 'live' (it's cleared only
+    // at the next round / champ), so the old `else if (tour.awaiting)` branch was SHADOWED by the live branch → a promoted heir
+    // never rebuilt _next or revealed START NEXT ROUND, hanging the whole bracket. Now the heir re-arms the await: rebuild the
+    // next round + repaint the advance control via onTourAwait, plus a generous AFK auto-advance so it can never deadlock.
+    if (tour.awaiting && tour._awaitWinners) {
+      if (!tour._next) tour._next = { n: (tour.round + 1), winners: tour._awaitWinners, sel: hostNextTrack() };
+      try { onTourAwait({ n: (tour.round + 1), winners: tour._awaitWinners }); } catch (e) {}
+      if (_devAuto) setTimeout(hostStartNextRound, 1200);
+      // build61: a promoted heir auto-advances after 25s UNLESS it has HOLD on — same streamer-pause semantics as the AFK timer.
+      else setTimeout(function () { if (tour.isHost && tour.awaiting && !tour._hostHold && tour._next) hostStartNextRound(); }, 25000);
+      return;
+    }
     if (tour.state === 'live') {
       // re-arm settlement from accumulated finals (every client stores finals before the host-gate, so a promoted host has them)
       tour.pairs.forEach(function (pr, i) {
@@ -1521,10 +1874,6 @@
         if (!tour._settleT[i]) tour._settleT[i] = setTimeout(function () { forceSettleGuarded(i); }, 30000);
         trySettlePair(i);
       });
-    } else if (tour.awaiting && tour._awaitWinners && !tour._next) {
-      // rebuild the stashed next round from the snapshot's winners (buildPairs is deterministic)
-      tour._next = { n: (tour.round + 1), winners: tour._awaitWinners, sel: hostNextTrack() };
-      if (_devAuto) setTimeout(hostStartNextRound, 1200);
     }
   }
 
@@ -1563,7 +1912,7 @@
   function rollTrack() {
     if (!tour.isHost || tour.state !== 'open') return;
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t); });
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
     var sel = null;
     if (all.length) {
       var t = all[Math.floor(Math.random() * all.length)];
@@ -1593,7 +1942,7 @@
     var box = $('mpx-tour-results'); if (!box) return;
     var RC = window.RhythmCatalog;
     var all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t); });
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
     q = (q || '').toLowerCase();
     var rows = all.filter(function (t) {
       if (!q) return true;
@@ -1649,6 +1998,14 @@
   function buildTourEnvRow() {
     var rowEl = $('mpx-tour-env'), head = $('mpx-tour-envhead'); if (!rowEl) return;
     var list = tourEnvList();
+    // build64: hide unfinished "COMING SOON" stages entirely (match the song env-picker / room STAGE picker — only real
+    // RR_FINISHED_LEVELS belong in the pool). Keep Random + Arena (_envComingSoon excludes them); drop unowned-paid stages
+    // too (peers may not own them, and hostResolveEnv refuses to roll a paid stage anyway).
+    if (list) list = list.filter(function (e) {
+      if (_envComingSoon(e)) return false;
+      if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.id)); } catch (x) { return false; } }
+      return true;
+    });
     var show = !!list && tour.isHost && tour.state === 'open';
     if (head) head.hidden = !list;
     rowEl.hidden = !list;
@@ -1680,7 +2037,7 @@
     var pool = tour.envPool || [];
     var list = tourEnvList(); if (!list) return null;
     if (!pool.length || pool.indexOf('__random') >= 0) {
-      var all = list.filter(function (e) { return !e.isDefault && !e.isRandom && !_envComingSoon(e); });
+      var all = list.filter(function (e) { return !e.isDefault && !e.isRandom && !e.paid && !_envComingSoon(e); });   // build60: never ROLL a paid stage in a tournament (peers may not own it → free premium content)
       if (!all.length) return null;
       var r = all[Math.floor(Math.random() * all.length)];
       return { id: r.id, name: r.name };
@@ -1701,6 +2058,8 @@
   function startTour() {
     if (!tour.isHost || tour.state !== 'open') return;
     if (!tour.sel) { banner('mpx-tour-msg', 'Pick a track first — tap REROLL or SEARCH, then START.'); return; }   // was a silent no-op
+    var _staked = tour.stakes && tour.stakes !== 'free';
+    if (_staked) { var _n = Object.keys(tour.members).length, _paidN = Object.keys(tour.paid || {}).length; if (_paidN < _n) { banner('mpx-tour-msg', 'Waiting on buy-ins — ' + _paidN + '/' + _n + ' paid in.'); return; } }   // build71: re-assert the everyone-paid gate IN CODE — the disabled START button alone could be clicked through a state-sync race
     var ids = Object.keys(tour.members);
     if (ids.length < TOUR_MIN) { banner('mpx-tour-msg', 'Need at least ' + TOUR_MIN + ' players to start (add NPCs in the dev bar to solo-test).'); return; }
     try { if (window.RhythmGame.getAC) window.RhythmGame.getAC().resume(); } catch (e) {}   // unlock the AudioContext on the START gesture — the deferred play() fires ~5s later, outside any gesture
@@ -1716,7 +2075,7 @@
   }
   function hostNextTrack() {
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t); });
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
     if (!all.length) return tour.sel;
     var t = all[Math.floor(Math.random() * all.length)];
     return { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: (tour.sel && tour.sel.difficulty) || 'medium', demo: (t.id === 'demo') };
@@ -1725,7 +2084,13 @@
   // ---- uniform round handler (host included via self:true) ----
   function onTourRound(p) {
     if (!p || !p.n) return;
-    if (tour.state === 'live' && tour.round === p.n) return;   // dedup: a duplicated/echoed t-round must not double-launch the song or stack tick loops
+    // build58: dedup on a per-EMISSION token (atMs is unique per hostBeginRound call), not the round NUMBER alone. The old
+    // number-only guard double-purposed: it blocked our own self:true echo (good) BUT also permanently swallowed a LEGITIMATE
+    // re-issue of the same round (a promoted host restarting round n after an abort). Token dedup kills only true echoes.
+    var _tok = p.atMs || p.n;
+    if (tour._roundTok === _tok) return;                                                  // exact echo (incl. self-broadcast) → never double-launch
+    if (tour.state === 'live' && tour.round === p.n && p.atMs && tour.atMs && p.atMs < tour.atMs) return;   // a stale OLDER emission of the round we're already running
+    tour._roundTok = _tok;
     tour.awaiting = false;
     closeTransientOverlays();   // belt-and-suspenders: no overlay (How-To/store/levels/profile/settings) can occlude the starting round
     var _nw = $('mpx-tour-nextwrap'); if (_nw) _nw.hidden = true;
@@ -1738,7 +2103,8 @@
     var myPair = null;
     tour.pairs.forEach(function (pr) { if (pr.indexOf(ME.id) >= 0) myPair = pr; });
     tour.meIn = !!myPair; tour.rival = myPair ? myPair[(myPair.indexOf(ME.id) + 1) % 2] : null;
-    paintTourRoom(); renderTourBoard(); renderTourBracket();
+    if (_awaitAutoT) { clearTimeout(_awaitAutoT); _awaitAutoT = 0; }   // build61: round launched → drop any pending AFK auto-advance
+    paintTourRoom(); renderTourBoard(); renderTourBracket(); paintHostPaceControls();   // build61: hide the pace row, reveal the ready indicator
     var rchip = $('mpx-tour-chip'); if (rchip) { rchip.setAttribute('data-state', 'live'); rchip.textContent = tour.alive.length === 2 ? 'THE FINAL' : 'ROUND ' + p.n; }
     screen.classList.add('active'); activeNow = true; step('tour');   // pull everyone back from results/winner views
     // cinematic build over the live room (never blanks the bracket): ROUND card → VS reveal → 3·2·1·GO
@@ -1830,6 +2196,7 @@
   function onTourTick(p) {
     if (!p || !p.id) return;
     if (tour._alive) tour._alive[p.id] = Date.now();   // build42: proof-of-life — a streaming tick means this player is actively playing
+    paintTourReady();   // build61: refresh the "X / N loaded" indicator as proof-of-life arrives (cheap DOM text)
     if (p.id === tour.rival) {
       lastOppTick = p;
       // feed the ghost deck + compact HUD from the rival's tick (tournaments stream t-tick, not t-state)
@@ -1890,7 +2257,7 @@
     // tick (after that strip), mirroring the 1v1 showWinner() path. Otherwise the solo results screen wins.
     setTimeout(function () {
       screen.classList.add('active'); activeNow = true; step('tour');
-      banner('mpx-tour-msg', 'Run banked — waiting on the rest of the bracket…');
+      _bracketWaitBanner();   // build58: live "X / Y duels resolved" instead of static dead-time
     }, 0);
   }
   function onTourFinal(p) {
@@ -1911,6 +2278,15 @@
     });
     broadcastSnapshot();
   }
+  // build58: turn the between-rounds dead-time into a live race readout — how many duels are resolved + who's still playing.
+  function _bracketWaitBanner() {
+    if (!tour || !tour.pairs || !tour.pairs.length) return;
+    var done = Object.keys(tour.settled || {}).length, total = tour.pairs.length;
+    if (done >= total) return;   // round's settling → onTourAwait takes over the banner
+    var playing = [];
+    tour.pairs.forEach(function (pr, i) { if (tour.settled[i] == null) playing.push(tourName(pr[0]) + ' vs ' + tourName(pr[1])); });
+    banner('mpx-tour-msg', 'Run banked — ' + done + ' / ' + total + ' duels resolved · still playing: ' + playing.slice(0, 3).join(' · ') + (playing.length > 3 ? ' …' : ''));
+  }
   function trySettlePair(i, force) {
     if (!tour.isHost || tour.settled[i] != null) return;
     var pr = tour.pairs[i]; if (!pr) return;
@@ -1925,7 +2301,7 @@
     if (tour._settleT[i]) { clearTimeout(tour._settleT[i]); delete tour._settleT[i]; }
     if (tour._settleT['ff' + i]) { clearTimeout(tour._settleT['ff' + i]); delete tour._settleT['ff' + i]; }
     broadcastSnapshot();   // build42: publish the settled pair so clients self-heal + a promoted host can resume
-    if (Object.keys(tour.settled).length === tour.pairs.length) hostFinishRound();
+    if (Object.keys(tour.settled).length === tour.pairs.length) hostFinishRound(); else _bracketWaitBanner();   // build58: live "X / Y resolved"
   }
   function hostFinishRound() {
     var winners = tour.pairs.map(function (pr, i) { return tour.settled[i]; }).concat(tour.byes);
@@ -1972,13 +2348,81 @@
       }
     }
     screen.classList.add('active'); activeNow = true; step('tour');
-    if (tour.isHost && _devAuto) setTimeout(hostStartNextRound, 1600);   // dev solo-run keeps flowing
+    paintHostPaceControls();   // build61: surface HOLD + the pace note (host-only) alongside START NEXT ROUND
+    if (tour.isHost) {
+      if (_devAuto) setTimeout(hostStartNextRound, 1600);   // dev solo-run keeps flowing
+      // build58: AFK-host failsafe — if the host never taps START NEXT ROUND, auto-advance after 45s so the bracket can't stall on one idle player.
+      // build61: a streamer HOLD suppresses this auto-advance entirely (re-armed cleanly on release via paintHostPaceControls).
+      else { armAwaitAutoAdvance(); }
+    }
+  }
+  // build61: arm (or skip, while held) the AFK auto-advance. Single place so HOLD/release re-arms identically.
+  function armAwaitAutoAdvance() {
+    if (_awaitAutoT) { clearTimeout(_awaitAutoT); _awaitAutoT = 0; }
+    if (!tour.isHost || !tour.awaiting || tour._hostHold) return;   // held → the bracket waits for the host's GO
+    _awaitAutoT = setTimeout(function () {
+      if (tour.isHost && tour.awaiting && !tour._hostHold && (tour._next || tour._awaitWinners)) hostStartNextRound();
+    }, 45000);
+  }
+
+  // ===================== BUILD61: STREAMER HOST-PACING (HOLD + ready indicator) =====================
+  // HOLD is host-only: while held it suppresses BOTH auto-advance timers (the 45s AFK + the 25s promoted-host) so a
+  // host narrating a bracket live keeps the next round on THEIR cue (START NEXT ROUND). Stored on tour._hostHold so a
+  // promoted heir inherits the controls but starts un-held (sensible default — the new host's flow is never stuck).
+  function toggleHostHold() {
+    if (!tour.isHost) return;                      // no-op for non-hosts (and after migration the heir owns this)
+    tour._hostHold = !tour._hostHold;
+    if (tour._hostHold) { if (_awaitAutoT) { clearTimeout(_awaitAutoT); _awaitAutoT = 0; } }   // freeze the AFK timer
+    else if (tour.awaiting) { armAwaitAutoAdvance(); }   // release → cleanly re-arm the normal AFK failsafe (no dangling timer)
+    paintHostPaceControls();
+  }
+  // paint the HOLD button + pace note + ready indicator. Host-only row; hidden + inert for everyone else and on migration.
+  function paintHostPaceControls() {
+    var row = $('mpx-tour-pacerow');
+    if (row) row.hidden = !(tour.isHost && tour.awaiting);
+    var hold = $('mpx-tour-hold');
+    if (hold) {
+      hold.classList.toggle('on', !!tour._hostHold);
+      hold.setAttribute('aria-pressed', tour._hostHold ? 'true' : 'false');
+      hold.textContent = tour._hostHold ? '▶ RESUME AUTO' : '⏸ HOLD BRACKET';
+    }
+    var note = $('mpx-tour-pacenote');
+    if (note) note.textContent = tour._hostHold ? 'Held — only YOU start the next round.' : 'Auto-advances if you don\'t start it.';
+    paintTourReady();
+  }
+  // per-round "players loaded / N ready" — reuses tour._alive proof-of-life (a streaming t-tick = loaded & playing).
+  // Informational only (never blocks a round start); helps a host HOLD when a slow decode hasn't loaded someone yet.
+  function paintTourReady() {
+    var el = $('mpx-tour-ready'); if (!el) return;
+    // expected = everyone still alive in this round who isn't a bye (byes don't play). Hidden unless a live round is up.
+    if (!tour.id || tour.state !== 'live' || !tour.alive || !tour.alive.length || tour.awaiting) { el.hidden = true; return; }
+    var expected = tour.alive.filter(function (id) { return (tour.byes || []).indexOf(id) < 0; });
+    if (!expected.length) { el.hidden = true; return; }
+    var now = Date.now();
+    var loaded = expected.filter(function (id) {
+      if (tour.finals && tour.finals[id]) return true;                       // already finished = was loaded
+      return !!(tour._alive && tour._alive[id] && (now - tour._alive[id] < 6000));   // streaming ticks = loaded
+    }).length;
+    el.hidden = false;
+    el.classList.toggle('allset', loaded >= expected.length);
+    var txt = $('mpx-tour-ready-txt');
+    if (txt) txt.textContent = loaded + ' / ' + expected.length + ' loaded' + (loaded >= expected.length ? ' ✓' : '');
+  }
+  // build66 (launch-audit P2): when the host removes a member who already STAKED during open registration, drop them from the
+  // authoritative paid roster + bets AND decrement the pot once — else the champion is over-credited and `paidN` can exceed the
+  // member count so the everyone-paid START gate passes trivially. The leaver self-refunds on their own client (closeTour →
+  // _wagerRefundMine); the host must NOT also broadcast a refund (that would double-credit).
+  function _wagerDropMember(id) {
+    if (!tour.isHost || !id || tour.stakes === 'free') return;
+    if (tour.paid && tour.paid[id]) { delete tour.paid[id]; tour.pot = Math.max(0, (tour.pot || 0) - (tour.buyIn || 0)); }
+    if (tour.bets && tour.bets[id]) delete tour.bets[id];
   }
   function hostKick(id) {
     if (!tour.isHost || tour.state !== 'open' || !id || id === ME.id || id === tour.hostId) return;
     if (tour.members[id] && tour.members[id].bot) { delete _devBots[id]; delete tour.members[id]; advertiseTour(); paintTourRoom(); return; }   // dev bot = local only
     try { tour.ch.send({ type: 'broadcast', event: 't-kick', payload: { id: id, by: ME.id } }); } catch (e) {}
-    delete tour.members[id]; advertiseTour(); paintTourRoom();   // optimistic; softPresence bye confirms
+    _wagerDropMember(id);   // build66: also drop their stake from the pot/roster (host-authoritative) before removing them
+    delete tour.members[id]; advertiseTour(); paintTourRoom(); broadcastSnapshot();   // optimistic; softPresence bye confirms; snapshot replicates the corrected pot/roster
   }
   function onTourKick(p) {
     if (!p || !p.id) return;
@@ -2016,6 +2460,7 @@
   function onTourChamp(p) {
     if (!p) return;
     tour.state = 'done'; tour.champ = p.id;
+    var _wagerWon = (tour.stakes && tour.stakes !== 'free') ? _wagerSettle() : 0;   // build66: WAGER — settle (pool: champ credited; side-bet: every correct picker splits the pot)
     if (tour.isHost) broadcastSnapshot();
     stopTourHeartbeat(); clearPersistedTour();   // build42: bracket over → stop the heartbeat + drop the reconnect pointer
     setSpectating(false);
@@ -2027,7 +2472,16 @@
     var live = $('mpx-tour-live'); if (live) live.hidden = false;
     var box = $('mpx-tour-champ'); if (box) { box.hidden = false; box.classList.toggle('you', p.id === ME.id); box.classList.remove('reveal'); void box.offsetWidth; box.classList.add('reveal'); }   // re-trigger the entrance
     set('mpx-tour-champ-name', p.id === ME.id ? 'YOU' : tourName(p.id));
-    set('mpx-tour-champ-sub', p.id === ME.id ? 'YOU ARE THE BRACKET CHAMPION' : 'BRACKET CHAMPION');
+    // build66: WAGER — surface winnings on the champion card. POOL: the champion won the pot. SIDE-BET: the champion only wins
+    // if they backed themselves; OTHER players who backed the winner also win → toast them (they aren't on this card).
+    var _csub;
+    if (p.id === ME.id) _csub = (_wagerWon > 0) ? ('CHAMPION · WON ' + _wagerWon + ' ◆ BONUS SPARKS') : 'YOU ARE THE BRACKET CHAMPION';
+    else if (tour.stakes === 'pool' && tour.pot) _csub = 'BRACKET CHAMPION · WON ' + tour.pot + ' ◆';
+    else _csub = 'BRACKET CHAMPION';
+    set('mpx-tour-champ-sub', _csub);
+    if (tour.stakes === 'sidebet' && p.id !== ME.id && _wagerWon > 0) {
+      try { (window.RhythmGame && window.RhythmGame.showToast) ? window.RhythmGame.showToast('🎲 You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!', 'good') : banner('mpx-tour-msg', '🎲 You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!'); } catch (e) {}
+    }
     // award-clip backdrop (muted ambient loop) + the champ's banked final
     var clip = $('mpx-tour-champ-clip');
     if (clip) {
@@ -2042,6 +2496,9 @@
     }
     var chip = $('mpx-tour-chip'); if (chip) { chip.setAttribute('data-state', 'done'); chip.textContent = 'CHAMPION'; }
     banner('mpx-tour-msg', '');
+    if (_awaitAutoT) { clearTimeout(_awaitAutoT); _awaitAutoT = 0; }   // build61: bracket over → drop any AFK timer
+    var prow = $('mpx-tour-pacerow'); if (prow) prow.hidden = true;    // build61: hide host-pacing controls at the champion reveal
+    var prdy = $('mpx-tour-ready'); if (prdy) prdy.hidden = true;
     renderTourBracket();
     paintTourRoom();
   }
@@ -2065,8 +2522,15 @@
     var sizeseg = $('mpx-tour-size');
     if (sizeseg) [].forEach.call(sizeseg.children, function (b) { b.disabled = !tour.isHost; b.classList.toggle('active', +b.getAttribute('data-size') === (tour.size || 8)); });
     var sizerow = $('mpx-tour-sizerow'); if (sizerow) sizerow.hidden = !tour.isHost;
+    // build61: round lead-in picker — host-only (entrants honor the host's broadcast atMs); reflect the current TOUR_LEADIN_MS
+    var leadrow = $('mpx-tour-leadinrow'); if (leadrow) leadrow.hidden = !tour.isHost;
+    var leadseg = $('mpx-tour-leadin');
+    if (leadseg) [].forEach.call(leadseg.children, function (b) { b.disabled = !tour.isHost; b.classList.toggle('active', +b.getAttribute('data-lead') === TOUR_LEADIN_MS); });
+    var stakerow = $('mpx-tour-stakerow'); if (stakerow) stakerow.hidden = !tour.isHost;   // build66: STAKES control is host-only; the pot banner + buy-in confirm are shown to everyone
+    paintStakeRow();
     buildTourEnvRow();   // stage POOL chips (host multi-select; guests see the pick)
     banner('mpx-tour-msg', '');
+    paintHostPaceControls();   // build61: reset host-pacing controls on (re-)entry (hidden until a live round/await)
     paintTourRoom();
   }
   function paintTourRoom() {
@@ -2098,9 +2562,13 @@
       else { art.style.backgroundImage = ''; art.textContent = '♪'; }
     }
     var n = Object.keys(tour.members).length;
+    // build66: WAGER — gate START until every entrant has paid the buy-in; show the live pot to everyone.
+    var staked = tour.stakes && tour.stakes !== 'free';
+    var paidN = Object.keys(tour.paid || {}).length;
+    var allPaid = !staked || paidN >= n;
     var st = $('mpx-tour-start');
     if (st && tour.isHost) {
-      var ok = tour.state === 'open' && n >= TOUR_MIN && !!tour.sel;
+      var ok = tour.state === 'open' && n >= TOUR_MIN && !!tour.sel && allPaid;
       st.disabled = !ok;
       st.textContent = 'START BRACKET (' + n + '/' + (tour.size || TOUR_MAX) + ')';
     }
@@ -2108,8 +2576,23 @@
     if (msg) {
       if (tour.state !== 'open') msg.textContent = '';
       else if (n < TOUR_MIN) msg.textContent = 'Need ' + (TOUR_MIN - n) + ' more to start — best with 5–10. Share the lobby!';
+      else if (staked && !allPaid) msg.textContent = 'Waiting on buy-ins — ' + paidN + '/' + n + ' paid in…';
       else msg.textContent = tour.isHost ? (n + ' in. Start when the table feels full (5–10 is the sweet spot).') : 'Waiting for the host to start the bracket…';
     }
+    var potEl = $('mpx-tour-pot');
+    if (potEl) {
+      if (!staked) potEl.hidden = true;
+      else { potEl.hidden = false; var picon = tour.stakes === 'sidebet' ? '🎲' : '💰';
+        potEl.innerHTML = picon + ' POT <b>' + (tour.pot || 0) + ' &#9670;</b> &nbsp;·&nbsp; ' + (tour.buyIn || 0) + ' &#9670; ' + (tour.stakes === 'sidebet' ? 'bet' : 'buy-in') + ' &nbsp;·&nbsp; ' + paidN + '/' + n + ' in'; }
+    }
+    // build66: side-bet — every entrant (host included) places ONE bet via the picker before round 1; show the prompt until they have.
+    var betBtn = $('mpx-tour-bet');
+    if (betBtn) {
+      var showBet = (tour.stakes === 'sidebet') && tour.state === 'open' && !_betPlaced();
+      betBtn.hidden = !showBet;
+      if (showBet) betBtn.textContent = '🎲 PLACE YOUR BET — ' + (tour.buyIn || 0) + ' ◆';
+    }
+    try { paintStakeRow(); } catch (e) {}
     if (tour.state === 'live') {
       var setup = $('mpx-tour-setup'); if (setup) setup.hidden = true;
       var live = $('mpx-tour-live'); if (live) live.hidden = false;
@@ -2361,6 +2844,7 @@
     o = o || {};
     try { teardownMatch(); } catch (e) {}
     matchId = 'npc' + (++_devN); matchRole = 'host';
+    matchCombat = false;   // build69: CPU/Practice is no-remote + combat-inert (bot guards) — set explicitly so it never inherits a stale prior human-match value
     oppMeta = { id: 'npc', name: o.name || 'NIGHT-OWL (CPU)', avatar: null, bot: true };
     matchCh = fakeTourChannel();                 // inert: matchCh.send guards pass; self-broadcasts drop (no handlers)
     sel = o.sel || hostNextTrack() || { trackId: 'demo', title: 'Demo Track', artist: 'ReactivVibe', difficulty: (sel && sel.difficulty) || 'medium', demo: true };
@@ -2430,7 +2914,7 @@
     var box = $('mpx-results'); if (!box) return;
     var RC = window.RhythmCatalog;
     var all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t); });
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
     q = (q || '').toLowerCase();
     var rows = all.filter(function (t) {
       if (!q) return true;
@@ -2454,10 +2938,45 @@
   // ===================== WIRING =====================
   function wire(id, ev, fn) { var el = $(id); if (el) el.addEventListener(ev, fn); }
   wire('mpx-leave-setup', 'click', backToLobby);
+
+  // ---- build60: "Play with friends ▸" disclosure (demotes Open / Browse / Tournament under one tap) ----
+  function toggleFriends(force) {
+    var tg = $('mpx-friends-toggle'), panel = $('mpx-friends-panel'); if (!tg || !panel) return;
+    var open = (force != null) ? !!force : panel.hidden;
+    panel.hidden = !open; tg.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  wire('mpx-friends-toggle', 'click', function () { toggleFriends(); });
+
+  // ---- build60: first-run coach card (one-time; re-openable via the header "?") ----
+  function mpSeen() { try { return localStorage.getItem('rr_mp_seen') === '1'; } catch (e) { return false; } }
+  function showCoach() { var c = $('mpx-coach'); if (c) c.hidden = false; }
+  function dismissCoach() { var c = $('mpx-coach'); if (c) c.hidden = true; try { localStorage.setItem('rr_mp_seen', '1'); } catch (e) {} }
+  wire('mpx-coach-go', 'click', dismissCoach);
+  wire('mpx-help', 'click', showCoach);
+
+  // ---- build60: gentle up-front sign-in note (shown on lobby entry only when signed-out actions would fail) ----
+  function refreshSigninNote() {
+    var note = $('mpx-signin-note'); if (!note) return;
+    // Only nudge when there's a live connection but no identity — i.e. actions would bounce with a "sign in" banner.
+    // The dev-open path still works without sign-in (guest), so keep it informational, never blocking.
+    var show = !!supa && !ME.signedIn;
+    note.hidden = !show;
+  }
+  wire('mpx-signin-btn', 'click', function () {
+    // Route to the existing rr-id sign-in control (lives outside the MP screen); fall back to a friendly nudge.
+    var done = false;
+    try { var rid = document.getElementById('rr-id'); if (rid) { rid.click(); done = true; } } catch (e) {}
+    if (!done) { try { if (window.RhythmCatalog && window.RhythmCatalog.signIn) { window.RhythmCatalog.signIn(); done = true; } } catch (e) {} }
+    if (!done) banner('mpx-lobby-msg', 'Open the account menu (top bar) to sign in — or just hit PLAY NOW to practice vs CPU as a guest.');
+  });
+
   // build8: lobby action bar
   wire('mpx-act-quick', 'click', toggleQuickMatch);
+  wire('mpx-combat-toggle', 'click', toggleCombat);   // v254: P-vs-P / P-vs-E combat toggle
   wire('mpx-act-open', 'click', function () { gotoRooms('create'); });
   wire('mpx-act-browse', 'click', function () { gotoRooms('browse'); });
+  // build61: LIVE NOW empty-state CTA → straight into the host-a-tournament form (also un-collapses friends so the path is visible)
+  wire('mpx-livenow-host', 'click', function () { try { toggleFriends(true); } catch (e) {} gotoRooms('tour-create'); });
   // build8: rooms step
   wire('mpx-rooms-refresh', 'click', function () { try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} renderRooms(); });
   wire('mpx-rooms-back', 'click', function () { step('lobby'); onLobbySync(); });
@@ -2467,31 +2986,53 @@
   });
   wire('mpx-room-create-cancel', 'click', function () { step('lobby'); onLobbySync(); });
   wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
+  wire('mpx-room-combat', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build69: segmented combat select for the room (read at openRoom into room.combat)
   // build8: room context (inside setup) — host closes / guest leaves
-  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { leaveRoomChannel(); room = { id: null, name: null, priv: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; reannounce(); backToLobby(); } });
+  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; reannounce(); backToLobby(); } });
+  // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
+  wire('mpx-invite-friend', 'click', function () {
+    if (!room.id) return;
+    var code = roomCode(room.id), link = roomInviteLink(room.id);
+    var share = 'Join my Reactive Rhythm room — code ' + code + ': ' + link;
+    var btn = $('mpx-invite-friend');
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — SEND IT' : '👤 VS PLAYER — INVITE'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '👤 VS PLAYER — INVITE'; }, 2600); }
+    try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a friend:', share); }); }
+    catch (e) { window.prompt('Copy this — send it to a friend:', share); }
+  });
+  // build60: a solo host is never stuck — drop a CPU opponent into the duel and start a real split-screen match.
+  wire('mpx-add-cpu', 'click', function () {
+    if (!room.isHost) return;
+    var carry = (sel && sel.trackId) ? Object.assign({}, sel) : null;
+    try { closeRoom(true); } catch (e) {}        // tear down the empty room channel cleanly
+    step('setup');
+    try { devVsNpc(carry ? { sel: carry } : {}); } catch (e) { banner('mpx-lobby-msg', 'Could not start a CPU duel — try PLAY NOW.'); }
+  });
   wire('mpx-leave-win', 'click', leaveAll);
   wire('mpx-backlobby', 'click', backToLobby);
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
   wire('mpx-ready', 'click', toggleReady);
   wire('mpx-diff', 'click', function (e) {
-    var b = e.target.closest('button'); if (!b || matchRole !== 'host') return;
+    var b = e.target.closest('button'); if (!b || !amPicker()) return;
     sel.difficulty = b.getAttribute('data-diff');
     [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
     broadcastSong();
   });
   wire('mpx-pick', 'click', function () {
-    if (matchRole !== 'host') return;
+    if (!amPicker()) return;
     var p = $('mpx-picker'); if (!p) return;
     p.hidden = !p.hidden; if (!p.hidden) { renderPicker(''); var s = $('mpx-search'); if (s) s.focus(); }
   });
   wire('mpx-search', 'input', function () { renderPicker(this.value); });
   // build9: tournament controls
   wire('mpx-act-tour', 'click', function () { gotoRooms('tour-create'); });
-  (function () { var nb = $('mpx-act-npc'); if (nb && MP_DEV) nb.hidden = false; })();   // dev-only: offline 1v1 vs bot
-  wire('mpx-act-npc', 'click', function () { devVsNpc({}); });
+  // build60: "Practice vs CPU" is now a FIRST-CLASS lobby action (no longer a hidden dev-only reveal) — a lone first-timer
+  // always has a real, instantly-playable split-screen match. The MP screen only opens when MP is reachable (the public
+  // gate lives in index.html toMultiplayer); inside it, everyone who's here gets the CPU on-ramp.
+  wire('mpx-act-npc', 'click', function () { banner('mpx-lobby-msg', ''); devVsNpc({}); });
   wire('mpx-tour-roll', 'click', rollTrack);
   wire('mpx-tour-start', 'click', startTour);
   wire('mpx-tour-next', 'click', hostStartNextRound);   // host: manual round advance
+  wire('mpx-tour-hold', 'click', toggleHostHold);       // build61: streamer HOLD — suppress both auto-advance timers until GO
   wire('mpx-tour-leave', 'click', leaveTourBtn);
   wire('mpx-tour-size', 'click', function (e) {
     var b = e.target.closest('button[data-size]'); if (!b || !tour.isHost || tour.state !== 'open') return;
@@ -2499,6 +3040,151 @@
     [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
     broadcastTourTrack(); paintTourRoom();
   });
+  // build61: host-selectable round LEAD-IN (the 3·2·1·GO cinematic length). Local to the host's clock — used by
+  // hostBeginRound's atMs; entrants just honor whatever atMs the host broadcasts, so no sync change. Default 5200 (unchanged).
+  wire('mpx-tour-leadin', 'click', function (e) {
+    var b = e.target.closest('button[data-lead]'); if (!b || !tour.isHost) return;
+    TOUR_LEADIN_MS = +b.getAttribute('data-lead') || 5200;
+    [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
+  });
+  // build66: WAGER — host sets the bracket STAKES (free | prize pool | side-bet) + the buy-in. BONUS SPARKS ONLY
+  // (cashable Sparks gated off behind RhythmWager WAGER_SERVER_MODE='local'). Stakes/buyIn/pot/paid ride the t-snapshot to entrants.
+  function paintStakeRow() {
+    var seg = $('mpx-tour-stakes');
+    if (seg) [].forEach.call(seg.children, function (b) { b.classList.toggle('active', b.getAttribute('data-stakes') === (tour.stakes || 'free')); b.disabled = !tour.isHost || tour.state !== 'open'; });
+    var staked = tour.stakes && tour.stakes !== 'free', anyPaid = Object.keys(tour.paid || {}).length > 0;
+    var bir = $('mpx-tour-buyinrow'); if (bir) bir.hidden = !(staked && tour.isHost);
+    var bl = $('mpx-tour-buyinlbl'); if (bl) bl.textContent = (tour.stakes === 'sidebet') ? 'BET' : 'BUY-IN';
+    var bi = $('mpx-tour-buyin');
+    if (bi) { bi.disabled = !tour.isHost || tour.state !== 'open' || anyPaid; if (document.activeElement !== bi) bi.value = tour.buyIn || 50; }
+    var hint = $('mpx-tour-stakehint');
+    if (hint) {
+      if (!staked) hint.hidden = true;
+      else { hint.hidden = false; var amt = '<b>' + (tour.buyIn || 0) + ' ◆ Bonus Sparks</b>';
+        hint.innerHTML = (tour.stakes === 'pool')
+          ? '💰 Each entrant pays ' + amt + ' into the pot — the <b>champion takes the whole pool</b>. (Bonus Sparks are earned by playing, not real money.)'
+          : '🎲 Players bet ' + amt + ' on who wins — <b>correct pickers split the pot</b> (parimutuel). Bets lock when round 1 starts.'; }
+    }
+  }
+  function _wagerMax() { try { return window.RhythmWager ? window.RhythmWager.maxBuyIn() : 5000; } catch (e) { return 5000; } }
+  function _wagerEnsurePool() {
+    if (!tour.isHost || !tour.id || tour.stakes === 'free' || !window.RhythmWager) return;
+    try { var pr = window.RhythmWager.openPool(tour.id, tour.buyIn, 'bonus', { mode: tour.stakes }); tour.potId = pr.potId; tour.currency = 'bonus'; if (!tour.pot) tour.pot = pr.pot || 0; } catch (e) {}
+  }
+  wire('mpx-tour-stakes', 'click', function (e) {
+    var b = e.target.closest('button[data-stakes]'); if (!b || !tour.isHost || tour.state !== 'open') return;
+    if (Object.keys(tour.paid || {}).length > 0) { banner('mpx-tour-msg', 'Can’t change stakes after a buy-in has been paid.'); return; }
+    tour.stakes = b.getAttribute('data-stakes') || 'free'; tour.currency = 'bonus';
+    if (tour.stakes === 'free') { tour.potId = null; tour.pot = 0; }
+    else { tour.buyIn = Math.max(1, Math.min(_wagerMax(), parseInt(($('mpx-tour-buyin') || {}).value, 10) || 50)); _wagerEnsurePool(); _wagerDeclined[tour.id] = false; try { setTimeout(_wagerMaybePay, 400); } catch (e) {} }   // host commits to its own buy-in too; re-selecting a mode re-prompts
+    paintStakeRow(); paintTourRoom(); broadcastSnapshot(); advertiseTour();
+  });
+  wire('mpx-tour-buyin', 'input', function () {
+    if (!tour.isHost || tour.state !== 'open' || Object.keys(tour.paid || {}).length > 0) return;
+    tour.buyIn = Math.max(1, Math.min(_wagerMax(), parseInt(this.value, 10) || 1));
+    if (tour.stakes !== 'free') _wagerEnsurePool();
+    paintStakeRow(); paintTourRoom(); broadcastSnapshot(); advertiseTour();
+  });
+  // build66: side-bet — open the WHO-WINS picker + close it (cancel button or backdrop click)
+  wire('mpx-tour-bet', 'click', function () { _openBetPicker(); });
+  wire('mpx-bet-cancel', 'click', function () { _closeBetPicker(); });
+  wire('mpx-bet-overlay', 'click', function (e) { if (e.target === this) _closeBetPicker(); });
+  // build66: WAGER — entrant buy-in confirm + the HOST-verified paid fan-in + champion payout + refunds (all Bonus Sparks).
+  var _wagerDeclined = {};
+  function _wagerPaidLocal() { try { var pp = window.RhythmWager.getPool(tour.potId); return !!(pp && pp.paid && pp.paid[ME.id]); } catch (e) { return false; } }
+  function _wagerMaybePay() {
+    if (!tour.id || tour.stakes === 'free' || !tour.potId || tour.state !== 'open' || !window.RhythmWager) return;
+    if (tour.stakes === 'sidebet') return;              // build66: side-bet is placed via the explicit PLACE-YOUR-BET picker (you choose WHO wins), not the pool auto-prompt
+    if (tour.paid && tour.paid[ME.id]) return;          // the host already counts me as paid
+    if (_wagerPaidLocal()) return;                      // I paid locally, awaiting the host's fan-in
+    if (_wagerDeclined[tour.id]) return;                // I already passed on this bracket
+    var amt = tour.buyIn || 0, isBet = tour.stakes === 'sidebet';
+    if (!window.RhythmWager.canStake(amt, 'bonus')) { banner('mpx-tour-msg', 'Not enough Bonus Sparks for the ' + amt + ' ◆ ' + (isBet ? 'bet' : 'buy-in') + ' — earn more by playing, or leave the bracket.'); return; }
+    var ok = true;
+    try { ok = window.confirm('Enter this ' + (isBet ? 'side-bet' : 'prize-pool') + ' tournament?\n\nStake: ' + amt + ' ◆ Bonus Sparks.\n' + (isBet ? 'Correct pickers split the pot.' : 'The champion takes the whole pot.') + '\n\n(Bonus Sparks are earned by playing — NOT real money.)'); } catch (e) { ok = true; }
+    if (!ok) { _wagerDeclined[tour.id] = true; banner('mpx-tour-msg', 'You passed on the buy-in — leave the bracket to exit.'); return; }
+    try {
+      window.RhythmWager.openPool(tour.id, amt, 'bonus', { mode: tour.stakes });   // local mirror so joinPool can debit my Bonus
+      var key = tour.id + ':' + ME.id;
+      var res = window.RhythmWager.joinPool(tour.potId, ME.id, key);
+      if (res && res.ok) {
+        if (tour.ch) { try { tour.ch.send({ type: 'broadcast', event: 't-paid', payload: { id: ME.id, idemKey: key } }); } catch (e) {} }
+        if (tour.isHost) onTourPaid({ id: ME.id, idemKey: key });   // host counts itself immediately
+        try { window.__rrSparksRefresh && window.__rrSparksRefresh(); } catch (e) {}
+        banner('mpx-tour-msg', 'Paid ' + amt + ' ◆ in — waiting for the bracket to fill.');
+      } else { banner('mpx-tour-msg', (res && res.error === 'insufficient') ? 'Not enough Bonus Sparks.' : 'Could not pay in — try again.'); }
+    } catch (e) {}
+    paintTourRoom();
+  }
+  // build66: SIDE-BET (parimutuel) — entrants pick WHO they think wins from the live roster + stake the buy-in on that pick.
+  // Correct pickers split the pot at the crown. Placement is an explicit picker (not the pool auto-prompt) so you can wait for
+  // the roster to fill before betting. The HOST fans each pick into tour.bets (host-verified), exactly like the pool roster.
+  function _wagerBetLocal() { try { var pp = window.RhythmWager.getPool(tour.potId); return !!(pp && pp.bets && pp.bets[ME.id]); } catch (e) { return false; } }
+  function _betPlaced() { return !!(tour.paid && tour.paid[ME.id]) || _wagerBetLocal(); }
+  function _closeBetPicker() { var ov = $('mpx-bet-overlay'); if (ov) ov.hidden = true; }
+  function _openBetPicker() {
+    if (!tour.id || tour.stakes !== 'sidebet' || tour.state !== 'open' || !window.RhythmWager || _betPlaced()) return;
+    var amt = tour.buyIn || 0;
+    if (!window.RhythmWager.canStake(amt, 'bonus')) { banner('mpx-tour-msg', 'Not enough Bonus Sparks for the ' + amt + ' ◆ bet — earn more by playing.'); return; }
+    var ov = $('mpx-bet-overlay'), list = $('mpx-bet-list'); if (!ov || !list) return;
+    var amtEl = $('mpx-bet-amt'); if (amtEl) amtEl.textContent = amt + ' ◆ Bonus Sparks';
+    list.innerHTML = '';
+    Object.keys(tour.members || {}).forEach(function (id) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'mpx-bet-pick'; b.setAttribute('data-pick', id);
+      b.textContent = (id === ME.id) ? (tourName(id) + ' (you)') : tourName(id);   // textContent → a peer display name can't inject markup
+      b.addEventListener('click', function () { _placeBet(id); });
+      list.appendChild(b);
+    });
+    ov.hidden = false;
+  }
+  function _placeBet(pick) {
+    if (!pick || _betPlaced()) { _closeBetPicker(); return; }
+    var amt = tour.buyIn || 0, key = tour.id + ':' + ME.id;
+    try {
+      window.RhythmWager.openPool(tour.id, amt, 'bonus', { mode: 'sidebet' });   // local mirror so placeBet can debit my Bonus
+      var res = window.RhythmWager.placeBet(tour.potId, pick, amt, ME.id, key);
+      if (res && res.ok) {
+        if (tour.ch) { try { tour.ch.send({ type: 'broadcast', event: 't-paid', payload: { id: ME.id, idemKey: key, pick: String(pick) } }); } catch (e) {} }
+        if (tour.isHost) onTourPaid({ id: ME.id, idemKey: key, pick: String(pick) });   // host counts its own bet immediately
+        try { window.__rrSparksRefresh && window.__rrSparksRefresh(); } catch (e) {}
+        banner('mpx-tour-msg', 'Bet ' + amt + ' ◆ on ' + (pick === ME.id ? 'yourself' : tourName(pick)) + ' — locks at round 1.');
+      } else { banner('mpx-tour-msg', (res && res.error === 'insufficient') ? 'Not enough Bonus Sparks.' : 'Could not place the bet — try again.'); }
+    } catch (e) {}
+    _closeBetPicker(); paintTourRoom();
+  }
+  // HOST records each unique payer ONCE into the authoritative roster + pot (the integrity point — payment is host-verified,
+  // not self-asserted; a modded client can broadcast t-paid but can't fabricate a real Bonus debit, and the host counts it once).
+  function onTourPaid(p) {
+    if (!tour.id || !p || !p.id || !tour.isHost || tour.stakes === 'free') return;
+    if (tour.paid[p.id]) return;   // idempotent — never add the same payer's buy-in/bet twice
+    tour.paid[p.id] = { at: Date.now(), idemKey: p.idemKey || null };
+    if (tour.stakes === 'sidebet' && p.pick) tour.bets[p.id] = String(p.pick);   // build66: side-bet — record the host-verified pick (who this entrant backed)
+    tour.pot = (tour.pot || 0) + (tour.buyIn || 0);
+    paintTourRoom(); broadcastSnapshot();
+  }
+  // every client settles its own view when the champion is crowned. POOL: only the CHAMPION's client credits (winner-takes-pot).
+  // SIDE-BET: EVERY client settles its own bet — those who backed the champion split the pot (parimutuel); the authoritative
+  // pool-wide totals (WT, Wk) come from the replicated tour.bets/tour.pot. Returns MY winnings (0 if I didn't win).
+  function _wagerSettle() {
+    if (!tour.potId || tour.stakes === 'free' || !window.RhythmWager) return 0;
+    var won = 0;
+    try {
+      if (tour.stakes === 'sidebet') {
+        var WT = tour.pot || 0, Wk = 0, bs = tour.bets || {};
+        Object.keys(bs).forEach(function (k) { if (String(bs[k]) === String(tour.champ)) Wk += (tour.buyIn || 0); });   // total staked on the actual champion
+        var res = window.RhythmWager.settleBets(tour.potId, tour.champ, ME.id, tour.id + ':settle', { WT: WT, Wk: Wk });
+        if (res && res.ok) { won = res.payout || 0; if (won > 0) { try { window.__rrSparksRefresh && window.__rrSparksRefresh(); } catch (e) {} } }
+      } else {
+        var r2 = window.RhythmWager.settlePool(tour.potId, tour.champ, ME.id, tour.id + ':settle', tour.pot);
+        if (r2 && r2.ok && tour.champ === ME.id) { won = r2.payout || 0; if (won > 0) { try { window.__rrSparksRefresh && window.__rrSparksRefresh(); } catch (e) {} } }
+      }
+    } catch (e) {}
+    return won;
+  }
+  function _wagerRefundMine() {
+    if (!tour.potId || tour.stakes === 'free' || !window.RhythmWager) return;
+    try { var res = window.RhythmWager.refundPool(tour.potId, ME.id, tour.id + ':refund'); if (res && res.ok) { try { window.__rrSparksRefresh && window.__rrSparksRefresh(); } catch (e) {} } } catch (e) {}
+  }
   // dev NPC harness controls (visible only in dev mode)
   wire('mpx-dev-bot1', 'click', function () { devAddBots(1); });
   wire('mpx-dev-bot3', 'click', function () { devAddBots(3); });
@@ -2567,8 +3253,13 @@
   else { try { if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500); } catch (e) {} }
 
   // public hook
-  window.RhythmMP = { open: open, close: leaveAll, isLive: function () { return matchLive || tour.state === 'live'; } };
-  // dev NPC harness (console): __mpDev.run(7) = offline auto-bracket · .bots(n)/.spectate(true) within a live room · .status()
+  window.RhythmMP = { open: open, close: leaveAll, isLive: function () { return matchLive || tour.state === 'live'; },
+    getRank: getRank,                                                  // v254: the leaderboard MULTIPLAYER tab reads this
+    getCombat: function () { return combatOn; },
+    setCombat: function (on) { combatOn = !!on; try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {} paintCombatToggle(); return combatOn; } };
+  // dev NPC harness (console) — LOCALHOST-ONLY (build66 launch-audit P1: __tour.send can forge live-bracket events /
+  // self-credit the pot with no sender auth; MP_DEV gates it out of production while keeping it for the localhost builder).
+  if (MP_DEV) {
   window.__mpDev = { bots: devAddBots, clear: devClearBots, auto: devSetAuto, spectate: devSetSpectate, diff: devSetBotDiff, status: devStatus,
     solo: devSoloTour, start: startTour, run: function (n) { devSoloTour(n); setTimeout(startTour, 700); return tour.id; },
     npc: devVsNpc,
@@ -2603,4 +3294,5 @@
     snap: snapshotTour, promote: maybePromoteHost, sanitize: sanitizeFinal,
     persisted: function () { try { return JSON.parse(sessionStorage.getItem('rr_tour') || 'null'); } catch (e) { return null; } }
   };
+  }   // end if (MP_DEV) — dev harness is localhost-only
 })();
