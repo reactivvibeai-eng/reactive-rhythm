@@ -778,6 +778,10 @@
     }
     return null;
   }
+  // best-effort playable VIDEO source for the interim Watch preview (NOT a rhythm chart).
+  // SWAP-SEAM: a dedicated t.video_url lands with the backend video bucket; until then
+  // stream_url (.mp4/.m3u8) is the fallback. .m3u8 → Chrome can't decode → openWatch new-tab fallback.
+  function videoWatchUrl(t) { return (t && (t.video_url || t.stream_url || t.media_url)) || ''; }
   function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — media type (music vs video). Prefer an AUTHORITATIVE backend
   // field (media_type / is_video). When Lovable ships it, ONLY mediaType() changes —
@@ -817,6 +821,14 @@
   function musicTracks() { return catalogTracks; }   // catalogTracks is already music-only post-split
   function videoTracks() { return catalogVideos; }
   function videoCount() { return catalogVideos.length; }
+  // ▼▼▼ SWAP-SEAM ▼▼▼ — 16:9 cinema poster for AI Flixs. Lovable should add a LANDSCAPE
+  // poster_url on video rows; until then thumbnail → first-frame → square artwork (cover-cropped).
+  // Mirrors mediaType()/goldenBuzzer(). See VIDEO_SEPARATION_BRIEF.md / LOVABLE_BACKEND_ASKS.md.
+  function posterFor(t) {
+    if (!t) return '';
+    return t.poster_url || t.thumbnail_url || t.first_frame_url || t.artwork_url || '';
+  }
+  // ▲▲▲ SWAP-SEAM ▲▲▲
   function trackReady(t) {
     if (!t) return false;
     if (t.demo) return true;
@@ -863,6 +875,7 @@
 
   // ---------- catalog query helpers (consumed by the library UI) --------------
   function allTracks() { return catalogTracks; }
+  function allMedia() { return catalogTracks.concat(catalogVideos); }   // music + videos, for cross-search (Phase 5)
   function genreList() {
     const m = {};
     catalogTracks.forEach(t => { const g = cleanGenre(t.genre); if (g) m[g] = (m[g] || 0) + 1; });
@@ -1034,9 +1047,19 @@
     const vid = isVideo(track);   // a music video / film \u2014 never launchable into the rhythm engine (deferred)
     if (vid) {
       // also protects a shared /play?trackId=<videoId> deep link (the raw /track row bypasses the catalog split)
-      $('sheet-hint').textContent = 'Music video \u2014 playable video is coming to the game soon.';
-      if (playBtn) { playBtn.disabled = true; playBtn.classList.add('not-ready'); }
-      if (playLabel) playLabel.textContent = 'Video';
+      // Phase 5: interim WATCH preview (muted inline player) \u2014 the PLAYABLE rhythm level stays deferred (Phase 6).
+      const wsrc = videoWatchUrl(track);
+      $('sheet-hint').textContent = wsrc
+        ? 'AI Flixs film \u2014 tap Watch for a preview. The playable video level is coming soon.'
+        : 'AI Flixs film \u2014 playable video is coming to the game soon.';
+      if (playBtn) { playBtn.disabled = !wsrc; playBtn.classList.toggle('not-ready', !wsrc); }
+      if (playLabel) playLabel.textContent = wsrc ? '\u25b6 Watch' : 'Coming soon';
+      if (wsrc) {
+        // override the play handler with Watch; return BEFORE the rhythm-engine wiring below.
+        window.RhythmGame.setMenuPlayHandler(() => { closeSheet(); openWatch(track, wsrc); });
+        sheet.classList.add('open');
+        return;   // Watch is preview-only \u2014 never enters the engine (isVideo guards at play handler + launchTrack remain)
+      }
     } else if (!ready) {
       $('sheet-hint').textContent = status === 'failed'
         ? 'This track couldn\u2019t be processed for the game.'
@@ -1089,6 +1112,33 @@
     sheet.classList.add('open');
   }
   function closeSheet() { sheet.classList.remove('open'); }
+
+  // AI Flixs interim WATCH overlay — muted inline <video> preview ONLY (never the rhythm engine). Phase 5.
+  function openWatch(track, src) {
+    let ov = document.getElementById('flix-watch');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'flix-watch'; ov.className = 'flix-watch';
+      ov.innerHTML = '<div class="fw-scrim"></div>' +
+        '<div class="fw-box"><button class="fw-close" type="button" aria-label="Close">✕</button>' +
+        '<video class="fw-video" playsinline muted controls preload="metadata"></video>' +
+        '<div class="fw-cap"></div></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('.fw-scrim').addEventListener('click', closeWatch);
+      ov.querySelector('.fw-close').addEventListener('click', closeWatch);
+    }
+    const v = ov.querySelector('.fw-video');
+    v.poster = posterFor(track); v.src = src;
+    ov.querySelector('.fw-cap').textContent = (track.title || '') + ' — ' + (track.artist_name || '');
+    ov.classList.add('open');
+    const p = v.play && v.play();
+    if (p && p.catch) p.catch(() => { try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });   // HLS / autoplay-blocked → new tab
+    if (catalogLive && track.id) logUse(track.id, 'preview', { kind: 'watch' });
+  }
+  function closeWatch() {
+    const ov = document.getElementById('flix-watch'); if (!ov) return;
+    const v = ov.querySelector('.fw-video'); try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+    ov.classList.remove('open');
+  }
 
   // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
   function launchTrack(track, opts) {
@@ -1377,9 +1427,9 @@
     getStore, getEntitlements, spendSparks, ownsItem, _entitlements,
     fetchLeaderboard, fetchGlobalLeaderboard,
     // data layer for the library UI (jukebox.js)
-    allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
+    allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
-    isVideo, mediaType, musicTracks, videoTracks, videoCount, goldenBuzzer,
+    isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
     search, sortTracks, sections, getBest,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,

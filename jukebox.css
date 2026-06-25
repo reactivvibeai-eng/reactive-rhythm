@@ -378,10 +378,24 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
 .genre-tile::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255,255,255,0.22), transparent 60%); pointer-events: none; }
 .genre-tile .gt-name { position: relative; z-index: 2; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .genre-tile .gt-count { position: relative; z-index: 2; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); margin-top: 3px; letter-spacing: 0.1em; }
-/* Videos category tile — distinct from the genre color-tiles: dark warm body, chrome edge, gold count */
-.genre-tile.gt-videos { background: linear-gradient(150deg, #2a0d10, #120607); border-color: rgba(218,215,210,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 0 18px rgba(194,24,42,0.28); }
-.genre-tile.gt-videos .gt-name { color: #f0e9e4; }
-.genre-tile.gt-videos .gt-count { color: rgba(224,169,63,0.95); }
+/* AI FLIXS hero — full-width cinematic entry above the genres (replaces the old gt-videos tile).
+   Warm-dark body + crimson glow + chrome edge + gold wordmark. NO blue/purple. */
+.flixs-hero-card {
+  grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px;
+  padding: 16px 18px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(218,215,210,0.22); border-radius: 16px;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(255,31,46,0.28), transparent 60%),
+              linear-gradient(150deg, #2a0d10, #120607);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.flixs-hero-card:hover  { border-color: rgba(255,31,46,0.55); }
+.flixs-hero-card:active { transform: scale(0.99); }
+.flixs-hero-card:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+.fh-badge { font-family: 'Unbounded', sans-serif; font-weight: 800; letter-spacing: 0.03em; font-size: 22px;
+  color: var(--gold); text-shadow: 0 0 18px rgba(224,169,63,0.35); }
+.fh-sub   { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--ink-dim);
+  text-transform: uppercase; letter-spacing: 0.14em; }
+.fh-count { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 13px; color: var(--ink); margin-top: 2px; }
 
 .artist-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
 .artist-tile {
@@ -443,6 +457,54 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
 }
 .sc-score { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); margin-top: 3px; }
 .sc-right { display: flex; align-items: center; gap: 10px; }
+
+/* ===========================================================================
+   AI FLIXS — poster grid + 16:9 video cards (Phase 5 discovery surface)
+   =========================================================================== */
+#view-songs.poster-grid .song-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; align-content: start;
+}
+@media (max-width: 560px) { #view-songs.poster-grid .song-list { grid-template-columns: 1fr 1fr; gap: 10px; } }
+.video-card { display: flex; flex-direction: column; gap: 8px; padding: 0; background: none; border: none; cursor: pointer; text-align: left; }
+.video-card:focus-visible { outline: none; }
+.video-card:focus-visible .vc-frame { outline: 2px solid var(--crimson); outline-offset: 3px; }
+.vc-frame {
+  position: relative; aspect-ratio: 16 / 9; width: 100%; border-radius: 12px; overflow: hidden;
+  background: linear-gradient(150deg, #2a0d10, #120607);
+  border: 1px solid rgba(218,215,210,0.22);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10);
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+.video-card:hover .vc-frame { border-color: rgba(255,31,46,0.45); transform: translateY(-3px); }
+.vc-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vc-noart::before { content: '▶'; font-family: 'Unbounded', sans-serif; font-size: 30px; color: rgba(255,31,46,0.5); }
+.vc-grad { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, rgba(8,5,5,0.82) 0%, rgba(8,5,5,0) 42%); }
+.vc-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(0.6); width: 46px; height: 46px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; padding-left: 2px;
+  background: rgba(255,31,46,0.86); box-shadow: 0 0 22px rgba(255,31,46,0.5); opacity: 0; transition: opacity 0.18s ease, transform 0.18s ease; pointer-events: none; }
+.video-card:hover .vc-play, .video-card:focus-visible .vc-play { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+.vc-dur { position: absolute; right: 7px; bottom: 7px; z-index: 3; font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 11px;
+  color: var(--chrome); text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+.vc-badge { position: absolute; left: 8px; top: 8px; z-index: 3; padding: 3px 8px; border-radius: 7px;
+  font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  background: rgba(10,7,5,0.78); border: 1px solid rgba(218,215,210,0.3); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); color: var(--ink-dim); }
+.vc-cap { display: flex; flex-direction: column; gap: 1px; padding: 0 2px; }
+.vc-title { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vc-sub   { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.rr-reduce-motion .video-card:hover .vc-frame { transform: none; }
+
+/* AI FLIXS interim Watch overlay (muted inline preview) */
+.flix-watch { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; }
+.flix-watch.open { display: flex; }
+.fw-scrim { position: absolute; inset: 0; background: rgba(6,4,3,0.82); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.fw-box { position: relative; width: min(92vw, 900px); }
+.fw-video { width: 100%; aspect-ratio: 16/9; border-radius: 14px; background: #000;
+  border: 1px solid rgba(255,31,46,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.7); }
+.fw-close { position: absolute; top: -14px; right: -14px; width: 36px; height: 36px; border-radius: 50%;
+  background: var(--crimson); color: #fff; border: none; font-size: 16px; cursor: pointer; }
+.fw-cap { margin-top: 10px; text-align: center; font-family: 'Chakra Petch', monospace; color: var(--ink); }
 
 /* grade colors (shared) */
 .g-S { color: #e0a93f; }

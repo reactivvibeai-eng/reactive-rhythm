@@ -281,13 +281,16 @@
     renderTopGenreStrip(named.slice(0, 5));
 
     const gg = $('genre-grid'); gg.innerHTML = '';
-    // ---- Videos category — music videos / films, grouped OUT of the music genres ----
+    // ---- AI FLIXS — cinematic hero entry (full-width), grouped OUT of the music genres ----
     const nVid = RC().videoCount ? RC().videoCount() : 0;
     if (nVid > 0) {
       const vt = document.createElement('button');
-      vt.className = 'genre-tile gt-videos';
-      vt.innerHTML = '<span class="gt-name">▶ Videos</span><span class="gt-count">' + nVid + ' video' + (nVid !== 1 ? 's' : '') + '</span>';
-      vt.addEventListener('click', () => openSongs(RC().videoTracks(), 'Videos', 'browse', '', true));
+      vt.className = 'flixs-hero-card';
+      vt.innerHTML = '<span class="fh-badge">AI FLIXS</span>' +
+        '<span class="fh-sub">Music videos &amp; AI films</span>' +
+        '<span class="fh-count">' + nVid + ' film' + (nVid !== 1 ? 's' : '') + ' ▶</span>';
+      // 6th arg = posterMode (poster grid); scope defaults to 'flixs' (videos-only) from isVid
+      vt.addEventListener('click', () => openSongs(RC().videoTracks(), 'AI Flixs', 'browse', '', true, true));
       gg.appendChild(vt);
     }
     genres.forEach(g => {
@@ -402,22 +405,29 @@
   // =========================================================================
   let songsBase = [], songsList = [], songsRendered = 0;
   let songsIsVideo = false;   // true ONLY for the dedicated Videos view, so currentSongs doesn't filter it empty
+  let songsPoster = false;    // poster-grid (AI Flixs) vs row list (music) — Phase 5
+  let songsScope = 'music';   // 'music' | 'flixs' | 'all' — which media currentSongs() keeps — Phase 5
   const PAGE = 40;
 
-  function openSongs(list, title, ret, q, isVid) {
+  function openSongs(list, title, ret, q, isVid, poster, scope) {
     songsBase = list || [];
     songsIsVideo = !!isVid;
+    songsPoster = !!poster;
+    songsScope = scope || (isVid ? 'flixs' : 'music');
     songsReturn = ret || 'jukebox';
     $('songs-title').textContent = title || 'All Songs';
     $('songs-search').value = q || '';
     $('songs-sort').value = 'new';
+    const lv = $('view-songs'); if (lv) lv.classList.toggle('poster-grid', songsPoster);
     showView('songs');
     refreshSongs();
   }
 
   function currentSongs() {
     let list = songsBase;
-    if (!songsIsVideo) list = list.filter(t => !RC().isVideo(t));   // belt-and-suspenders: keep videos out of music lists
+    if (songsScope === 'music')      list = list.filter(t => !RC().isVideo(t));   // keep videos out of music lists
+    else if (songsScope === 'flixs') list = list.filter(t =>  RC().isVideo(t));   // dedicated Flixs list stays music-free
+    // 'all' → no media filter (used by the global header search)
     const q = $('songs-search').value.trim().toLowerCase();
     if (q) list = list.filter(t => (t.title || '').toLowerCase().includes(q) || (t.artist_name || '').toLowerCase().includes(q) || (RC().cleanGenre(t.genre) || '').toLowerCase().includes(q));
     return RC().sortTracks(list, $('songs-sort').value);
@@ -480,6 +490,32 @@
     return card;
   }
 
+  // 16:9 cinematic poster card for AI Flixs (vs the music songCard row). Phase 5 discovery surface.
+  function videoCard(t) {
+    const card = document.createElement('button');
+    card.className = 'video-card';
+    const fr = document.createElement('span'); fr.className = 'vc-frame';
+    const src = RC().posterFor(t);
+    if (src) {
+      const img = document.createElement('img');
+      img.className = 'vc-poster'; img.loading = 'lazy'; img.src = src; img.alt = '';
+      img.onerror = () => { img.remove(); fr.classList.add('vc-noart'); };
+      fr.appendChild(img);
+    } else { fr.classList.add('vc-noart'); }
+    const grad = document.createElement('span'); grad.className = 'vc-grad'; fr.appendChild(grad);
+    if (t.duration_seconds) { const d = document.createElement('span'); d.className = 'vc-dur'; d.textContent = RC().fmtDur(t.duration_seconds); fr.appendChild(d); }
+    // discovery surface only — videos are NOT yet playable into the engine (Phase 6). Always "Soon".
+    const badge = document.createElement('span'); badge.className = 'vc-badge'; badge.textContent = 'Soon'; fr.appendChild(badge);
+    const play = document.createElement('span'); play.className = 'vc-play'; play.textContent = '▶'; fr.appendChild(play);
+    card.appendChild(fr);
+    const cap = document.createElement('span'); cap.className = 'vc-cap';
+    cap.innerHTML = '<span class="vc-title">' + RC().escapeHtml(t.title || '') + '</span>' +
+                    '<span class="vc-sub">' + RC().escapeHtml([t.artist_name, RC().cleanGenre(t.genre)].filter(Boolean).join(' · ')) + '</span>';
+    card.appendChild(cap);
+    card.addEventListener('click', () => RC().openSheet(t));   // sheet handles the Watch affordance (Item 6)
+    return card;
+  }
+
   function refreshSongs() {
     const host = $('song-list');
     host.innerHTML = '';
@@ -536,7 +572,7 @@
     const host = $('song-list');
     const end = Math.min(songsList.length, songsRendered + PAGE);
     const frag = document.createDocumentFragment();
-    for (let i = songsRendered; i < end; i++) frag.appendChild(songCard(songsList[i]));
+    for (let i = songsRendered; i < end; i++) frag.appendChild(songsPoster ? videoCard(songsList[i]) : songCard(songsList[i]));
     host.appendChild(frag);
     songsRendered = end;
   }
@@ -576,7 +612,7 @@
         const run = () => {
           const q = (lsi.value || '').trim();
           if (lsx) lsx.hidden = !q;
-          if (q) openSongs(RC().allTracks(), 'Search · “' + q + '”', 'jukebox', q);
+          if (q) openSongs(RC().allMedia(), 'Search · “' + q + '”', 'jukebox', q, null, false, 'all');   // search music + AI Flixs
           else showView('jukebox');
         };
         if (lsi) lsi.addEventListener('input', () => { clearTimeout(lsdt); lsdt = setTimeout(run, 140); });
