@@ -219,6 +219,7 @@
   let score = 0, combo = 0, maxCombo = 0;
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
+  let comboMidT = 0;      // 3B-i: seconds remaining on the MID-STREAK pulse (a smaller flash at combo%25===15, fills the 11-24 / post-milestone dead zone — cosmetic only)
   // ── COMBO TIER LADDER ───────────────────────────────────────────────────────
   // Named streak "modes" that escalate PAST the golden glow (the #1 ask). Purely
   // COSMETIC + feel — they recolor the combo readout, the board energy hue, and
@@ -2295,23 +2296,40 @@
   async function runCountdown() {
     const el = $('countdown');
     screens.countdown.classList.add('active');
-    // build83: a "GET READY" beat + a "GO!" punch bracket the 3·2·1 (single-player previously had only digits;
-    // MP already cued GET READY). Words render smaller than the big digits so they fit the slot.
-    el.textContent = 'GET READY';
-    el.style.fontSize = 'clamp(26px, 7vw, 64px)';
-    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-    await new Promise(r => setTimeout(r, 650));
-    el.style.fontSize = '';   // digits revert to the big CSS default size
-    for (let i = 3; i >= 1; i--) {
-      el.textContent = i;
+    // build84 (3B-ii): ONE-TIME tap-zone coachmark. On a touch device, the FIRST time a player ever
+    // reaches a 3·2·1, pulse the lane outlines + a "TAP THE LANES" caption so they learn where to
+    // press. localStorage-gated → shown exactly once, ever. layoutTapZones() has already pinned the
+    // buttons to the live lane x-positions, so the coach glow rides the real columns. The finally
+    // strips it so a superseded/aborted countdown can never leave the pulse stuck on.
+    const _tz = $('tap-zones');
+    try {
+      if (_tz && document.body.classList.contains('has-touch') && !localStorage.getItem('rr_tapcoach_seen')) {
+        layoutTapZones();                 // ensure outlines sit on the current lane geometry
+        _tz.classList.add('coach');
+        try { localStorage.setItem('rr_tapcoach_seen', '1'); } catch (e) {}
+      }
+    } catch (e) {}
+    try {
+      // build83: a "GET READY" beat + a "GO!" punch bracket the 3·2·1 (single-player previously had only digits;
+      // MP already cued GET READY). Words render smaller than the big digits so they fit the slot.
+      el.textContent = 'GET READY';
+      el.style.fontSize = 'clamp(26px, 7vw, 64px)';
       el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, 650));
+      el.style.fontSize = '';   // digits revert to the big CSS default size
+      for (let i = 3; i >= 1; i--) {
+        el.textContent = i;
+        el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+        await new Promise(r => setTimeout(r, 700));
+      }
+      el.textContent = 'GO!';
+      el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+      await new Promise(r => setTimeout(r, 320));
+      el.style.fontSize = '';
+      screens.countdown.classList.remove('active');
+    } finally {
+      if (_tz) _tz.classList.remove('coach');
     }
-    el.textContent = 'GO!';
-    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-    await new Promise(r => setTimeout(r, 320));
-    el.style.fontSize = '';
-    screens.countdown.classList.remove('active');
   }
 
   function stopGame() {
@@ -3077,6 +3095,16 @@
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
       // build8: level-fx combo milestone hook (Skully swaps to the intense backdrop). No-op when unset.
       try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, big); } catch (e) {}
+    }
+    // 3B-i: MID-STREAK PULSE — a smaller cue at the HALFWAY point of each 25-combo interval (15, 40, 65, …)
+    // so the 11-24 (and every post-milestone) dead zone feels alive between the full lightning payoffs.
+    // Cosmetic only — no score/mult change. A brief gold flash band + a single-lane string surge + light shake.
+    else if (combo >= 15 && combo % 25 === 15) {
+      comboMidT = 0.34;
+      comboGlow = Math.max(comboGlow, 0.55);
+      cameraShake = Math.max(cameraShake, 5);
+      bgPulse = Math.max(bgPulse, 0.5);
+      try { if (fx && !reduceMotion && !fxLite) { const g = fretGeom(); emitStringSurge(lane, 'lane-pulse', 0, (g.lw / 128) * FX_GLOBAL, g); } } catch (e) {}
     }
     // combo TIER cross-up (HOT→BLAZE→GOLDEN→INFERNO→ASCENDANT) — fires after the
     // milestone block so the named-mode flash headlines at 25/75/150/300/500.
@@ -4008,6 +4036,7 @@
     cameraShake = Math.max(0, cameraShake - dt * 30);
     scanT = Math.max(0, scanT - dt);
     lightningT = Math.max(0, lightningT - dt);
+    comboMidT = Math.max(0, comboMidT - dt);   // 3B-i: decay the mid-streak pulse
     // VISUAL-ONLY miss/fail FX decays
     missFlash = Math.max(0, missFlash - dt * 2.2);
     wipeoutT = Math.max(0, wipeoutT - dt * 1.6);
@@ -4547,6 +4576,20 @@
     // ambient dust drifting toward the player (depth + speed)
     // (ambient embers come from the background image now)
 
+    // 3B-i: MID-STREAK PULSE — a SMALLER cue than the milestone lightning (no bolts), keeping the 11-24
+    // (and every post-milestone) dead zone alive. A brief warm gold band rising off the catcher row + a
+    // light edge glow. Additive, capped, decays fast (~0.34s). Cosmetic only — never touches scoring.
+    if (comboMidT > 0 && state === 'playing') {
+      const ma = comboMidT / 0.34;            // 1 → 0
+      const cy = fretGeom().nearY;
+      const bg = ctx.createLinearGradient(0, cy + ch * 0.04, 0, cy - ch * 0.34);
+      bg.addColorStop(0, 'rgba(255,206,120,' + (0.20 * ma).toFixed(3) + ')');
+      bg.addColorStop(1, 'rgba(255,210,130,0)');
+      ctx.save(); ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
+      ctx.restore();
+    }
+
     // LIGHTNING STRIKE on a combo milestone — jagged bolts + a hot flash down the playfield
     if (lightningT > 0) {
       const la = lightningT / 0.3;
@@ -4629,6 +4672,40 @@
         ctx.beginPath(); ctx.arc(cw / 2, ch * 0.56, Math.max(1, rw), 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // 3B-i: OVERDRIVE READY — a stronger ON-HIGHWAY banner the moment the meter fills, so the player
+    // knows Space is armed without hunting the HUD chip. Brand gold/crimson, pulsing, sits just above the
+    // catcher row (over the playfield, not full-screen). Cosmetic gate only — Space already fires OD.
+    if (state === 'playing' && overdrive >= 1 && !odActive) {
+      const fgr = fretGeom();
+      const cx = fgr.gx + fgr.gw * 0.5;
+      const by = fgr.nearY - fgr.lw * 2.6;                       // ride above the catcher buttons
+      const pulse = reduceMotion ? 0.85 : (0.72 + 0.28 * Math.sin(performance.now() / 150));
+      const w = Math.min(cw * 0.82, fgr.gw * 1.04), h = Math.max(34, fgr.lw * 1.3);
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // pill backdrop (warm dark, gold-rimmed) so the text reads on any backdrop
+      const rr = h * 0.5, x0 = cx - w / 2, y0 = by - h / 2;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.moveTo(x0 + rr, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, rr);
+      ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, rr); ctx.arcTo(x0, y0 + h, x0, y0, rr);
+      ctx.arcTo(x0, y0, x0 + w, y0, rr); ctx.closePath();
+      ctx.fillStyle = 'rgba(26,10,6,' + (0.62 * pulse).toFixed(3) + ')'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,206,120,' + (0.55 + 0.4 * pulse).toFixed(3) + ')'; ctx.stroke();
+      // headline
+      const fs = Math.max(15, Math.round(h * 0.46));
+      ctx.font = '800 ' + fs + "px 'Oxanium', sans-serif";
+      ctx.shadowColor = 'rgba(255,180,80,0.9)'; ctx.shadowBlur = 16 * pulse;
+      ctx.fillStyle = 'rgba(255,224,150,' + (0.9 + 0.1 * pulse).toFixed(3) + ')';
+      ctx.fillText('▸ OVERDRIVE READY', cx, by - h * 0.06);
+      // key-cue sub-line (brand crimson)
+      ctx.shadowBlur = 0;
+      ctx.font = '700 ' + Math.max(10, Math.round(fs * 0.6)) + "px 'Chakra Petch', sans-serif";
+      ctx.fillStyle = 'rgba(255,80,70,' + (0.78 + 0.22 * pulse).toFixed(3) + ')';
+      ctx.fillText('PRESS  SPACE', cx, by + h * 0.34);
+      ctx.restore();
     }
 
     // MISS edge-vignette — a brief crimson frame pulse on a missed note / combo break (brand crimson).
@@ -5914,24 +5991,32 @@
   // ---------- How to Play (note-type legend) ----------
   { const ho = $('howto-open'), hs = $('howto-screen'), hc = $('howto-close');
     if (ho && hs) ho.addEventListener('click', () => hs.classList.add('active'));
-    const closeHowto = () => { if (hs) hs.classList.remove('active'); try { localStorage.setItem('rr_howto_seen', '1'); } catch (e) {} };
-    if (hc) hc.addEventListener('click', closeHowto);
-    { const hcal = $('howto-calibrate'); if (hcal) hcal.addEventListener('click', () => { closeHowto(); openCalib(); }); }
-    if (hs) hs.addEventListener('click', (e) => { if (e.target === hs) closeHowto(); });   // click backdrop to dismiss
+    // build84 (3B-ii): UNMISSABLE first run. closeHowto() now takes an `ack` flag — only an EXPLICIT
+    // acknowledgement (GOT IT, or CALIBRATE) marks rr_howto_seen. A backdrop click just hides the
+    // overlay this once; the first-run auto-pop returns on the next menu visit until the player
+    // actually taps a CTA, so session one can never silently swallow the tutorial on a stray tap.
     // first-time players get it once, automatically — but AFTER the title screen + RYO intro have
     // finished (it used to pop on a boot timer underneath them = broken first impression), and never
-    // over gameplay/loading if they raced straight into a song.
-    try {
-      if (hs && !localStorage.getItem('rr_howto_seen')) {
-        const tryShowHowto = () => {
-          try {
-            if (document.querySelector('#start.active, #ryo-intro.active, #menu-hub.active, #game.active, #loading.active, #countdown-screen.active, #multiplayer-screen.active, #results.active')) { setTimeout(tryShowHowto, 900); return; }   // never pop the first-run How-To over a live MP/tournament round, results, the guided hub, or a live 3·2·1 countdown (build72: + #menu-hub/#countdown-screen — howto z-260 was occluding the hub z-240)
-            hs.classList.add('active');
-          } catch (e) {}
-        };
-        setTimeout(tryShowHowto, 800);
-      }
-    } catch (e) {}
+    // over gameplay/loading if they raced straight into a song. Hoisted so a NON-acked backdrop
+    // dismissal can re-arm it: until rr_howto_seen is set it re-pops once the player settles on a
+    // safe (non-live) screen.
+    let _howtoSeen = false; try { _howtoSeen = !!localStorage.getItem('rr_howto_seen'); } catch (e) {}
+    const tryShowHowto = () => {
+      try {
+        if (_howtoSeen || !hs) return;
+        if (document.querySelector('#start.active, #ryo-intro.active, #menu-hub.active, #game.active, #loading.active, #countdown-screen.active, #multiplayer-screen.active, #results.active')) { setTimeout(tryShowHowto, 900); return; }   // never pop the first-run How-To over a live MP/tournament round, results, the guided hub, or a live 3·2·1 countdown (build72: + #menu-hub/#countdown-screen — howto z-260 was occluding the hub z-240)
+        hs.classList.add('active');
+      } catch (e) {}
+    };
+    const closeHowto = (ack) => {
+      if (hs) hs.classList.remove('active');
+      if (ack) { _howtoSeen = true; try { localStorage.setItem('rr_howto_seen', '1'); } catch (e) {} }
+      else if (!_howtoSeen) { setTimeout(tryShowHowto, 1200); }   // backdrop dismissal: NOT acknowledged → bring it back once they're back on the menu
+    };
+    if (hc) hc.addEventListener('click', () => closeHowto(true));
+    { const hcal = $('howto-calibrate'); if (hcal) hcal.addEventListener('click', () => { closeHowto(true); openCalib(); }); }
+    if (hs) hs.addEventListener('click', (e) => { if (e.target === hs) closeHowto(false); });   // backdrop = hide only, NOT acknowledged
+    try { if (!_howtoSeen) setTimeout(tryShowHowto, 800); } catch (e) {}
   }
   $('set-close').addEventListener('click', closeSettings);
   $('set-calibrate').addEventListener('click', () => { closeSettings(); openCalib(); });

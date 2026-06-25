@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=323" />
+<link rel="stylesheet" href="jukebox.css?v=324" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1867,6 +1867,46 @@
   }
   .tap-zone:first-child { border-left: none; }
   .tap-zone.lit { background: none; }
+  /* build84 (3B-ii): faint PERSISTENT lane outlines so a phone player can SEE where to press.
+     Touch devices only (body.has-touch) AND only while a song is live (#game.active) — never
+     clutters desktop / menus. The pseudo-element is a thin brand-crimson capsule centered in each
+     JS-positioned lane column; it rides the same x-positions as the (transparent) button.
+     ::after only — the button itself stays a clean hitbox. */
+  body.has-touch #game.active .tap-zone::after {
+    content: ""; position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+    width: min(54%, 30px); height: calc(100% - 28px); border-radius: 999px;
+    border: 1.5px solid rgba(255,42,48,0.30);
+    box-shadow: inset 0 0 9px rgba(255,42,48,0.10), 0 0 6px rgba(0,0,0,0.35);
+    pointer-events: none; opacity: 0.85; transition: opacity 90ms ease, border-color 90ms ease;
+  }
+  /* pressing a lane brightens its own outline (chrome flash on the warm crimson) */
+  body.has-touch #game.active .tap-zone.lit::after {
+    border-color: rgba(232,232,235,0.85);
+    box-shadow: inset 0 0 14px rgba(255,42,48,0.30), 0 0 12px rgba(255,42,48,0.45);
+    opacity: 1;
+  }
+  /* build84 (3B-ii): ONE-TIME first-run COACHMARK. While #tap-zones.coach is set (the very first
+     3·2·1 on a touch device, localStorage-gated), every lane outline pulses bright + a "TAP THE
+     LANES" caption rides above them. Removed the instant the countdown ends → never seen again. */
+  #tap-zones.coach .tap-zone::after {
+    border-color: rgba(255,42,48,0.9);
+    box-shadow: inset 0 0 16px rgba(255,42,48,0.45), 0 0 16px rgba(255,42,48,0.55);
+    opacity: 1; animation: rrTapCoach 0.95s ease-in-out infinite;
+  }
+  @keyframes rrTapCoach {
+    0%,100% { box-shadow: inset 0 0 10px rgba(255,42,48,0.30), 0 0 8px rgba(255,42,48,0.35); transform: translateX(-50%) scaleY(0.97); }
+    50%     { box-shadow: inset 0 0 20px rgba(255,42,48,0.55), 0 0 22px rgba(255,42,48,0.7); transform: translateX(-50%) scaleY(1.02); }
+  }
+  #tap-zones.coach::before {
+    content: "TAP THE LANES"; position: absolute; left: 0; right: 0; top: -34px; text-align: center;
+    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; letter-spacing: 0.18em;
+    color: var(--ink); text-shadow: 0 0 12px rgba(255,42,48,0.7); pointer-events: none;
+    animation: rrTapCoachLbl 0.95s ease-in-out infinite;
+  }
+  @keyframes rrTapCoachLbl { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    #tap-zones.coach .tap-zone::after, #tap-zones.coach::before { animation: none; }
+  }
 
   /* ============ HUD PANELS ============ */
   .hud-panel {
@@ -5444,7 +5484,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=323"></script>
+<script src="telemetry.js?v=324"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5582,14 +5622,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=323"></script>
-<script src="game.js?v=323"></script>
-<script src="procbg.js?v=323"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=323"></script>
-<script src="catalog.js?v=323"></script>
-<script src="multiplayer.js?v=323"></script>
-<script src="share.js?v=323"></script>
-<script src="couch.js?v=323"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
+<script src="assets/fx/fx-player.js?v=324"></script>
+<script src="game.js?v=324"></script>
+<script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=324"></script>
+<script src="catalog.js?v=324"></script>
+<script src="multiplayer.js?v=324"></script>
+<script src="share.js?v=324"></script>
+<script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8898,7 +8938,10 @@
   // build62: Settings + How-to-Play now dismiss on Escape AND backdrop-click, identical to the other four overlays
   // (they were the only two that silently ignored Esc — the global handler bails when any overlay is open, and these
   // two lacked the per-screen Esc the others have). Clicking the existing close button runs the normal close/save path.
-  [['settings-screen', 'set-close'], ['howto-screen', 'howto-close']].forEach(function (pair) {
+  // build84 (3B-ii): How-To's BACKDROP-click is intentionally NOT routed here — game.js owns it and a backdrop tap must
+  // NOT acknowledge the first-run tutorial (it only hides; an explicit GOT IT / CALIBRATE marks it seen). Settings has no
+  // such "ack" state, so its backdrop→set-close stays. Esc on How-To still routes to GOT IT below (a deliberate dismissal).
+  [['settings-screen', 'set-close']].forEach(function (pair) {
     var el = $(pair[0]); if (!el) return;
     el.addEventListener('click', function (ev) { if (ev.target === el) { var b = $(pair[1]); if (b) b.click(); } });   // backdrop
   });
