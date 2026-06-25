@@ -1563,9 +1563,24 @@
         if (n.chordLanes) n.chordLanes = n.chordLanes.map(mir);
       }
     }
+    // build75 NOTE FEEL — surface the music the charter ALREADY computes (strength / downbeat / on-grid) so songs
+    // LOOK distinct + on-beat. Purely cosmetic: per-note _emph (0..1 normalized onset strength) drives gem size +
+    // a downbeat rim at render; _sub = beat-subdivision class for future tinting. No timing / lane / scoring change.
+    (function () {
+      const real = notes.filter(n => n && (n.type === 'tap' || n.type === 'accent' || n.type === 'star' || n.type === 'hold') && !n._fill);
+      const ss = real.map(n => n.strength || 1).sort((a, b) => a - b);
+      const pick = (p) => ss.length ? ss[Math.min(ss.length - 1, Math.max(0, Math.round(p * (ss.length - 1))))] : 1;
+      const p5 = pick(0.05), p95 = pick(0.95), span = Math.max(0.001, p95 - p5);
+      const per = beats._period || 0, ph = beats._phase || 0, sub = per / 4;
+      for (const n of notes) {
+        n._emph = Math.max(0, Math.min(1, ((n.strength || 1) - p5) / span));
+        n._sub = (per > 0 && sub > 0) ? (function () { const m = ((Math.round((n.time - ph) / sub) % 4) + 4) % 4; return m === 0 ? 0 : m === 2 ? 1 : 2; })() : 0;
+      }
+    })();
     try {
       window.__rrChartStats = {
         notes: notes.length,
+        emphSpread: (function () { const e = notes.filter(n => typeof n._emph === 'number').map(n => n._emph); return e.length ? +(Math.max.apply(null, e) - Math.min.apply(null, e)).toFixed(3) : 0; })(),
         holds: notes.filter(n => n.type === 'hold').length,
         stars: notes.filter(n => n.type === 'star').length,
         chords: notes.filter(n => n.chord).length,
@@ -4781,10 +4796,21 @@
     // gem within S=base*~2.7 of padding/glow, so scale the whole canvas by (S/base) to land the gem at that size.
     let GEM_K = 1.55;
     if (note.type === 'accent') GEM_K *= 1.12;
+    const _emph = (typeof note._emph === 'number') ? note._emph : 0.5;   // build75: music-driven emphasis (0..1)
+    GEM_K *= (0.88 + 0.34 * _emph);   // strong onsets render BIGGER (~0.88x weak → ~1.22x strong) so the chart looks like the song
     if (gem && gfx.base) {
       const Sd = w * GEM_K * (gem.S / gfx.base);
       ctx.drawImage(gem.c, cx - Sd / 2, y - Sd / 2, Sd, Sd);
     } else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
+    // build75: DOWNBEAT emphasis ring — a thin lane-colored additive halo on the strong on-beat notes so the song's
+    // PULSE reads in the falling notes (louder half only; skipped under reduce-motion + once judged).
+    if ((note._downbeat || note._onGrid) && !note.judged && !reduceMotion && _emph > 0.45) {
+      const _rc = (LANE_COLORS[note.lane] && LANE_COLORS[note.lane].rgb) || '255,90,60';
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(' + _rc + ',' + (0.32 + 0.4 * _emph) + ')'; ctx.lineWidth = Math.max(1, w * 0.10);
+      ctx.beginPath(); ctx.arc(cx, y, w * (0.66 + 0.12 * _emph), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
     // HOPO "flow" cue — a thin ember ring (openNotes flag only; .hopo is never set unless the flag built it).
     if (note.hopo && !note.judged) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';

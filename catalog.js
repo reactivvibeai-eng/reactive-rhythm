@@ -161,6 +161,23 @@
     saveBonusSparks(bal);
     return bal;
   }
+  // ── Bonus Sparks WEEKLY EARN CAP (build73 — owner economy rebalance) ─────────────────────────────
+  // Bonus Sparks are spendable on the WEBSITE (song skips / boosts — the real revenue), so gameplay must NOT
+  // flood them. The faucet is now tiny (a small per-run grade reward) AND hard-capped per ISO week, so even the
+  // best grinder tops out near BONUS_WEEKLY_CAP/week. Client-side for the beta (same trust model as the rest of
+  // Bonus — a modded client can still mint); move this server-side with the balance via the swap-seam before
+  // Bonus has real economic weight. Tune the ceiling here.
+  var BONUS_WEEKLY_CAP = 50;
+  function _isoWeekKey() {
+    var d = new Date(); var day = (d.getUTCDay() + 6) % 7;
+    var t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day + 3));
+    var w1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    var wk = 1 + Math.round(((t - w1) / 86400000 - 3 + ((w1.getUTCDay() + 6) % 7)) / 7);
+    return t.getUTCFullYear() + '-W' + wk;
+  }
+  function _bonusWeek() { try { var o = JSON.parse(localStorage.getItem('rr_bonus_week') || '{}'); if (o.wk !== _isoWeekKey()) o = { wk: _isoWeekKey(), earned: 0 }; return o; } catch (e) { return { wk: _isoWeekKey(), earned: 0 }; } }
+  function bonusWeekRemaining() { return Math.max(0, BONUS_WEEKLY_CAP - (_bonusWeek().earned || 0)); }
+  function _bonusWeekAdd(n) { try { var o = _bonusWeek(); o.earned = (o.earned || 0) + Math.max(0, Math.floor(n)); localStorage.setItem('rr_bonus_week', JSON.stringify(o)); } catch (e) {} }
   // cosmetic spend. Deducts only if affordable.
   function spendBonusSparks(n) {
     const cost = Math.max(0, Math.floor(Number(n) || 0));
@@ -1170,10 +1187,15 @@
     // (a failed run earns nothing). NEVER touches the cashable Sparks balance. The amount is
     // stashed on results._bonusAwarded so the results screen can show "+N BONUS SPARKS".
     if (!failed) {
-      const gradeBonus = { S: 50, A: 30, B: 20, C: 10 }[grade] || 0;
-      // base on final score + a grade kicker; clamp keeps a freak score from ballooning the grant.
-      const earned = Math.min(2000, Math.round((results.score || 0) / 2000) + gradeBonus);
+      // build73 ECONOMY REBALANCE (owner): Bonus Sparks spend on the WEBSITE (skips/boosts — the real revenue),
+      // so the gameplay faucet is now TINY + weekly-capped. Dropped the runaway score/2000 term entirely; a run
+      // earns a small grade reward (+full-combo kicker), and the ISO-week cap (BONUS_WEEKLY_CAP=50) means even
+      // the best grinder tops out near ~50/week — while the per-run "+N BONUS SPARKS" still gives the dopamine hit.
+      const base = ({ S: 6, A: 4, B: 2, C: 1, D: 1 })[grade] || 1;
+      const want = base + (results.full_combo ? 2 : 0);     // 1–8 per run (S + full combo = 8)
+      const earned = Math.min(want, bonusWeekRemaining());  // hard weekly ceiling
       if (earned > 0) {
+        _bonusWeekAdd(earned);
         const newBal = awardBonusSparks(earned, 'run_complete');
         results._bonusAwarded = earned;
         results._bonusBalance = newBal;

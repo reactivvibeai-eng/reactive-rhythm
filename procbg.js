@@ -229,17 +229,31 @@
     ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
   }
 
-  // ───────────────────────── EMBER (Ember Drift) — a dense, busy particle STORM: populates EVERYWHERE, bursts on the beat, grows + morphs color + falls ──
-  function _newEmber(w, h, burst) {
-    var e = { x: w * (0.5 + (Math.random() - 0.5) * (0.5 + bassN * 0.5)), y: h * (0.86 + Math.random() * 0.12), vx: 0, vy: 0, spd: Math.random(),   // build67: spawn LOW + toward center = the base of a FIRE (an updraft column, narrow at dead-center)
-      life: 0, maxlife: 0.8 + Math.random() * 2.4, z: Math.pow(Math.random(), 1.4),
-      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 2.6, hue: Math.random() * 28,
-      kind: (Math.random() < 0.58 ? 0 : Math.random() < 0.78 ? 1 : 2), vb: 0 };   // 0 ember streak · 1 petal · 2 spark
-    e.vb = e.kind === 1 ? (0.5 + Math.random() * 0.6) : e.kind === 0 ? -(0.55 + Math.random() * 0.6) : (Math.random() - 0.5) * 0.5;   // petals FALL, embers rise, sparks drift
-    if (burst) {   // a beat ERUPTION — a fast UPWARD fountain from the floor, short-lived + bright
-      var ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.4, s = (2.2 + beatPunch * 7) * _dpr;
-      e.x = burst.x; e.y = burst.y; e.vx = Math.cos(ang) * s; e.vy = Math.sin(ang) * s; e.vb = (Math.random() - 0.5) * 0.4;
-      e.z = 0.55 + Math.random() * 0.45; e.maxlife = 0.5 + Math.random() * 0.9; e.kind = Math.random() < 0.7 ? 2 : 0;
+  // ───────────────────────── EMBER (Ember Drift) — REBUILT build74 (owner direction) ─────────────────
+  //  A warm fire/smoke field that FILLS the whole frame (no lit-center "box"): rising embers + sparks + soft
+  //  SMOKE puffs, BEAT-driven eruptions + smoke poofs, a MISS scatters + darkens the field, COMBO brightens +
+  //  adds a dreamy bloom-BLUR (GPU css filter), and a periodic FILTER MODE cycles the whole look (palette + tone)
+  //  through the song. Pure-black base, full-bleed, edge-to-edge warm ground-glow. Stays warm (crimson→amber→gold).
+  var EMBER_MODES = [
+    { pal:{ base:0,  span:46 }, sat:1.00, con:1.00, bri:1.00, smoke:0.16, spark:0.22 },  // 0 Ember — crimson→amber
+    { pal:{ base:22, span:30 }, sat:1.20, con:1.00, bri:1.07, smoke:0.10, spark:0.34 },  // 1 Gold Rush — amber→gold, sparkly
+    { pal:{ base:0,  span:18 }, sat:0.92, con:1.16, bri:0.92, smoke:0.34, spark:0.10 },  // 2 Smolder — deep crimson, smoky
+    { pal:{ base:6,  span:52 }, sat:1.30, con:1.06, bri:1.12, smoke:0.10, spark:0.40 }   // 3 Inferno — hot, dense sparks
+  ];
+  function _newEmber(w, h, burst, mix) {
+    mix = mix || EMBER_MODES[0];
+    var r = Math.random(), kind = r < mix.smoke ? 2 : r < (mix.smoke + mix.spark) ? 1 : 0;   // 2 smoke · 1 spark · 0 ember
+    var e = { x: Math.random() * w, y: h * (0.70 + Math.random() * 0.34),   // FULL-WIDTH spawn (kills the central-column box), low-ish
+      vx: (Math.random() - 0.5) * 30, vy: 0, life: 0, maxlife: 1, z: Math.pow(Math.random(), 1.3),
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 1.6, kind: kind, sz0: 2, sway: 8 + Math.random() * 22 };
+    if (kind === 2) { e.maxlife = 1.8 + Math.random() * 2.6; e.sz0 = 30 + Math.random() * 52; e.vy = -(34 + Math.random() * 56); e.z = 0.25 + Math.random() * 0.5; }   // SMOKE — big, soft, slow
+    else if (kind === 1) { e.maxlife = 0.5 + Math.random() * 1.0; e.sz0 = 1.0 + Math.random() * 1.8; e.vy = -(260 + Math.random() * 380); }   // SPARK — fast hot dot
+    else { e.maxlife = 1.1 + Math.random() * 2.2; e.sz0 = 1.6 + Math.random() * 3.0; e.vy = -(120 + Math.random() * 210); }   // EMBER — glowing rising mote
+    if (burst) {   // beat eruption / explosion — fast upward + outward, short, bright
+      e.x = burst.x + (Math.random() - 0.5) * w * 0.12; e.y = burst.y;
+      var ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.7, s = (160 + beatPunch * 520);
+      e.vx = Math.cos(ang) * s; e.vy = Math.sin(ang) * s; e.z = 0.5 + Math.random() * 0.5;
+      e.maxlife = kind === 2 ? (0.9 + Math.random() * 1.1) : (0.4 + Math.random() * 0.8);
     }
     return e;
   }
@@ -252,69 +266,83 @@
     c.fillStyle = g; c.fillRect(0, 0, 64, 64);
     _state.spr = s; return s;
   }
+  // a soft, wide, warm-grey SMOKE puff sprite — fills the black negative space so the field reads full (no "box")
+  function _smokeSprite() {
+    if (_state.smk) return _state.smk;
+    var s = document.createElement('canvas'); s.width = s.height = 96;
+    var c = s.getContext('2d'), g = c.createRadialGradient(48, 48, 0, 48, 48, 48);
+    g.addColorStop(0, 'rgba(150,96,60,0.5)'); g.addColorStop(0.45, 'rgba(96,52,34,0.22)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 96, 96); _state.smk = s; return s;
+  }
   function drawEmber(dt, st) {
-    var w = _w, h = _h, lite = _lite();
+    var w = _w, h = _h, lite = _lite(), reduce = _reduce();
+    // ── FILTER-MODE cycle — the whole LOOK (palette + css tone + particle mix) rotates through the song ──
+    if (_state.fmode == null) { _state.fmode = 0; _state.fmix = { sat: 1, con: 1, bri: 1, base: 0, span: 46, smoke: 0.16, spark: 0.22 }; _state.fcd = 16; _state.missT = 0; _state.prevCombo = st.combo || 0; }
+    _state.fcd -= dt;
+    if ((((_secPulse > 0.6) && _state.fcd <= 0) || _state.fcd <= -20) && !reduce) { _state.fmode = (_state.fmode + 1) % EMBER_MODES.length; _state.fcd = 16; }   // advance on a section change (with a floor cooldown) or after ~16-36s
+    var Mo = EMBER_MODES[_state.fmode], fx = _state.fmix, kf = Math.min(1, dt * 0.9);   // EASE the mode change — never a hard jump
+    fx.sat = lerp(fx.sat, Mo.sat, kf); fx.con = lerp(fx.con, Mo.con, kf); fx.bri = lerp(fx.bri, Mo.bri, kf);
+    fx.base = lerp(fx.base, Mo.pal.base, kf); fx.span = lerp(fx.span, Mo.pal.span, kf);
+    fx.smoke = lerp(fx.smoke, Mo.smoke, kf); fx.spark = lerp(fx.spark, Mo.spark, kf);
+    var pal = { base: fx.base, span: fx.span };
+    // ── MISS → dissipate: a broken combo scatters + darkens the field ──
+    var combo = st.combo || 0;
+    if (combo < _state.prevCombo - 2) _state.missT = 1;
+    _state.prevCombo = combo; _state.missT = Math.max(0, _state.missT - dt * 0.9);
+    var missK = _state.missT, calm = 1 - missK * 0.7;
+    // ── COMBO → brightness + dreamy BLUR (GPU css filter) + the eased filter-mode tone. Cleared in set() on level switch ──
+    try { if (cv) cv.style.filter = lite ? '' : ('blur(' + (reduce ? 0 : (comboGlow * 2.4 + missK * 1.4)).toFixed(2) + 'px) saturate(' + (fx.sat * (1 - missK * 0.35)).toFixed(2) + ') contrast(' + fx.con.toFixed(2) + ') brightness(' + (fx.bri * calm).toFixed(2) + ')'); } catch (e) {}
     var P = _state.p;
-    if (!P || _state.dirty) { var N = lite ? 260 : 440; P = _state.p = []; for (var i = 0; i < N; i++) { var e0 = _newEmber(w, h); e0.y = Math.random() * h; P.push(e0); } if (!lite) P.sort(function (a, b) { return a.z - b.z; }); _state.dirty = false; _state.bcd = 0; _state.erupted = 0; }   // initial fill spread vertically; respawns rise from the floor
+    if (!P || _state.dirty) { var N = lite ? 240 : 440; P = _state.p = []; for (var i = 0; i < N; i++) { var e0 = _newEmber(w, h, null, fx); e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; P.push(e0); } if (!lite) P.sort(function (a, b) { return a.z - b.z; }); _state.dirty = false; _state.bcd = 0; _state.erupted = 0; }
+    // pure-black trail — empties decay to TRUE black (no warm rectangle vs the black gutters)
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(0,0,0,' + (0.17 + 0.08 * beat) + ')'; ctx.fillRect(0, 0, w, h);   // PURE-BLACK trail — empties decay to TRUE black (rgba(6,5,4) left a faint warm rectangle vs the black gutters = the "box" the owner saw ONLY on ember)
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.26 + 0.10 * beat) + ')'; ctx.fillRect(0, 0, w, h);   // stronger clear → DARK baseline so embers POP + the dark↔bright reactivity reads (was a too-uniform warm wash)
     ctx.globalCompositeOperation = 'lighter';
-    // ambient bass BLOOM — the whole frame breathes on the low end so it's never "blank" between beats
+    // EDGE-TO-EDGE warm ground glow — fills the lower frame FULL WIDTH (no lit-box vs black-edge contrast = the owner's "box"); kept SUBTLE so it's atmosphere, not a wash
     if (!lite) {
-      var amb = 0.12 + bass * 0.55 + comboGlow * 0.3, ar = _hslToRgb(comboHue, 80, 42);
-      var ag = ctx.createRadialGradient(w * 0.5, h * 0.6, 0, w * 0.5, h * 0.6, Math.max(w, h) * 0.72);
-      ag.addColorStop(0, 'rgba(' + ar[0] + ',' + ar[1] + ',' + ar[2] + ',' + (0.06 * amb) + ')'); ag.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = ag; ctx.fillRect(0, 0, w, h);
+      var gr0 = _hslToRgb(_warmHue(0.3, pal, 0), 82, 40);
+      var gG = ctx.createLinearGradient(0, h, 0, h * 0.28);
+      gG.addColorStop(0, 'rgba(' + gr0[0] + ',' + gr0[1] + ',' + gr0[2] + ',' + ((0.05 + bass * 0.16 + comboGlow * 0.12) * calm) + ')');
+      gG.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gG; ctx.fillRect(0, 0, w, h);
     }
-    // ember BED — one stretched glow sprite along the floor = the glowing base of the fire
-    if (!lite) { var bedH = h * 0.14 * (0.7 + bass * 0.6 + comboGlow * 0.5); ctx.globalAlpha = clamp(0.12 + bass * 0.4, 0, 0.6); ctx.drawImage(_emberGlow(), 0, h * 0.93 - bedH * 0.5, w, bedH); ctx.globalAlpha = 1; }
-    // beat ERUPTION — a fountain bursts UP from the floor near center (not a random interior pop)
+    // BEAT eruption — embers + a smoke poof burst up at a random spot across the floor (a visible "explosion to the beat")
     _state.bcd -= dt;
-    if (beatPunch > 0.30 && _state.bcd <= 0) {
-      _state.bcd = 0.11;
-      var bx = w * (0.5 + (Math.random() - 0.5) * 0.4), by = h * 0.90, bn = lite ? 14 : 32, s0 = (Math.random() * P.length) | 0;
-      for (var q = 0; q < bn; q++) { var qi = (s0 + q) % P.length; P[qi] = _newEmber(w, h, { x: bx, y: by }); }
+    if (beatPunch > 0.28 && missK < 0.5 && _state.bcd <= 0) {
+      _state.bcd = 0.10;
+      var bx = w * (0.10 + Math.random() * 0.80), by = h * (0.80 + Math.random() * 0.12), bn = lite ? 14 : 30, s0 = (Math.random() * P.length) | 0;
+      for (var q = 0; q < bn; q++) { var qi = (s0 + q) % P.length; P[qi] = _newEmber(w, h, { x: bx, y: by }, fx); }
     }
-    // SECTION eruption — a one-shot floor blast on a section change (shares the spin-reverse vocabulary via _spinDir below)
-    if (_secPulse > 0.9 && !_state.erupted) { _state.erupted = 1; var bn2 = lite ? 30 : 60; for (var z = 0; z < bn2; z++) { var zi = (z * 7) % P.length; P[zi] = _newEmber(w, h, { x: w * 0.5, y: h * 0.92 }); } }
+    if (_secPulse > 0.9 && !_state.erupted) { _state.erupted = 1; var bn2 = lite ? 26 : 54; for (var z = 0; z < bn2; z++) { var zi = (z * 7) % P.length; P[zi] = _newEmber(w, h, { x: w * (0.2 + Math.random() * 0.6), y: h * 0.9 }, fx); } }
     if (_secPulse < 0.3) _state.erupted = 0;
-    var sp = _t * 0.5 * _spinDir, turb = 0.55 + bassN * 2.2 + beat * 1.4 + (st.od || 0) * 1.6, rise = (18 + bass * 95 + _energy * 42) * _dpr, spr = _emberGlow(), EMBER_PAL = { base: 0, span: 50 };   // sp*_spinDir = the curl flow REVERSES on a section change; od → white-hot crescendo
-    function Pot(px, py) { return Math.sin(px * 0.004 + sp) * Math.cos(py * 0.004 - sp * 0.8) + (lite ? 0 : 0.5 * Math.sin(px * 0.0012 - sp * 0.5) * Math.cos(py * 0.0012 + sp * 0.4)); }
+    var spr = _emberGlow(), smk = lite ? null : _smokeSprite(), riseE = (0.6 + bass * 0.9 + _energy * 0.4), swayK = 0.4 + bassN * 1.1 + beat * 0.7;
     for (var k = 0; k < P.length; k++) {
-      var e = P[k];
-      var tvx = (Pot(e.x, e.y + 1) - Pot(e.x, e.y - 1)) * turb * 52 * _dpr, tvy = -(Pot(e.x + 1, e.y) - Pot(e.x - 1, e.y)) * turb * 52 * _dpr;
-      e.vx = lerp(e.vx, tvx, 0.06); e.vy = lerp(e.vy, tvy, 0.06);   // burst velocity decays INTO the curl flow over ~0.7s
-      var driftZ = rise * (0.4 + e.z * 1.1);   // near particles move faster + bigger = depth/vertigo
-      var cxn = e.x / w - 0.5;   // BUOYANCY — net updraft, strongest in the central column (narrow at center) = a real fire, not omnidirectional haze
-      e.vy -= (0.6 + bass * 1.2) * driftZ * dt * clamp(1 - Math.abs(cxn) * 1.3, 0, 1); e.vx -= cxn * 0.4 * driftZ * dt;
-      e.x += e.vx; e.y += e.vy + e.vb * driftZ * dt; e.rot += e.vr * dt * (0.4 + e.z);
-      e.life += dt;
-      if (e.life >= e.maxlife || e.y < -24 || e.y > h + 24) { P[k] = _newEmber(w, h); continue; }
-      if (e.x < -20) e.x = w + 16; else if (e.x > w + 20) e.x = -16;
-      var lt = e.life / e.maxlife, envb = Math.sin(lt * 3.14159);   // grow → peak → dim over the particle's life
-      var bright = envb * (0.42 + level * 0.7 + beatPunch * 0.6) * (0.6 + comboGlow * 0.7);
-      var flameY = clamp(e.y / h * 1.5 - 0.1, 0, 1), flameX = clamp(1.5 - Math.abs(e.x / w - 0.5) * 2.4, 0, 1);   // FLAME envelope — dark at the TOP + a central column, bright at the floor → reads as FIRE, not a uniform lit "box" (the owner's ember-box)
-      bright *= flameY * (0.4 + 0.6 * flameX);
-      if (bright < 0.012) continue;
-      var grow = 0.7 + lt * 0.9, sz = (1.0 + e.z * 4.8) * _dpr * grow * (1 + beatPunch * 0.5 * e.z);
-      var yn = clamp(1 - e.y / h, 0, 1), heat = clamp((1 - yn) * 0.5 + bassN * 0.4 + beatPunch * 0.5 + comboGlow * 0.3 + 0.15, 0, 1);   // THERMAL — hottest (white) at the floor → crimson at the rising tips
-      var hue = _warmHue(heat, EMBER_PAL, 0), sat = _heatS(heat), lcol = clamp(_heatL(heat, 42) + envb * 8, 38, 99);
-      var a = clamp(bright * (0.4 + e.z * 0.7), 0, 1), col = _hsl(hue, sat, lcol, a);
-      if (spr) {   // soft volumetric glow halo (cached sprite) — turns a sparse field into a BUSY, full storm; cheap (one drawImage)
-        var gd = sz * (4.0 + e.z * 2.0); ctx.globalAlpha = clamp(a * 0.72, 0, 1);
-        ctx.drawImage(spr, e.x - gd * 0.5, e.y - gd * 0.5, gd, gd); ctx.globalAlpha = 1;
+      var e = P[k], depth = 0.55 + e.z * 1.0;
+      e.x += (e.vx + Math.sin(e.y * 0.012 + _t * 0.9 + e.rot) * e.sway * swayK) * dt * depth;   // gentle sinuous rise (NOT a chaotic curl field → no "random lines")
+      e.y += e.vy * dt * riseE * depth * (missK > 0 ? 1 + missK * 0.6 : 1);                      // a miss makes them scatter up faster
+      e.vx += (Math.random() - 0.5) * 6 * (e.kind === 1 ? 2 : 1);
+      e.rot += e.vr * dt; e.life += dt;
+      if (e.life >= e.maxlife || e.y < -40) { P[k] = _newEmber(w, h, null, fx); continue; }
+      if (e.x < -30) e.x = w + 24; else if (e.x > w + 30) e.x = -24;
+      var lt = e.life / e.maxlife, envb = Math.sin(lt * 3.14159);   // grow → peak → dim
+      if (e.kind === 2) {   // SMOKE — big soft warm puff, expands + rises, fills the black space
+        var ssz = e.sz0 * (0.6 + lt * 1.8) * _dpr, sa = envb * (0.05 + bass * 0.06 + comboGlow * 0.05) * calm;
+        if (smk && sa > 0.005) { ctx.globalAlpha = clamp(sa, 0, 0.4); ctx.drawImage(smk, e.x - ssz, e.y - ssz, ssz * 2, ssz * 2); ctx.globalAlpha = 1; }
+        continue;
       }
-      if (e.z < 0.34 && bright < 0.5) continue;   // PERF: far/dim particles are glow-only — skip the crisp core draw (near-invisible saving, ~40% fewer stroke/arc ops)
-      if (e.kind === 1 && !lite) {   // petal — a small rotated teardrop that tumbles
-        ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.rot); ctx.fillStyle = col;
-        ctx.beginPath(); ctx.ellipse(0, 0, sz * 0.7, sz * 1.8, 0, 0, 6.2832); ctx.fill(); ctx.restore();
-      } else if (e.kind === 2) {   // spark — a hot dot with a cross glint at peak
-        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(e.x, e.y, sz * 0.5, 0, 6.2832); ctx.fill();
-        if (!lite && bright > 0.5) { ctx.strokeStyle = _hsl(hue, 70, 93, a * 0.7); ctx.lineWidth = _dpr; var gl2 = sz * 1.7; ctx.beginPath(); ctx.moveTo(e.x - gl2, e.y); ctx.lineTo(e.x + gl2, e.y); ctx.moveTo(e.x, e.y - gl2); ctx.lineTo(e.x, e.y + gl2); ctx.stroke(); }
-      } else {   // ember — an elongated streak along velocity + a hot head
-        var vlen = Math.min(1, Math.hypot(e.vx, e.vy) / 7);
-        ctx.strokeStyle = col; ctx.lineWidth = sz * 0.9; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - e.vx * (1.5 + vlen * 3), e.y - e.vy * (1.5 + vlen * 3)); ctx.stroke();
+      var bright = envb * (0.45 + level * 0.65 + beatPunch * 0.6) * (0.6 + comboGlow * 0.7) * calm;
+      if (bright < 0.015) continue;
+      var grow = 0.7 + lt * 0.7, sz = e.sz0 * _dpr * grow * (1 + beatPunch * 0.4 * e.z);
+      var yn = clamp(1 - e.y / h, 0, 1), heat = clamp((1 - yn) * 0.5 + bassN * 0.4 + beatPunch * 0.5 + comboGlow * 0.3 + 0.15, 0, 1);   // THERMAL — hot near the floor → crimson at the rising tips
+      var hue = _warmHue(heat, pal, 0), sat = _heatS(heat), lcol = clamp(_heatL(heat, 42) + envb * 8, 38, 99);
+      var a = clamp(bright * (0.4 + e.z * 0.7), 0, 1), col = _hsl(hue, sat, lcol, a);
+      if (spr) { var gd = sz * (4.0 + e.z * 2.0); ctx.globalAlpha = clamp(a * 0.55, 0, 1); ctx.drawImage(spr, e.x - gd * 0.5, e.y - gd * 0.5, gd, gd); ctx.globalAlpha = 1; }   // cheap volumetric glow halo (dialed back so embers read as POINTS of fire, not a wash)
+      if (e.z < 0.32 && bright < 0.5) continue;   // PERF: far/dim particles are glow-only
+      if (e.kind === 1) {   // spark — hot dot + a cross glint at peak
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(e.x, e.y, sz * 0.55, 0, 6.2832); ctx.fill();
+        if (!lite && bright > 0.5) { ctx.strokeStyle = _hsl(hue, 70, 93, a * 0.7); ctx.lineWidth = _dpr; var gl2 = sz * 2.0; ctx.beginPath(); ctx.moveTo(e.x - gl2, e.y); ctx.lineTo(e.x + gl2, e.y); ctx.moveTo(e.x, e.y - gl2); ctx.lineTo(e.x, e.y + gl2); ctx.stroke(); }
+      } else {   // ember — a SHORT rising streak (a few px tail, not a long "line") + a hot head
+        ctx.strokeStyle = col; ctx.lineWidth = sz * 0.85; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - e.vx * dt * 2.4, e.y - e.vy * dt * 2.4); ctx.stroke();
         ctx.fillStyle = _hsl(hue, sat, Math.min(98, lcol + 16), a); ctx.beginPath(); ctx.arc(e.x, e.y, sz * 0.5, 0, 6.2832); ctx.fill();
       }
     }
@@ -456,7 +484,7 @@
       // activates a reactive backdrop gets it (kills the warm-gradient + scrim "lines and blocks" the owner can't stand).
       try { document.documentElement.classList[type ? 'add' : 'remove']('rr-procbg-on'); } catch (e) {}
       if (!_ensureCanvas()) return;
-      if (type) { cv.style.display = 'block'; cv.style.width = ''; cv.style.height = ''; _resize(); _hidden = 0; _start(); }
+      if (type) { cv.style.display = 'block'; cv.style.width = ''; cv.style.height = ''; cv.style.filter = ''; _resize(); _hidden = 0; _start(); }   // clear any ember combo-blur/filter so it can't leak onto the next level
       else { _stopRaf(); cv.style.display = 'none'; try { if (ctx) ctx.clearRect(0, 0, _w, _h); } catch (e) {} }
     },
     play: function () { _playing = true; _hidden = 0; _start(); },
