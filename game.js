@@ -124,7 +124,7 @@
   let bgPulse = 0;
   // ---- JUICE: FX intensities. The user-facing "FX Intensity" setting picks a preset; "balanced" = the defaults
   // below. The `window.__rrJuice` dev hook (strip at content-freeze) fine-tunes individual values live. ----
-  const JUICE = { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 };
+  const JUICE = { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62, odWarnAt: 1.6 };   // build92: odWarnAt = seconds-left at which the OD burn-down cue begins (base-only key, survives preset swaps)
   const FX_PRESETS = {
     subtle:   { bloom: 0.05,  bloomR: 0.90, odVig: 0.12, odVigPulse: 0.10, odFlash: 0.22, odRing: 0.50 },
     balanced: { bloom: 0.085, bloomR: 0.95, odVig: 0.16, odVigPulse: 0.14, odFlash: 0.34, odRing: 0.62 },
@@ -4658,12 +4658,20 @@
 
     // OVERDRIVE window: warm gold edge-glow framing the whole screen (on-brand, warm,
     // additive so it never reads purple). Pulses unless reduce-motion is on.
+    // build92: FINAL-SECONDS BURN-DOWN — in the last odWarnAt seconds the pulse quickens and the
+    // edge lerps gold→crimson (#ff1f2e, pure-red hue ~356°, never purple) as the meter empties — a
+    // wordless OD countdown. Cosmetic only: odTimer is READ here, never written; scoring/activation untouched.
     if (odActive) {
-      const pulse = reduceMotion ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() / 140));
+      const warn = JUICE.odWarnAt > 0 ? Math.max(0, Math.min(1, 1 - (odTimer / JUICE.odWarnAt))) : 0;   // 0 until <odWarnAt left, →1 as it empties
+      const period = reduceMotion ? 1 : 140 / (1 + warn);   // faster pulse as it burns down; motion floored under reduce-motion
+      const pulse = reduceMotion ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() / period));
       const a = JUICE.odVig + JUICE.odVigPulse * pulse;
+      // color burn gold(255,180,90)→crimson(255,31,46). A static color shift (not motion) → applies under reduce-motion too.
+      const eg = Math.round(180 + (31 - 180) * warn), eb = Math.round(90 + (46 - 90) * warn);    // edge stop
+      const ig = Math.round(200 + (31 - 200) * warn), ib = Math.round(120 + (46 - 120) * warn);  // inner stop (alpha 0)
       const og = ctx.createRadialGradient(cw / 2, ch * 0.5, ch * 0.34, cw / 2, ch * 0.5, ch * 0.8);
-      og.addColorStop(0, 'rgba(255,200,120,0)');
-      og.addColorStop(1, 'rgba(255,180,90,' + a.toFixed(3) + ')');
+      og.addColorStop(0, 'rgba(255,' + ig + ',' + ib + ',0)');
+      og.addColorStop(1, 'rgba(255,' + eg + ',' + eb + ',' + a.toFixed(3) + ')');
       ctx.save(); ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = og; ctx.fillRect(0, 0, cw, ch);
       ctx.restore();
