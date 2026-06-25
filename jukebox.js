@@ -466,6 +466,18 @@
       text.appendChild(gt);
     }
     card.appendChild(text);
+    // build95 (playtest): AI Flixs film cue — a video found via global 'all'-scope search renders here as a plain
+    // music ROW with no film indicator. Show a "FILM · SOON" pill + suppress the music status/grade/chevron so a
+    // film reads distinct from a song. Tap still opens the sheet (which owns the Watch/Soon affordance). Render-only.
+    if (RC() && typeof RC().isVideo === 'function' && RC().isVideo(t)) {
+      card.classList.add('is-video');
+      const vright = document.createElement('span'); vright.className = 'sc-right';
+      const fp = document.createElement('span'); fp.className = 'sc-film'; fp.textContent = 'FILM · SOON';   // warm-chrome pill, NOT gold (not a playable cue)
+      vright.appendChild(fp);
+      card.appendChild(vright);
+      card.addEventListener('click', () => RC().openSheet(t));
+      return card;
+    }
     // right — status pill (not ready) · grade badge · or chevron
     const right = document.createElement('span'); right.className = 'sc-right';
     const ready = RC().trackReady(t);

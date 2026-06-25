@@ -590,6 +590,15 @@ html.rr-reduce-motion .video-card:hover .vc-frame { transform: none; }
 .sc-status.s-pending { color: #a8a29c; }
 .sc-status.s-needs_audio { color: #a8a29c; }
 .sc-status.s-failed { color: #ff6b78; }
+/* build95 (playtest): AI Flixs film cue pill on a video row in mixed 'all'-scope search — warm chrome, NOT gold (not a playable cue) */
+.sc-film {
+  padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--chrome, #dad7d2);
+  background: rgba(10,7,5,0.55);
+  border: 1px solid rgba(218,215,210,0.3);
+}
 
 /* song sheet: play button locked when not ready */
 .play-btn.not-ready {
