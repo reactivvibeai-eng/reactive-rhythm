@@ -1217,7 +1217,8 @@
         const _ex = document.getElementById('results-chase'); if (_ex) _ex.remove();
         if (!isNewBest && prevReal && prevReal.score > 0 && _blurb) {
           const _by = (prevReal.score - results.score);
-          _blurb.insertAdjacentHTML('afterend',
+          const _anchor = document.getElementById('results-timing') || _blurb;   // build86 (QA B85-2): land the chase BELOW the timing histogram, not between blurb+timing
+          _anchor.insertAdjacentHTML('afterend',
             '<div id="results-chase" style="margin:8px auto 0;max-width:340px;font-family:\'Chakra Petch\',sans-serif;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#b9b2ac;">'
             + 'Best <b style="color:#e0a93f;font-family:\'Oxanium\',sans-serif;">' + prevReal.score.toLocaleString() + '</b>'
             + (_by > 0 ? ' — beat it by <b style="color:var(--crimson);font-family:\'Oxanium\',sans-serif;">' + _by.toLocaleString() + '</b>' : ' — match it again')

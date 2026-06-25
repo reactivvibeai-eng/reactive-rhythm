@@ -4151,4 +4151,12 @@ The data was computed but never celebrated. Owner decision: keep Score dominant,
 - **Results "NEW BEST +X"** (gold badge with the delta over your prior best) OR, when you didn't beat it, a **next-chase CTA** ("Best 222,000 — beat it by 4,200") under the blurb.
 - **FC grade floor:** a clean full-combo run never prints below B (floors only, never caps; full_combo keys off the same `_isFC`).
 - **Whiff cue:** an empty press (no note in window) now plays a short dry tick + a half-kick catcher recoil — and crucially does NOT break combo or drain stability (keyboard-feel guardrail). Verified: empty press → score/combo delta 0.
-- Verify (live ?v=322, rr-verify): `currentTrackId()` returns the real id after launch, `getBest` feeds the chip, whiff scores nothing, `node --check` clean (game.js + catalog.js), **0 console errors**. (Remaining Phase 3: combo 11-24 dead-zone, OD-ready banner, mobile tap coachmark + outlines, unmissable How-To — build86.)
+- Verify (live ?v=322, rr-verify): `currentTrackId()` returns the real id after launch, `getBest` feeds the chip, whiff scores nothing, `node --check` clean (game.js + catalog.js), **0 console errors**. (Remaining Phase 3: combo 11-24 dead-zone, OD-ready banner, mobile tap coachmark + outlines, unmissable How-To — build87.)
+
+### build86 — QA-swarm fixes on builds 83-85 (4 confirmed, 0 dismissed)  ✅ (?v 322→323, game.js + catalog.js + index.html)
+A 7-agent adversarial QA swarm (each finding independently verified) over Phases 1-3A. All 4 confirmed + fixed:
+- **B85-1 (MED):** FC grade floor + `full_combo` could fire on a FAILED run (bombs drain stability without a miss → `_isFC` true on a Signal-Lost run, showing a gold "Full Combo" + a floored-up B). Fixed: `_isFC = !runFailed && counts.miss===0 && total>0`.
+- **B84-1 (MED):** the store hero's full-image `.sh-guitar` had no error fallback → a 404 would render a broken-image glyph dead-center on the showroom stage (regression vs the card grid's onerror). Fixed: `g.onerror` hides the img on 404, cleared on the no-image path.
+- **B83-1 (LOW):** the buy-confirm armed state wasn't disarmed on store-close or grid-rebuild → a dangling 4s timer on a detached node. Fixed: `_disarmBuy()` at the top of `close()` and `render()`.
+- **B85-2 (LOW):** the results chase-CTA inserted between the blurb and the build83 timing histogram. Fixed: anchor the CTA off `#results-timing` when present (lands below it).
+- Verify (live ?v=323, rr-verify): hero opens + Escape/close work, store functional, `node --check` clean, **0 console errors**.

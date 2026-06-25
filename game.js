@@ -2357,7 +2357,7 @@
     if (accShown >= 95) grade = 'S'; else if (accShown >= 88) grade = 'A';
     else if (accShown >= 75) grade = 'B'; else if (accShown >= 60) grade = 'C';
     // build85 (Phase 3.2): FC grade FLOOR — a clean full-combo run never prints below B. Floors only, never caps.
-    const _isFC = counts.miss === 0 && total > 0;
+    const _isFC = !runFailed && counts.miss === 0 && total > 0;   // build86 (QA B85-1): a FAILED run (bombs drain stability w/o a miss) must NOT claim FC or a floored grade
     if (_isFC && (grade === 'C' || grade === 'D')) grade = 'B';
 
     const results = {
