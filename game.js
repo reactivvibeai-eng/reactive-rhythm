@@ -29,6 +29,21 @@
   function savePadMap() { try { localStorage.setItem(padStore, JSON.stringify(padMap)); } catch (e) {} }
   function padForLane(lane) { for (const k in padMap) if (padMap[k] === lane) return +k; return null; }
   padMap = loadPadMapFor('rr_padmap', 6);
+  // ---- GH guitar: strum / whammy / tilt calibration (sibling of the pad map) ----------------
+  // DEFAULTS are best-effort PLACEHOLDERS — GH/RB/Clone-Hero button+axis numbering is NOT
+  // standardized (varies by model/console/OS/browser/adapter; Clone Hero itself ships no fixed
+  // indices and tells users to calibrate). So these seed values are a convenience layer; the
+  // calibration wizard / live tester is the load-bearing path that overwrites them. See CHANGELOG.
+  const STRUMCFG_KEY = 'rr_strumcfg';
+  const STRUM_DEBOUNCE_MS = 55;        // anti-double-strum (strum-up + strum-down funnel through here)
+  let strumCfg = { btns: [12, 13], strumAxis: null, strumAxisDir: 0,
+                   whammyAxis: 2, whammyMin: -1, whammyMax: 1,
+                   tiltAxis: 3, tiltThresh: 0.6, spBtn: 8 };
+  let _frets = new Set();              // fret LANES currently held (GH require-strum mode)
+  let _strumAxisPrev = 0, _lastStrumT = 0, _whammyPrev = 0, _tiltPrev = 0;
+  function loadStrumCfg() { try { const sv = JSON.parse(localStorage.getItem(STRUMCFG_KEY) || 'null'); if (sv && typeof sv === 'object') strumCfg = Object.assign(strumCfg, sv); } catch (e) {} }
+  function saveStrumCfg() { try { localStorage.setItem(STRUMCFG_KEY, JSON.stringify(strumCfg)); } catch (e) {} }
+  loadStrumCfg();
   function keyForLane(lane) { for (const k in keyMap) if (keyMap[k] === lane) return k; return null; }
   const LANE_COLORS = [
     { c: '#ff3c3c', rgb: '255, 60, 60'   },
@@ -578,6 +593,7 @@
     LANE_COLORS.length = 0; for (const c of p.colors) LANE_COLORS.push(c);
     keyMapStore = p.store; keyMap = loadKeyMapFor(p);
     padStore = p.padStore; padMap = loadPadMapFor(p.padStore, p.count);
+    loadStrumCfg();   // GH strum/whammy/tilt calibration (device-level; reloaded on profile switch)
     allocLaneArrays();
     try { localStorage.setItem('rr_lanemode', name); } catch (e) {}
     try { if (typeof updateFooterHint === 'function') updateFooterHint(); } catch (e) {}
@@ -873,6 +889,13 @@
   window.RhythmGame.isSkinPlayable = (src) => (!src || !SKIN_GEOM[src] || !!SKIN_GEOM[src].verified);
   // Carnival high-striker mechanic: ringing the bell banks a chunk of Overdrive (clamped 0..1).
   window.RhythmGame.chargeOverdrive = (amt) => { try { overdrive = Math.min(1, overdrive + (typeof amt === 'number' ? amt : 0.2)); if (typeof updateHUD === 'function') updateHUD(); } catch (e) {} return (typeof overdrive === 'number' ? overdrive : 0); };
+  // ---- GH guitar calibration (PUBLIC — survives content-freeze; the future in-Settings wizard reuses these) ----
+  // padState() = live raw button/axis snapshot so you can SEE which index your guitar uses (watch which
+  // button flips when you strum, which axis moves when you whammy/tilt). Then setStrumCfg({...}) writes it.
+  window.RhythmGame.padState = () => { try { const out = []; const pads = navigator.getGamepads ? navigator.getGamepads() : []; for (const gp of pads) { if (!gp) continue; out.push({ index: gp.index, id: gp.id, isGuitar: isGuitarPad(gp.id), buttons: Array.from(gp.buttons).map((b, i) => b.pressed ? i : null).filter(v => v !== null), axes: Array.from(gp.axes).map(v => +(+v).toFixed(2)) }); } return out; } catch (e) { return 'ERR ' + e.message; } };
+  window.RhythmGame.getStrumCfg = () => Object.assign({}, strumCfg);
+  window.RhythmGame.setStrumCfg = (partial) => { try { strumCfg = Object.assign(strumCfg, partial || {}); saveStrumCfg(); } catch (e) {} return Object.assign({}, strumCfg); };
+  window.RhythmGame.requireStrum = () => { try { return requireStrum(); } catch (e) { return false; } };
 
   // ---------- SHARED, UNLOCKABLE AUDIO CONTEXT (mobile autoplay) ----------
   let sharedAC = null;
@@ -2647,6 +2670,9 @@
       holding: () => holdNote.map((h, i) => h ? { lane: i, scored: +holdScored[i].toFixed(2) } : null).filter(Boolean),
       press: (lane) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now()); } },
       release: (lane) => onLaneRelease(lane),
+      // GH require-strum dev hooks (strip at content-freeze): verify the gate + live config + held frets
+      requireStrum: () => requireStrum(),
+      strumState: () => ({ require: requireStrum(), profile: laneProfile, guitar: guitarPadId(), cfg: Object.assign({}, strumCfg), heldFrets: Array.from(_frets) }),
       // combo-tier dev hooks (stripped at content-freeze) — drive the ladder without a 500-streak run
       setCombo: (n) => { combo = Math.max(0, n | 0); if (combo > maxCombo) maxCombo = combo; const nt = comboTierIdx(combo); if (nt > comboTierCur) { comboTierCur = nt; onComboTierUp(nt, 2); } else { comboTierCur = nt; } updateHUD(); const cd = document.getElementById('combo-display'); return { combo, tier: comboTierCur, name: COMBO_TIERS[comboTierCur].name, dataTier: cd && cd.getAttribute('data-tier'), numColor: cd && cd.style.getPropertyValue('--ct-num') }; },
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
@@ -2841,6 +2867,39 @@
   // laneDown/onLaneRelease too, so a controller can hold sustain notes (it couldn't before).
   const _padPrev = {};
   let padRebindLane = null;            // lane awaiting a controller-button assignment (Settings remap)
+  // ---- GH require-strum core ---------------------------------------------------------------
+  // Only a DETECTED guitar on the 5-lane gh profile must fret + STRUM to score (authentic GH).
+  // Keyboard + standard gamepads are byte-identical — everything below gates on requireStrum().
+  function requireStrum() { return laneProfile === 'gh' && !!guitarPadId(); }
+  function tryStrum(now) {
+    if (now - _lastStrumT < STRUM_DEBOUNCE_MS) return;     // debounce: strum-up + strum-down both land here
+    _lastStrumT = now;
+    if (_frets.size === 0) return;                         // strum with no fret held = no-op (no phantom hit)
+    for (const lane of _frets) onLaneInput(lane, 'guitar', now);   // chord-safe: one hit per held fret, judged at the strum instant
+  }
+  function pollGuitarAxes(gp) {
+    const ax = gp.axes || [];
+    // strum-as-axis (some clones expose strum on a hat/axis): a sign-flip in the configured dir = an edge
+    if (strumCfg.strumAxis != null && ax.length > strumCfg.strumAxis) {
+      const v = ax[strumCfg.strumAxis] || 0;
+      if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(_strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) tryStrum(performance.now());
+      _strumAxisPrev = v;
+    }
+    // whammy -> Overdrive charge: wiggling the whammy (while OD not active) builds the meter; clamp at 1
+    if (strumCfg.whammyAxis != null && ax.length > strumCfg.whammyAxis) {
+      const raw = ax[strumCfg.whammyAxis] || 0;
+      const span = (strumCfg.whammyMax - strumCfg.whammyMin) || 1;
+      const w = Math.max(0, Math.min(1, (raw - strumCfg.whammyMin) / span));
+      if (!odActive && w > 0.5 && Math.abs(w - _whammyPrev) > 0.03) { overdrive = Math.min(1, overdrive + 0.012); try { updateHUD(); } catch (e) {} }
+      _whammyPrev = w;
+    }
+    // tilt -> Star Power activate (axis crosses the threshold upward) — Select button is the fallback (handled in the button loop)
+    if (strumCfg.tiltAxis != null && ax.length > strumCfg.tiltAxis) {
+      const tv = Math.abs(ax[strumCfg.tiltAxis] || 0);
+      if (tv > strumCfg.tiltThresh && _tiltPrev <= strumCfg.tiltThresh) activateOverdrive();
+      _tiltPrev = tv;
+    }
+  }
   function pollGamepad() {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
@@ -2852,12 +2911,18 @@
         if (pressed && !was) {
           if (padRebindLane != null) { const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue; }
           const lane = padMap[b];
-          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) {
+            if (requireStrum()) { _frets.add(lane); if (state === 'playing') laneDown[lane] = true; }   // GH: fret HELD, no hit until a strum
+            else { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }   // legacy: fret-press = hit (keyboard/standard pad)
+          }
+          if (requireStrum() && strumCfg.btns.indexOf(b) >= 0) tryStrum(performance.now());   // strum bar -> fire the held frets
+          if (requireStrum() && b === strumCfg.spBtn) activateOverdrive();                    // Select (tilt fallback) -> Star Power
         } else if (!pressed && was) {
           const lane = padMap[b];
-          if (lane != null && lane >= 0 && lane < LANE_COUNT) onLaneRelease(lane);
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (requireStrum()) _frets.delete(lane); onLaneRelease(lane); }
         }
       }
+      if (requireStrum()) pollGuitarAxes(gp);   // strum-axis / whammy->OD / tilt->SP (guitars only)
     }
   }
   function gamepadList() { if (!navigator.getGamepads) return []; const out = []; for (const gp of navigator.getGamepads()) if (gp) out.push(gp.id); return out; }
@@ -3703,7 +3768,7 @@
     _rfMult = tier;   // versus stream: cache the displayed multiplier tier for getRenderFrame()
     const _atCap = combo >= _tpH.comboStep * _tpH.comboCap;
     const within = odActive ? overdrive : (_atCap ? 1 : (combo % _tpH.comboStep) / _tpH.comboStep);
-    const mb = $('mult-badge'); if (mb) mb.textContent = tier + 'x';
+    const mb = $('mult-badge'); if (mb) { mb.textContent = tier + 'x'; if (mb.parentElement) mb.parentElement.classList.toggle('boosted', tier >= 3); }
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
     // overdrive gauge
     const of = $('od-fill'); if (of) of.style.height = (overdrive * 100) + '%';
@@ -4124,6 +4189,29 @@
           life: 0.3 + Math.random() * 0.25, age: 0, size: 1.2 + Math.random() * 1.8,
           color: Math.random() < 0.5 ? '255,150,60' : '255,90,46', spark: true });
       }
+    }
+
+    // STRIKE-LINE — the GH "hit here" rail across the catcher row. Spans the MEASURED string
+    // x-extents at nearY (NOT full canvas width); catchers + their halos draw on top of it so
+    // it reads as the rail the buttons sit on. Reuses laneHitPulse (the hit flash) — no new hook.
+    {
+      const slX0 = nearX[0] - lw * 0.5, slX1 = nearX[LANE_COUNT - 1] + lw * 0.5;
+      const slPulse = reduceMotion ? 0 : Math.max.apply(null, laneHitPulse);   // 0..1
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      // crimson underglow (soft, wide)
+      ctx.strokeStyle = 'rgba(255,42,48,' + (0.16 + slPulse * 0.30).toFixed(3) + ')';
+      ctx.lineWidth = Math.max(2, lw * 0.16);
+      if (!fxLite && !reduceMotion) { ctx.shadowColor = '#ff2a30'; ctx.shadowBlur = 8 + slPulse * 14; }
+      ctx.beginPath(); ctx.moveTo(slX0, nearY); ctx.lineTo(slX1, nearY); ctx.stroke();
+      // chrome core (thin, crisp) — lerps to hot-white on a hit
+      ctx.shadowBlur = (!fxLite && !reduceMotion) ? (4 + slPulse * 6) : 0;
+      const coreA = (0.34 + slPulse * 0.40).toFixed(3);
+      ctx.strokeStyle = slPulse > 0.4 ? 'rgba(255,238,224,' + coreA + ')' : 'rgba(236,231,227,' + coreA + ')';
+      ctx.lineWidth = Math.max(1.2, lw * 0.05);
+      ctx.beginPath(); ctx.moveTo(slX0, nearY); ctx.lineTo(slX1, nearY); ctx.stroke();
+      ctx.restore();
     }
 
     // glowing fret-catcher rings at the bottom (flare on hit)

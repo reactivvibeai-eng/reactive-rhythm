@@ -112,7 +112,7 @@
         if (!b || !b.type) return;
         const chip = document.createElement('span');
         let cls = 'cbadge', txt = '';
-        if (b.type === 'golden_buzzer') { cls += ' gold'; txt = '★'; chip.title = b.label || 'Golden Buzzer'; }   /* star-only on covers (full label in tooltip) so it can't crowd the grade chip */
+        if (b.type === 'golden_buzzer') { return; }   /* Golden Buzzer now has its OWN dedicated treatment (ring/crown/tag below) driven by the golden_buzzer field — skip the badges-array chip so there's one source of truth, no double-mark */
         else if (b.type === 'judge_grade') { cls += ' jg ' + gradeClass(b.tier); txt = b.tier || b.label || ''; }
         else if (b.type === 'hot') { cls += ' hot'; txt = b.label || 'HOT'; }
         else { cls += ' pick'; txt = b.label || ''; }
@@ -120,6 +120,18 @@
         bc.appendChild(chip);
       });
       bc.style.display = bc.children.length ? 'flex' : 'none';
+    }
+    // GOLDEN BUZZER winner treatment — driven by the dedicated golden_buzzer backend flag (NOT the badges array).
+    // Idempotent + reversible: covers are pooled/recycled, so both add AND remove branches are required.
+    const gbWin = !!RC().goldenBuzzer(t);
+    el.classList.toggle('gb-winner', gbWin);
+    let crown = card.querySelector('.gb-crown');
+    if (gbWin && !crown) {
+      crown = document.createElement('span'); crown.className = 'gb-crown'; crown.textContent = '♔';   // ♔
+      const tag = document.createElement('span'); tag.className = 'gb-tag'; tag.textContent = 'Golden Buzzer Winner';
+      card.appendChild(crown); card.appendChild(tag);
+    } else if (!gbWin && crown) {
+      crown.remove(); const tg = card.querySelector('.gb-tag'); if (tg) tg.remove();   // recycled onto a non-winner → strip stale crown/tag
     }
   }
 
@@ -437,6 +449,12 @@
     const text = document.createElement('span'); text.className = 'sc-text';
     const sub = [t.artist_name, RC().cleanGenre(t.genre), t.bpm ? t.bpm + ' BPM' : '', RC().fmtDur(t.duration_seconds)].filter(Boolean).join(' · ');
     text.innerHTML = '<span class="sc-title">' + RC().escapeHtml(t.title) + '</span><span class="sc-sub">' + RC().escapeHtml(sub) + '</span>';
+    // GOLDEN BUZZER winner — dedicated backend flag (golden_buzzer); dark until the backend sets it.
+    if (RC().goldenBuzzer(t)) {
+      card.classList.add('gb-winner');
+      const gt = document.createElement('span'); gt.className = 'sc-gb-tag'; gt.textContent = '♔ Golden Buzzer Winner';   // ♔
+      text.appendChild(gt);
+    }
     card.appendChild(text);
     // right — status pill (not ready) · grade badge · or chevron
     const right = document.createElement('span'); right.className = 'sc-right';

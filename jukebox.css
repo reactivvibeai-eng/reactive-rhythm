@@ -219,6 +219,38 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
 .cbadge.pick { color: var(--chrome, #dad7d2); }
 .cbadge.jg   { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; width: 24px; height: 24px; padding: 0; justify-content: center; }
 
+/* ============ GOLDEN BUZZER WINNER ============ */
+/* Driven by the dedicated golden_buzzer backend flag (catalog.js goldenBuzzer()). Gold is the
+   ONE allowed non-crimson accent here (owner-ratified, per the green-fret/gold precedent). Dark
+   pill stays WARM (rgba(10,7,5), R>=G>=B). Dormant until the backend marks a track. */
+.jb-cover.gb-winner .cover-card {
+  position: relative;
+  border: 1.5px solid var(--gold, #e0a93f);
+  box-shadow: 0 0 0 1px rgba(224,169,63,0.6), 0 0 22px 2px rgba(224,169,63,0.42), inset 0 0 16px rgba(224,169,63,0.12);
+}
+.gb-crown {
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  font-size: 22px; line-height: 1; color: var(--gold, #e0a93f);
+  text-shadow: 0 0 8px rgba(224,169,63,0.7), 0 1px 2px rgba(0,0,0,0.8); z-index: 6; pointer-events: none;
+}
+.gb-tag {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--gold, #e0a93f); background: rgba(10,7,5,0.82); border: 1px solid rgba(224,169,63,0.55);
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap; z-index: 6; pointer-events: none;
+  box-shadow: 0 0 10px rgba(224,169,63,0.3);
+}
+/* songs-list row */
+.song-card.gb-winner {
+  border: 1px solid rgba(224,169,63,0.5);
+  box-shadow: 0 0 0 1px rgba(224,169,63,0.28), 0 0 14px rgba(224,169,63,0.22);
+}
+.sc-gb-tag {
+  display: block; margin-top: 2px;
+  font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--gold, #e0a93f);
+}
+
 /* now-focused meta */
 .jb-nav {
   position: absolute; top: 50%; transform: translateY(-50%);

@@ -799,6 +799,21 @@
   }
   // ▲▲▲ SWAP-SEAM ▲▲▲
   function isVideo(t) { return mediaType(t) === 'video'; }
+  // ▼▼▼ SWAP-SEAM ▼▼▼ — Golden Buzzer winner flag. AUTHORITATIVE backend field ONLY —
+  // NO curated client list, NO title/genre heuristic. Stays DARK (returns false) until
+  // Lovable sets the column. Mirrors mediaType()/isVideo(). Two accepted shapes so the
+  // backend can pick either a boolean or a string/timestamp marker. See GOLDEN_BUZZER_BRIEF.md.
+  function goldenBuzzer(t) {
+    if (!t) return false;
+    if (typeof t.golden_buzzer === 'boolean') return t.golden_buzzer;        // preferred: boolean column
+    if (typeof t.is_golden_buzzer === 'boolean') return t.is_golden_buzzer;  // alt name
+    // tolerate a truthy string/timestamp marker (e.g. an award date) — but NOT the literal
+    // strings "false"/"0"/"" which a loose DB cast can produce.
+    var v = t.golden_buzzer != null ? t.golden_buzzer : t.is_golden_buzzer;
+    if (typeof v === 'string') return !!v && !/^(false|0|no|null)$/i.test(v.trim());
+    return false;   // absent → not a winner. DEFAULT OFF.
+  }
+  // ▲▲▲ SWAP-SEAM ▲▲▲
   function musicTracks() { return catalogTracks; }   // catalogTracks is already music-only post-split
   function videoTracks() { return catalogVideos; }
   function videoCount() { return catalogVideos.length; }
@@ -1042,6 +1057,12 @@
       closeSheet();
       stopPreview();
       currentTrack = track;
+      // Golden Buzzer launch flourish — one-time crowd cheer (mute/SFX-gated inside playCheer; procedural, no asset).
+      try {
+        if (goldenBuzzer(track) && window.RhythmGame && window.RhythmGame.playCheer) {
+          setTimeout(function () { try { window.RhythmGame.playCheer(); } catch (e) {} }, 600);
+        }
+      } catch (e) {}
       // build58: a plain free-play must NOT bank stars onto a previously-played campaign level (stale _activeLevel).
       // build59 FIX: but the sheet's env-picker wrapper (index.html setMenuPlayHandler) STAGES the chosen environment
       // (_isEnv) right BEFORE this fires — clearing it here is what made "Play this song in the X environment" load the
@@ -1074,6 +1095,12 @@
     if (!track || !trackReady(track) || isVideo(track)) return false;   // never launch a video into the rhythm engine
     stopPreview();
     currentTrack = track;
+    // Golden Buzzer launch flourish — one-time crowd cheer (mute/SFX-gated inside playCheer; procedural, no asset).
+    try {
+      if (goldenBuzzer(track) && window.RhythmGame && window.RhythmGame.playCheer) {
+        setTimeout(function () { try { window.RhythmGame.playCheer(); } catch (e) {} }, 600);
+      }
+    } catch (e) {}
     // build59 FIX: a plain-track launch clears any stale campaign _activeLevel so its results can't false-credit a level.
     // But launchLevel passes {keepEnvironment:true} — it has JUST set up the level's journey/skin/theme + _activeLevel, and
     // clearing here was wiping it so EVERY authored level loaded as the default (moon-loop, no journey). Only clear for a
@@ -1334,7 +1361,7 @@
     // data layer for the library UI (jukebox.js)
     allTracks, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
-    isVideo, mediaType, musicTracks, videoTracks, videoCount,
+    isVideo, mediaType, musicTracks, videoTracks, videoCount, goldenBuzzer,
     search, sortTracks, sections, getBest,
     preview, stopPreview,
     // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js

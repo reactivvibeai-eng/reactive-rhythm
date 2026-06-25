@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=312" />
+<link rel="stylesheet" href="jukebox.css?v=316" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1705,6 +1705,22 @@
   .gauge-lab { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.22em; color: var(--ink-dim); writing-mode: vertical-rl; text-orientation: mixed; }
   .gauge.mult .gauge-lab { transform: rotate(180deg); }
   .od-key { color: var(--crimson); font-weight: 700; letter-spacing: 0.12em; }
+  /* STRIKE-LINE companion: promote the multiplier readout on DESKTOP (reuses #mult-gauge; JS at game.js:3706 already drives it).
+     The side gauges are display:none on desktop by default (only the mobile media query shows them) — this re-shows JUST the
+     multiplier, enlarged, in Oxanium (brand number font). Combo / lore stats are untouched. */
+  @media (min-width: 880px) {
+    #game:not(.vs-mode) #mult-gauge { display: flex; top: 26%; left: 22px; gap: 11px; z-index: 32; }
+    #game:not(.vs-mode) #mult-gauge .gauge-badge {
+      width: 62px; height: 62px; font-size: 26px;
+      font-family: 'Oxanium', sans-serif; font-weight: 800;
+      border-color: rgba(255,60,60,0.7); box-shadow: 0 0 22px rgba(255,40,40,0.45);
+      transition: transform 0.15s ease, box-shadow 0.2s ease;
+    }
+    #game:not(.vs-mode) #mult-gauge .gauge-track { width: 13px; }
+    #game:not(.vs-mode) #mult-gauge .gauge-lab { font-size: 10px; letter-spacing: 0.26em; }
+    /* boosted (x3+/overdrive) — bigger + hotter; crimson→chrome, no gold here */
+    #game:not(.vs-mode) #mult-gauge.boosted .gauge-badge { transform: scale(1.12); box-shadow: 0 0 30px rgba(255,80,50,0.7); }
+  }
 
   /* HUD Overdrive readout — segmented + combo-driven + a categorical READY state (research-backed clarity) */
   .od-bar { position: relative; background: rgba(8,4,8,0.6); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
@@ -5048,6 +5064,8 @@
     <!-- CENTER: highway canvas (backdrop moved to #game-bg above) -->
     <div class="game-center">
       <canvas id="hwy"></canvas>
+      <!-- LOCAL COUCH VERSUS (build79): P2's deck — hidden until couch.js spawns the 2nd engine (?couch=1). -->
+      <canvas id="hwy2" hidden aria-hidden="true"></canvas>
 
       <!-- mobile compact HUD (overlay) -->
       <div class="mhud" id="mhud">
@@ -5276,7 +5294,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=312"></script>
+<script src="telemetry.js?v=316"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5414,13 +5432,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=312"></script>
-<script src="game.js?v=312"></script>
-<script src="procbg.js?v=312"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=312"></script>
-<script src="catalog.js?v=312"></script>
-<script src="multiplayer.js?v=312"></script>
-<script src="share.js?v=312"></script>
+<script src="assets/fx/fx-player.js?v=316"></script>
+<script src="game.js?v=316"></script>
+<script src="procbg.js?v=316"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=316"></script>
+<script src="catalog.js?v=316"></script>
+<script src="multiplayer.js?v=316"></script>
+<script src="share.js?v=316"></script>
+<script src="couch.js?v=316"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
