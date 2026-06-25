@@ -2302,6 +2302,10 @@
     // buttons to the live lane x-positions, so the coach glow rides the real columns. The finally
     // strips it so a superseded/aborted countdown can never leave the pulse stuck on.
     const _tz = $('tap-zones');
+    // build89: tag this countdown with the launch generation. A rapid re-launch (++_playGen) supersedes it;
+    // bail after each await BEFORE touching the shared #countdown node so two countdowns can't race / flicker
+    // / hide the newer overlay mid-count. (Scoring was already gen-safe; this fixes only the visual race.)
+    const myGen = _playGen;
     try {
       if (_tz && document.body.classList.contains('has-touch') && !localStorage.getItem('rr_tapcoach_seen')) {
         layoutTapZones();                 // ensure outlines sit on the current lane geometry
@@ -2316,15 +2320,18 @@
       el.style.fontSize = 'clamp(26px, 7vw, 64px)';
       el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
       await new Promise(r => setTimeout(r, 650));
+      if (myGen !== _playGen) return;   // superseded — leave the new countdown's node untouched
       el.style.fontSize = '';   // digits revert to the big CSS default size
       for (let i = 3; i >= 1; i--) {
         el.textContent = i;
         el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
         await new Promise(r => setTimeout(r, 700));
+        if (myGen !== _playGen) return;
       }
       el.textContent = 'GO!';
       el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
       await new Promise(r => setTimeout(r, 320));
+      if (myGen !== _playGen) return;
       el.style.fontSize = '';
       screens.countdown.classList.remove('active');
     } finally {
@@ -2500,6 +2507,9 @@
     // build83: EARLY/LATE timing summary — avg signed bias + a mini histogram (the keyboard grinder's feedback loop)
     try {
       const _old = document.getElementById('results-timing'); if (_old) _old.remove();
+      // build89: also clear the stale next-chase CTA each render — recordLocal only re-adds it for a
+      // qualifying (non-failed, scored, real-track) run, so a failed/zero/demo run can't show the prior song's "beat it by N".
+      const _oc = document.getElementById('results-chase'); if (_oc) _oc.remove();
       if (_timingSamples.length >= 4) {
         const _ms = _timingSamples.map(s => s * 1000);
         const _avg = Math.round(_ms.reduce((a, b) => a + b, 0) / _ms.length);
@@ -2614,7 +2624,7 @@
       difficulty = 'easy'; syncDiffButtons(); _firstRunEasy = true;
     }
   } catch (e) {}
-  if (_firstRunEasy) setTimeout(() => { try { window.RhythmGame.showToast('Starting you on EASY — bump it up anytime in difficulty ▸', 'info'); } catch (e) {} }, 2600);
+  if (_firstRunEasy) setTimeout(() => { try { window.RhythmGame.showToast('Starting you on EASY — bump it up anytime in difficulty ▸', 'neutral'); } catch (e) {} }, 2600);   // build89: 'neutral' is a supported severity ('info' was coerced to neutral anyway)
   $('resume-btn').addEventListener('click', resumeGame);
   // RESTART is gated behind a two-tap "tap again to restart" confirm so a stray click can't nuke a
   // good run. Same arm idiom as RESET CAREER / RESET ALL SETTINGS. Disarms on resume/exit/timeout.
@@ -3043,7 +3053,8 @@
       if (d < targetDiff) { targetDiff = d; target = n; }
     }
     if (!target) {   // empty press — no note in window. build85: whiff cue (does NOT break combo or drain stability — keyboard-feel guardrail)
-      flashJudgment('—', '#8a7f86');
+      // build89: warm-grey dash (#8a807c, R>=G>=B — brand law); skip the flash if a real judgment fired this frame so the dash can't clobber it
+      if (performance.now() - _lastRealJudgeMs > 30) flashJudgment('—', '#8a807c', true);
       playWhiffSfx();
       catcherRecoil[lane] = Math.max(catcherRecoil[lane] || 0, 0.5);   // half-kick (a real miss = 1.0)
       return;
@@ -3793,7 +3804,9 @@
     }
   }
 
-  function flashJudgment(text, color) {
+  let _lastRealJudgeMs = -1e9;   // build89: timestamp of the last NON-whiff judgment, so a whiff dash can't clobber a real hit's callout
+  function flashJudgment(text, color, isWhiff) {
+    if (!isWhiff) _lastRealJudgeMs = performance.now();
     const el = $('judge-flash');
     el.textContent = text; el.style.color = color;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
@@ -4704,7 +4717,8 @@
       ctx.shadowBlur = 0;
       ctx.font = '700 ' + Math.max(10, Math.round(fs * 0.6)) + "px 'Chakra Petch', sans-serif";
       ctx.fillStyle = 'rgba(255,80,70,' + (0.78 + 0.22 * pulse).toFixed(3) + ')';
-      ctx.fillText('PRESS  SPACE', cx, by + h * 0.34);
+      // build89: touch players activate OD by tapping the flame (there is no Space key) — adapt the cue
+      ctx.fillText(document.body.classList.contains('has-touch') ? 'TAP THE FLAME' : 'PRESS  SPACE', cx, by + h * 0.34);
       ctx.restore();
     }
 

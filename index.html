@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=325" />
+<link rel="stylesheet" href="jukebox.css?v=326" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1907,6 +1907,9 @@
   @media (prefers-reduced-motion: reduce) {
     #tap-zones.coach .tap-zone::after, #tap-zones.coach::before { animation: none; }
   }
+  /* build89: also honor the IN-APP reduce-motion toggle (rr-reduce-motion class), not just the OS-level query */
+  html.rr-reduce-motion #tap-zones.coach .tap-zone::after,
+  html.rr-reduce-motion #tap-zones.coach::before { animation: none; }
 
   /* ============ HUD PANELS ============ */
   .hud-panel {
@@ -5623,10 +5626,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=325"></script>
+<script src="game.js?v=326"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=325"></script>
-<script src="catalog.js?v=325"></script>
+<script src="jukebox.js?v=326"></script>
+<script src="catalog.js?v=326"></script>
 <script src="multiplayer.js?v=324"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
@@ -8058,6 +8061,7 @@
     $h('.sh-traits').innerHTML = traits.map(function (t) { return '<span class="sh-trait">' + esc(t) + '</span>'; }).join('');
     renderHero(it);
     hero.classList.add('show'); hero.setAttribute('aria-hidden', 'false');
+    try { var _sg = $('store-grid'); if (_sg) _sg.inert = true; } catch (e) {}   // build89: trap focus — keep the grid behind the aria-modal hero out of the tab order (no buying from behind the modal)
     var cb = $h('.sh-close'); if (cb) try { cb.focus(); } catch (e) {}
   }
   function renderHero(it) {
@@ -8081,6 +8085,7 @@
   function closeStoreHero() {
     var hero = $('store-hero');
     hero.classList.remove('show'); hero.setAttribute('aria-hidden', 'true');
+    try { var _sg = $('store-grid'); if (_sg) _sg.inert = false; } catch (e) {}   // build89: restore the grid to the tab order
     _heroItem = null;
     if (_heroPrevFocus && _heroPrevFocus.focus) try { _heroPrevFocus.focus(); } catch (e) {}
   }
@@ -8254,7 +8259,8 @@
   var gm = $('store-getmore'); if (gm) gm.addEventListener('click', openGetSparks);
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+    // build89: when the showroom hero is open, let ITS Escape handler close just the hero — don't tear down the whole store
+    if (e.key === 'Escape' && screen.classList.contains('active') && !$('store-hero').classList.contains('show')) { e.stopImmediatePropagation(); close(); }
   }, true);
 
   try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openStore = open; } catch (e) {}

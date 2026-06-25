@@ -1255,9 +1255,11 @@
       const badges = document.getElementById('results-badges');
       if (badges) {
         if (isNewBest) {
-          // build85 (Phase 3.1): gold "NEW BEST +X" — X = how much you beat your own prior best by (full score if first-ever)
+          // build85 (Phase 3.1): gold "NEW BEST +X" — X = how much you beat your own prior best by.
+          // build89: on a first-ever best there is no prior to beat → plain "NEW BEST" (not a confusing +<entire score>).
           const _delta = results.score - ((prevReal && prevReal.score) || 0);
-          if (!/new best/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">★ NEW BEST +' + _delta.toLocaleString() + '</span>');
+          const _bestLabel = prevReal ? '★ NEW BEST +' + _delta.toLocaleString() : '★ NEW BEST';
+          if (!/new best/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge best">' + _bestLabel + '</span>');
         }
         if (isGradeUp && !/grade up/i.test(badges.textContent)) badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">Grade Up · ' + grade + '</span>');
       }
