@@ -281,7 +281,7 @@
     var t = $('mpx-combat-toggle'); if (!t) return;
     t.setAttribute('aria-pressed', combatOn ? 'true' : 'false');
     t.classList.toggle('on', combatOn);
-    var lab = t.querySelector('.ct-state'); if (lab) lab.textContent = combatOn ? 'COMBAT default: ON · you host → combos shock' : 'COMBAT default: OFF · you host → score race';
+    var lab = t.querySelector('.ct-state'); if (lab) lab.textContent = combatOn ? 'Combat (when I host): On' : 'Combat (when I host): Off';
   }
   function toggleCombat() {
     combatOn = !combatOn;
@@ -431,7 +431,7 @@
     var host = $('mpx-roster'); if (!host) return;
     var ids = Object.keys(lobby).filter(function (id) { return id !== ME.id; });
     var cnt = $('mpx-roster-count'); if (cnt) cnt.textContent = (Object.keys(lobby).length) + ' online';
-    roEmpty(ids.length === 0, 'No one else is online right now. Keep this open — challengers appear here live.');
+    roEmpty(ids.length === 0, 'No one online yet — Play Now for a CPU warm-up.');
     host.innerHTML = ids.map(function (id) {
       var p = lobby[id];
       var isHost = (id === hostId);
@@ -1310,9 +1310,11 @@
   function paintQuickBtn() {
     var b = $('mpx-act-quick'); if (!b) return;
     b.setAttribute('aria-busy', QM.looking ? 'true' : 'false');
-    var t = b.querySelector('.a-t'), d = b.querySelector('.a-d');
-    if (t) t.textContent = QM.looking ? '⏳ Looking for a player…' : '▶ PLAY NOW';
-    if (d) d.textContent = QM.looking ? 'Tap to cancel · CPU warm-up in a few seconds' : 'Instantly matched 1‑on‑1 · CPU if nobody\'s around';
+    // build99h: hero CTA now uses .mpx-hero-title / .mpx-hero-sub (fall back to legacy .a-t/.a-d if present)
+    var t = b.querySelector('.mpx-hero-title') || b.querySelector('.a-t');
+    var d = b.querySelector('.mpx-hero-sub') || b.querySelector('.a-d');
+    if (t) t.textContent = QM.looking ? 'LOOKING…' : 'PLAY NOW';
+    if (d) d.textContent = QM.looking ? 'Tap to cancel · CPU warm-up in a few seconds' : 'Instant 1-on-1 · CPU if no one\'s around';
   }
   // Deterministic proposer: of the two queued ids, the lexicographically-smaller one emits the pair.
   // Both sides receive qm-pair and route into the SAME match channel — no race, no double match.
@@ -3009,8 +3011,12 @@
 
   // build8: lobby action bar
   wire('mpx-act-quick', 'click', toggleQuickMatch);
-  wire('mpx-combat-toggle', 'click', toggleCombat);   // v254: P-vs-P / P-vs-E combat toggle
-  wire('mpx-act-open', 'click', function () { gotoRooms('create'); });
+  wire('mpx-combat-toggle', 'click', toggleCombat);   // v254: P-vs-P / P-vs-E combat toggle (now lives in the "More" drawer)
+  wire('mpx-act-open', 'click', function () { gotoRooms('create'); });   // legacy id (harmless no-op if absent)
+  // build99h: TIER-2 "Play a friend" → same open-a-room flow as the old #mpx-act-open
+  wire('mpx-act-friend', 'click', function () { gotoRooms('create'); });
+  // build99h: TIER-2 "Local versus" → hand off to the parallel couch-coop engine (RhythmCouch)
+  wire('mpx-act-local', 'click', function () { try { if (window.RhythmCouch && window.RhythmCouch.open) window.RhythmCouch.open(); } catch (e) {} });
   wire('mpx-act-browse', 'click', function () { gotoRooms('browse'); });
   // build61: LIVE NOW empty-state CTA → straight into the host-a-tournament form (also un-collapses friends so the path is visible)
   wire('mpx-livenow-host', 'click', function () { try { toggleFriends(true); } catch (e) {} gotoRooms('tour-create'); });

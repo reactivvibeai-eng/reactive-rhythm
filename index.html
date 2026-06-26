@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=343" />
+<link rel="stylesheet" href="jukebox.css?v=344" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3287,6 +3287,10 @@
   .multiplayer-screen { z-index: 240; overflow-y: auto;
     background: radial-gradient(ellipse at 50% 26%, rgba(120,12,20,0.55), transparent 64%), #0a0706;
     backdrop-filter: blur(14px); }
+  /* build99h: top-align the card (the lobby is a tall 3-tier journey — vertical-centering buried PLAY NOW mid-screen
+     and made tall steps scroll from the middle). flex-start + a small top offset lifts the hero into the upper third. */
+  .multiplayer-screen { align-items: flex-start; padding: 14px 0 28px; box-sizing: border-box; }
+  .multiplayer-screen .mp-card { margin: 0 auto; }
   /* build11: the VERSUS ROOM — full-bleed key art behind the lobby (CSS bg 404s silently → the
      gradient above stays = self-healing) + a scrim so the card reads; card becomes a glass panel. */
   .mp-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none;
@@ -3439,7 +3443,77 @@
   .mpx-friends-toggle .mft-chev { transition: transform .16s ease; font-size: 11px; }
   .mpx-friends-toggle[aria-expanded="true"] .mft-chev { transform: rotate(90deg); }
   .mpx-friends-panel { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .mpx-friends-panel[hidden] { display: none; }   /* build99h: the class's display:flex otherwise beats the [hidden] attr → the closed drawer still took ~285px */
   html.rr-reduce-motion .mpx-friends-toggle .mft-chev { transition: none; }
+
+  /* ===== build99h: MULTIPLAYER lobby — 3-tier journey (status strip · hero · 2-up · More drawer) ===== */
+  /* STATUS STRIP — identity · online · rank, one slim ~34px row directly under the wordmark */
+  .mpx-statusstrip { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px;
+    margin: 2px 0 10px; padding: 4px 4px; text-align: left; flex-wrap: wrap; }
+  .mpx-statusstrip .mpx-ss-id { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+  .mpx-statusstrip .mpx-you-av { width: 26px; height: 26px; font-size: 12px; }
+  .mpx-statusstrip .mpx-you-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+  .mpx-statusstrip .mpx-badge.host { font-size: 9px; padding: 2px 7px; }
+  .mpx-ss-online { display: inline-flex; align-items: center; gap: 7px; margin-left: auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: var(--ink-dim, #a0938f); }
+  .mpx-ss-online b { color: var(--ink, #f3eceb); font-weight: 700; }
+  .mpx-ss-online .mpx-live-dot { color: #ff7a4a; font-size: 10px; }
+  .mpx-statusstrip .mpx-rank-chip { padding: 5px 11px; }
+  .mpx-statusstrip .mpx-rank-chip[hidden] { display: none; }
+  .mpx-statusstrip .mpx-rank-chip .rk-tier { font-size: 12px; }
+
+  /* TIER 1 — the one dominant hero CTA */
+  .mpx-hero { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    width: 100%; min-height: 88px; box-sizing: border-box; padding: 16px 20px; margin: 2px 0 4px; cursor: pointer; text-align: left;
+    border-radius: 16px; border: 1px solid rgba(255,31,46,0.55);
+    background: linear-gradient(180deg, rgba(255,31,46,0.30), rgba(150,12,22,0.16));
+    box-shadow: 0 14px 36px -10px rgba(255,31,46,0.5), 0 0 0 1px rgba(255,31,46,0.18) inset, 0 0 26px -6px rgba(255,31,46,0.45);
+    transition: transform .12s ease, box-shadow .14s ease, border-color .14s ease; }
+  .mpx-hero:hover { transform: translateY(-2px); border-color: rgba(255,42,48,0.85);
+    box-shadow: 0 20px 46px -10px rgba(255,31,46,0.65), 0 0 0 1px rgba(255,31,46,0.28) inset, 0 0 36px -4px rgba(255,31,46,0.6); }
+  .mpx-hero:active { transform: translateY(0); }
+  .mpx-hero[aria-busy="true"] { opacity: .8; pointer-events: none; }
+  .mpx-hero-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.28em; color: #ffd0b6; }
+  .mpx-hero-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; line-height: 1; letter-spacing: 0.03em; color: #fff;
+    text-shadow: 0 2px 16px rgba(255,31,46,0.55); }
+  .mpx-hero-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.02em; color: #ffd8cd; text-transform: uppercase; }
+  .mpx-hero .mpx-ranked-tag { top: 12px; right: 14px; }
+  html.rr-reduce-motion .mpx-hero { transition: none; }
+  html.rr-reduce-motion .mpx-hero:hover { transform: none; }
+
+  /* TIER 2 — two equal secondary tiles + a small tertiary CPU entry */
+  .mpx-tier2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin: 8px 0 0; }
+  .mpx-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 13px 14px; cursor: pointer; text-align: left;
+    border-radius: 13px; border: 1px solid var(--line, rgba(218,215,210,0.16));
+    background: linear-gradient(180deg, rgba(218,215,210,0.07), rgba(218,215,210,0.02));
+    transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+  .mpx-tile:hover { transform: translateY(-1px); border-color: rgba(255,31,46,0.45); box-shadow: 0 8px 22px -8px rgba(0,0,0,0.5); }
+  .mpx-tile-ico { font-size: 18px; line-height: 1; margin-bottom: 1px; }
+  .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
+  .mpx-tile-d { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-dim, #a0938f); text-transform: uppercase; }
+  html.rr-reduce-motion .mpx-tile { transition: none; }
+  html.rr-reduce-motion .mpx-tile:hover { transform: none; }
+  .mpx-act-cpu-min { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 8px 0 0;
+    padding: 9px 12px; cursor: pointer; border-radius: 11px; border: 1px dashed rgba(218,215,210,0.30); background: transparent;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.02em; color: var(--ink-dim, #a0938f);
+    transition: border-color .12s ease, color .12s ease; }
+  .mpx-act-cpu-min:hover { border-color: rgba(218,215,210,0.5); color: var(--ink, #f3eceb); }
+  .mpx-act-cpu-min .mac-ico { font-size: 14px; }
+  /* TIER 3 disclosure now opens below the 2-up — give it breathing room */
+  .mpx-friends-toggle { margin-top: 14px; }
+  /* build99h: LOBBY-scoped tightening so PLAY NOW lands in the upper third on a 1280x720 laptop.
+     The wordmark + eyebrow are decoration; the hero is the crucial info — compact the chrome above it. */
+  .mp-card[data-mp-step="lobby"] { padding-top: 18px; gap: 9px; }
+  .mp-card[data-mp-step="lobby"] .mp-logo { max-width: min(264px, 64%); margin-top: 0; }
+  .mp-card[data-mp-step="lobby"] .mh-pre { margin: 0; font-size: 10px; }
+  .mp-card[data-mp-step="lobby"] .mpx-statusstrip { margin: 0 0 4px; }
+  .mp-card[data-mp-step="lobby"] .mp-sub { margin: 0 0 2px; }
+  /* compact the sign-in nudge in the lobby (it's a thin guest hint, not a tier) */
+  .mp-card[data-mp-step="lobby"] .mpx-signin-note { margin: 0; padding: 6px 12px; }
+  /* combat toggle relocated INTO the drawer — drop the lobby margin-left:auto so it fills the row */
+  .mpx-friends-panel .mpx-combat-toggle { margin-left: 0; width: 100%; justify-content: center; }
+  /* full roster inside the drawer */
+  .mpx-friends-panel .mpx-roster { max-height: 240px; margin-top: 2px; }
 
   /* build60: up-front sign-in note */
   .mpx-signin-note { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap;
@@ -4061,63 +4135,80 @@
       <h2 class="mp-title">MULTIPLAYER</h2>
 
       <!-- STEP: LOBBY (everyone currently online) -->
+      <!-- build99h: redesigned as a 3-tier journey. STATUS STRIP (identity+online+rank, one slim row) →
+           TIER 1 hero PLAY NOW → TIER 2 two equal tiles (friend · local) + tertiary CPU →
+           TIER 3 "More ways to play" drawer (LIVE NOW · browse · tournament · combat default · full roster). -->
       <div class="mpx-step mpx-step-lobby">
-        <p class="mp-sub">Race a rival on the same track — top score wins. One tap to play; nobody around yet? You'll warm up against the CPU.</p>
-        <!-- build61: LIVE NOW — open tournaments/rooms surfaced at the TOP so a newcomer sees a live bracket to join.
-             Rendered from the existing toursDir/roomsDir (softPresence-fed); auto-promoted when openRoomCount() > 0. -->
-        <div class="mpx-livenow" id="mpx-livenow" hidden>
-          <div class="mpx-livenow-head"><span class="mln-dot">●</span><span class="mln-t">LIVE NOW</span><span class="mln-n" id="mpx-livenow-n"></span></div>
-          <div class="mpx-livenow-list" id="mpx-livenow-list"></div>
-          <div class="mpx-livenow-empty" id="mpx-livenow-empty" hidden>
-            <span class="mln-empty-txt">No live tournaments right now.</span>
-            <button class="rh-refresh" id="mpx-livenow-host" type="button">🏆 HOST ONE</button>
-          </div>
+        <!-- STATUS STRIP — identity · online count · rank, collapsed into one ~34px row under the wordmark -->
+        <div class="mpx-statusstrip">
+          <span class="mpx-ss-id">
+            <span class="mpx-you-av" id="mpx-you-av">?</span>
+            <span class="mpx-you-name" id="mpx-you-name">You</span>
+            <span class="mpx-badge host" id="mpx-you-host" hidden>HOST</span>
+          </span>
+          <span class="mpx-ss-online"><b id="mpx-roster-count">0 online</b><span class="mpx-live-dot">● LIVE</span></span>
+          <div class="mpx-rank-chip" id="mpx-rank-chip" hidden></div>
         </div>
         <!-- build60: gentle, up-front sign-in line (shown only when signed-out actions would fail; wired in multiplayer.js) -->
         <div class="mpx-signin-note" id="mpx-signin-note" hidden>
           <span class="mpx-signin-txt" id="mpx-signin-txt">Sign in to play with others online.</span>
           <button class="mpx-signin-btn" id="mpx-signin-btn" type="button">Sign in</button>
         </div>
-        <!-- build60: ONE dominant PLAY NOW (quick-match → CPU fallback); friends/tournaments demoted under a disclosure. -->
-        <!-- v254: competitive controls — your rank chip + the P-vs-P / P-vs-E combat toggle, right above PLAY NOW -->
-        <div class="mpx-rankrow">
-          <div class="mpx-rank-chip" id="mpx-rank-chip" hidden></div>
-          <button class="mpx-combat-toggle" id="mpx-combat-toggle" type="button" aria-pressed="false" title="Your COMBAT default when YOU host a match. Combat is the host's match modifier — your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. NOT a lobby-wide switch — nobody can turn it on/off for everyone.">
-            <span class="ct-ico" aria-hidden="true">⚡</span><span class="ct-state">COMBAT default: OFF</span>
+        <p class="mp-sub">Race a rival head-to-head — top score wins.</p>
+
+        <!-- TIER 1 — the one dominant CTA. Quick-match → CPU fallback. -->
+        <button class="mpx-hero" id="mpx-act-quick" type="button">
+          <span class="mpx-hero-eyebrow">QUICK MATCH</span>
+          <span class="mpx-hero-title">PLAY NOW</span>
+          <span class="mpx-hero-sub">Instant 1-on-1 · CPU if no one's around</span>
+          <span class="mpx-ranked-tag" title="Quick Match affects your ranked ladder (RP)">RANKED</span>
+        </button>
+
+        <!-- TIER 2 — two equal secondary tiles + a small tertiary CPU entry -->
+        <div class="mpx-tier2">
+          <button class="mpx-tile" id="mpx-act-friend" type="button">
+            <span class="mpx-tile-ico" aria-hidden="true">👥</span>
+            <span class="mpx-tile-t">Play a friend</span>
+            <span class="mpx-tile-d">Room code or link</span>
+          </button>
+          <button class="mpx-tile" id="mpx-act-local" type="button">
+            <span class="mpx-tile-ico" aria-hidden="true">🎮</span>
+            <span class="mpx-tile-t">Local versus</span>
+            <span class="mpx-tile-d">2 controllers · same screen</span>
           </button>
         </div>
-        <div class="mpx-actionbar" id="mpx-actionbar">
-          <button class="mpx-act accent full play-now" id="mpx-act-quick" type="button">
-            <span class="a-t">▶ PLAY NOW</span><span class="a-d">Instantly matched 1‑on‑1 · CPU if nobody's around</span>
-            <span class="mpx-ranked-tag" title="Quick Match affects your ranked ladder (RP)">RANKED</span>
-          </button>
-          <button class="mpx-act full mpx-act-cpu" id="mpx-act-npc" type="button">
-            <span class="a-t">🤖 Practice vs CPU</span><span class="a-d">Warm up in a real split‑screen duel — no waiting</span>
-          </button>
-          <button class="mpx-friends-toggle" id="mpx-friends-toggle" type="button" aria-expanded="false" aria-controls="mpx-friends-panel">
-            <span class="mft-t">Play with friends</span><span class="mft-chev" aria-hidden="true">▸</span>
-          </button>
-          <div class="mpx-friends-panel" id="mpx-friends-panel" hidden>
-            <button class="mpx-act" id="mpx-act-open" type="button">
-              <span class="a-t">+ Open a room</span><span class="a-d">Host · invite a friend with a code or link</span>
-            </button>
-            <button class="mpx-act" id="mpx-act-browse" type="button">
-              <span class="a-t">🔎 Browse <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span>
-            </button>
-            <button class="mpx-act gold" id="mpx-act-tour" type="button">
-              <span class="a-t">🏆 Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span>
-            </button>
+        <button class="mpx-act-cpu-min" id="mpx-act-npc" type="button">
+          <span class="mac-ico" aria-hidden="true">🤖</span>Practice vs CPU — warm up, no waiting
+        </button>
+
+        <!-- TIER 3 — collapsed "More ways to play" drawer (closed by default) -->
+        <button class="mpx-friends-toggle" id="mpx-friends-toggle" type="button" aria-expanded="false" aria-controls="mpx-friends-panel">
+          <span class="mft-t">More ways to play</span><span class="mft-chev" aria-hidden="true">▸</span>
+        </button>
+        <div class="mpx-friends-panel" id="mpx-friends-panel" hidden>
+          <!-- build61: LIVE NOW — open tournaments/rooms; hidden when empty so the lobby never opens on a "nothing live" shell -->
+          <div class="mpx-livenow" id="mpx-livenow" hidden>
+            <div class="mpx-livenow-head"><span class="mln-dot">●</span><span class="mln-t">LIVE NOW</span><span class="mln-n" id="mpx-livenow-n"></span></div>
+            <div class="mpx-livenow-list" id="mpx-livenow-list"></div>
+            <div class="mpx-livenow-empty" id="mpx-livenow-empty" hidden>
+              <span class="mln-empty-txt">No live tournaments right now.</span>
+              <button class="rh-refresh" id="mpx-livenow-host" type="button">🏆 HOST ONE</button>
+            </div>
           </div>
+          <button class="mpx-act" id="mpx-act-browse" type="button">
+            <span class="a-t">🔎 Browse rooms <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span>
+          </button>
+          <button class="mpx-act gold" id="mpx-act-tour" type="button">
+            <span class="a-t">🏆 Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span>
+          </button>
+          <!-- v254: combat is a HOST-ONLY modifier — lives here, out of the pre-CTA zone -->
+          <button class="mpx-combat-toggle" id="mpx-combat-toggle" type="button" aria-pressed="false" title="Your COMBAT default when YOU host a match. Combat is the host's match modifier — your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. NOT a lobby-wide switch — nobody can turn it on/off for everyone.">
+            <span class="ct-ico" aria-hidden="true">⚡</span><span class="ct-state">Combat (when I host): Off</span>
+          </button>
+          <!-- full roster lives in the drawer, not stacked mid-page -->
+          <div class="mpx-roster" id="mpx-roster"></div>
+          <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one online yet — Play Now for a CPU warm-up.</p>
         </div>
-        <div class="mpx-youbar">
-          <span class="mpx-you-av" id="mpx-you-av">?</span>
-          <span class="mpx-you-name" id="mpx-you-name">You</span>
-          <span class="mpx-badge host" id="mpx-you-host" hidden>HOST</span>
-          <span class="mpx-you-tag">that's you</span>
-        </div>
-        <div class="mpx-rosterhead"><span id="mpx-roster-count">0 online</span><span class="mpx-live-dot">● LIVE</span></div>
-        <div class="mpx-roster" id="mpx-roster"></div>
-        <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one else is online yet — hit <b>PLAY NOW</b> for a CPU warm-up, or <b>Open a room</b> and invite a friend. The moment someone joins, they'll appear here.</p>
         <div class="mpx-banner" id="mpx-lobby-msg" hidden></div>
       </div>
 
@@ -5660,11 +5751,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=343"></script>
+<script src="game.js?v=344"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=343"></script>
-<script src="catalog.js?v=343"></script>
-<script src="multiplayer.js?v=343"></script>
+<script src="jukebox.js?v=344"></script>
+<script src="catalog.js?v=344"></script>
+<script src="multiplayer.js?v=344"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>

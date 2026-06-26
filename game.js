@@ -617,7 +617,7 @@
   // GREEN=0, RED=1, YELLOW=3, BLUE=2, ORANGE=4 (a common layout for these as seen by the browser).
   // Cheap clones (Santroller / Raphnet adapters / Wii) vary, so this is BEST-EFFORT — tune freely;
   // the wizard always rescues a mismatch. Order below is fret-1(green)..fret-5(orange) -> lane 0..4.
-  const GH_ID_RE = /guitar|gh\b|guitar\s*hero|red\s*octane|harmonix|rock\s*band|rockband|wii.*guitar|santroller|raphnet|clone\s*hero|world\s*tour|les\s*paul|stratocaster/i;
+  const GH_ID_RE = /guitar|gh\b|guitar\s*hero|red\s*octane|harmonix|rock\s*band|rockband|wii.*guitar|santroller|raphnet|clone\s*hero|world\s*tour|les\s*paul|stratocaster|riffmaster/i;   // build99h: + Riffmaster (the recommended PDP guitar). NOTE: Chrome may report it as a generic XInput pad with no "guitar" token — then the wizard is the fallback.
   const GH_PRESET_BTN = [0, 1, 3, 2, 4];   // green, red, yellow, blue, orange  ->  lane 0..4 (gh profile)
   function isGuitarPad(id) { return GH_ID_RE.test(String(id || '')); }
   function guitarPadId() { for (const id of gamepadList()) if (isGuitarPad(id)) return id; return null; }
@@ -2028,6 +2028,9 @@
       await beginPlay();
     } catch (e) {
       console.error(e);
+      // build99h (playtest P1): reset the loading meter so a failed start can't leave a stale "8%" frame to flash on
+      // the next load. (setLoading writes a quip + %, but on failure we bail out before it ever reaches 100/teardown.)
+      try { const lp = $('loading-pct'); if (lp) lp.textContent = '0%'; const lr = $('loading-ring'); if (lr) lr.style.strokeDashoffset = '628'; } catch (_) {}
       showToast(e && e.message ? e.message : 'Could not start this track', 'error');
       // don't eject an MP/tournament player to the menu on a decode/start failure — let the MP watchdog (abortRound)
       // recover them back to the bracket; only bail to menu in single-player.
@@ -3027,9 +3030,15 @@
   }
   function pollGuitarAxes(gp) {
     const ax = gp.axes || [];
-    // strum-as-axis (some clones expose strum on a hat/axis): a sign-flip in the configured dir = an edge
-    if (strumCfg.strumAxis != null && ax.length > strumCfg.strumAxis) {
-      const v = ax[strumCfg.strumAxis] || 0;
+    // strum: a STANDARD-mapped guitar fires strum on the D-pad buttons 12/13 (handled in pollGamepad). But most
+    // instrument controllers (incl. the Riffmaster under many drivers) get a NON-standard mapping, where the D-pad
+    // collapses into a POV HAT on axis 9 and buttons 12/13 never fire — so strum would do nothing. build99h fix #1:
+    // when the user hasn't configured a strumAxis and the pad is non-standard with a hat, auto-use axis 9. A sign-flip
+    // in the configured dir = a strum edge. (The Settings wizard's strum sampler still overrides this precisely.)
+    let sAxis = strumCfg.strumAxis;
+    if (sAxis == null && gp.mapping && gp.mapping !== 'standard' && ax.length >= 10) sAxis = 9;
+    if (sAxis != null && ax.length > sAxis) {
+      const v = ax[sAxis] || 0;
       if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(_strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) tryStrum(performance.now());
       _strumAxisPrev = v;
     }
@@ -6221,7 +6230,19 @@
       body.style.display = open ? 'none' : 'block';
       adv.classList.toggle('open', !open);
     }); }
-  window.addEventListener('gamepadconnected', () => { if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });
+  window.addEventListener('gamepadconnected', (e) => {
+    // build99h GH-readiness #2/#3: a freshly-plugged guitar should "just work" without opening Settings. If the user
+    // has NEVER customized their pad map, switch to the 5-lane gh profile + apply the GH fret preset (default identity
+    // crosses yellow/blue vs the painted strings). One-time — applyGhPreset saves rr_padmap so this won't re-fire. The
+    // wizard still fine-tunes. Gated to not disrupt a song in progress.
+    try {
+      if (e && e.gamepad && isGuitarPad(e.gamepad.id) && !localStorage.getItem('rr_padmap') && state !== 'playing') {
+        if (laneProfile !== 'gh') applyLaneProfile('gh');
+        applyGhPreset();
+      }
+    } catch (err) {}
+    if (settingsScreen.classList.contains('active')) renderDeviceStatus();
+  });
   window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); _frets.clear(); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining. build79-fix(B78-2): also clear GH held-fret Set so an unplugged-mid-hold guitar can't leave phantom frets that the next strum fires.
 
   $('calib-cancel').addEventListener('click', closeCalib);
