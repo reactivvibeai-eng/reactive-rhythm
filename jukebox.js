@@ -516,7 +516,12 @@
     const runtime = RC().fmtDur(t.duration_seconds) || '';
     const genre = RC().cleanGenre(t.genre) || '';
     const artist = t.artist_name || '';
-    const stats = ['★ AI FILM', runtime, genre].filter(Boolean).join(' · ');
+    const statsParts = ['★ AI FILM', runtime, genre].filter(Boolean);
+    // build99c: data-gap films (no runtime/genre) showed a lone star-AI-FILM row + a separate by-line (two stunted
+    // lines). Fold the artist INTO the stat row in that case and drop the by-line.
+    let byLine = artist ? 'by ' + artist : '';
+    if (statsParts.length === 1 && artist) { statsParts.push(artist); byLine = ''; }
+    const stats = statsParts.join(' · ');
     hero.innerHTML =
       '<span class="fm-bg"></span>' +
       '<span class="fm-grain"></span>' +
@@ -528,7 +533,7 @@
         '<span class="fm-kicker"><b>●</b> NOW SHOWING · AI PREMIERE</span>' +
         '<span class="fm-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
         '<span class="fm-stats">' + RC().escapeHtml(stats) + '</span>' +
-        (artist ? '<span class="fm-by">by ' + RC().escapeHtml(artist) + '</span>' : '') +
+        (byLine ? '<span class="fm-by">' + RC().escapeHtml(byLine) + '</span>' : '') +
         '<span class="fm-actions">' +
           '<button class="fm-play" type="button">▶ PLAY PREMIERE</button>' +
           '<button class="fm-info" type="button">Details</button>' +
