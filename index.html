@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=349" />
+<link rel="stylesheet" href="jukebox.css?v=350" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4860,6 +4860,13 @@
        ============================================================ -->
   <style>
     .set-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    /* build99L: labeled section header — a Chakra-Petch eyebrow over a hairline divider so Settings reads in chunks */
+    .set-section { display: flex; align-items: center; gap: 10px; margin: 22px 0 2px;
+      font-family: 'Chakra Petch', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.26em;
+      text-transform: uppercase; color: var(--crimson); }
+    .set-section::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 8px rgba(255,31,46,0.5); flex: 0 0 auto; }
+    .set-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,31,46,0.32), var(--line) 40%, transparent); }
+    .set-section:first-of-type { margin-top: 6px; }
     .set-l { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); flex: 0 0 96px; text-align: left; }
     .set-row input[type=range] { flex: 1; accent-color: var(--crimson); }
     .set-v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--crimson); flex: 0 0 46px; text-align: right; }
@@ -5220,11 +5227,9 @@
       <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// SETTINGS</div>
       <h2 class="display" style="font-size:44px;margin:12px 0 22px;">Settings</h2>
 
-      <div class="set-row">
-        <span class="set-l">Note Speed</span>
-        <input type="range" id="set-scroll" min="0.5" max="2" step="0.05" value="1" aria-label="Note speed" /><!-- build65 (cycle-5): range now matches the engine clamp [0.5,2.0] so a stored/hand-set value can't land off the track -->
-        <span class="set-v" id="set-scroll-v">1.0×</span>
-      </div>
+      <!-- build99L: grouped into labeled sections (AUDIO / GAMEPLAY / VISUALS / CONTROLS) with hairline
+           dividers so the ~18-row wall is scannable. Pure markup grouping — every control id/wiring is unchanged. -->
+      <div class="set-section">AUDIO</div>
       <div class="set-row">
         <span class="set-l">Music Volume</span>
         <input type="range" id="set-music" min="0" max="1" step="0.05" value="1" aria-label="Music volume" />
@@ -5235,27 +5240,12 @@
         <input type="range" id="set-sfx" min="0" max="0.5" step="0.01" value="0.05" aria-label="Hit sound volume" />
         <span class="set-v" id="set-sfx-v">10%</span>
       </div>
+
+      <div class="set-section">GAMEPLAY</div>
       <div class="set-row">
-        <span class="set-l">Visual Effects</span>
-        <div class="set-seg" id="set-fx">
-          <button data-fx="full" class="active">Full</button>
-          <button data-fx="lite">Lite</button>
-        </div>
-      </div>
-      <div class="set-row">
-        <span class="set-l">FX Intensity</span>
-        <div class="set-seg" id="set-fxi">
-          <button data-fxi="subtle">Subtle</button>
-          <button data-fxi="balanced" class="active">Balanced</button>
-          <button data-fxi="intense">Intense</button>
-        </div>
-      </div>
-      <div class="set-row">
-        <span class="set-l">Reduce Motion</span>
-        <div class="set-seg" id="set-rm">
-          <button data-rm="off" class="active">Off</button>
-          <button data-rm="on">On</button>
-        </div>
+        <span class="set-l">Note Speed</span>
+        <input type="range" id="set-scroll" min="0.5" max="2" step="0.05" value="1" aria-label="Note speed" /><!-- build65 (cycle-5): range now matches the engine clamp [0.5,2.0] so a stored/hand-set value can't land off the track -->
+        <span class="set-v" id="set-scroll-v">1.0×</span>
       </div>
       <div class="set-row">
         <span class="set-l">Fail Mode</span>
@@ -5269,13 +5259,6 @@
         <div class="set-seg" id="set-chart">
           <button data-chart="musical" class="active">Musical</button>
           <button data-chart="classic">Classic</button>
-        </div>
-      </div>
-      <div class="set-row">
-        <span class="set-l">Guitar on Levels</span>
-        <div class="set-seg" id="set-levelguitar">
-          <button data-levelguitar="mine" class="active">My Guitar</button>
-          <button data-levelguitar="level">Level's</button>
         </div>
       </div>
       <div class="set-row">
@@ -5300,19 +5283,52 @@
         </div>
       </div>
       <div class="set-row">
-        <span class="set-l">Background</span>
-        <div class="set-seg" id="set-bg">
-          <button data-bg="cinematic" class="active">Cinematic</button>
-          <button data-bg="performance">Performance</button>
-        </div>
-      </div>
-      <div class="set-row">
         <span class="set-l">Lane Mode</span>
         <div class="set-seg" id="set-lanemode">
           <button data-lanemode="standard">6-Lane · Keys</button>
           <button data-lanemode="gh" class="active">5-String · Guitar</button>
         </div>
       </div>
+      <div class="set-row">
+        <span class="set-l">Guitar on Levels</span>
+        <div class="set-seg" id="set-levelguitar">
+          <button data-levelguitar="mine" class="active">My Guitar</button>
+          <button data-levelguitar="level">Level's</button>
+        </div>
+      </div>
+
+      <div class="set-section">VISUALS</div>
+      <div class="set-row">
+        <span class="set-l">Visual Effects</span>
+        <div class="set-seg" id="set-fx">
+          <button data-fx="full" class="active">Full</button>
+          <button data-fx="lite">Lite</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="set-l">FX Intensity</span>
+        <div class="set-seg" id="set-fxi">
+          <button data-fxi="subtle">Subtle</button>
+          <button data-fxi="balanced" class="active">Balanced</button>
+          <button data-fxi="intense">Intense</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="set-l">Reduce Motion</span>
+        <div class="set-seg" id="set-rm">
+          <button data-rm="off" class="active">Off</button>
+          <button data-rm="on">On</button>
+        </div>
+      </div>
+      <div class="set-row">
+        <span class="set-l">Background</span>
+        <div class="set-seg" id="set-bg">
+          <button data-bg="cinematic" class="active">Cinematic</button>
+          <button data-bg="performance">Performance</button>
+        </div>
+      </div>
+
+      <div class="set-section">CONTROLS</div>
       <div class="set-row">
         <span class="set-l">Inputs</span>
         <span class="set-status" id="set-inputs">Touch · Keyboard (A S D · J K)</span>
@@ -5884,13 +5900,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=349"></script>
+<script src="game.js?v=350"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=349"></script>
-<script src="catalog.js?v=349"></script>
-<script src="multiplayer.js?v=349"></script>
+<script src="jukebox.js?v=350"></script>
+<script src="catalog.js?v=350"></script>
+<script src="multiplayer.js?v=350"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=349"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=350"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -9432,6 +9448,28 @@
   // build62: every icon-button gets a hover tooltip (title) from its aria-label — mouse users had zero hover
   // discoverability on the header icons (the gameplay mute-btn already pairs aria-label + title).
   try { document.querySelectorAll('.icon-btn[aria-label]').forEach(function (b) { if (!b.getAttribute('title')) b.setAttribute('title', b.getAttribute('aria-label')); }); } catch (e) {}
+
+  // build99L: the controller-wizard's bottom button reads "CLOSE" mid-capture, which looks like a SAVE — but clicking it
+  // there cancels & restores the prior map (game.js already routes it through cancelPadWizard while active). Relabel it
+  // "CANCEL & CLOSE" during the fret-mapping phase so the discard is honest; game.js still sets "DONE" at the calibration/
+  // finish phase, which we leave alone. Render-only: a MutationObserver on the wizard's visibility — no engine logic touched.
+  try {
+    var _wiz = $('pad-wizard');
+    if (_wiz) {
+      var _relabelWiz = function () {
+        var done = $('pad-wizard-done'); if (!done) return;
+        var visible = _wiz.style.display !== 'none' && _wiz.offsetParent !== null;
+        var phase = null; try { phase = window.__rrPadWizard && window.__rrPadWizard(); } catch (e) {}
+        // only override during the active fret-mapping phase (calStep < 0). Once calibration runs, game.js owns the label ("DONE").
+        if (visible && phase && phase.active && (phase.calStep == null || phase.calStep < 0)) {
+          if (done.textContent !== 'CANCEL & CLOSE') done.textContent = 'CANCEL & CLOSE';
+        }
+      };
+      new MutationObserver(_relabelWiz).observe(_wiz, { attributes: true, attributeFilter: ['style'] });
+      // also re-check shortly after the wizard launches (the launch sets display:flex, then game.js renders)
+      ['set-pad-wizard', 'gh-setup'].forEach(function (id) { var b = $(id); if (b) b.addEventListener('click', function () { setTimeout(_relabelWiz, 30); setTimeout(_relabelWiz, 200); }); });
+    }
+  } catch (e) {}
 
   // ============================================================================
   // OVERLAY SYSTEM-LAYER POLISH (additive · never throws):
