@@ -508,44 +508,56 @@
   // not a plain poster grid. This cinematic NOW-SHOWING hero tops the Flixs list: the featured film's poster as a
   // letterboxed backdrop, a premiere kicker, the title + meta, and a PLAY PREMIERE button that launches the film as a
   // playable level (the music video plays full-screen behind the highway, charted from its audio). One-click play.
-  function flixsHero(t) {
-    if (!t) return null;
+  // build99f: takes the FILM LIST (not one film) so the hero can self-heal — it renders the first film immediately,
+  // then async-probes audio reachability and swaps to the first PLAYABLE film, so PLAY PREMIERE never 404s on the
+  // flagship CTA (~7% of Mux films are missing their audio rendition).
+  function flixsHero(list) {
+    const films = (list || []).filter(Boolean);
+    if (!films.length) return null;
     const hero = document.createElement('div');
     hero.className = 'flixs-marquee';
-    const poster = RC().posterFor(t) || '';
-    const runtime = RC().fmtDur(t.duration_seconds) || '';
-    const genre = RC().cleanGenre(t.genre) || '';
-    const artist = t.artist_name || '';
-    const statsParts = ['★ AI FILM', runtime, genre].filter(Boolean);
-    // build99c: data-gap films (no runtime/genre) showed a lone star-AI-FILM row + a separate by-line (two stunted
-    // lines). Fold the artist INTO the stat row in that case and drop the by-line.
-    let byLine = artist ? 'by ' + artist : '';
-    if (statsParts.length === 1 && artist) { statsParts.push(artist); byLine = ''; }
-    const stats = statsParts.join(' · ');
-    hero.innerHTML =
-      '<span class="fm-bg"></span>' +
-      '<span class="fm-grain"></span>' +
-      '<span class="fm-scrim"></span>' +
-      '<span class="fm-vig"></span>' +
-      '<span class="fm-letterbox"></span>' +
-      '<span class="fm-tag">✦ FEATURED PREMIERE' + (runtime ? ' · ' + RC().escapeHtml(runtime) : '') + '</span>' +
-      '<span class="fm-body">' +
-        '<span class="fm-kicker"><b>●</b> NOW SHOWING · AI PREMIERE</span>' +
-        '<span class="fm-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
-        '<span class="fm-stats">' + RC().escapeHtml(stats) + '</span>' +
-        (byLine ? '<span class="fm-by">' + RC().escapeHtml(byLine) + '</span>' : '') +
-        '<span class="fm-actions">' +
-          '<button class="fm-play" type="button">▶ PLAY PREMIERE</button>' +
-          '<button class="fm-info" type="button">Details</button>' +
-        '</span>' +
-        '<span class="fm-note">The music video plays behind the highway — hit the notes to the song.</span>' +
-      '</span>';
-    if (poster) { const bg = hero.querySelector('.fm-bg'); if (bg) bg.style.backgroundImage = 'url("' + poster.replace(/"/g, '%22') + '")'; }
-    const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().playFlix(t); });
-    const ib = hero.querySelector('.fm-info'); if (ib) ib.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });
+    function render(t) {
+      const poster = RC().posterFor(t) || '';
+      const runtime = RC().fmtDur(t.duration_seconds) || '';
+      const genre = RC().cleanGenre(t.genre) || '';
+      const artist = t.artist_name || '';
+      const statsParts = ['★ AI FILM', runtime, genre].filter(Boolean);
+      // data-gap films (no runtime/genre): fold the artist INTO the stat row (else two stunted lines), drop the by-line.
+      let byLine = artist ? 'by ' + artist : '';
+      if (statsParts.length === 1 && artist) { statsParts.push(artist); byLine = ''; }
+      const stats = statsParts.join(' · ');
+      hero.innerHTML =
+        '<span class="fm-bg"></span>' +
+        '<span class="fm-grain"></span>' +
+        '<span class="fm-scrim"></span>' +
+        '<span class="fm-vig"></span>' +
+        '<span class="fm-letterbox"></span>' +
+        '<span class="fm-tag">✦ FEATURED PREMIERE' + (runtime ? ' · ' + RC().escapeHtml(runtime) : '') + '</span>' +
+        '<span class="fm-body">' +
+          '<span class="fm-kicker"><b>●</b> NOW SHOWING · AI PREMIERE</span>' +
+          '<span class="fm-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
+          '<span class="fm-stats">' + RC().escapeHtml(stats) + '</span>' +
+          (byLine ? '<span class="fm-by">' + RC().escapeHtml(byLine) + '</span>' : '') +
+          '<span class="fm-actions">' +
+            '<button class="fm-play" type="button">▶ PLAY PREMIERE</button>' +
+            '<button class="fm-info" type="button">Details</button>' +
+          '</span>' +
+          '<span class="fm-note">The music video plays behind the highway — hit the notes to the song.</span>' +
+        '</span>';
+      if (poster) { const bg = hero.querySelector('.fm-bg'); if (bg) bg.style.backgroundImage = 'url("' + poster.replace(/"/g, '%22') + '")'; }
+      const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().playFlix(t); });
+      const ib = hero.querySelector('.fm-info'); if (ib) ib.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });
+    }
+    render(films[0]);
+    // self-heal: if the featured film's audio is unreachable, re-render with the first PLAYABLE one (keeps the hero's
+    // prominent PLAY PREMIERE from 404-ing). Cheap session-cached probes; re-render only if the pick actually changed.
+    try {
+      if (RC().firstPlayableFlix) RC().firstPlayableFlix(films, 8).then(function (good) {
+        if (good && good.id !== films[0].id) render(good);
+      }).catch(function () {});
+    } catch (e) {}
     return hero;
   }
-
   // 16:9 cinematic poster card for AI Flixs (vs the music songCard row). Phase 5 discovery surface.
   function videoCard(t) {
     const card = document.createElement('button');
@@ -588,7 +600,7 @@
     // film so it isn't duplicated. Only on the un-searched Flixs list (a query collapses back to the plain grid).
     const showHero = songsScope === 'flixs' && songsPoster && !($('songs-search').value || '').trim();
     if (showHero) {
-      const hero = flixsHero(songsList[0]);
+      const hero = flixsHero(songsList);   // build99f: pass the LIST so the hero self-heals to a playable film
       if (hero) { host.appendChild(hero); songsRendered = 1; }
     }
     appendSongs();

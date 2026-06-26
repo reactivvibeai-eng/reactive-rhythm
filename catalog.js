@@ -1168,11 +1168,39 @@
   // they stay in sync. Falls back to the Watch preview only when the film has no decodable audio.
   // ============================================================================
   let _flixRaf = 0, _flixPrevSrc = null, _flixActive = false, _flixVideoUrl = '', _flixSawActive = false;
+  // build99f (playtest P0): ~7% of the Mux-hosted films are missing their audio.m4a rendition, so a deterministic
+  // featured film (or a tapped card) could 404 and dead-end on the loading screen — the worst first-impression bug
+  // on the flagship feature. Probe audio reachability once per film (session-cached) so the premiere hero can
+  // self-heal to a PLAYABLE film and known-bad films fall back to the trailer instead of dead-ending.
+  const _flixAudioCache = new Map();   // trackId → true (reachable) | false (404/err)
+  function probeFlixAudio(track) {
+    const id = track && track.id; if (!id) return Promise.resolve(false);
+    if (_flixAudioCache.has(id)) return Promise.resolve(_flixAudioCache.get(id));
+    const url = trackAudioUrl(track);
+    if (!url) { _flixAudioCache.set(id, false); return Promise.resolve(false); }
+    return fetch(url, { method: 'GET', headers: { Range: 'bytes=0-1' } })   // 1-byte range = cheap reachability check
+      .then(function (r) { const ok = !!(r && (r.ok || r.status === 206)); _flixAudioCache.set(id, ok); return ok; })
+      .catch(function () { _flixAudioCache.set(id, false); return false; });
+  }
+  async function firstPlayableFlix(films, max) {
+    const list = (films || []).filter(Boolean);
+    const n = Math.min(list.length, max || 8);
+    for (let i = 0; i < n; i++) { try { if (await probeFlixAudio(list[i])) return list[i]; } catch (e) {} }
+    return list[0] || null;   // none verified quickly → fall back to the first (it may still work; play-path handles failure)
+  }
   function playFlix(track) {
     const aurl = trackAudioUrl(track);            // decodable music → the chart + the audio + the clock
     const vurl = videoWatchUrl(track);            // the music video → the full-screen backdrop
     if (!aurl) { if (vurl) openWatch(track, vurl); return; }   // no chartable audio → fall back to the Watch preview
+    // known-bad audio (already probed 404) → don't dead-end on the loading screen; show the trailer instead
+    if (track && _flixAudioCache.get(track.id) === false) { if (vurl) { openWatch(track, vurl); return; } }
     closeSheet(); stopPreview(); currentTrack = track;
+    // build99e (owner): a flix uses the player's EQUIPPED guitar — the clean default crimson for anyone who hasn't
+    // equipped a skin (so the music video reads), and their own skin if they chose one. Drop any leftover per-level
+    // skin/environment first so a film can never inherit a campaign level's guitar. (clearEnvironment sets
+    // _levelSkinActive=false → the play-setup re-applies the equipped/default skin.) The flix video backdrop is set
+    // right after + re-asserted each frame, so clearing the env's backdrop here is harmless.
+    try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
     _startFlixBackdrop(vurl || aurl);
     window.RhythmGame.playUrl(aurl, {              // chart + play exactly like a live track
       id: track.id, title: track.title, artist: track.artist_credit_name || track.artist_name,
@@ -1522,7 +1550,7 @@
     allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
-    playFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio) — used by the AI Flixs premiere hero
+    playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
     search, sortTracks, sections, getBest,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,
