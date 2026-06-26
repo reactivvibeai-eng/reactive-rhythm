@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=352" />
+<link rel="stylesheet" href="jukebox.css?v=353" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5424,6 +5424,10 @@
         <button class="ghost-btn" id="set-reset-all">RESET ALL SETTINGS</button>
         <button class="ghost-btn" id="set-close">DONE</button>
       </div>
+      <!-- build99M (launch): support / report-a-chart channel — a tester (or a player) can flag a broken chart or a failed purchase. -->
+      <div style="margin-top:18px;text-align:center;">
+        <a href="mailto:reactivvibeai@gmail.com?subject=Reactive%20Rhythm%20%E2%80%94%20report&amp;body=What%20happened%3A%0A%0ASong%2Flevel%3A%0ADevice%2Fbrowser%3A%0A" style="font-family:'Chakra Petch',monospace;font-size:11.5px;color:var(--ink-dim);text-decoration:none;border-bottom:1px solid var(--line);">Found a bug or a broken chart? Report it →</a>
+      </div>
     </div>
 
     <!-- ===== GUIDED CONTROLLER WIZARD (modal overlay over the whole Settings screen) ===== -->
@@ -5923,13 +5927,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=352"></script>
+<script src="game.js?v=353"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=352"></script>
-<script src="catalog.js?v=352"></script>
-<script src="multiplayer.js?v=352"></script>
+<script src="jukebox.js?v=353"></script>
+<script src="catalog.js?v=353"></script>
+<script src="multiplayer.js?v=353"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=352"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=353"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

@@ -4016,6 +4016,17 @@
   // never finds Settings. Decided once per device (rr_autolite); the user always wins afterward (Settings → applySettings).
   let _qSamples = 0, _qSlow = 0, _qAutoDone = false;
   try { _qAutoDone = localStorage.getItem('rr_autolite') === '1'; } catch (e) {}
+  // build99M (launch): pre-emptive lite on a CLEARLY weak device (<=2GB deviceMemory) so it doesn't stutter through the
+  // first ~2.5s before the adaptive sampler decides. fxLite ONLY (lighter canvas FX) — NEVER bgMode (that hides the AI Flix
+  // + journey videos, the build66.10 footgun). Skipped if the player already saved an fxLite preference; they always win in
+  // Settings. Quiet (no toast / no persist) — the adaptive sampler still confirms + persists if the device truly can't hold up.
+  try {
+    if (!_qAutoDone) {
+      var _dm = navigator.deviceMemory;
+      var _savedLite = null; try { var _ss = JSON.parse(localStorage.getItem('rr_settings') || '{}'); _savedLite = (typeof _ss.fxLite === 'boolean') ? _ss.fxLite : null; } catch (e) {}
+      if (_savedLite === null && _dm && _dm <= 2) fxLite = true;
+    }
+  } catch (e) {}
   function _autoLite() {
     _qAutoDone = true;
     try { localStorage.setItem('rr_autolite', '1'); } catch (e) {}
