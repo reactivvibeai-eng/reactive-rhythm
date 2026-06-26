@@ -4306,3 +4306,11 @@ Ships alongside build99h (MP redesign). From the round-3 controller-research age
 - **Detection:** added `riffmaster` to `GH_ID_RE` (note: Chrome may still report it as a generic XInput pad with no "guitar" token — the wizard remains the fallback).
 - **Playtest P1 — stale loading meter:** a failed play (e.g. a 404) bailed to the menu but left the loading ring/`%` stale, flashing "8%" on the next load. Now reset to 0% / full ring offset in the play-failure catch.
 - Buy recommendation saved to handoff: **PDP Riffmaster, Xbox/Windows model (049-034-BK)** — its own USB dongle, no adapter; NOT the PS5 model, NOT GH Live.
+
+### build99k — Systems-polish swarm: P1 real bugs (?v 344→345, game.js + index.html + catalog.js)
+A 6-surface polish-critique swarm (wryzys2pj: start/menu, store, career, leaderboard, settings, results) returned a prioritized checklist. First pass = the genuine BUGS it caught:
+- **Results blurb "undefined" crash:** the grade→blurb map had no `F` key, so an F (or any unmapped grade) rendered the literal string "undefined". Added `F`, a `|| blurbs.D` fallback, and softened the C/D copy (a C/D is a *completed* clear, not a "failure" — the old copy told a passing player ECH0 "logged your failure"). [game.js renderResults]
+- **Leaderboard "You / You / You":** the local Global board flagged EVERY row `you:true` (crimson outline on all, zero contrast), and the per-song board named every row literally "You". Now only the top row highlights; per-song rows read "Your best" (difficulty already in the subtitle). [index.html renderGlobalLocal / renderSongLocal]
+- **Store badge collision:** the type chip + the FEATURED/NEW flag both anchored top-left and overlapped into two stacked pills. Now the flag replaces the type chip when present. [index.html itemHtml]
+- **Results count-up ignored reduce-motion** (the only reveal that did) — now lands on final numbers instantly under `rr-reduce-motion`; also gave the star rating + grade an aria-label (they were aria-hidden). [game.js]
+- **Career stat consistency:** a completed run with no track id (the practice demo) credited runs/grade/combo but not `c.songs`, so the profile showed "Runs 1 / Full Combos 1" with "Songs Played 0". Now every completed run records under a stable key. [catalog.js recordLocal]

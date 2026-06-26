@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=344" />
+<link rel="stylesheet" href="jukebox.css?v=345" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5751,11 +5751,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=344"></script>
+<script src="game.js?v=345"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=344"></script>
-<script src="catalog.js?v=344"></script>
-<script src="multiplayer.js?v=344"></script>
+<script src="jukebox.js?v=345"></script>
+<script src="catalog.js?v=345"></script>
+<script src="multiplayer.js?v=345"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>
@@ -7632,7 +7632,8 @@
     var runs = localRuns().slice(0, 20);
     if (!runs.length) { board.innerHTML = ''; empty.textContent = 'No runs yet — play a few songs to build your board.'; empty.hidden = false; return; }
     empty.hidden = true;
-    var items = runs.map(function (r, i) { return { rank: i + 1, name: r.title, sub: r.difficulty, score: r.score, acc: r.accuracy, grade: r.grade, you: true }; });
+    // build99k: this is ALL your runs, so flagging EVERY row 'you' (crimson outline) gave zero contrast — highlight only #1 (your best).
+    var items = runs.map(function (r, i) { return { rank: i + 1, name: r.title, sub: r.difficulty, score: r.score, acc: r.accuracy, grade: r.grade, you: i === 0 }; });
     board.innerHTML = boardHtml('<div class="lb-head">YOUR TOP RUNS</div>', items);
   }
 
@@ -7684,7 +7685,9 @@
     rows.sort(function (a, b) { return b.score - a.score; });
     if (!rows.length) { board.innerHTML = head; empty.textContent = 'No score on this track yet — play it to set the pace.'; empty.hidden = false; return; }
     empty.hidden = true;
-    var items = rows.map(function (r, i) { return { rank: i + 1, name: 'You', sub: r.d, score: r.score, acc: r.accuracy, grade: r.grade, you: true }; });
+    // build99k: these are your bests per difficulty — naming every one literally 'You' made the podium read "You/You/You".
+    // Label as "Your best" (the difficulty is in `sub`) and only highlight the top one.
+    var items = rows.map(function (r, i) { return { rank: i + 1, name: 'Your best', sub: r.d, score: r.score, acc: r.accuracy, grade: r.grade, you: i === 0 }; });
     board.innerHTML = boardHtml(head, items);
   }
 
@@ -8117,8 +8120,10 @@
     return '<div class="store-item' + (owned ? ' owned' : '') + (equipped ? ' equipped' : '') + (soon ? ' soon' : '') +
         '" data-rarity="' + r + '" data-key="' + esc(ownKey(it)) + '">' +
       '<div class="store-art">' + artHtml(it) +
-        '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span>' +
-        (flag && !owned ? '<span class="si-flag ' + flag + '">' + (flag === 'featured' ? '<svg class="ic"><use href="#ic-star"/></svg>FEATURED' : 'NEW') + '</span>' : '') +
+        // build99k: the type chip + the FEATURED/NEW flag both anchor top-left and overlapped into two stacked pills.
+        // Show the flag when present (it's the higher-value signal); otherwise show the type chip.
+        (flag && !owned ? '<span class="si-flag ' + flag + '">' + (flag === 'featured' ? '<svg class="ic"><use href="#ic-star"/></svg>FEATURED' : 'NEW') + '</span>'
+                        : '<span class="store-type">' + esc(typeLabel(it.item_type)) + '</span>') +
         '<svg class="r-gem"><use href="#ic-gem"/></svg>' +
         (owned && !equipped ? '<span class="si-owned-tab"><svg class="ic"><use href="#ic-check"/></svg>OWNED</span>' : '') +
         (equipped ? '<span class="si-equip-banner"><svg class="ic"><use href="#ic-check"/></svg>EQUIPPED</span>' : '') +

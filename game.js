@@ -2527,6 +2527,8 @@
       const sh = $('results-stars');
       if (sh) {
         sh.innerHTML = '';
+        sh.setAttribute('role', 'img'); sh.setAttribute('aria-label', starN + ' of 3 stars');   // build99k: the star reward was aria-hidden — announce it
+        try { const gEl = $('results-grade'); if (gEl) gEl.setAttribute('aria-label', 'Grade ' + grade); } catch (e) {}
         for (let i = 0; i < 3; i++) {
           const st = document.createElement('span');
           st.className = 'rstar' + (i < starN ? ' on' : '');
@@ -2535,17 +2537,22 @@
           sh.appendChild(st);
         }
       } }
-    // count-up the score & accuracy for a satisfying results reveal
+    // count-up the score & accuracy for a satisfying results reveal — but honor reduce-motion (build99k: this was the
+    // only results reveal that ignored it; a reduced-motion player should land on the final numbers instantly)
     const scoreEl = $('rs-score'), accEl = $('rs-acc');
-    const startT = performance.now(), dur = 900;
-    (function tick(now) {
-      const p = Math.min(1, (now - startT) / dur);
-      const e = 1 - Math.pow(1 - p, 3);            // ease-out cubic
-      scoreEl.textContent = Math.floor(results.score * e).toLocaleString();
-      accEl.textContent = (accPct * e).toFixed(1) + '%';
-      if (p < 1) requestAnimationFrame(tick);
-      else { scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%'; }
-    })(startT);
+    if (document.documentElement.classList.contains('rr-reduce-motion')) {
+      scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%';
+    } else {
+      const startT = performance.now(), dur = 900;
+      (function tick(now) {
+        const p = Math.min(1, (now - startT) / dur);
+        const e = 1 - Math.pow(1 - p, 3);            // ease-out cubic
+        scoreEl.textContent = Math.floor(results.score * e).toLocaleString();
+        accEl.textContent = (accPct * e).toFixed(1) + '%';
+        if (p < 1) requestAnimationFrame(tick);
+        else { scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%'; }
+      })(startT);
+    }
     $('rs-maxcombo').textContent = results.max_combo;
     $('rs-hit').textContent = results.notes_hit + ' / ' + results.notes_total;
     const tname = session && session.meta ? session.meta.title : 'Lunar Waves';
@@ -2555,10 +2562,11 @@
       S: 'The cathedral is humming. Echoes have folded inward. The rift accepts you.',
       A: 'Signal locked. The crowd is screaming your frequency back at you.',
       B: 'Stable resonance. A few cracks in the architecture — survivable.',
-      C: 'The static won. The rift bent but did not break. Try again, controller.',
-      D: 'The song collapsed. ECH0 has logged your failure as a remix prompt.',
+      C: 'You held the line. The rift wobbled but you stayed on it — tighten up and climb.',   // a C is a PASS, not a failure
+      D: 'Rough run, but you finished it. The rift remembers persistence — run it back.',
+      F: 'The song got away from you this time. Shake it off and dive back in.',
     };
-    $('results-blurb').textContent = blurbs[grade];
+    $('results-blurb').textContent = blurbs[grade] || blurbs.D;   // build99k: guard — an unmapped grade used to render the literal string "undefined"
     // build83: EARLY/LATE timing summary — avg signed bias + a mini histogram (the keyboard grinder's feedback loop)
     try {
       const _old = document.getElementById('results-timing'); if (_old) _old.remove();

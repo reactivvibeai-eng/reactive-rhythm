@@ -1352,7 +1352,10 @@
         c.bestCombo = Math.max(c.bestCombo || 0, results.max_combo || 0);
         if (results.full_combo) c.fullCombos = (c.fullCombos || 0) + 1;
         c.grades = c.grades || {}; c.grades[grade] = (c.grades[grade] || 0) + 1;
-        if (currentTrack && currentTrack.id) { c.songs = c.songs || {}; c.songs[currentTrack.id] = (c.songs[currentTrack.id] || 0) + 1; }
+        // build99j (playtest P2): a completed run with no track id (e.g. the practice demo) used to credit runs/grade/
+        // combo but NOT c.songs, so the profile read "Runs 1 / Full Combos 1 / Grade B" with "Songs Played 0".
+        // Always record the run under a stable key (id → title → '_practice') so "songs played" can't lag the run count.
+        { const songKey = (currentTrack && currentTrack.id) || (currentTrack && currentTrack.title) || (results.title) || '_practice'; c.songs = c.songs || {}; c.songs[songKey] = (c.songs[songKey] || 0) + 1; }
       }
       localStorage.setItem('rr_career', JSON.stringify(c));
     } catch (e) {}
