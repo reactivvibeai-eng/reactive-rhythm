@@ -6347,6 +6347,243 @@
   if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
   if (!window.RhythmGame.getMusicAnalyser) window.RhythmGame.getMusicAnalyser = function () { return musicAnalyser; };   // build66: live FFT tap (frequency + waveform) for procbg.js reactive backdrops
 
+  // ===========================================================================
+  // LOCAL COUCH VERSUS — P2 SHADOW SCORER (build99j; additive, default-INERT).
+  // ---------------------------------------------------------------------------
+  // createEngine() does NOT clone the ~440KB engine. It spins up a SECOND, PARALLEL
+  // scoring layer that READS the shared, authoritative game state (notes[], songTime(),
+  // the active DIFFICULTY hit window, JUDGE, the mult formula) and keeps its OWN P2
+  // state in a fully separate namespace (_p2*). It NEVER touches P1's _frets / _padPrev /
+  // score / combo / counts or the shared notes[].judged|hit fields — P1 (single-player +
+  // online MP) stays byte-identical. The whole thing only runs while a couch match is live,
+  // and tears down cleanly. couch.js drives the P2 deck render + the verdict; this layer
+  // owns P2's input, scoring, and miss-detection and exposes a render frame + ghost notes.
+  // ===========================================================================
+  let _p2 = null;   // the single live P2 layer (null when no couch match) — only one local versus at a time
+  window.RhythmGame.createEngine = function (opts) {
+    opts = opts || {};
+    // tear down any prior P2 layer first (a rematch re-creates it)
+    if (_p2 && _p2.teardown) { try { _p2.teardown(); } catch (e) {} }
+
+    const gpIndex = (typeof opts.gamepadIndex === 'number') ? opts.gamepadIndex : null;
+    const onEnd = (typeof opts.onSongEnd === 'function') ? opts.onSongEnd : null;
+
+    // ---- P2 STATE (entirely separate from P1; nothing here aliases P1's variables) -------
+    const P = {
+      score: 0, combo: 0, maxCombo: 0,
+      counts: { perfect: 0, great: 0, good: 0, miss: 0 },
+      overdrive: 0, odActive: false,
+      judged: new Set(),               // note indices P2 has resolved (hit OR missed) — parallel to P1's notes[].judged
+      hitKind: Object.create(null),    // index -> 'perfect'|'great'|'good'|'bomb' (for P2 deck gem fade; display-only)
+      frets: new Set(),                // P2's held fret LANES (GH require-strum) — SEPARATE from P1's _frets
+      padPrev: Object.create(null),    // P2's per-button edge state — SEPARATE from P1's _padPrev
+      strumAxisPrev: 0, lastStrumT: 0,
+      holdNote: new Array(LANE_COUNT).fill(null),  // P2's active sustains (keyed by lane), separate from P1's holdNote
+      holdScored: new Array(LANE_COUNT).fill(0),
+      laneDown: new Array(LANE_COUNT).fill(false), // P2's physically-held lanes (for sustain)
+      ev: [],                          // drained event buffer for the P2 deck: [{l:lane, j:'p'|'g'|'m'}]
+      lastJudgeT: 0,
+      raf: 0, alive: true
+    };
+    function _p2push(lane, j) { P.ev.push({ l: lane, j: j }); if (P.ev.length > 12) P.ev.shift(); }
+    function _p2Mult() {
+      const tp = timingProf();
+      const ct = Math.min(tp.comboCap, 1 + Math.floor(P.combo / tp.comboStep));
+      const cap = tp.comboCap + 1;
+      return Math.min(MAX_MULT, Math.min(P.odActive ? cap : tp.comboCap, P.odActive ? ct + 1 : ct));   // identical to curMult(), P2 namespace
+    }
+
+    // ---- P2 hit-detection (mirrors handleHit, but in the P2 namespace) -------------------
+    function p2LaneInput(lane, now) {
+      const inputLag = now ? Math.min(0.05, Math.max(0, (performance.now() - now) / 1000)) : 0;
+      const t = songTime() - audioOffset - inputLag;
+      const diff = DIFFICULTY[difficulty];
+      let target = null, targetIdx = -1, targetDiff = Infinity;
+      // notes[] is kept time-sorted ascending (engine invariant) → same early-break scan as P1
+      for (let i = 0; i < notes.length; i++) {
+        const n = notes[i];
+        if (!n.open && n.lane !== lane) continue;
+        if (P.judged.has(i)) continue;              // P2's OWN judged set — independent of P1's n.judged
+        if (n.time < t - diff.hitWindow) continue;
+        if (n.time > t + diff.hitWindow) break;
+        const d = Math.abs(n.time - t);
+        if (d < targetDiff) { targetDiff = d; target = n; targetIdx = i; }
+      }
+      if (!target) return;   // empty press: no combo break, no penalty (matches P1's keyboard-feel whiff guardrail)
+
+      // BOMB: P2 striking a bomb takes the same penalty the main engine applies (combo reset).
+      if (target.type === 'bomb') {
+        P.judged.add(targetIdx);
+        P.combo = 0;
+        _p2push(lane, 'm');
+        P.lastJudgeT = performance.now();
+        return;
+      }
+      const ad = targetDiff, tp = timingProf();
+      let kind;
+      if (ad < diff.hitWindow * tp.perfFrac) kind = 'perfect';
+      else if (ad < diff.hitWindow * tp.greatFrac) kind = 'great';
+      else kind = 'good';
+      P.judged.add(targetIdx); P.hitKind[targetIdx] = kind;
+      P.counts[kind]++; P.combo++; if (P.combo > P.maxCombo) P.maxCombo = P.combo;
+      const mult = _p2Mult();
+      P.score += JUDGE[kind].score * mult;
+      if (!P.odActive) P.overdrive = Math.min(1, P.overdrive + (target.type === 'star' ? 0.14 : 0.022));
+      _p2push(lane, kind === 'perfect' ? 'p' : 'g');
+      P.lastJudgeT = performance.now();
+      // a struck hold → P2 sustain (scored continuously in p2Frame while the fret stays held)
+      if (target.type === 'hold' && target.hold > 0) { P.holdNote[lane] = { note: target, idx: targetIdx }; P.holdScored[lane] = 0; }
+    }
+    // P2 strum (GH guitars): fire every held fret at the strum instant (chord-safe), debounced like tryStrum
+    function p2Strum(now) {
+      if (now - P.lastStrumT < (typeof STRUM_DEBOUNCE_MS === 'number' ? STRUM_DEBOUNCE_MS : 60)) return;
+      P.lastStrumT = now;
+      if (P.frets.size === 0) return;
+      P.frets.forEach(function (lane) { p2LaneInput(lane, now); });
+    }
+
+    // ---- P2 gamepad poll (reuses padMap + strumCfg + requireStrum, P2's OWN edge state) --
+    function p2PollPad() {
+      if (gpIndex == null || !navigator.getGamepads) return;
+      const pads = navigator.getGamepads();
+      const gp = pads[gpIndex]; if (!gp) return;
+      const strum = requireStrum();     // same global rule: a detected GH guitar on the gh profile must strum
+      for (let b = 0; b < gp.buttons.length; b++) {
+        const pressed = gp.buttons[b].pressed; const was = P.padPrev[b]; P.padPrev[b] = pressed;
+        if (pressed && !was) {
+          const lane = padMap[b];
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) {
+            if (strum) { P.frets.add(lane); P.laneDown[lane] = true; }      // GH: fret held, no hit until strum
+            else { P.laneDown[lane] = true; p2LaneInput(lane, performance.now()); }   // standard pad: press = hit
+          }
+          if (strum && strumCfg.btns.indexOf(b) >= 0) p2Strum(performance.now());     // strum bar → fire held frets
+          if (strum && b === strumCfg.spBtn) { if (P.overdrive >= 1 && !P.odActive) { P.odActive = true; P._odUntil = songTime() + 6; } }   // Select → P2 Star Power
+        } else if (!pressed && was) {
+          const lane = padMap[b];
+          if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (strum) P.frets.delete(lane); P.laneDown[lane] = false; }
+        }
+      }
+      // P2 strum AXIS (non-standard guitars whose D-pad collapses to a hat) — mirror pollGuitarAxes' strum edge
+      if (strum) {
+        const ax = gp.axes || [];
+        let sAxis = strumCfg.strumAxis;
+        if (sAxis == null && gp.mapping && gp.mapping !== 'standard' && ax.length >= 10) sAxis = 9;
+        if (sAxis != null && ax.length > sAxis) {
+          const v = ax[sAxis] || 0;
+          if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(P.strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) p2Strum(performance.now());
+          P.strumAxisPrev = v;
+        }
+      }
+    }
+
+    // ---- P2 per-frame tick: poll input, score sustains, run the miss pass ----------------
+    function p2Tick() {
+      if (!P.alive) return;
+      P.raf = requestAnimationFrame(p2Tick);
+      if (state !== 'playing') return;           // only score while the shared clock is live
+      p2PollPad();
+      const t = songTime();
+      const jt = t - audioOffset;
+      const diff = DIFFICULTY[difficulty];
+      // OD auto-drain (P2 Star Power is time-boxed, like P1's)
+      if (P.odActive) { if (t >= (P._odUntil || 0)) { P.odActive = false; P.overdrive = 0; } else { P.overdrive = Math.max(0, (P._odUntil - t) / 6); } }
+      // P2 sustain payout: a struck hold keeps paying while THIS player's fret stays held
+      for (let i = 0; i < LANE_COUNT; i++) {
+        const h = P.holdNote[i]; if (!h) continue;
+        const hn = h.note, end = hn.time + hn.hold;
+        if (jt >= end) { const rem = 1 - P.holdScored[i]; if (rem > 0) P.score += rem * HOLD_TOTAL * _p2Mult(); P.holdNote[i] = null; P.holdScored[i] = 0; continue; }
+        if (!P.laneDown[i]) { P.holdNote[i] = null; P.holdScored[i] = 0; continue; }   // let go early → drop the sustain
+        const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
+        const gain = frac - P.holdScored[i];
+        if (gain > 0) { P.score += gain * HOLD_TOTAL * _p2Mult(); P.holdScored[i] = frac; }
+      }
+      // P2 MISS pass: a note that passed P2's window unjudged-for-P2 breaks P2's combo (bombs dodged = safe)
+      for (let i = 0; i < notes.length; i++) {
+        const n = notes[i];
+        if (P.judged.has(i)) continue;
+        if (jt <= n.time + diff.hitWindow) continue;
+        P.judged.add(i);
+        if (n.type === 'bomb') continue;          // dodged hazard — no penalty (matches P1)
+        P.counts.miss++; P.combo = 0;
+        _p2push(n.lane, 'm');
+      }
+    }
+
+    // ---- P2 ghost notes: the SAME falling chart, but marked with P2's OWN judged state ----
+    // Mirrors getGhostNotes' projection param (d: 0=catcher, 1=nut) so couch.js reuses the board's
+    // perspective verbatim. `hit` reflects P2's real play (the gem fades once P2 resolves it).
+    const _p2GhostPool = []; for (let _g = 0; _g < 96; _g++) _p2GhostPool.push({ lane: 0, d: 0, type: 0, hit: false });
+    function p2Ghost(aheadSec) {
+      const t = songTime();
+      const approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul());
+      const dMax = (typeof aheadSec === 'number' && aheadSec > 0) ? Math.min(1.02, aheadSec / approach) : 1.02;
+      let n = 0; const L = notes.length;
+      for (let k = 0; k < L && n < _p2GhostPool.length; k++) {
+        const nn = notes[k];
+        if (nn.open) continue;
+        const d = (nn.time - t) / approach;
+        if (d < -0.12 || d > dMax) continue;
+        const p = _p2GhostPool[n++];
+        p.lane = nn.lane; p.d = d;
+        p.type = nn.type === 'hold' ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
+        p.hit = P.judged.has(k) && P.hitKind[k] != null;   // P2 hit this one → fade it on P2's deck
+      }
+      return { n: n, items: _p2GhostPool };
+    }
+
+    // ---- P2 render frame (lastOppState-shaped → couch.js feeds it to the deck renderer) ---
+    function p2Frame() {
+      const prog = (songDuration > 0 && player) ? Math.max(0, Math.min(1, songTime() / songDuration)) : 0;
+      const ev = P.ev; P.ev = [];   // drain
+      return { sc: Math.round(P.score), cb: P.combo, mu: _p2Mult(), od: +P.overdrive.toFixed(3), oda: P.odActive,
+        st: 1, pr: Math.round(prog * 1000) / 1000, ev: ev };
+    }
+
+    // ---- song-end hook: report P2's final score so couch.js can show the verdict ---------
+    if (onEnd) { try { window.RhythmGame.onSongEnd(function (reason, res) { if (P.alive) { try { onEnd(P.score, { reason: reason, maxCombo: P.maxCombo, counts: P.counts }); } catch (e) {} } }); } catch (e) {} }
+
+    function teardown() {
+      P.alive = false;
+      if (P.raf) { cancelAnimationFrame(P.raf); P.raf = 0; }
+      try { window.RhythmGame.setVsMode(false); } catch (e) {}
+      if (_p2 === api) _p2 = null;
+    }
+
+    // start the parallel loop + enter split-screen fit
+    try { window.RhythmGame.setVsMode(true); } catch (e) {}
+    P.raf = requestAnimationFrame(p2Tick);
+
+    const api = {
+      isP2: true,
+      getP2Frame: p2Frame,
+      getP2Ghost: p2Ghost,
+      getP2Score: function () { return P.score; },
+      getP2Stats: function () { return { score: Math.round(P.score), combo: P.combo, maxCombo: P.maxCombo, counts: P.counts }; },
+      setVsMode: function (b) { try { window.RhythmGame.setVsMode(b); } catch (e) {} },
+      teardown: teardown,
+      // ---- dev/test hooks (strip at content-freeze with __rrDebug) ----
+      // Drive the P2 scorer SYNCHRONOUSLY so its logic is verifiable when rAF is throttled (headless tab).
+      // Mirrors __rrDebug.press() for P1: _press judges a P2 lane input now; _tick runs one scoring frame
+      // (sustains + the miss pass); _setPad lets a test inject P2 button edges through the real pad path.
+      _p2state: P,
+      _press: function (lane) { p2LaneInput(lane, performance.now()); return P.score; },
+      _release: function (lane) { if (lane >= 0 && lane < LANE_COUNT) { if (requireStrum()) P.frets.delete(lane); P.laneDown[lane] = false; } },
+      _strum: function () { p2Strum(performance.now()); return P.score; },
+      _tick: function () { p2PollPad(); },                    // one input poll (reads navigator.getGamepads)
+      _scoreTick: function () {                               // one scoring frame WITHOUT rAF (sustains + miss pass)
+        const t = songTime(), jt = t - audioOffset, diff = DIFFICULTY[difficulty];
+        for (let i = 0; i < notes.length; i++) { const n = notes[i]; if (P.judged.has(i)) continue; if (jt <= n.time + diff.hitWindow) continue; P.judged.add(i); if (n.type === 'bomb') continue; P.counts.miss++; P.combo = 0; _p2push(n.lane, 'm'); }
+      }
+    };
+    _p2 = api;
+    // honor opts.expose so couch's contract call (expose:'RhythmGameP2') lands a global handle
+    try { if (opts.expose) window[opts.expose] = api; } catch (e) {}
+    return api;
+  };
+  // couch.js convenience: is a P2 layer live right now?
+  window.RhythmGame.hasP2 = function () { return !!(_p2 && _p2._p2state && _p2._p2state.alive); };
+  window.RhythmGame.getP2 = function () { return _p2; };
+
   // play button → defers to catalog handler if set, else demo
   let _menuPlayHandler = null;
   $('play-btn').addEventListener('click', () => {
