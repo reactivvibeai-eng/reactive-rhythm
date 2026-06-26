@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=351" />
+<link rel="stylesheet" href="jukebox.css?v=352" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1113,6 +1113,10 @@
   .store-price.bonus-px .bonus-px-glyph { width: 13px; height: 13px; color: var(--gold, #e0a93f); filter: drop-shadow(0 0 3px rgba(224,169,63,0.6)); }
   .store-buy.bonus { background: linear-gradient(180deg, rgba(224,169,63,0.20), rgba(184,128,26,0.14)); color: #ffe9c4; border: 1px solid rgba(224,169,63,0.55); box-shadow: none; }
   .store-buy.bonus:hover, .store-buy.bonus:focus-visible { box-shadow: 0 4px 14px rgba(224,169,63,0.28); }
+  /* build99L: GUEST demotes "Use Bonus" to a small secondary text-link so "Sign in to buy" is the lone primary CTA */
+  .store-buy.bonus.bonus-secondary { background: none; border: none; box-shadow: none; padding: 4px 6px;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--gold, #e0a93f); text-decoration: underline; text-underline-offset: 3px; opacity: 0.85; }
+  .store-buy.bonus.bonus-secondary:hover, .store-buy.bonus.bonus-secondary:focus-visible { opacity: 1; box-shadow: none; }
   .store-price { display: inline-flex; align-items: center; gap: 5px; font-family: 'Oxanium', monospace; font-weight: 800; font-size: 15px; color: var(--chrome); font-variant-numeric: tabular-nums; }
   .store-price .spk-glyph { width: 13px; height: 13px; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 3px rgba(255,122,74,0.6)); }
   /* BETA: Coming-soon padlock on unfinished store assets (mirrors the Levels lock styling) */
@@ -5919,13 +5923,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=351"></script>
+<script src="game.js?v=352"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=351"></script>
-<script src="catalog.js?v=351"></script>
-<script src="multiplayer.js?v=351"></script>
+<script src="jukebox.js?v=352"></script>
+<script src="catalog.js?v=352"></script>
+<script src="multiplayer.js?v=352"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=351"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=352"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8406,7 +8410,7 @@
       }
       return '<button class="store-buy owned" disabled>Owned</button>';
     }
-    if (!signedIn) return '<button class="store-buy" data-act="signin">Sign in</button>';
+    if (!signedIn) return '<button class="store-buy signin-primary" data-act="signin">Sign in to buy</button>';   // build99L: clear primary guest CTA (was a bare "Sign in" that dead-ended next to "Use Bonus")
     return '<button class="store-buy" data-act="buy" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '">Buy</button>';
   }
 
@@ -8427,8 +8431,11 @@
     var line = '<div class="store-payline"><span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + usdTxt + '</span>' + buyBtnHtml(it) + '</div>';
     var bp = bonusPriceFor(it);
     if (bp > 0) {
+      // build99L: for a GUEST, the Sparks "Sign in to buy" button is the primary CTA — demote "Use Bonus" to a
+      // small secondary link so the guest path isn't two competing buttons. Signed-in users keep the full button.
+      var bonusCls = 'store-buy bonus' + (!signedIn ? ' bonus-secondary' : '');
       line += '<div class="store-payline"><span class="store-price bonus-px">' + BONUS_PX_SVG + fmt(bp) + ' <span style="font-size:9px;letter-spacing:0.1em;opacity:0.8;">BONUS</span></span>' +
-        '<button class="store-buy bonus" data-act="buybonus" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '" data-bonus="' + bp + '">Use Bonus</button></div>';
+        '<button class="' + bonusCls + '" data-act="buybonus" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '" data-bonus="' + bp + '">Use Bonus</button></div>';
     }
     return line;
   }
@@ -8465,6 +8472,19 @@
     var shown = items.filter(function (it) { return !STORE_HIDDEN[String(it && it.item_id)] && storePlayable(it); });   // P0: hide unplayable skins + never-built backend leftovers
     if (!shown.length) { grid.innerHTML = ''; empty.hidden = false; return; }
     empty.hidden = true;
+    // build99L: open on hero merchandise — sort featured → new → by rarity (legendary/epic first).
+    // Stable: owned/soon items keep their relative order within a tier (sort key is the merch signal only).
+    var FLAG_RANK = { featured: 0, 'new': 1, '': 2 };
+    var RARITY_RANK = { legendary: 0, epic: 1, rare: 2, common: 3 };
+    shown = shown.map(function (it, i) { return { it: it, i: i }; }).sort(function (a, b) {
+      var fa = FLAG_RANK[flagOf(a.it)] != null ? FLAG_RANK[flagOf(a.it)] : 2;
+      var fb = FLAG_RANK[flagOf(b.it)] != null ? FLAG_RANK[flagOf(b.it)] : 2;
+      if (fa !== fb) return fa - fb;
+      var ra = RARITY_RANK[rarityOf(a.it)] != null ? RARITY_RANK[rarityOf(a.it)] : 3;
+      var rb = RARITY_RANK[rarityOf(b.it)] != null ? RARITY_RANK[rarityOf(b.it)] : 3;
+      if (ra !== rb) return ra - rb;
+      return a.i - b.i;   // stable fallback
+    }).map(function (x) { return x.it; });
     grid.innerHTML = shown.map(itemHtml).join('');
     if (!signedIn) banner('Browsing as a guest. <b>Sign in on ReactivVibe</b> to spend Sparks and keep your unlocks.');
     else banner(null);
