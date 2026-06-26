@@ -707,9 +707,11 @@
     'assets/guitars/crimson-chrome.png':{ verified: true, aspect: 904 / 2194, nutFY: 0.128, bridgeFY: 0.550,
       nutXF:    [0.4505, 0.4737, 0.4923, 0.5116, 0.5349],
       bridgeXF: [0.3899, 0.4384, 0.4851, 0.5347, 0.5872] },
-    'assets/guitars/ember-bone.png':    { aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810,
-      nutXF:    [0.4339, 0.4494, 0.4878, 0.5132, 0.5314],
-      bridgeXF: [0.3182, 0.3848, 0.4708, 0.5609, 0.6209] },
+    // build99 alignment swarm: 6-string art (6→5 even resample); stored was already well-centered (≤11px),
+    // refined to better hit the outer strings at both rows — FY rows 0.10/0.81 kept (both on painted strings).
+    'assets/guitars/ember-bone.png':    { verified: true, aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810,
+      nutXF:    [0.4375, 0.4615, 0.4861, 0.5101, 0.5314],
+      bridgeXF: [0.3141, 0.3948, 0.4731, 0.5519, 0.6311] },
     // build99 alignment swarm: 6-STRING art — stored FY rows landed on the gold headstock/body ornament (no strings there),
     // so catchers floated off. The painted strings read cleanly only on the dark fretboard (y≈0.16→0.475). Re-measured there:
     // nutFY 0.085→0.175, bridgeFY 0.800→0.475, 5-lane fan across the 6 strings. Overlay-verified on-string nut→bridge.
