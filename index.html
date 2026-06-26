@@ -8114,10 +8114,14 @@
   function footHtml(it, soon) {
     if (soon) return '<span class="store-price soon-px">Coming soon</span>';
     if (isOwned(it)) return buyBtnHtml(it);   // Equip / Equipped / Owned — no price line
-    var line = '<div class="store-payline"><span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>' + buyBtnHtml(it) + '</div>';
+    // build99k: anchor the cashable-Sparks price in real dollars (1 Spark = $0.05) so "50" reads as "$2.50", not an
+    // abstract number — the swarm's top trust/conversion win. And label the Bonus figure so the two currencies don't blur.
+    var usd = (Number(it.price_sparks) || 0) * 0.05;
+    var usdTxt = usd > 0 ? ' <span class="store-usd" style="font-family:\'Chakra Petch\',monospace;font-size:10px;font-weight:600;color:var(--ink-dim);">($' + usd.toFixed(2) + ')</span>' : '';
+    var line = '<div class="store-payline"><span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + usdTxt + '</span>' + buyBtnHtml(it) + '</div>';
     var bp = bonusPriceFor(it);
     if (bp > 0) {
-      line += '<div class="store-payline"><span class="store-price bonus-px">' + BONUS_PX_SVG + fmt(bp) + '</span>' +
+      line += '<div class="store-payline"><span class="store-price bonus-px">' + BONUS_PX_SVG + fmt(bp) + ' <span style="font-size:9px;letter-spacing:0.1em;opacity:0.8;">BONUS</span></span>' +
         '<button class="store-buy bonus" data-act="buybonus" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '" data-bonus="' + bp + '">Use Bonus</button></div>';
     }
     return line;
