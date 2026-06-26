@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=350" />
+<link rel="stylesheet" href="jukebox.css?v=351" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1386,7 +1386,15 @@
   #game.rr-lvl-themed .footer-hint kbd { border-color: var(--rr-acc-line); }
   #results-next { display: none; }
   #results-next.show { display: inline-flex; }
-  #results-next.gold { color: #160606; background: linear-gradient(180deg, #f0c25a, #c9902f); border-color: rgba(224,169,63,0.6); box-shadow: 0 4px 16px rgba(224,169,63,0.35); }
+  /* build99L: NEXT LEVEL is CRIMSON-primary (reserve gold for achievement: S / NEW BEST / badges), inherits .ghost-btn.primary */
+  /* build99L — Results action hierarchy: ONE primary per context.
+     • level active (#results.level-active): NEXT LEVEL is the single primary; PLAY AGAIN demotes to a ghost.
+     • free-play: NEXT LEVEL is hidden (no .show); PLAY AGAIN stays primary. */
+  #results.level-active #results-replay.primary { background: transparent; color: var(--ink); border-color: var(--line); box-shadow: none; }
+  #results.level-active #results-replay.primary:hover { border-color: var(--crimson); color: #fff; }
+  .results-secondary-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+  .ghost-btn.quiet { font-size: 11px; padding: 8px 16px; opacity: 0.7; }
+  .ghost-btn.quiet:hover { opacity: 1; }
 
   /* build10b: LEVEL-START CINEMATIC — the backdrop opens slightly zoomed-in and slowly settles while
      the custom guitar materializes on the highway (engine-side print). Presentation only. */
@@ -2259,12 +2267,15 @@
   /* ============ RESULTS ============ */
   .results-wrap {
     width: min(900px, 92vw);
+    max-height: 92vh; overflow-y: auto;   /* build99L: the 220px grade stamp + summary + breakdown + buttons overflowed/clipped on 13" screens (mirrors .howto-card) */
     padding: 56px;
     background: linear-gradient(180deg, rgba(24,12,14,0.55), rgba(12,6,8,0.85));
     border: 1px solid var(--line);
     backdrop-filter: blur(20px);
     position: relative;
   }
+  .results-wrap::-webkit-scrollbar { width: 6px; }
+  .results-wrap::-webkit-scrollbar-thumb { background: rgba(224,218,214,0.2); border-radius: 3px; }
   .results-wrap::before,
   .results-wrap::after {
     content: ''; position: absolute;
@@ -2318,6 +2329,9 @@
   .rs-cell { display: flex; flex-direction: column; gap: 6px; }
   .rs-cell .l { font-family: 'JetBrains Mono'; font-size: 10px; letter-spacing: 0.3em; color: var(--ink-dim); text-transform: uppercase; }
   .rs-cell .n { font-family: 'Unbounded'; font-weight: 600; font-size: 28px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  /* build99L: Final Score is the headline number — bigger than the other KPIs; gold/crimson accent on a NEW BEST */
+  .rs-cell-score .n { font-size: 40px; }
+  #results.is-newbest .rs-cell-score .n { color: var(--gold); text-shadow: 0 0 22px rgba(224,169,63,0.45); }
 
   /* results badges (FULL COMBO / NEW BEST) */
   .results-badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
@@ -5681,7 +5695,7 @@
       <p class="tagline" style="margin-top: 12px;" id="results-blurb">The cathedral is humming. Echoes have folded inward. The rift accepts you.</p>
 
       <div class="results-summary">
-        <div class="rs-cell"><span class="l">Final Score</span><span class="n" id="rs-score">0</span></div>
+        <div class="rs-cell rs-cell-score"><span class="l">Final Score</span><span class="n" id="rs-score">0</span></div>
         <div class="rs-cell"><span class="l">Accuracy</span><span class="n" id="rs-acc">0.0%</span></div>
         <div class="rs-cell"><span class="l">Max Combo</span><span class="n" id="rs-maxcombo">0</span></div>
         <div class="rs-cell"><span class="l">Notes Hit</span><span class="n" id="rs-hit">0 / 0</span></div>
@@ -5705,12 +5719,17 @@
 
       <div class="results-leaderboard" id="results-leaderboard" style="display:none;"></div>
 
-      <div class="pause-actions" style="margin-top: 40px;">
+      <!-- build99L: ONE clear primary per context. Level active → NEXT LEVEL is the single crimson primary
+           (PLAY AGAIN drops to ghost via #results.level-active). Free-play → PLAY AGAIN is primary, NEXT LEVEL hidden.
+           SHARE is the secondary gold (achievement accent). CAREER + RETURN-TO-MENU sit in a quieter row beneath. -->
+      <div class="pause-actions results-primary-row" style="margin-top: 36px;">
+        <button class="ghost-btn primary" id="results-next">NEXT LEVEL ▶</button>
         <button class="ghost-btn primary" id="results-replay">PLAY AGAIN</button>
-        <button class="ghost-btn gold" id="results-next">NEXT LEVEL ▶</button>
-        <button class="ghost-btn" id="results-menu">RETURN TO MENU</button>
-        <button class="ghost-btn" id="results-career">CAREER</button>
         <button class="ghost-btn gold" id="results-share"><span class="rs-share-glyph" aria-hidden="true">⤴</span> SHARE SCORE</button>
+      </div>
+      <div class="results-secondary-row">
+        <button class="ghost-btn quiet" id="results-career">CAREER</button>
+        <button class="ghost-btn quiet" id="results-menu">RETURN TO MENU</button>
       </div>
       <div class="results-keys" style="margin-top:14px;">
         <kbd>ENTER</kbd> Play again · <kbd>ESC</kbd> Menu
@@ -5900,13 +5919,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=350"></script>
+<script src="game.js?v=351"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=350"></script>
-<script src="catalog.js?v=350"></script>
-<script src="multiplayer.js?v=350"></script>
+<script src="jukebox.js?v=351"></script>
+<script src="catalog.js?v=351"></script>
+<script src="multiplayer.js?v=351"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=350"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=351"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -7687,7 +7706,12 @@
   // ---- results-screen level loop wiring (defers to free-play when no level active) ----
   (function wireResultsLoop() {
     var nextBtn = $('results-next'), replayBtn = $('results-replay'), resScreen = $('results');
-    function refresh() { var L = _activeLevel; if (nextBtn) nextBtn.classList.toggle('show', !!(L && !L._isEnv)); }   // build72: a free-play-in-environment synthetic (_isEnv) is NOT a campaign level → no NEXT button
+    function refresh() {
+      var L = _activeLevel, levelActive = !!(L && !L._isEnv);
+      if (nextBtn) nextBtn.classList.toggle('show', levelActive);   // build72: a free-play-in-environment synthetic (_isEnv) is NOT a campaign level → no NEXT button
+      // build99L: mark the screen so CSS picks the single primary for this context (level → NEXT LEVEL; free-play → PLAY AGAIN)
+      if (resScreen) resScreen.classList.toggle('level-active', levelActive);
+    }
     if (resScreen) {
       var mo = new MutationObserver(function () {
         if (resScreen.classList.contains('active')) {

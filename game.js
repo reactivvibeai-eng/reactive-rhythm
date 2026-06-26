@@ -2745,6 +2745,8 @@
       const brag = !!results.full_combo || grade === 'S' || !!results._newBest;
       if (brag) { sb.classList.remove('share-pulse'); void sb.offsetWidth; sb.classList.add('share-pulse'); }
       else sb.classList.remove('share-pulse');
+      // build99L (render-only): flag a NEW BEST on the results screen so the Final Score KPI gets the gold accent (reserve gold for achievement)
+      const rs = $('results'); if (rs) rs.classList.toggle('is-newbest', !!results._newBest);
     } catch (e) {}
   }
 
