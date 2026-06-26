@@ -114,6 +114,7 @@
   var roomsDir = {};              // rid -> {rid,name,priv,hostId,hostName,count,max,at} (browser directory)
   var QM = { looking: false, t: 0 };   // quick-match: am I in the queue?
   var spectating = false;         // joined a match purely as a watcher
+  var _specFocus = null;          // build96 (playtest): in a tournament SPECTATOR view, the player id whose LIVE deck you're watching — defaults to the leader; cycle with WATCH NEXT
   var _fromRoom = null;           // build8: one-shot carry across room→match handoff
   // ---- build9: tournament state (5–10 player single-elim bracket on ONE channel) ----
   var TOUR_MAX = 10, TOUR_MIN = 3;          // copy advertises 5–10; 3 makes a real bracket testable
@@ -2197,6 +2198,12 @@
     if (!p || !p.id) return;
     if (tour._alive) tour._alive[p.id] = Date.now();   // build42: proof-of-life — a streaming tick means this player is actively playing
     paintTourReady();   // build61: refresh the "X / N loaded" indicator as proof-of-life arrives (cheap DOM text)
+    // build96 (playtest): a SPECTATOR follows a FOCUSED player so the watch deck shows a real match. Default to whoever
+    // streams first (then WATCH NEXT cycles). Feeds the SAME lastOppState the opponent deck renders for a duelist.
+    if (spectating && p.id !== ME.id) {
+      if (!_specFocus) { _specFocus = p.id; _paintSpecLabel(); }
+      if (p.id === _specFocus) { lastOppTick = p; lastOppState = { sc: p.score || 0, cb: p.combo || 0, pr: p.prog || 0, od: 0, oda: false, mu: 1, st: 1, ev: [] }; }
+    }
     if (p.id === tour.rival) {
       lastOppTick = p;
       // feed the ghost deck + compact HUD from the rival's tick (tournaments stream t-tick, not t-state)
@@ -2206,7 +2213,7 @@
   }
   // build44: the rival's FULL render frame (paired tournament players stream it like 1v1) → the ghost deck shows
   // their real hits/misses, combo + OD — it reads as them actually playing, not just a climbing score.
-  function onTourState(p) { if (p && p.id === tour.rival) lastOppState = p; }
+  function onTourState(p) { if (p && (p.id === tour.rival || (spectating && p.id === _specFocus))) lastOppState = p; }   // build96: a spectator renders the FOCUSED player's full render frame (real hits/misses/notes), not just score
   // dev: in a solo bot tournament, drive the rival bot's live "play" so the split-screen ghost looks alive
   function devDriveRival(roundN) {
     if (_npcRaf) cancelAnimationFrame(_npcRaf);
@@ -2626,7 +2633,37 @@
   function scoreTxt(f) { return f ? (f.score < 0 ? 'FORFEIT' : Number(f.score || 0).toLocaleString()) : '0'; }
   // mark the bracket board as a LIVE spectator view (eliminated / bye / not-in-pair) — a "● LIVE" badge + the
   // duel rows animating from t-tick let an out-of-it player watch the race instead of seeing an instant result.
-  function setSpectating(on) { var lv = $('mpx-tour-live'); if (lv) lv.classList.toggle('mpx-watching', !!on); }
+  function setSpectating(on) {
+    var lv = $('mpx-tour-live'); if (lv) lv.classList.toggle('mpx-watching', !!on);
+    if (on) {
+      _specFocus = null;
+      // build96 (playtest): mount the live opponent deck for a tournament spectator — the SAME tested panel room
+      // spectators use — + a WATCH NEXT switcher, so eliminated/BYE players WATCH a real match, not just a scoreboard.
+      try { mountOppPanel(); var pnl = $('mp-opp'); if (pnl) { pnl.classList.add('spectate'); _ensureSpecControls(pnl); } } catch (e) {}
+    } else { var pnl2 = $('mp-opp'); if (pnl2) pnl2.classList.remove('spectate'); }
+  }
+  // ---- build96: tournament spectator focus ("watch one of the matches") ----
+  function _specCandidates() { return (tour.alive || []).filter(function (id) { return id && id !== ME.id; }); }   // everyone still alive in the bracket except me
+  function _paintSpecLabel() {
+    var el = $('mpx-spec-name'); if (!el) return;
+    var m = _specFocus ? tourSeat(_specFocus) : null;
+    el.textContent = m ? ('WATCHING ' + (m.name || 'Player').slice(0, 14)) : 'PICK A MATCH';
+  }
+  function _specNext() {
+    var c = _specCandidates(); if (!c.length) return;
+    var i = _specFocus ? c.indexOf(_specFocus) : -1;
+    _specFocus = c[(i + 1) % c.length];
+    lastOppState = null; lastOppTick = null;   // clear so the newly-focused player's stream repopulates the deck cleanly
+    _paintSpecLabel();
+  }
+  function _ensureSpecControls(panel) {
+    if (!panel || panel.querySelector('.mo-spec')) return;
+    var bar = document.createElement('div'); bar.className = 'mo-spec';
+    bar.innerHTML = '<span class="mo-spec-eye">👁</span><span id="mpx-spec-name">SPECTATING</span><button type="button" id="mpx-spec-next" class="mo-spec-next">WATCH NEXT ▶</button>';
+    panel.insertBefore(bar, panel.firstChild);
+    var nx = bar.querySelector('#mpx-spec-next'); if (nx) nx.onclick = _specNext;
+    _paintSpecLabel();
+  }
   function updateBoardScore(id, score, isFinal) {
     var el = screen.querySelector('[data-sc="' + id + '"]');
     if (!el) return;
