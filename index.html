@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=334" />
+<link rel="stylesheet" href="jukebox.css?v=338" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1630,6 +1630,10 @@
     0%   { transform: scale(1.02) translateY(-0.5%); }
     100% { transform: scale(1.10) translateY(0.8%); }
   }
+  /* build98: AI FLIXS LEVEL — the music video IS the stage. Cover-fill it full-screen behind the highway (bright),
+     drop the blurred fill (the cover video already fills), and force it visible even under perf-bg. */
+  #game.flix-mode #bg-video { object-fit: cover !important; object-position: 50% 50% !important; opacity: 1 !important; transform: none !important; display: block !important; }
+  #game.flix-mode #bg-video-fill { display: none !important; }
   /* Per-level static backdrop (level bgArt). Above the moon video, below the scrim. */
   #bg-image {
     position: absolute; inset: 0; width: 100%; height: 100%;
@@ -5648,11 +5652,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=334"></script>
+<script src="game.js?v=338"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=334"></script>
-<script src="catalog.js?v=334"></script>
-<script src="multiplayer.js?v=334"></script>
+<script src="jukebox.js?v=338"></script>
+<script src="catalog.js?v=338"></script>
+<script src="multiplayer.js?v=338"></script>
 <script src="share.js?v=324"></script>
 <script src="couch.js?v=324"></script><!-- build79: LOCAL couch split-screen versus — claim flow + verdict groundwork (inert until ?couch=1; engine-doubling deferred, see LOCAL_VERSUS_BRIEF.md) -->
 <script>

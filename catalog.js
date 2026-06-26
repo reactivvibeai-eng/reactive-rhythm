@@ -1045,23 +1045,37 @@
     const playBtn = $('play-btn');
     const playLabel = playBtn ? playBtn.querySelector('span') : null;
     const vid = isVideo(track);   // a music video / film \u2014 never launchable into the rhythm engine (deferred)
+    // build98: env-picker shows for music; HIDDEN for a playable flix (the music video IS the stage). Reset each open.
+    { const _envSec = $('env-section'); if (_envSec) _envSec.style.display = ''; }
     if (vid) {
-      // also protects a shared /play?trackId=<videoId> deep link (the raw /track row bypasses the catalog split)
-      // Phase 5: interim WATCH preview (muted inline player) \u2014 the PLAYABLE rhythm level stays deferred (Phase 6).
+      // build98: AI FLIXS PLAYABLE LEVEL. If the film has DECODABLE audio, PLAY launches the rhythm level with the
+      // music video full-screen behind the highway (notes charted to the song). No environment picker \u2014 the video is
+      // the stage. Falls back to the Watch preview only when there's no chartable audio.
+      const aurl = trackAudioUrl(track);
       const wsrc = videoWatchUrl(track);
+      if (aurl) {
+        const _es = $('env-section'); if (_es) _es.style.display = 'none';   // no level picker for a flix
+        $('sheet-hint').textContent = 'AI Flix \u2014 the music video plays behind the highway. Tap PLAY.';
+        if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('not-ready'); }
+        if (playLabel) playLabel.textContent = '\u25b6 Play AI Flix';
+        const _flixFn = () => { playFlix(track); };
+        _flixFn._preview = true;   // bypass the env-picker wrapper \u2014 the flix manages its OWN #bg-video backdrop
+        window.RhythmGame.setMenuPlayHandler(_flixFn);
+        sheet.classList.add('open');
+        return;
+      }
+      // no decodable audio \u2192 Watch-only preview (the playable level needs a chartable audio track)
       $('sheet-hint').textContent = wsrc
-        ? 'AI Flixs film \u2014 tap Watch for a preview. The playable video level is coming soon.'
-        : 'AI Flixs film \u2014 playable video is coming to the game soon.';
+        ? 'AI Flixs film \u2014 tap Watch for a preview.'
+        : 'AI Flixs film \u2014 coming to the game soon.';
       if (playBtn) { playBtn.disabled = !wsrc; playBtn.classList.toggle('not-ready', !wsrc); }
       if (playLabel) playLabel.textContent = wsrc ? '\u25b6 Watch' : 'Coming soon';
       if (wsrc) {
-        // override the play handler with Watch; return BEFORE the rhythm-engine wiring below.
-        // build90: tag _preview so the env-picker wrapper skips staging/clearing the level environment (Watch is not a launch).
         const _watchFn = () => { closeSheet(); openWatch(track, wsrc); };
         _watchFn._preview = true;
         window.RhythmGame.setMenuPlayHandler(_watchFn);
         sheet.classList.add('open');
-        return;   // Watch is preview-only \u2014 never enters the engine (isVideo guards at play handler + launchTrack remain)
+        return;
       }
     } else if (!ready) {
       $('sheet-hint').textContent = status === 'failed'
@@ -1144,6 +1158,76 @@
     const ov = document.getElementById('flix-watch'); if (!ov) return;
     const v = ov.querySelector('.fw-video'); try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
     ov.classList.remove('open');
+  }
+
+  // ============================================================================
+  // build98: AI FLIXS PLAYABLE LEVEL — the music VIDEO plays FULL-SCREEN behind the guitar highway while you
+  // play Guitar Hero to the song. The notes are charted from the track's DECODABLE audio (the normal in-browser
+  // chart path — decode audio_url → analyzeBeats → DemoPlayer), and the muted video is slaved to the audio clock
+  // (#bg-video, the same backdrop element journey levels use). audio_url and video_url share the same source, so
+  // they stay in sync. Falls back to the Watch preview only when the film has no decodable audio.
+  // ============================================================================
+  let _flixRaf = 0, _flixPrevSrc = null, _flixActive = false, _flixVideoUrl = '', _flixSawActive = false;
+  function playFlix(track) {
+    const aurl = trackAudioUrl(track);            // decodable music → the chart + the audio + the clock
+    const vurl = videoWatchUrl(track);            // the music video → the full-screen backdrop
+    if (!aurl) { if (vurl) openWatch(track, vurl); return; }   // no chartable audio → fall back to the Watch preview
+    closeSheet(); stopPreview(); currentTrack = track;
+    _startFlixBackdrop(vurl || aurl);
+    window.RhythmGame.playUrl(aurl, {              // chart + play exactly like a live track
+      id: track.id, title: track.title, artist: track.artist_credit_name || track.artist_name,
+      genre: track.genre, artwork: track.artwork_url, flix: true,
+    });
+    try { window.RhythmGame.onSongEnd && window.RhythmGame.onSongEnd(function () { _stopFlixBackdrop(); }); } catch (e) {}
+    if (catalogLive && track.id) logUse(track.id, 'play', { kind: 'flix' });
+  }
+  function _startFlixBackdrop(videoUrl) {
+    const bv = document.getElementById('bg-video'); if (!bv || !videoUrl) return;
+    _flixActive = true; _flixVideoUrl = videoUrl; _flixSawActive = false;
+    _flixPrevSrc = bv.getAttribute('src') || '';
+    const g = document.getElementById('game'); if (g) g.classList.add('flix-mode');
+    try { bv.pause(); } catch (e) {}
+    bv.muted = true; bv.loop = false; bv.setAttribute('src', videoUrl); try { bv.load(); } catch (e) {}
+    const p0 = bv.play && bv.play(); if (p0 && p0.catch) p0.catch(function () {});
+    if (_flixRaf) cancelAnimationFrame(_flixRaf);
+    (function frame() {
+      _flixRaf = requestAnimationFrame(frame);
+      if (!_flixActive) return;
+      const g2 = document.getElementById('game');
+      const active = !!(g2 && g2.classList.contains('active'));
+      if (active) _flixSawActive = true;
+      // tear down ONLY after a real run actually started then ended (was-active → not-active). Do NOT tear down during
+      // the ~4s decode/lead-in BEFORE the game first activates (that bug restored moon-loop before play even began).
+      if (_flixSawActive && !active) { _stopFlixBackdrop(); return; }
+      // re-assert the flix video + class if the engine's play-setup reset #bg-video to the default backdrop.
+      if (bv.getAttribute('src') !== _flixVideoUrl) {
+        bv.muted = true; bv.loop = false; bv.setAttribute('src', _flixVideoUrl); try { bv.load(); } catch (e) {}
+        const pr = bv.play && bv.play(); if (pr && pr.catch) pr.catch(function () {});
+      }
+      if (g2 && !g2.classList.contains('flix-mode')) g2.classList.add('flix-mode');
+      // slave the muted video to the audio clock. progress (0→1) is 0 through the 3·2·1 lead-in, then climbs once the
+      // music plays — and the video shares the song's Mux source, so progress*duration ≈ the audio position. (There is
+      // no public song-time getter on RhythmGame, so progress is the sync source.)
+      const st = window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : null;
+      if (st && bv.readyState >= 2 && bv.duration) {
+        if (st.progress <= 0) {
+          // lead-in / countdown: hold the very first frame, don't let it run ahead (avoids a rewind when music starts)
+          try { if (!bv.paused) bv.pause(); if (bv.currentTime > 0.05) bv.currentTime = 0; } catch (e) {}
+        } else {
+          if (bv.paused) { const pp = bv.play && bv.play(); if (pp && pp.catch) pp.catch(function () {}); }
+          const target = st.progress * bv.duration;
+          if (Math.abs(bv.currentTime - target) > 0.40) { try { bv.currentTime = target; } catch (e) {} }   // soft re-sync only on real drift
+        }
+      }
+    })();
+  }
+  function _stopFlixBackdrop() {
+    if (!_flixActive) return;
+    _flixActive = false;
+    if (_flixRaf) { cancelAnimationFrame(_flixRaf); _flixRaf = 0; }
+    const bv = document.getElementById('bg-video');
+    if (bv) { try { bv.pause(); } catch (e) {} try { if (_flixPrevSrc) bv.setAttribute('src', _flixPrevSrc); else bv.removeAttribute('src'); bv.load(); } catch (e) {} }
+    const g = document.getElementById('game'); if (g) g.classList.remove('flix-mode');
   }
 
   // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
@@ -1438,6 +1522,7 @@
     allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
+    playFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio) — used by the AI Flixs premiere hero
     search, sortTracks, sections, getBest,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,

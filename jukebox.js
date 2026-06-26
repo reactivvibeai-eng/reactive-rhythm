@@ -420,7 +420,7 @@
     $('songs-title').textContent = title || 'All Songs';
     $('songs-search').value = q || '';
     $('songs-sort').value = 'new';
-    const lv = $('view-songs'); if (lv) lv.classList.toggle('poster-grid', songsPoster);
+    const lv = $('view-songs'); if (lv) { lv.classList.toggle('poster-grid', songsPoster); lv.classList.toggle('flixs-mode', songsScope === 'flixs'); }   // build99: flixs-mode → premiere header treatment
     showView('songs');
     refreshSongs();
   }
@@ -504,6 +504,36 @@
     return card;
   }
 
+  // build99: AI FLIXS PREMIERE marquee. The owner wanted the films to feel like a "big film premiere section,"
+  // not a plain poster grid. This cinematic NOW-SHOWING hero tops the Flixs list: the featured film's poster as a
+  // letterboxed backdrop, a premiere kicker, the title + meta, and a PLAY PREMIERE button that launches the film as a
+  // playable level (the music video plays full-screen behind the highway, charted from its audio). One-click play.
+  function flixsHero(t) {
+    if (!t) return null;
+    const hero = document.createElement('div');
+    hero.className = 'flixs-marquee';
+    const poster = RC().posterFor(t) || '';
+    const meta = [t.artist_name, RC().cleanGenre(t.genre), RC().fmtDur(t.duration_seconds)].filter(Boolean).join('  ·  ');
+    hero.innerHTML =
+      '<span class="fm-bg"></span>' +
+      '<span class="fm-bars"></span>' +
+      '<span class="fm-scrim"></span>' +
+      '<span class="fm-body">' +
+        '<span class="fm-kicker"><b>●</b> NOW SHOWING · AI PREMIERE</span>' +
+        '<span class="fm-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
+        '<span class="fm-meta">' + RC().escapeHtml(meta) + '</span>' +
+        '<span class="fm-actions">' +
+          '<button class="fm-play" type="button">▶ PLAY PREMIERE</button>' +
+          '<button class="fm-info" type="button">Details</button>' +
+        '</span>' +
+        '<span class="fm-note">The music video plays behind the highway — hit the notes to the song.</span>' +
+      '</span>';
+    if (poster) { const bg = hero.querySelector('.fm-bg'); if (bg) bg.style.backgroundImage = 'url("' + poster.replace(/"/g, '%22') + '")'; }
+    const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().playFlix(t); });
+    const ib = hero.querySelector('.fm-info'); if (ib) ib.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });
+    return hero;
+  }
+
   // 16:9 cinematic poster card for AI Flixs (vs the music songCard row). Phase 5 discovery surface.
   function videoCard(t) {
     const card = document.createElement('button');
@@ -518,8 +548,10 @@
     } else { fr.classList.add('vc-noart'); }
     const grad = document.createElement('span'); grad.className = 'vc-grad'; fr.appendChild(grad);
     if (t.duration_seconds) { const d = document.createElement('span'); d.className = 'vc-dur'; d.textContent = RC().fmtDur(t.duration_seconds); fr.appendChild(d); }
-    // discovery surface only — videos are NOT yet playable into the engine (Phase 6). Always "Soon".
-    const badge = document.createElement('span'); badge.className = 'vc-badge'; badge.textContent = 'Soon'; fr.appendChild(badge);
+    // build99: films are PLAYABLE now (playFlix → the music video plays full-screen behind the highway while you
+    // play the chart from its audio). Gold "AI FILM" premiere ribbon + hover ▶; the card opens the sheet, which
+    // launches "▶ Play AI Flix". (Was a stale "Soon" discovery-only chip.)
+    const badge = document.createElement('span'); badge.className = 'vc-badge'; badge.textContent = '★ AI FILM'; fr.appendChild(badge);
     const play = document.createElement('span'); play.className = 'vc-play'; play.textContent = '▶'; fr.appendChild(play);
     card.appendChild(fr);
     const cap = document.createElement('span'); cap.className = 'vc-cap';
@@ -540,6 +572,12 @@
     { const q0 = ($('songs-search').value || '').trim(); const sx = $('songs-search-clear'); if (sx) sx.hidden = !q0; }
     if (!songsList.length) { renderSongsEmpty(host); return; }
     host.scrollTop = 0;
+    // build99: AI FLIXS premiere marquee — feature the top film in a NOW-SHOWING hero, then start the grid at the 2nd
+    // film so it isn't duplicated. Only on the un-searched Flixs list (a query collapses back to the plain grid).
+    if (songsScope === 'flixs' && songsPoster && !($('songs-search').value || '').trim()) {
+      const hero = flixsHero(songsList[0]);
+      if (hero) { host.appendChild(hero); songsRendered = 1; }
+    }
     appendSongs();
     fillViewport();
   }

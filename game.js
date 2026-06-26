@@ -700,16 +700,22 @@
     // fit overlay-verified riding the painted strings nut→bridge. Transparent cutout, aspect ≈0.560.
     'assets/guitars/shaman-wolf.png':   { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,
       nutXF:    [0.4583, 0.4779, 0.4990, 0.5197, 0.5375],
-      bridgeXF: [0.3866, 0.4403, 0.4980, 0.5612, 0.6203] },
-    'assets/guitars/crimson-chrome.png':{ aspect: 904 / 2194, nutFY: 0.085, bridgeFY: 0.800,
-      nutXF:    [0.4483, 0.4752, 0.4860, 0.4960, 0.5152],
-      bridgeXF: [0.3571, 0.4043, 0.4557, 0.5124, 0.5603] },
+      bridgeXF: [0.3800, 0.4339, 0.4926, 0.5525, 0.6096] },   // build99 alignment swarm: stored bridge fanned too wide (outer lanes 4-8px off the strings) → re-measured on-string
+    // build99 alignment swarm: 6-STRING art driving 5 lanes — the stored FY rows landed on HARDWARE (nut on the headstock
+    // between the pegs; bridge on the saddle posts), so catchers floated off the strings. Re-measured the clean painted-string
+    // band: nutFY 0.085→0.128, bridgeFY 0.800→0.550, and a 5-lane fan across the 6 strings. Overlay-verified on-string.
+    'assets/guitars/crimson-chrome.png':{ verified: true, aspect: 904 / 2194, nutFY: 0.128, bridgeFY: 0.550,
+      nutXF:    [0.4505, 0.4737, 0.4923, 0.5116, 0.5349],
+      bridgeXF: [0.3899, 0.4384, 0.4851, 0.5347, 0.5872] },
     'assets/guitars/ember-bone.png':    { aspect: 904 / 1759, nutFY: 0.100, bridgeFY: 0.810,
       nutXF:    [0.4339, 0.4494, 0.4878, 0.5132, 0.5314],
       bridgeXF: [0.3182, 0.3848, 0.4708, 0.5609, 0.6209] },
-    'assets/guitars/gold-relic.png':    { aspect: 904 / 2160, nutFY: 0.085, bridgeFY: 0.800,
-      nutXF:    [0.4332, 0.4480, 0.4644, 0.4782, 0.4921],
-      bridgeXF: [0.3341, 0.3743, 0.4160, 0.4582, 0.5008] },
+    // build99 alignment swarm: 6-STRING art — stored FY rows landed on the gold headstock/body ornament (no strings there),
+    // so catchers floated off. The painted strings read cleanly only on the dark fretboard (y≈0.16→0.475). Re-measured there:
+    // nutFY 0.085→0.175, bridgeFY 0.800→0.475, 5-lane fan across the 6 strings. Overlay-verified on-string nut→bridge.
+    'assets/guitars/gold-relic.png':    { verified: true, aspect: 904 / 2160, nutFY: 0.175, bridgeFY: 0.475,
+      nutXF:    [0.4170, 0.4448, 0.4726, 0.5004, 0.5282],
+      bridgeXF: [0.3817, 0.4254, 0.4690, 0.5127, 0.5563] },
     // ---- PREMIUM STORE GUITARS (i2i from crimson-chaos-ryo: theme painted on the BODY, neck + 5 strings kept clean).
     // Each gate-PASSED via adaptive neck-band measure on the transparent cutout; fit overlay-verified riding the strings.
     'assets/guitars/crimson-fox.png':   { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // Ryo "Crimson Moon Fox" — 100 rows, res 4.36px
@@ -717,10 +723,10 @@
       bridgeXF: [0.3427, 0.4169, 0.4889, 0.5600, 0.6344] },
     'assets/guitars/crimson-tarot.png': { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Crimson Fortune" tarot — 32 rows, res 5.56px
       nutXF:    [0.4552, 0.4775, 0.4985, 0.5215, 0.5425],
-      bridgeXF: [0.3956, 0.4453, 0.5016, 0.5484, 0.5952] },
+      bridgeXF: [0.4062, 0.4540, 0.5003, 0.5470, 0.5926] },   // build99 swarm: two leftmost catchers drifted off-string at the bridge → re-measured
     'assets/guitars/clockwork.png':     { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Tourbillon" clockwork — 58 rows, res 2.84px
-      nutXF:    [0.4386, 0.4594, 0.4891, 0.5134, 0.5387],
-      bridgeXF: [0.4080, 0.4613, 0.5058, 0.5615, 0.6130] },
+      nutXF:    [0.4508, 0.4728, 0.4971, 0.5221, 0.5443],   // build99 swarm: stored nut sat ~6-10px left of the strings → re-measured
+      bridgeXF: [0.4008, 0.4470, 0.4955, 0.5436, 0.5923] },   // build99 swarm: stored bridge fanned right (5th string ~15px off) → re-measured (gear ornaments excluded)
     // Alarm Clock Hero — ivory-and-gold clock-face bass (i2i from crimson-chaos-ryo: clean dark fretboard + bright strings
     // kept, ivory body / gold clock face / Roman numerals / brass gears painted on the BODY below the strings). Gate PASSED
     // via adaptive neck-band measure: 108 clean exactly-5 rows, res 5.89px; fit overlay-verified riding the painted strings
@@ -749,13 +755,13 @@
     // the strings nut→bridge (incl. the bridge/catcher zone where you hit). Visual cutout preserves the light marble body (TH=22).
     'assets/guitars/deadkin.png':       { verified: true, aspect: 752 / 1344, nutFY: 0.160, bridgeFY: 0.810,  // "Deadkin" marble-ivory bass — 68 rows, res 4.91px
       nutXF:    [0.4453, 0.4716, 0.4995, 0.5251, 0.5503],
-      bridgeXF: [0.3514, 0.4251, 0.4989, 0.5740, 0.6464] },
+      bridgeXF: [0.3528, 0.4242, 0.4956, 0.5653, 0.6341] },   // build99 swarm: stored bridge drifted right on the two outer lanes (~9px) → re-measured
     'assets/guitars/shorty-x.png':      { verified: true, aspect: 1520 / 2688, nutFY: 0.160, bridgeFY: 0.810,  // "Shorty X" vampire-fang bass — i2i reskin of crimson-chaos-ryo, 17 rows, res 16.65px
       nutXF:    [0.4633, 0.4844, 0.5087, 0.5336, 0.5577],
-      bridgeXF: [0.3518, 0.4227, 0.4852, 0.5539, 0.6247] },
+      bridgeXF: [0.3469, 0.4181, 0.4931, 0.5655, 0.6372] },   // build99 swarm: stored bridge fan was narrower than the strings (outer lanes ~19px off) → re-measured
     'assets/guitars/celines-razor.png': { verified: true, aspect: 1140 / 2016, nutFY: 0.160, bridgeFY: 0.810,  // "Celine's Razor" — CelinesRazor × Dion community guitar (i2i reskin of crimson-chaos-ryo), 55 rows, res 1.67px
       nutXF:    [0.4649, 0.4867, 0.5098, 0.5335, 0.5566],
-      bridgeXF: [0.3487, 0.4214, 0.4950, 0.5723, 0.6502] },
+      bridgeXF: [0.3395, 0.4132, 0.4877, 0.5623, 0.6342] },   // build99 swarm: stored bridge rode right of the strings (growing toward lane 5) → re-measured
     // build64: three NEW store guitars — i2i reskins of crimson-chaos-ryo (strings/neck kept, body re-skinned), keyed + adaptive-measured + overlay-verified riding the strings nut→bridge.
     'assets/guitars/razor.png':         { verified: true, aspect: 1518 / 2647, nutFY: 0.152, bridgeFY: 0.812,  // "Razor" emo-punk dark-purple bass — 164 clean rows, res 7.09px
       nutXF:    [0.4635, 0.4842, 0.5068, 0.5301, 0.5521],
@@ -764,8 +770,8 @@
       nutXF:    [0.4633, 0.4843, 0.5074, 0.5323, 0.5547],
       bridgeXF: [0.3527, 0.4227, 0.4931, 0.5648, 0.6380] },
     'assets/guitars/kitsune.png':       { verified: true, aspect: 1514 / 2677, nutFY: 0.160, bridgeFY: 0.813,  // "Kitsune" ivory fox-fur bass (fox-ear horns + fox-skull crown) — 112 clean rows, res 14.33px
-      nutXF:    [0.4472, 0.4736, 0.5037, 0.5359, 0.5646],
-      bridgeXF: [0.3974, 0.4604, 0.5156, 0.5634, 0.6183] },
+      nutXF:    [0.4512, 0.4791, 0.5078, 0.5367, 0.5625],   // build99 swarm: stored nut 7-9px left of the strings → re-measured on-string
+      bridgeXF: [0.3675, 0.4295, 0.4949, 0.5584, 0.6219] },   // build99 swarm: stored bridge badly off (up to ~45px left, lines in the fur/ornament) → re-measured (atom + edge ornaments excluded)
     'assets/guitars/triemrys.png':      { verified: true, aspect: 1517 / 2646, nutFY: 0.149, bridgeFY: 0.810,  // "Triemrys" scarecrow bass — charred black, demon-crow wings, burlap+bone, axe-blade — 110 clean rows, res 7.25px
       nutXF:    [0.4616, 0.4845, 0.5075, 0.5316, 0.5535],
       bridgeXF: [0.3548, 0.4211, 0.4919, 0.5661, 0.6422] },
@@ -1678,8 +1684,52 @@
   // DEMO PROVIDER (local mp3 + in-browser analyzer)
   // ===========================================================================
   let cachedBuffer = null;
+  // build99: beta-flavored loading quips. The owner asked for funnier loading text than the old
+  // "DECODING SIGNAL / SPLITTING FREQUENCY BANDS" — self-deprecating beta humor (snacks, the cat, cardio).
+  // The real per-stage strings are still passed to setLoading and kept as the title tooltip; what SHOWS is a
+  // shuffled quip, so every load feels like the beta has a sense of humor and you rarely see the same line twice.
+  const LOADING_QUIPS = [
+    'Teaching the cat to code again',
+    'Running this off our own fat asses',
+    'Bribing the algorithm with snacks',
+    'Microwaving last night’s leftovers',
+    'Waking ECH0 from its nap',
+    'Untangling the guitar cable',
+    'Doing the cardio so you don’t have to',
+    'Letting the cat walk across the keyboard',
+    'Arguing with the metronome',
+    'Tuning a string we definitely broke',
+    'Convincing the notes to fall down',
+    'Pretending we read the manual',
+    'Feeding the beat detector a sandwich',
+    'Asking Ryo for the WiFi password',
+    'Hiding the bugs before you notice',
+    'Stretching before the big solo',
+    'Spilling coffee on the mixing board',
+    'Negotiating with the loading bar',
+    'Counting the beats on our fingers',
+    'Warming up the air guitar',
+    'Summoning the rhythm gods (beta build)',
+    'Polishing the crimson off the frets',
+    'Sweeping the green room for snacks',
+    'Pouring one out for the dropped frames',
+    'Reticulating splines (legally distinct)',
+    'Yelling “one more song” at no one',
+  ];
+  const LOADING_STAGES = ['WARMING UP THE CROWD', 'TUNING THE CHAOS', 'SOUNDCHECK IN PROGRESS', 'CHARTING YOUR DOOM', 'SUMMONING THE RIFF', 'LOADING — BETA VIBES'];
+  let _quipBag = [];
+  function nextQuip() {
+    if (!_quipBag.length) {   // refill + Fisher-Yates shuffle → no immediate repeats across a load
+      _quipBag = LOADING_QUIPS.slice();
+      for (let i = _quipBag.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = _quipBag[i]; _quipBag[i] = _quipBag[j]; _quipBag[j] = t; }
+    }
+    return _quipBag.pop();
+  }
+  function funnyStage() { return LOADING_STAGES[(Math.random() * LOADING_STAGES.length) | 0]; }
   function setLoading(msg, pct) {
-    $('loading-msg').textContent = msg; $('loading-pct').textContent = Math.floor(pct) + '%';
+    const el = $('loading-msg');
+    if (el) { el.textContent = nextQuip(); el.title = msg || ''; }   // SHOW a funny quip; keep the real stage as a hover title
+    $('loading-pct').textContent = Math.floor(pct) + '%';
     const ring = $('loading-ring');   // fill the atom's progress ring (circumference 2π·100 ≈ 628)
     if (ring) ring.style.strokeDashoffset = String(628 * (1 - Math.max(0, Math.min(100, pct)) / 100));
   }
@@ -1703,7 +1753,7 @@
 
   async function demoProvider() {
     showScreen('loading');
-    $('loading-stage').textContent = 'DECODING SIGNAL';
+    $('loading-stage').textContent = funnyStage();
     if (!cachedBuffer) {
       setLoading('Awakening ECH0', 5);
       const audioEl = $('audio-el');
@@ -1730,7 +1780,7 @@
   let lastDecoded = { url: null, buf: null };
   async function bufferedProvider(url, meta) {
     showScreen('loading');
-    $('loading-stage').textContent = 'DECODING SIGNAL';
+    $('loading-stage').textContent = funnyStage();
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
     if (!buf) {
       setLoading('Fetching track', 8);
