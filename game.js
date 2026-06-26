@@ -6243,7 +6243,11 @@
     var n = 0, L = notes.length;
     for (var k = 0; k < L && n < _ghostPool.length; k++) {
       var nn = notes[k];
-      if (nn.judged && nn.hit !== 'miss') continue;     // already struck/cleared
+      // build96 (playtest): do NOT cull notes YOU already hit. The rival/opponent highway must show a FULL,
+      // INDEPENDENT note-fall — the same chart falling on THEIR board no matter what you hit — so it reads as a
+      // live game being played beside you, not a sparse mirror that loses a note every time you strike one.
+      // (The time-window cull below still keeps it to the visible approach lane.) This is display-only — the
+      // ghost pool feeds ONLY the opponent deck + the NPC shadow-sim; your scoring path never reads it.
       if (nn.open) continue;                             // open strum bar, not a lane gem
       var d = (nn.time - t) / approach;
       if (d < -0.12 || d > dMax) continue;               // matches the render cull

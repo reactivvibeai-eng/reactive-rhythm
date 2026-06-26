@@ -378,6 +378,10 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
 .genre-tile::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255,255,255,0.22), transparent 60%); pointer-events: none; }
 .genre-tile .gt-name { position: relative; z-index: 2; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .genre-tile .gt-count { position: relative; z-index: 2; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); margin-top: 3px; letter-spacing: 0.1em; }
+/* build96 (playtest): AI FLIXS first-class jukebox button — gold film icon + count so it reads as the cinema section (matches the hero wordmark) */
+.jb-flixs svg { color: var(--gold, #e0a93f); }
+.jb-flixs #jb-flixscount, .jb-flixs span { color: var(--gold, #e0a93f); }
+
 /* AI FLIXS hero — full-width cinematic entry above the genres (replaces the old gt-videos tile).
    Warm-dark body + crimson glow + chrome edge + gold wordmark. NO blue/purple. */
 .flixs-hero-card {

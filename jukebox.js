@@ -221,6 +221,8 @@
     sectionKey = key;
     jbList = RC().sections()[key] || [];
     try { var _ac = $('jb-allcount'); if (_ac) { var _n = (RC().allTracks() || []).length; _ac.textContent = _n ? ' · ' + _n : ''; } } catch (e) {}
+    // build96 (playtest): surface AI FLIXS as a first-class jukebox button (was only buried inside Browse → owner couldn't find it)
+    try { var _fx = $('jb-flixs'), _fc = $('jb-flixscount'), _nv = (RC().videoCount ? RC().videoCount() : 0); if (_fx) _fx.hidden = !_nv; if (_fc) _fc.textContent = _nv ? ' · ' + _nv : ''; } catch (e) {}
     pos = 0; target = 0;
     [...$('jb-tabs').children].forEach(b => { var on = b.dataset.sec === key; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });   // build71: keep ARIA tab state in sync (role=tablist/tab markup in index.html)
     layout(); settlePreview();
@@ -618,6 +620,7 @@
       // browse entry
       $('jb-browse').addEventListener('click', () => { renderBrowse(); showView('browse'); });
       { const asb = $('jb-allsongs'); if (asb) asb.addEventListener('click', () => openSongs(RC().allTracks(), 'All Songs', 'jukebox')); }
+      { const fxb = $('jb-flixs'); if (fxb) fxb.addEventListener('click', () => openSongs(RC().videoTracks(), 'AI Flixs', 'jukebox', '', true, true)); }   // build96 (playtest): AI Flixs as a first-class entry → opens the poster grid directly
       $('lib-search-btn').addEventListener('click', () => { const i = $('lib-search-input'); if (i) i.focus(); openSongs(RC().allTracks(), 'All Songs', 'jukebox'); });
       // prominent header search — type to find any song/artist across the whole library
       { const lsi = $('lib-search-input'), lsx = $('lib-search-clear'); let lsdt = 0;
