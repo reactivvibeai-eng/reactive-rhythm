@@ -513,15 +513,22 @@
     const hero = document.createElement('div');
     hero.className = 'flixs-marquee';
     const poster = RC().posterFor(t) || '';
-    const meta = [t.artist_name, RC().cleanGenre(t.genre), RC().fmtDur(t.duration_seconds)].filter(Boolean).join('  ·  ');
+    const runtime = RC().fmtDur(t.duration_seconds) || '';
+    const genre = RC().cleanGenre(t.genre) || '';
+    const artist = t.artist_name || '';
+    const stats = ['★ AI FILM', runtime, genre].filter(Boolean).join(' · ');
     hero.innerHTML =
       '<span class="fm-bg"></span>' +
-      '<span class="fm-bars"></span>' +
+      '<span class="fm-grain"></span>' +
       '<span class="fm-scrim"></span>' +
+      '<span class="fm-vig"></span>' +
+      '<span class="fm-letterbox"></span>' +
+      '<span class="fm-tag">✦ FEATURED PREMIERE' + (runtime ? ' · ' + RC().escapeHtml(runtime) : '') + '</span>' +
       '<span class="fm-body">' +
         '<span class="fm-kicker"><b>●</b> NOW SHOWING · AI PREMIERE</span>' +
         '<span class="fm-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
-        '<span class="fm-meta">' + RC().escapeHtml(meta) + '</span>' +
+        '<span class="fm-stats">' + RC().escapeHtml(stats) + '</span>' +
+        (artist ? '<span class="fm-by">by ' + RC().escapeHtml(artist) + '</span>' : '') +
         '<span class="fm-actions">' +
           '<button class="fm-play" type="button">▶ PLAY PREMIERE</button>' +
           '<button class="fm-info" type="button">Details</button>' +
@@ -574,12 +581,16 @@
     host.scrollTop = 0;
     // build99: AI FLIXS premiere marquee — feature the top film in a NOW-SHOWING hero, then start the grid at the 2nd
     // film so it isn't duplicated. Only on the un-searched Flixs list (a query collapses back to the plain grid).
-    if (songsScope === 'flixs' && songsPoster && !($('songs-search').value || '').trim()) {
+    const showHero = songsScope === 'flixs' && songsPoster && !($('songs-search').value || '').trim();
+    if (showHero) {
       const hero = flixsHero(songsList[0]);
       if (hero) { host.appendChild(hero); songsRendered = 1; }
     }
     appendSongs();
     fillViewport();
+    // build99: keep the premiere marquee at the top on entry — an async focus/layout pass was snapping the
+    // scroller ~300px down (past the hero), so the premiere never got its moment. Re-pin to top over 2 frames.
+    if (showHero) { host.scrollTop = 0; requestAnimationFrame(() => { host.scrollTop = 0; requestAnimationFrame(() => { host.scrollTop = 0; }); }); }
   }
 
   // branded empty state — echoes the query + offers a one-tap Clear (mirrors the .lib-empty box idiom)
