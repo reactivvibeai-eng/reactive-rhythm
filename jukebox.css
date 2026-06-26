@@ -292,40 +292,60 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
 .jb-pos { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); margin-top: 8px; letter-spacing: 0.2em; }
 
 /* actions */
+/* build99g: the rail wraps meta + actions in ONE element so the desktop framed panel paints a single edge (kills the
+   stray "rectangle box" seam). On mobile it's layout-transparent (display:contents) so meta/actions flow as before. */
+.jb-rail { display: contents; }
 .jb-actions {
   position: relative; z-index: 5;
-  display: flex; gap: 12px; align-items: stretch;
+  display: flex; flex-direction: column; gap: 10px; align-items: stretch;   /* full-width tiers: AI FLIXS hero / Play / utilities */
   padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 24px);
   flex-shrink: 0;
 }
 .jb-browse {
-  flex: 0 0 auto;
+  flex: 1 1 0; min-width: 0;
   display: flex; align-items: center; justify-content: center; gap: 9px;
-  padding: 0 22px; height: 56px;
-  background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 16px;
+  padding: 0 14px; height: 52px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 14px;
   color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-  cursor: pointer; transition: all 0.14s ease;
+  cursor: pointer; transition: all 0.14s ease; white-space: nowrap; overflow: hidden;
 }
+.jb-browse:hover  { border-color: rgba(224,218,214,0.34); }
 .jb-browse:active { transform: scale(0.97); }
-.jb-browse svg { width: 18px; height: 18px; }
+.jb-browse svg { width: 18px; height: 18px; flex: 0 0 auto; }
+/* TIER 3: the two library utilities sit side-by-side, demoted under the hero + Play */
+.jb-util { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .jb-play {
-  flex: 1;
-  height: 56px;
+  width: 100%; height: 58px;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   background: linear-gradient(180deg, #ff2a38, #b3121f);
   border: none; border-radius: 16px;
-  color: #fff; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.06em;
+  color: #fff; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: 0.06em;
   cursor: pointer; box-shadow: 0 8px 30px rgba(255,31,46,0.35), inset 0 1px 0 rgba(255,255,255,0.3);
   transition: transform 0.1s ease, box-shadow 0.2s ease;
 }
-.jb-play:active { transform: scale(0.97); }
-/* phones: the 3-button action row can't fit on one line — stack Play full-width on top,
-   BROWSE + ALL SONGS share a shrinkable row below (fixes Play getting cut off the right edge). */
-@media (max-width: 640px) {
-  .jb-actions { flex-wrap: wrap; gap: 10px; padding-top: 8px; }
-  .jb-actions .jb-play { flex: 1 1 100%; order: -1; height: 54px; }
-  .jb-actions .jb-browse { flex: 1 1 0; min-width: 0; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+.jb-play:hover  { box-shadow: 0 10px 34px rgba(255,31,46,0.45), inset 0 1px 0 rgba(255,255,255,0.35); }
+.jb-play:active { transform: scale(0.98); }
+
+/* TIER 1: AI FLIXS flagship strip — 112 playable music videos, the cinema differentiator (gold premiere language) */
+.jb-flixs-hero {
+  display: flex; align-items: center; gap: 13px; width: 100%; height: 62px;
+  padding: 0 16px; cursor: pointer; text-align: left;
+  border: 1px solid rgba(224,169,63,0.45); border-radius: 16px;
+  background: radial-gradient(130% 170% at 100% 0%, rgba(255,31,46,0.20), transparent 58%), linear-gradient(150deg, #241008, #120607);
+  box-shadow: 0 10px 30px -12px rgba(224,169,63,0.32), inset 0 0 0 1px rgba(224,169,63,0.10);
+  transition: transform 0.12s ease, border-color 0.14s ease, box-shadow 0.2s ease;
 }
+.jb-flixs-hero:hover  { border-color: rgba(224,169,63,0.78); box-shadow: 0 12px 36px -10px rgba(224,169,63,0.46), inset 0 0 0 1px rgba(224,169,63,0.18); transform: translateY(-1px); }
+.jb-flixs-hero:active { transform: scale(0.99); }
+.jb-flixs-hero:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.jfh-ic { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; flex: 0 0 auto;
+  background: rgba(224,169,63,0.12); border: 1px solid rgba(224,169,63,0.34); }
+.jfh-ic svg { width: 20px; height: 20px; color: var(--gold); }
+.jfh-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.jfh-kick { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.08em; color: var(--gold); text-transform: uppercase; }
+.jfh-sub { font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.03em; color: rgba(255,255,255,0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jfh-go { flex: 0 0 auto; font-size: 14px; color: var(--gold); opacity: 0.85; }
+html.rr-reduce-motion .jb-flixs-hero:hover { transform: none; }
 
 /* ===========================================================================
    MOBILE RESPONSIVE FIXES (≤900px) — scroll tall content instead of clipping it,
@@ -378,9 +398,8 @@ html.rr-reduce-motion .gb-tag { animation: none !important; }
 .genre-tile::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 0%, rgba(255,255,255,0.22), transparent 60%); pointer-events: none; }
 .genre-tile .gt-name { position: relative; z-index: 2; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 16px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .genre-tile .gt-count { position: relative; z-index: 2; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.8); margin-top: 3px; letter-spacing: 0.1em; }
-/* build96 (playtest): AI FLIXS first-class jukebox button — gold film icon + count so it reads as the cinema section (matches the hero wordmark) */
-.jb-flixs svg { color: var(--gold, #e0a93f); }
-.jb-flixs #jb-flixscount, .jb-flixs span { color: var(--gold, #e0a93f); }
+/* build99g: the old .jb-flixs gold-recolor rules were retired — #jb-flixs is now the .jb-flixs-hero flagship strip
+   (its own gold premiere styling above), no longer a recolored .jb-browse button. */
 
 /* AI FLIXS hero — full-width cinematic entry above the genres (replaces the old gt-videos tile).
    Warm-dark body + crimson glow + chrome edge + gold wordmark. NO blue/purple. */
@@ -697,25 +716,25 @@ html.rr-reduce-motion .fm-play:hover { transform: none; }
   #view-jukebox .jukebox   { grid-area: stage; }
   #view-jukebox .jb-eq     { grid-area: eq; margin-top: 6px; }
 
-  /* the right rail reads as one framed panel (meta on top, actions anchored) */
-  #view-jukebox .jb-meta,
-  #view-jukebox .jb-actions {
-    grid-column: 2;
-    border-left: 1px solid var(--line);
-    text-align: left;
-    padding-left: 30px; padding-right: 22px;
-    background: linear-gradient(100deg, rgba(255,31,46,0.05), transparent 60%);
+  /* build99g: the right rail is ONE framed panel (.jb-rail) — meta centered on top, actions pinned to the bottom.
+     Previously .jb-meta + .jb-actions EACH painted their own border-left + crimson gradient and overlapped ~6px in
+     row 3, so the edge + wash restarted mid-column and read as a stray bordered "rectangle box" bolted on. Now one
+     element paints one NEUTRAL-CHROME edge + one subtle wash → a clean, deliberate panel. */
+  #view-jukebox .jb-rail {
+    grid-area: rail; display: flex; flex-direction: column;
+    border-left: 1px solid rgba(218,215,210,0.12);   /* neutral chrome hairline (was crimson-tinted --line) */
+    background: linear-gradient(100deg, rgba(255,31,46,0.045), transparent 55%);
+    padding: 26px 22px 26px 30px; text-align: left;
   }
   #view-jukebox .jb-meta {
-    grid-row: 1 / 3;
-    align-self: stretch;
-    display: flex; flex-direction: column; justify-content: center; gap: 13px;
-    padding-top: 28px; padding-bottom: 16px;
+    flex: 1 1 auto; align-self: stretch;
+    display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    padding: 0;
   }
   #view-jukebox .jb-meta::before {
     content: '// NOW FOCUSED';
     font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.34em;
-    color: var(--chrome); opacity: 0.75;
+    color: var(--chrome); opacity: 0.75; margin-bottom: 6px;
   }
   #view-jukebox .jb-title {
     font-size: clamp(28px, 2.5vw, 42px); line-height: 1.04; -webkit-line-clamp: 3;
@@ -736,13 +755,12 @@ html.rr-reduce-motion .fm-play:hover { transform: none; }
   }
 
   #view-jukebox .jb-actions {
-    grid-row: 3 / 4;
-    align-self: end;
+    flex: 0 0 auto; margin-top: 18px; padding: 0;
     flex-direction: column; gap: 12px;
-    padding-top: 0; padding-bottom: 26px;
   }
-  #view-jukebox .jb-actions .jb-play   { flex: 0 0 auto; height: 60px; font-size: 18px; }
-  #view-jukebox .jb-actions .jb-browse { flex: 0 0 auto; height: 52px; }
+  #view-jukebox .jb-actions .jb-flixs-hero { height: 66px; }
+  #view-jukebox .jb-actions .jb-play       { height: 60px; font-size: 18px; }
+  #view-jukebox .jb-actions .jb-browse     { height: 52px; }
 
   /* coverflow nav arrows live inside the stage column, not the full width */
   #view-jukebox .jb-nav.prev { left: 4px; }
