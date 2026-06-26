@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=348" />
+<link rel="stylesheet" href="jukebox.css?v=349" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -896,7 +896,10 @@
   .lbd-diff { align-self: center; }
   .lbd-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.5; color: #e0a93f; border: 1px solid rgba(224,169,63,0.4); background: rgba(224,169,63,0.06); border-radius: 12px; padding: 10px 14px; }
   .lbd-banner b { color: #e0a93f; font-weight: 700; }
-  .lbd-board { width: 100%; display: flex; flex-direction: column; gap: 2px; min-height: 60px; }
+  .lbd-board { width: 100%; display: flex; flex-direction: column; gap: 2px; min-height: 240px; }   /* build99L: 60→240 so an empty board doesn't collapse to a void */
+  .lb-head-tag { font-family: 'Chakra Petch', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; }
+  .lbd-board .lb-row.lb-you-claim { margin-top: 8px; opacity: 0.92; }
+  .lbd-board .lb-row.lb-you-claim .lb-rank { color: var(--ink-dim); }
   .lbd-board .lb-head { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--silver); margin-bottom: 8px; text-align: left; }
   .lbd-board .lb-row { display: grid; grid-template-columns: 48px 1fr auto auto auto; gap: 14px; align-items: baseline; padding: 9px 10px; border-bottom: 1px solid rgba(222,216,212,0.06); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: left; }
   .lbd-board .lb-rank { color: var(--crimson); font-weight: 700; }
@@ -914,13 +917,16 @@
   /* ── TOP-3 PODIUM — the headline of every board (2nd · 1st-raised · 3rd) ── */
   .lbd-board .lb-podium { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 8px; align-items: end; margin: 2px 0 14px; }
   .lbd-board .lb-pod { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 8px 11px; border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.015)); border: 1px solid rgba(222,216,212,0.10); text-align: center; min-width: 0; }
-  .lbd-board .lb-pod.r1 { background: linear-gradient(180deg, rgba(224,169,63,0.18), rgba(224,169,63,0.03)); border-color: rgba(224,169,63,0.45); box-shadow: 0 0 22px rgba(224,169,63,0.16); padding-top: 18px; padding-bottom: 15px; }
+  .lbd-board .lb-pod.r1 { position: relative; background: linear-gradient(180deg, rgba(224,169,63,0.18), rgba(224,169,63,0.03)); border-color: rgba(224,169,63,0.45); box-shadow: 0 0 22px rgba(224,169,63,0.16); padding-top: 22px; padding-bottom: 18px; transform: translateY(-14px); z-index: 1; animation: lbPodPulse 2.8s ease-in-out infinite; }   /* build99L: 1st towers — taller pedestal + crown + slow gold pulse */
+  .lbd-board .lb-pod-crown { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 17px; filter: drop-shadow(0 2px 6px rgba(224,169,63,0.6)); }
+  @keyframes lbPodPulse { 0%,100% { box-shadow: 0 0 22px rgba(224,169,63,0.16); } 50% { box-shadow: 0 0 34px rgba(224,169,63,0.34); } }
+  html.rr-reduce-motion .lbd-board .lb-pod.r1, body.rr-fx-lite .lbd-board .lb-pod.r1 { animation: none; }
   .lbd-board .lb-pod.r2 { border-color: rgba(203,199,194,0.30); }   /* v258 brand fix: was rgba(214,216,226) cool blue-grey → warm silver (203,199,194) */
   .lbd-board .lb-pod.r3 { border-color: rgba(224,151,90,0.30); }
   .lbd-board .lb-pod-medal { font-size: 22px; line-height: 1; }
   .lbd-board .lb-pod.r1 .lb-pod-medal { font-size: 28px; }
   .lbd-board .lb-pod-av { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 17px; color: #fff; background: linear-gradient(150deg, #c2182a, #1e0407); border: 1px solid rgba(255,255,255,0.14); }
-  .lbd-board .lb-pod.r1 .lb-pod-av { width: 48px; height: 48px; font-size: 20px; background: linear-gradient(150deg, #e0a93f, #b8801a); color: #2a1602; }
+  .lbd-board .lb-pod.r1 .lb-pod-av { position: relative; width: 48px; height: 48px; font-size: 20px; background: linear-gradient(150deg, #e0a93f, #b8801a); color: #2a1602; }
   .lbd-board .lb-pod-name { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; color: var(--ink); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-board .lb-pod.r1 .lb-pod-name { color: #ffe9a8; }
   .lbd-board .lb-pod-score { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -944,7 +950,20 @@
   .lbd-board .lb-row.lvl .lb-lvl b { color: var(--ink); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-board .lb-row.lvl .lb-lvl span { color: var(--ink-dim); font-size: 10px; letter-spacing: 0.1em; }
   .lbd-board .lb-row.lvl .lb-champ { color: #e0a93f; font-weight: 700; }
-  .lbd-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  /* build99L: centered empty state with a PLAY A SONG CTA (was a bare faint line over a void) */
+  .lbd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    min-height: 200px; text-align: center; font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  .lbd-empty[hidden] { display: none; }
+  .lbd-empty-ico { font-size: 30px; color: var(--crimson); opacity: 0.7; filter: drop-shadow(0 0 12px rgba(255,31,46,0.4)); }
+  .lbd-empty-txt { max-width: 340px; }
+  .lbd-empty-cta { cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 26px; border-radius: 999px; border: 1.5px solid rgba(255,60,70,0.9);
+    background: linear-gradient(180deg, rgba(255,31,46,0.24), rgba(255,31,46,0.10));
+    box-shadow: 0 0 22px rgba(255,31,46,0.28), inset 0 1px 0 rgba(255,255,255,0.12);
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.18em; color: #fff;
+    transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
+  .lbd-empty-cta:hover, .lbd-empty-cta:focus-visible { background: linear-gradient(180deg, rgba(255,31,46,0.36), rgba(255,31,46,0.16)); box-shadow: 0 0 32px rgba(255,31,46,0.45); transform: translateY(-1px); outline: none; }
+  .lbd-empty-cta:active { transform: scale(0.97); }
   /* ===== v254: MULTIPLAYER ranking + combat UI (lobby rank chip · combat toggle · stun veil · leaderboard MP tab) ===== */
   .mpx-rankrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
   .mpx-rank-chip { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 999px;
@@ -5098,7 +5117,12 @@
 
       <div class="lbd-banner" id="lbd-banner" hidden></div>
       <div class="lbd-board" id="lbd-board"></div>
-      <p class="lbd-empty" id="lbd-empty" hidden>No scores yet — finish a run and you'll appear here.</p>
+      <!-- build99L: centered empty-state with a PLAY A SONG CTA (was a bare faint line over a ~300px void) -->
+      <div class="lbd-empty" id="lbd-empty" hidden>
+        <span class="lbd-empty-ico" aria-hidden="true">♪</span>
+        <span class="lbd-empty-txt" id="lbd-empty-txt">No scores yet — finish a run and you'll appear here.</span>
+        <button class="lbd-empty-cta" id="lbd-empty-cta" type="button">PLAY A SONG</button>
+      </div>
       <!-- SHARE MY RANK — only shown when the LIVE board has the player's own ranked "you" row -->
       <div class="lbd-share-row" id="lbd-share-row" hidden style="margin-top:12px;text-align:center;">
         <button class="ghost-btn gold" id="lbd-share">SHARE MY RANK</button>
@@ -5860,13 +5884,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=348"></script>
+<script src="game.js?v=349"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=348"></script>
-<script src="catalog.js?v=348"></script>
-<script src="multiplayer.js?v=348"></script>
+<script src="jukebox.js?v=349"></script>
+<script src="catalog.js?v=349"></script>
+<script src="multiplayer.js?v=349"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=348"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=349"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -7701,6 +7725,14 @@
     return raw;
   }
 
+  // build99L: the empty state is now a structured block (icon + text + PLAY A SONG CTA). Set its text
+  // via the inner span so the CTA survives; the bare `empty.textContent=` calls were replaced with this.
+  function showEmpty(msg) {
+    var empty = $('lbd-empty'), txt = $('lbd-empty-txt');
+    if (txt) txt.textContent = msg; else if (empty) empty.textContent = msg;
+    if (empty) empty.hidden = false;
+  }
+
   var tab = 'global';      // 'global' | 'song'
   var diff = '';           // '' = all, else easy|medium|hard
   var pickTrack = null;    // selected track for the By-Song board
@@ -7740,9 +7772,10 @@
     return '<div class="lb-podium">' + order.map(function (p) {
       if (!p) return '';
       var medal = p.rank === 1 ? '🏆' : (p.rank === 2 ? '🥈' : '🥉');
+      var crown = p.rank === 1 ? '<div class="lb-pod-crown" aria-hidden="true">👑</div>' : '';
       return '<div class="lb-pod r' + p.rank + (p.you ? ' you' : '') + '">' +
         '<div class="lb-pod-medal">' + medal + '</div>' +
-        '<div class="lb-pod-av">' + esc(initial(p.name)) + '</div>' +
+        '<div class="lb-pod-av">' + crown + esc(initial(p.name)) + '</div>' +
         '<div class="lb-pod-name">' + esc(p.name) + '</div>' +
         '<div class="lb-pod-score">' + fmt(p.score) + '</div>' +
         '<div class="lb-pod-meta">' + gradeBadge(p.grade) + (p.acc != null ? '<span>' + (p.acc * 100).toFixed(1) + '%</span>' : '') + '</div>' +
@@ -7818,16 +7851,38 @@
       '<span class="lb-acc">' + (acc != null ? (acc * 100).toFixed(1) + '%' : '—') + '</span>' +
     '</div>';
   }
+  // build99L: a SEEDED aspirational global ladder so the default Global tab is never a dead empty board.
+  // Five "house" players with grade badges; the local player is pinned in (real best score → ranked among
+  // them; no runs yet → a #— "play a song to claim your spot" row). Marked a preview (banner) since the
+  // real world ranking goes live when accounts connect.
+  var GLOBAL_SEED = [
+    { name: 'VEX',       score: 1284500, acc: 0.991, grade: 'S' },
+    { name: 'KUNNING',   score:  962300, acc: 0.974, grade: 'S' },
+    { name: 'RYO-9',     score:  741800, acc: 0.958, grade: 'A' },
+    { name: 'NIGHT-OWL', score:  503600, acc: 0.933, grade: 'A' },
+    { name: 'ECH0',      score:  318900, acc: 0.901, grade: 'B' }
+  ];
   function renderGlobalLocal(c) {
     var board = $('lbd-board'), empty = $('lbd-empty');
     setYouRow(null);   // local/dormant board carries no real world rank
-    banner(DORMANT);
-    var runs = localRuns().slice(0, 20);
-    if (!runs.length) { board.innerHTML = ''; empty.textContent = 'No runs yet — play a few songs to build your board.'; empty.hidden = false; return; }
+    banner('<b>Preview ladder — beat these.</b> Global rankings go live when accounts connect; for now this seeds aspirational targets next to your best.');
+    var runs = localRuns();
+    var best = runs.length ? runs[0] : null;
+    // build the combined ladder: house seeds + the player (real best, or an unranked placeholder)
+    var pool = GLOBAL_SEED.map(function (s) { return { name: s.name, score: s.score, acc: s.acc, grade: s.grade, you: false }; });
+    if (best) pool.push({ name: 'YOU', sub: best.title, score: best.score, acc: best.accuracy, grade: best.grade, you: true });
+    pool.sort(function (a, b) { return b.score - a.score; });
+    var items = pool.map(function (p, i) { p.rank = i + 1; return p; });
     empty.hidden = true;
-    // build99k: this is ALL your runs, so flagging EVERY row 'you' (crimson outline) gave zero contrast — highlight only #1 (your best).
-    var items = runs.map(function (r, i) { return { rank: i + 1, name: r.title, sub: r.difficulty, score: r.score, acc: r.accuracy, grade: r.grade, you: i === 0 }; });
-    board.innerHTML = boardHtml('<div class="lb-head">YOUR TOP RUNS</div>', items);
+    var head = '<div class="lb-head">All-time · Top players <span class="lb-head-tag">preview</span></div>';
+    var html = boardHtml(head, items);
+    if (!best) {
+      // no run yet → a pinned, un-ranked YOU row inviting the first play
+      html += '<div class="lb-row you lb-you-claim"><span class="lb-rank">#—</span>' +
+        '<span class="lb-name">YOU <span class="lb-sub">· play a song to claim your spot</span></span>' +
+        '<span class="lb-gradecol"></span><span class="lb-score">—</span><span class="lb-acc">—</span></div>';
+    }
+    board.innerHTML = html;
   }
 
   // ---- BY-SONG board: live per-track if backend offers it, else local best ----
@@ -7846,7 +7901,7 @@
       setYouRow(null);
       banner(null);
       board.innerHTML = '';
-      empty.textContent = 'Pick a track to see its leaderboard.'; empty.hidden = false;
+      showEmpty('Pick a track to see its leaderboard.');
       return;
     }
     var head = '<div class="lb-head">' + esc(pickTrack.title || '') + (diff ? ' · ' + diff : '') + '</div>';
@@ -7876,7 +7931,7 @@
     var rows = [];
     diffs.forEach(function (d) { var r = scores[pickTrack.id + '|' + d]; if (r && r.score) rows.push({ d: d, score: r.score, accuracy: r.accuracy, grade: r.grade }); });
     rows.sort(function (a, b) { return b.score - a.score; });
-    if (!rows.length) { board.innerHTML = head; empty.textContent = 'No score on this track yet — play it to set the pace.'; empty.hidden = false; return; }
+    if (!rows.length) { board.innerHTML = head; showEmpty('No score on this track yet — play it to set the pace.'); return; }
     empty.hidden = true;
     // build99k: these are your bests per difficulty — naming every one literally 'You' made the podium read "You/You/You".
     // Label as "Your best" (the difficulty is in `sub`) and only highlight the top one.
@@ -7890,7 +7945,7 @@
     setYouRow(null);   // level-champions board is local-only
     banner(DORMANT);
     var levels = (window.RhythmLevels && window.RhythmLevels.champions) ? window.RhythmLevels.champions() : [];
-    if (!levels.length) { board.innerHTML = ''; empty.textContent = 'No levels yet.'; empty.hidden = false; return; }
+    if (!levels.length) { board.innerHTML = ''; showEmpty('No levels yet.'); return; }
     var scores; try { scores = JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { scores = {}; }
     empty.hidden = true;
     var rows = levels.map(function (L) {
@@ -7988,7 +8043,23 @@
     });
   }
 
+  // build99L: seed the By-Song picker with the most-recently-played track so that tab isn't a cold
+  // "Choose a track" prompt. Prefers the last completed run (RhythmGame.lastResults), else the highest
+  // local score. Only runs when no track is picked yet (respects an explicit user pick this session).
+  function defaultPick() {
+    if (pickTrack) return;
+    var C = RC(); if (!C || !C.allTracks) return;
+    var byId = {}; C.allTracks().forEach(function (t) { byId[t.id] = t; });
+    var id = null;
+    try {
+      var lr = window.RhythmGame && window.RhythmGame.lastResults && window.RhythmGame.lastResults();
+      if (lr && lr.trackId && byId[lr.trackId]) id = lr.trackId;
+    } catch (e) {}
+    if (!id) { var runs = []; try { runs = localRuns(); } catch (e) {} if (runs.length && byId[runs[0].id]) id = runs[0].id; }
+    if (id && byId[id]) setPick(byId[id]);
+  }
   function open() {
+    defaultPick();
     render();
     screen.classList.add('active');
   }
@@ -8017,6 +8088,18 @@
 
   var ob = $('leaderboard-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('leaderboard-close'); if (cb) cb.addEventListener('click', close);
+  // build99L: empty-state CTA → close the board + open the jukebox so a player with no scores can start playing
+  var ecta = $('lbd-empty-cta');
+  if (ecta) ecta.addEventListener('click', function () {
+    close();
+    try {
+      var menu = $('menu'), hub = $('menu-hub');
+      if (hub) hub.classList.remove('active');
+      if (menu) menu.classList.add('active');
+      if (window.RhythmLibrary && window.RhythmLibrary.showView) window.RhythmLibrary.showView('jukebox');
+      window.dispatchEvent(new Event('resize'));
+    } catch (e) {}
+  });
 
   // ---- SHARE — always available. A LIVE world rank → gold WORLD RANK "Signal Card";
   // otherwise → a MY-TOP-RUNS podium card built from the player's best local runs. Names are
