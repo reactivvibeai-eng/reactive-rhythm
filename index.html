@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=346" />
+<link rel="stylesheet" href="jukebox.css?v=348" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -619,17 +619,43 @@
   .profile-rank { font-family: 'Chakra Petch', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: #e0a93f; text-shadow: 0 0 16px rgba(224,169,63,0.4); }
   .profile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; margin-top: 8px; }
   .ps-cell { display: flex; flex-direction: column; gap: 5px; padding: 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); }
+  /* build99L: Lifetime Score = the trophy — span-2, first position, gold/crimson frame, larger number */
+  .ps-cell.ps-hero { grid-column: span 2; justify-content: center;
+    border-color: rgba(224,169,63,0.55);
+    background: radial-gradient(120% 130% at 0% 0%, rgba(224,169,63,0.12), transparent 60%), linear-gradient(180deg, rgba(255,31,46,0.07), rgba(255,255,255,0.02));
+    box-shadow: inset 0 0 0 1px rgba(224,169,63,0.18), 0 0 22px rgba(224,169,63,0.12); }
+  .ps-cell.ps-hero .ps-l { color: var(--gold); }
+  .ps-cell.ps-hero .ps-n { font-size: 34px; color: #fff; text-shadow: 0 0 22px rgba(224,169,63,0.4); }
   .ps-l { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
   .ps-n { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,42,48,0.22); }
   .profile-grades-wrap { width: 100%; margin-top: 4px; }
   .pg-head { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
   .pg-head::before { content: '◆'; font-size: 8px; color: var(--crimson); }
-  .profile-grades { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-  .pg-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 4px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.02); }
-  .pg-g { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 24px; line-height: 1; }
-  .pg-c { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .pg-cell.g-S .pg-g { color: #e0a93f; } .pg-cell.g-A .pg-g { color: #ff6b78; }
-  .pg-cell.g-B .pg-g { color: var(--chrome); } .pg-cell.g-C .pg-g { color: var(--ink-dim); } .pg-cell.g-D .pg-g { color: #8a5a3a; }
+  /* build99L: grade distribution = horizontal bars (width = count/max). S gets a faint inset gold glow + bigger letter. */
+  .profile-grades { display: flex; flex-direction: column; gap: 7px; }
+  .pg-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 10px; }
+  .pg-g { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; line-height: 1; text-align: center; }
+  .pg-track { position: relative; height: 16px; border-radius: 8px; background: rgba(255,255,255,0.04); overflow: hidden; }
+  .pg-fill { position: absolute; inset: 0 auto 0 0; height: 100%; border-radius: 8px; width: 0;
+    transition: width .6s cubic-bezier(.2,.9,.26,1); background: var(--chrome); }
+  .pg-c { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; min-width: 22px; }
+  .pg-row.g-S .pg-g { color: #e0a93f; font-size: 21px; } .pg-row.g-A .pg-g { color: #e07a4a; }
+  .pg-row.g-B .pg-g { color: var(--chrome); } .pg-row.g-C .pg-g { color: var(--ink-dim); } .pg-row.g-D .pg-g { color: #8a5a3a; }
+  .pg-row.g-S .pg-track { box-shadow: inset 0 0 10px rgba(224,169,63,0.35); }
+  .pg-row.g-S .pg-fill { background: linear-gradient(90deg, rgba(224,169,63,0.9), #f0c870); }
+  .pg-row.g-A .pg-fill { background: linear-gradient(90deg, rgba(224,122,74,0.85), #e89a6a); }
+  .pg-row.g-B .pg-fill { background: var(--chrome); }
+  .pg-row.g-C .pg-fill { background: rgba(218,215,210,0.5); }
+  .pg-row.g-D .pg-fill { background: rgba(138,90,58,0.7); }
+  html.rr-reduce-motion .pg-fill { transition: none; }
+  /* build99L: rank progress bar under the rank label (gold on warm dark) */
+  .pn-rankprog { margin-top: 7px; max-width: 320px; }
+  .pn-rankbar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; border: 1px solid rgba(224,169,63,0.16); }
+  .pn-rankfill { display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, rgba(224,169,63,0.85), #f0c870); box-shadow: 0 0 10px rgba(224,169,63,0.45);
+    transition: width .7s cubic-bezier(.2,.9,.26,1); }
+  html.rr-reduce-motion .pn-rankfill { transition: none; }
+  .pn-rankcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-dim); }
   .profile-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; display: none; }
   .profile-screen.is-empty .profile-empty { display: block; }
   .profile-screen.is-empty .profile-stats, .profile-screen.is-empty .profile-grades-wrap { opacity: 0.5; }
@@ -4984,6 +5010,11 @@
           <div class="pn-eyebrow" id="profile-title">// CONTROLLER PROFILE</div>
           <div class="pn-name" id="profile-name">Local Player</div>
           <div class="profile-rank" id="profile-rank">SIGNAL INITIATE</div>
+          <!-- build99L: rank progress on the runs ladder -->
+          <div class="pn-rankprog" aria-hidden="true">
+            <div class="pn-rankbar"><span class="pn-rankfill" id="profile-rank-fill"></span></div>
+            <div class="pn-rankcap" id="profile-rank-cap"></div>
+          </div>
           <div class="pn-hint" id="profile-id-hint">Sign in on ReactivVibe to save your profile photo</div>
         </div>
       </div>
@@ -5829,13 +5860,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
 <script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=346"></script>
+<script src="game.js?v=348"></script>
 <script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=346"></script>
-<script src="catalog.js?v=346"></script>
-<script src="multiplayer.js?v=346"></script>
+<script src="jukebox.js?v=348"></script>
+<script src="catalog.js?v=348"></script>
+<script src="multiplayer.js?v=348"></script>
 <script src="share.js?v=324"></script>
-<script src="couch.js?v=346"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="couch.js?v=348"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5967,18 +5998,99 @@
     var distinct = Object.keys(c.songs || {}).length;
     var acc = c.notesTotal > 0 ? (c.notesHit / c.notesTotal * 100) : 0;
     var rk = $('profile-rank'); if (rk) rk.textContent = rankTitle(c);
+    paintRankProgress(c);   // build99L: gold progress bar on the runs ladder under the rank label
+    // build99L: each numeric cell carries a data-target so the count-up can ease 0→target on open.
+    // Lifetime Score is the trophy — span-2, first position, gold/crimson frame, larger number.
+    // [label, target-number, suffix, isInt, heroFlag]
     var cells = [
-      ['Lifetime Score', fmt(c.score)], ['Runs', fmt(c.runs)], ['Songs Played', fmt(distinct)],
-      ['Best Combo', fmt(c.bestCombo) + '×'], ['Accuracy', acc.toFixed(1) + '%'], ['Full Combos', fmt(c.fullCombos)]
+      ['Lifetime Score', c.score, '', true, true],
+      ['Runs', c.runs, '', true, false],
+      ['Songs Played', distinct, '', true, false],
+      ['Best Combo', c.bestCombo, '×', true, false],
+      ['Accuracy', acc, '%', false, false],
+      ['Full Combos', c.fullCombos, '', true, false]
     ];
     var st = $('profile-stats');
-    if (st) st.innerHTML = cells.map(function (p) { return '<div class="ps-cell"><span class="ps-l">' + p[0] + '</span><span class="ps-n">' + p[1] + '</span></div>'; }).join('');
+    if (st) st.innerHTML = cells.map(function (p) {
+      var disp = p[3] ? fmt(p[1]) + p[2] : (Number(p[1]).toFixed(1) + p[2]);
+      return '<div class="ps-cell' + (p[4] ? ' ps-hero' : '') + '"><span class="ps-l">' + p[0] + '</span>' +
+        '<span class="ps-n" data-target="' + p[1] + '" data-suffix="' + p[2] + '" data-int="' + (p[3] ? 1 : 0) + '">' + disp + '</span></div>';
+    }).join('');
+    // GRADE DISTRIBUTION — horizontal bars (width = count/maxCount on the S=gold/A/B/C/D ladder).
     var order = ['S', 'A', 'B', 'C', 'D'];
+    var counts = order.map(function (g) { return (c.grades && c.grades[g]) || 0; });
+    var maxC = Math.max.apply(null, counts.concat([1]));
     var gr = $('profile-grades');
-    if (gr) gr.innerHTML = order.map(function (g) { return '<div class="pg-cell g-' + g + '"><span class="pg-g">' + g + '</span><span class="pg-c">' + fmt((c.grades && c.grades[g]) || 0) + '</span></div>'; }).join('');
+    if (gr) gr.innerHTML = order.map(function (g, i) {
+      var n = counts[i], pct = Math.round(n / maxC * 100);
+      return '<div class="pg-row g-' + g + '">' +
+        '<span class="pg-g">' + g + '</span>' +
+        '<span class="pg-track"><span class="pg-fill" data-pct="' + pct + '" style="width:0%"></span></span>' +
+        '<span class="pg-c">' + fmt(n) + '</span>' +
+      '</div>';
+    }).join('');
     screen.classList.toggle('is-empty', !c.runs);
+    animateStats();   // count-up + grade-bar grow (reduce-motion → instant finals)
     renderLoadout();
     renderBadges();
+  }
+  // build99L: rank progress bar — fill = (runs - currentFloor)/(nextFloor - currentFloor) on the runs
+  // ladder (0/5/15/30/60/120). S>=25 caps it full. Caption: "RIFT TAPPER · 11/15 to ECHO RUNNER".
+  function paintRankProgress(c) {
+    var bar = $('profile-rank-fill'), cap = $('profile-rank-cap');
+    if (!bar && !cap) return;
+    var s = (c.grades && c.grades.S) || 0, runs = c.runs || 0;
+    // find current floor + next floor on the ladder
+    var floor = 0, next = RANK_FLOORS[1] || 5;
+    for (var i = 0; i < RANK_FLOORS.length; i++) {
+      if (runs >= RANK_FLOORS[i]) { floor = RANK_FLOORS[i]; next = RANK_FLOORS[i + 1] || RANK_FLOORS[i]; }
+    }
+    var capped = (s >= 25) || (runs >= RANK_FLOORS[RANK_FLOORS.length - 1]);
+    var pct, capTxt;
+    if (capped) { pct = 100; capTxt = rankTitle(c) + ' · MAX RANK'; }
+    else {
+      var span = Math.max(1, next - floor);
+      pct = Math.max(0, Math.min(100, Math.round((runs - floor) / span * 100)));
+      // name the NEXT rank by probing rankTitle at the next floor
+      var nextName = rankTitle({ runs: next, grades: { S: s } });
+      capTxt = rankTitle(c) + ' · ' + runs + '/' + next + ' to ' + nextName;
+    }
+    if (cap) cap.textContent = capTxt;
+    if (bar) {
+      var reduce = false; try { reduce = document.documentElement.classList.contains('rr-reduce-motion'); } catch (e) {}
+      if (reduce) { bar.style.transition = 'none'; bar.style.width = pct + '%'; }
+      // start at 0 then grow on the next tick. setTimeout (not idle-rAF) so the reveal is reliable even if rAF is throttled.
+      else { bar.style.width = '0%'; setTimeout(function () { bar.style.width = pct + '%'; }, 40); }
+    }
+  }
+  // build99L: count-up the .ps-n cells 0→target (~700ms ease-out, staggered ~60ms) + grow the grade bars.
+  // Honors html.rr-reduce-motion (set finals instantly). Uses rAF; toLocaleString per frame.
+  function animateStats() {
+    var reduce = false; try { reduce = document.documentElement.classList.contains('rr-reduce-motion'); } catch (e) {}
+    var nums = Array.prototype.slice.call(screen.querySelectorAll('.ps-n'));
+    var fills = Array.prototype.slice.call(screen.querySelectorAll('.pg-fill'));
+    if (reduce) {
+      nums.forEach(function (el) { var t = +el.getAttribute('data-target') || 0, isInt = el.getAttribute('data-int') === '1', sfx = el.getAttribute('data-suffix') || '';
+        el.textContent = (isInt ? fmt(t) : Number(t).toFixed(1)) + sfx; });
+      fills.forEach(function (f) { f.style.transition = 'none'; f.style.width = (+f.getAttribute('data-pct') || 0) + '%'; });
+      return;
+    }
+    fills.forEach(function (f, i) { f.style.transitionDelay = (i * 50) + 'ms'; setTimeout(function () { f.style.width = (+f.getAttribute('data-pct') || 0) + '%'; }, 40); });
+    nums.forEach(function (el, i) {
+      var target = +el.getAttribute('data-target') || 0, isInt = el.getAttribute('data-int') === '1', sfx = el.getAttribute('data-suffix') || '';
+      var dur = 700, delay = i * 60, start = null;
+      function ease(t) { return 1 - Math.pow(1 - t, 3); }
+      function step(ts) {
+        if (start === null) start = ts;
+        var t = Math.min(1, (ts - start - delay) / dur);
+        if (t < 0) { requestAnimationFrame(step); return; }
+        var v = ease(t) * target;
+        el.textContent = (isInt ? fmt(Math.round(v)) : v.toFixed(1)) + sfx;
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = (isInt ? fmt(target) : Number(target).toFixed(1)) + sfx;
+      }
+      requestAnimationFrame(step);
+    });
   }
   // CAMPAIGN BADGES — one medal per beaten level (from RhythmLibrary.earnedBadges, derived from lvProg)
   function renderBadges() {
