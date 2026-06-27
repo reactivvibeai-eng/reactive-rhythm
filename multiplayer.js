@@ -1352,7 +1352,7 @@
     if (creating) {
       var isTour = (mode === 'tour-create');
       if (cr) cr.setAttribute('data-mode', isTour ? 'tour' : 'duel');
-      var ttl = $('mpx-create-title'); if (ttl) ttl.textContent = isTour ? '🏆 OPEN A TOURNAMENT' : 'OPEN A ROOM';
+      var ttl = $('mpx-create-title'); if (ttl) ttl.textContent = isTour ? 'OPEN A TOURNAMENT' : 'OPEN A ROOM';
       var go = $('mpx-room-create-go'); if (go) go.textContent = isTour ? 'OPEN TOURNAMENT' : 'OPEN ROOM';
       var msg = $('mpx-room-create-msg'); if (msg) msg.textContent = isTour ? 'Single-elimination bracket · 3–10 players · winners advance until one remains.' : "Public rooms appear in everyone's browser.";
       var pv = $('mpx-room-priv'); if (pv) pv.style.display = isTour ? 'none' : '';
@@ -1528,6 +1528,11 @@
   // Surfaces OPEN tournaments + rooms from the EXISTING toursDir/roomsDir (softPresence-fed — no new channel).
   // Each entry one-taps into the SAME join path as ?mpjoin=/?mproom= and the room-code input. Auto-promoted
   // whenever openRoomCount() > 0; otherwise a tasteful "host one" CTA. Only painted while the lobby step is up.
+  // visual-overhaul: small inline SVG glyphs for the LIVE-NOW list sparks (replace off-brand emoji 🏆/🎸 —
+  // the controller/robot emoji rendered PURPLE/BLUE, violating the brand rule). Crimson/gold/chrome only.
+  var SVG_TROPHY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg>';
+  var SVG_PICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-4 0-7 2.4-7 6 0 5.4 5.2 11.4 6.4 12.6a.8.8 0 0 0 1.2 0C13.8 20.4 19 14.4 19 9c0-3.6-3-6-7-6z"></path></svg>';
+
   function renderLiveNow() {
     var wrap = $('mpx-livenow'); if (!wrap) return;
     // only meaningful on the lobby step (the directory is irrelevant inside a match/room/bracket)
@@ -1538,20 +1543,25 @@
     var tids = Object.keys(toursDir).filter(function (tid) { var r = toursDir[tid]; return r && r.state !== 'live' && r.state !== 'done'; });
     var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && (r.count || 1) < (r.max || 2); });
     wrap.hidden = false;
+    // visual-overhaul (owner ask): a LIVE / hostable tournament gets promoted to a FRONT-AND-CENTER hero card.
+    var heroShown = renderTourHero(tids);
     var total = tids.length + rids.length;
-    if (nEl) nEl.textContent = total ? (total + (total === 1 ? ' open' : ' open')) : '';
+    if (nEl) nEl.textContent = total ? (total + ' open') : '';
     if (!total) {
       if (list) { list.innerHTML = ''; list.hidden = true; }
-      if (empty) empty.hidden = false;
+      // when the hero is up there's already a prominent tournament surface — keep the quiet "host one" strip only when nothing is live
+      if (empty) empty.hidden = heroShown;
       return;
     }
     if (empty) empty.hidden = true;
     if (!list) return;
     list.hidden = false;
-    var tourHtml = tids.map(function (tid) {
+    // the bracket featured in the hero shouldn't also repeat as a row below it
+    var heroTid = _tourHeroTid;
+    var tourHtml = tids.filter(function (tid) { return tid !== heroTid; }).map(function (tid) {
       var r = toursDir[tid], cnt = r.count || 1, max = r.max || TOUR_MAX, full = cnt >= max;
       return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
-        '<span class="mpx-rc-spark tour">🏆</span>' +
+        '<span class="mpx-rc-spark tour">' + SVG_TROPHY + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Bracket') + '</span>' +
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag tour">BRACKET</span> host ' + esc(r.hostName || 'host') +
         ' · <span class="mpx-rc-count">' + cnt + '/' + max + '</span></span></span>' +
@@ -1560,7 +1570,7 @@
     var roomHtml = rids.map(function (rid) {
       var r = roomsDir[rid], cnt = r.count || 1, max = r.max || 2;
       return '<div class="mpx-roomcard">' +
-        '<span class="mpx-rc-spark">🎸</span>' +
+        '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span> host ' + esc(r.hostName || 'host') +
         ' · <span class="mpx-rc-count">' + cnt + '/' + max + '</span></span></span>' +
@@ -1569,6 +1579,61 @@
     list.innerHTML = tourHtml + roomHtml;
     [].forEach.call(list.querySelectorAll('[data-ln-jt]'), function (b) { b.addEventListener('click', function () { joinTour(b.getAttribute('data-ln-jt')); }); });
     [].forEach.call(list.querySelectorAll('[data-ln-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-join'), false); }); });
+  }
+
+  // visual-overhaul: pick the single most prominent active tournament and paint the gold hero card at the top of
+  // the LIVE NOW surface. Priority: (1) a bracket I'm hosting/in → MANAGE, (2) an OPEN joinable bracket → JOIN,
+  // (3) a remote LIVE bracket in the directory → WATCH (routes to the rooms browser where spectating lives).
+  // No active tournament → hero hidden, return false (caller keeps the quiet "host one" strip).
+  var _tourHeroTid = null;
+  function renderTourHero(openTids) {
+    var hero = $('mpx-tour-hero'); if (!hero) return false;
+    _tourHeroTid = null;
+    var mode = null, data = null;
+    // (1) my own active bracket — I'm hosting or seated in a live/filling tournament
+    if (tour && tour.id && (tour.isHost || tour.meIn) && tour.state !== 'done') {
+      mode = 'mine';
+      data = { name: tour.name || 'Your Bracket', host: ME.name,
+        count: (tour.members ? Object.keys(tour.members).length : 1) || 1,
+        max: tour.size || TOUR_MAX, live: tour.state === 'live' };
+    } else {
+      // (2) an OPEN joinable bracket I'm not in (filling, has a seat); fall back to (3) a remote LIVE bracket
+      var openId = (openTids || []).filter(function (tid) { var r = toursDir[tid]; return r && (r.count || 1) < (Math.min(TOUR_MAX, r.size || r.max || TOUR_MAX)); })[0];
+      if (openId) {
+        var ro = toursDir[openId]; mode = 'join'; _tourHeroTid = openId;
+        data = { name: ro.name || 'Bracket', host: ro.hostName || 'host', count: ro.count || 1, max: ro.max || TOUR_MAX, live: false };
+      } else {
+        var liveId = Object.keys(toursDir).filter(function (tid) { return toursDir[tid] && toursDir[tid].state === 'live'; })[0];
+        if (liveId) { var rl = toursDir[liveId]; mode = 'watch'; data = { name: rl.name || 'Bracket', host: rl.hostName || 'host', count: rl.count || 1, max: rl.max || TOUR_MAX, live: true }; }
+      }
+    }
+    if (!mode) { hero.hidden = true; return false; }
+    var stateEl = $('mpx-tour-hero-state'), nameEl = $('mpx-tour-hero-name'), subEl = $('mpx-tour-hero-sub'),
+        cntEl = $('mpx-tour-hero-count'), ctaLbl = $('mpx-tour-hero-cta-label');
+    if (nameEl) nameEl.textContent = data.name;
+    if (cntEl) cntEl.textContent = data.count + '/' + data.max + ' players';
+    var stateTxt, ctaTxt, subTxt;
+    if (mode === 'mine') {
+      stateTxt = data.live ? 'YOUR BRACKET · LIVE' : 'YOUR BRACKET';
+      ctaTxt = data.live ? 'RESUME' : 'MANAGE'; subTxt = 'host ' + data.host + ' · single-elim, last one standing';
+    } else if (mode === 'join') {
+      stateTxt = 'OPEN BRACKET'; ctaTxt = 'JOIN'; subTxt = 'host ' + data.host + ' · grab a seat before it fills';
+    } else {
+      stateTxt = 'LIVE NOW'; ctaTxt = 'WATCH'; subTxt = 'host ' + data.host + ' · bracket underway';
+    }
+    if (stateEl) stateEl.textContent = stateTxt;
+    if (ctaLbl) ctaLbl.textContent = ctaTxt;
+    if (subEl) subEl.textContent = subTxt;
+    var cta = $('mpx-tour-hero-cta');
+    if (cta) {
+      cta.onclick = function () {
+        if (mode === 'mine') { try { enterTourRoom(); } catch (e) {} }
+        else if (mode === 'join') { try { joinTour(_tourHeroTid); } catch (e) {} }
+        else { try { gotoRooms('browse'); } catch (e) {} }
+      };
+    }
+    hero.hidden = false;
+    return true;
   }
   function renderRooms() {
     var host = $('mpx-roomlist'); if (!host) return;
@@ -1579,7 +1644,7 @@
     var tourCards = tids.map(function (tid) {
       var r = toursDir[tid], live = r.state === 'live' || r.state === 'done', full = (r.count || 1) >= (r.max || 10);
       return '<div class="mpx-roomcard' + (full || live ? ' full' : '') + '">' +
-        '<span class="mpx-rc-spark tour">🏆</span>' +
+        '<span class="mpx-rc-spark tour">' + SVG_TROPHY + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Bracket') + '</span>' +
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag ' + (live ? 'live">LIVE' : 'tour">BRACKET') + '</span> host ' + esc(r.hostName || 'host') + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 10) + '</span></span></span>' +
         '<span class="mpx-rc-act"><button class="mpx-rc-join" data-jt="' + esc(tid) + '"' + (full || live ? ' disabled' : '') + '>' + (live ? 'LIVE' : full ? 'FULL' : 'JOIN') + '</button></span></div>';
@@ -1587,7 +1652,7 @@
     host.innerHTML = tourCards + ids.map(function (rid) {
       var r = roomsDir[rid], full = (r.count || 1) >= (r.max || 2);
       return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
-        '<span class="mpx-rc-spark">🎸</span>' +
+        '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span> host ' + esc((r.hostName || 'host')) + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 2) + '</span></span></span>' +
         '<span class="mpx-rc-act">' +

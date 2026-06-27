@@ -3046,7 +3046,11 @@
     // when the user hasn't configured a strumAxis and the pad is non-standard with a hat, auto-use axis 9. A sign-flip
     // in the configured dir = a strum edge. (The Settings wizard's strum sampler still overrides this precisely.)
     let sAxis = strumCfg.strumAxis;
-    if (sAxis == null && gp.mapping && gp.mapping !== 'standard' && ax.length >= 10) sAxis = 9;
+    // build99R (controller P0-1): the POV-hat strum fallback was gated on gp.mapping !== 'standard'. On Windows/Chrome
+    // the Riffmaster often enumerates as a "standard" XInput pad even though its strum is a hat on axis 9 — so strum
+    // died out of the box (the single biggest plug-and-play risk). Drop the mapping gate; the ax.length >= 10 guard
+    // already excludes normal gamepads (4 axes), so only guitar-shaped pads ever read axis 9. NEEDS REAL-HARDWARE VERIFY.
+    if (sAxis == null && ax.length >= 10) sAxis = 9;
     if (sAxis != null && ax.length > sAxis) {
       const v = ax[sAxis] || 0;
       if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(_strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) tryStrum(performance.now());
@@ -6257,7 +6261,11 @@
     // crosses yellow/blue vs the painted strings). One-time — applyGhPreset saves rr_padmap so this won't re-fire. The
     // wizard still fine-tunes. Gated to not disrupt a song in progress.
     try {
-      if (e && e.gamepad && isGuitarPad(e.gamepad.id) && !localStorage.getItem('rr_padmap') && state !== 'playing') {
+      // build99R (controller P0-3): also auto-adopt the guitar profile for a guitar-SHAPED pad (>=10 axes → a POV-hat
+      // instrument) even when Chrome reports a generic XInput id with no "guitar"/"riffmaster" token. Normal gamepads
+      // have 4 axes, so this never misfires on a standard pad; a flightstick edge case is recoverable in Settings.
+      var _gp = e && e.gamepad, _looksGuitar = _gp && (isGuitarPad(_gp.id) || ((_gp.axes || []).length >= 10));
+      if (_looksGuitar && !localStorage.getItem('rr_padmap') && state !== 'playing') {
         if (laneProfile !== 'gh') applyLaneProfile('gh');
         applyGhPreset();
       }
@@ -6388,6 +6396,10 @@
 
     const gpIndex = (typeof opts.gamepadIndex === 'number') ? opts.gamepadIndex : null;
     const onEnd = (typeof opts.onSongEnd === 'function') ? opts.onSongEnd : null;
+    // build99R: keyboard-P2 — lets two people share ONE keyboard (couch co-op without a 2nd controller, and
+    // makes Local Versus testable before a controller arrives). opts.keyMap = { key -> lane }. Set up below.
+    const _p2KeyMap = (opts.keyMap && typeof opts.keyMap === 'object' && Object.keys(opts.keyMap).length) ? opts.keyMap : null;
+    let _p2KeyDown = null, _p2KeyUp = null;
 
     // ---- P2 STATE (entirely separate from P1; nothing here aliases P1's variables) -------
     const P = {
@@ -6488,7 +6500,7 @@
       if (strum) {
         const ax = gp.axes || [];
         let sAxis = strumCfg.strumAxis;
-        if (sAxis == null && gp.mapping && gp.mapping !== 'standard' && ax.length >= 10) sAxis = 9;
+        if (sAxis == null && ax.length >= 10) sAxis = 9;   // build99R (controller P0-1): mirror P1 — read the hat strum even on a 'standard'-mapped guitar
         if (sAxis != null && ax.length > sAxis) {
           const v = ax[sAxis] || 0;
           if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(P.strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) p2Strum(performance.now());
@@ -6566,6 +6578,8 @@
     function teardown() {
       P.alive = false;
       if (P.raf) { cancelAnimationFrame(P.raf); P.raf = 0; }
+      if (_p2KeyDown) { try { window.removeEventListener('keydown', _p2KeyDown, true); } catch (e) {} }   // build99R: drop keyboard-P2 listeners
+      if (_p2KeyUp) { try { window.removeEventListener('keyup', _p2KeyUp, true); } catch (e) {} }
       try { window.RhythmGame.setVsMode(false); } catch (e) {}
       if (_p2 === api) _p2 = null;
     }
@@ -6573,6 +6587,24 @@
     // start the parallel loop + enter split-screen fit
     try { window.RhythmGame.setVsMode(true); } catch (e) {}
     P.raf = requestAnimationFrame(p2Tick);
+
+    // build99R: keyboard-P2 input (shared-keyboard couch co-op). Press = hit (NO strum, like P1's keyboard);
+    // P2's keys (1..5) never overlap P1's letter keys. Capture-phase listeners, removed on teardown; e.repeat
+    // guarded so a held key can't auto-fire a stream of hits. Holds: keydown arms laneDown, keyup drops it.
+    if (_p2KeyMap) {
+      _p2KeyDown = function (e) {
+        if (e.repeat) return;
+        const lane = _p2KeyMap[e.key]; if (lane == null) return;
+        e.preventDefault();
+        if (state === 'playing' && !P.laneDown[lane]) { P.laneDown[lane] = true; p2LaneInput(lane, performance.now()); }
+      };
+      _p2KeyUp = function (e) {
+        const lane = _p2KeyMap[e.key]; if (lane == null) return;
+        if (lane >= 0 && lane < LANE_COUNT) P.laneDown[lane] = false;
+      };
+      window.addEventListener('keydown', _p2KeyDown, true);
+      window.addEventListener('keyup', _p2KeyUp, true);
+    }
 
     const api = {
       isP2: true,

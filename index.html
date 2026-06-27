@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=355" />
+<link rel="stylesheet" href="jukebox.css?v=356" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -980,7 +980,8 @@
   .mpx-combat-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
     cursor: pointer; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em;
     color: var(--ink-dim); background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.18)); transition: color .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease; }
-  .mpx-combat-toggle .ct-ico { opacity: 0.5; transition: opacity .15s ease; }
+  .mpx-combat-toggle .ct-ico { opacity: 0.5; transition: opacity .15s ease; display: inline-flex; }
+  .mpx-combat-toggle .ct-ico svg { width: 15px; height: 15px; }   /* visual-overhaul: SVG bolt replaces ⚡ emoji */
   .mpx-combat-toggle:hover { color: var(--ink); border-color: rgba(255,31,46,0.4); }
   .mpx-combat-toggle.on { color: #fff; background: linear-gradient(180deg, rgba(255,42,48,0.28), rgba(179,18,31,0.18)); border-color: rgba(255,31,46,0.6); box-shadow: 0 0 18px -4px rgba(255,31,46,0.6); }
   .mpx-combat-toggle.on .ct-ico { opacity: 1; color: #ffe08a; }
@@ -3613,7 +3614,8 @@
     background: linear-gradient(180deg, rgba(218,215,210,0.07), rgba(218,215,210,0.02));
     transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
   .mpx-tile:hover { transform: translateY(-1px); border-color: rgba(255,31,46,0.45); box-shadow: 0 8px 22px -8px rgba(0,0,0,0.5); }
-  .mpx-tile-ico { font-size: 18px; line-height: 1; margin-bottom: 1px; }
+  .mpx-tile-ico { font-size: 18px; line-height: 1; margin-bottom: 3px; color: #ff7a4a; }
+  .mpx-tile-ico svg { width: 22px; height: 22px; }   /* visual-overhaul: SVG icons replace off-brand emoji */
   .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
   .mpx-tile-d { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-dim, #a0938f); text-transform: uppercase; }
   html.rr-reduce-motion .mpx-tile { transition: none; }
@@ -3623,7 +3625,8 @@
     font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.02em; color: var(--ink-dim, #a0938f);
     transition: border-color .12s ease, color .12s ease; }
   .mpx-act-cpu-min:hover { border-color: rgba(218,215,210,0.5); color: var(--ink, #f3eceb); }
-  .mpx-act-cpu-min .mac-ico { font-size: 14px; }
+  .mpx-act-cpu-min .mac-ico { font-size: 14px; display: inline-flex; }
+  .mpx-act-cpu-min .mac-ico svg { width: 16px; height: 16px; }   /* visual-overhaul: SVG icon replaces off-brand emoji */
   /* TIER 3 disclosure now opens below the 2-up — give it breathing room */
   .mpx-friends-toggle { margin-top: 14px; }
   /* build99h: LOBBY-scoped tightening so PLAY NOW lands in the upper third on a 1280x720 laptop.
@@ -3661,10 +3664,81 @@
   .mpx-livenow-head .mln-dot { color: var(--crimson, #ff1f2e); animation: tourLivePulse 1.4s ease-in-out infinite; }
   .mpx-livenow-head .mln-n { margin-left: auto; color: #c9a25a; letter-spacing: 0.1em; }
   .mpx-livenow-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
+  .mpx-livenow-list:empty { display: none; }
   .mpx-livenow-empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
     padding: 4px 2px; font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: #b3a8a5; }
-  .mpx-livenow-empty .mln-empty-txt { flex: 1; min-width: 0; }
+  .mpx-livenow-empty .mln-empty-txt { flex: 1; min-width: 140px; line-height: 1.4; }
+  .mln-host-cta { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 9px 15px; border-radius: 10px; cursor: pointer;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+    color: #ffe1a6; background: linear-gradient(180deg, rgba(224,169,63,0.20), rgba(224,169,63,0.06));
+    border: 1px solid rgba(224,169,63,0.5); transition: border-color .12s ease, box-shadow .12s ease, color .12s ease; }
+  .mln-host-cta svg { width: 15px; height: 15px; }
+  .mln-host-cta:hover { color: #fff3d6; border-color: rgba(224,169,63,0.85); box-shadow: 0 0 16px -3px rgba(224,169,63,0.5); }
   html.rr-reduce-motion .mpx-livenow-head .mln-dot { animation: none; }
+
+  /* visual-overhaul: drawer "Browse rooms" / "Host a tournament" rows — the white-button + jammed-text fix.
+     These live in .mpx-friends-panel (NOT .mpx-actionbar), so the actionbar-scoped .mpx-act rules never reached them
+     → bare white native buttons. Restyle them as on-brand warm-dark tiles with a structured title/desc + an SVG icon. */
+  .mpx-friends-panel .mpx-act { display: flex; align-items: center; gap: 12px; width: 100%; box-sizing: border-box;
+    padding: 12px 14px; border-radius: 13px; cursor: pointer; text-align: left;
+    background: linear-gradient(180deg, rgba(218,215,210,0.065), rgba(218,215,210,0.02));
+    border: 1px solid var(--line, rgba(218,215,210,0.16));
+    transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
+  .mpx-friends-panel .mpx-act:hover { transform: translateY(-1px); border-color: rgba(255,31,46,0.45); box-shadow: 0 8px 22px -8px rgba(0,0,0,0.5); }
+  .mpx-friends-panel .mpx-act .mpx-act-ico { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+    color: #ffd9c2; background: linear-gradient(135deg, rgba(255,31,46,0.22), rgba(255,122,74,0.08));
+    border: 1px solid rgba(255,122,74,0.22); }
+  .mpx-friends-panel .mpx-act .mpx-act-ico svg { width: 20px; height: 20px; }
+  .mpx-friends-panel .mpx-act .mpx-act-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .mpx-friends-panel .mpx-act .a-t { display: block; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
+  .mpx-friends-panel .mpx-act .a-d { display: block; font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.04em; color: var(--ink-dim, #9c918e); text-transform: uppercase; }
+  /* gold is for the tournament host row (it lives in the drawer, so the actionbar-scoped .gold rule never applied) */
+  .mpx-friends-panel .mpx-act.gold { background: linear-gradient(180deg, rgba(224,169,63,0.14), rgba(224,169,63,0.035)); border-color: rgba(224,169,63,0.4); }
+  .mpx-friends-panel .mpx-act.gold:hover { border-color: rgba(224,169,63,0.7); box-shadow: 0 8px 22px -8px rgba(224,169,63,0.35); }
+  .mpx-friends-panel .mpx-act.gold .mpx-act-ico { color: #ffe9bd; background: linear-gradient(135deg, rgba(224,169,63,0.28), rgba(224,169,63,0.08)); border-color: rgba(224,169,63,0.3); }
+  .mpx-friends-panel .mpx-act.gold .a-t { color: #ffe9bd; }
+  #mpx-act-browse-n { color: #c9a25a; font-family: 'Oxanium', sans-serif; font-weight: 700; }
+  html.rr-reduce-motion .mpx-friends-panel .mpx-act { transition: none; }
+  html.rr-reduce-motion .mpx-friends-panel .mpx-act:hover { transform: none; }
+
+  /* visual-overhaul: tournament HERO card — gold/live accent, front-and-center when a bracket is active (driven by JS) */
+  .mpx-tour-hero { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 11px;
+    margin: 2px 0 12px; padding: 14px 15px 15px; border-radius: 15px; text-align: left;
+    background: linear-gradient(150deg, rgba(224,169,63,0.20), rgba(170,110,30,0.07) 55%, rgba(20,12,8,0.4));
+    border: 1px solid rgba(224,169,63,0.55);
+    box-shadow: 0 14px 40px -14px rgba(224,169,63,0.45), 0 0 0 1px rgba(224,169,63,0.12) inset; }
+  .mpx-tour-hero[hidden] { display: none; }
+  .mpx-tour-hero .mth-glow { position: absolute; top: -40%; right: -20%; width: 60%; height: 180%; pointer-events: none;
+    background: radial-gradient(circle, rgba(224,169,63,0.28), transparent 70%); filter: blur(8px);
+    animation: mthGlow 3.4s ease-in-out infinite; }
+  @keyframes mthGlow { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+  html.rr-reduce-motion .mpx-tour-hero .mth-glow { animation: none; }
+  .mpx-tour-hero .mth-top { position: relative; display: flex; align-items: center; gap: 10px; }
+  .mpx-tour-hero .mth-badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #fff0cf; background: rgba(224,169,63,0.16); border: 1px solid rgba(224,169,63,0.5); }
+  .mpx-tour-hero .mth-pulse { color: var(--crimson, #ff1f2e); font-size: 11px; animation: tourLivePulse 1.4s ease-in-out infinite; }
+  html.rr-reduce-motion .mpx-tour-hero .mth-pulse { animation: none; }
+  .mpx-tour-hero .mth-count { margin-left: auto; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.04em; color: #ffe1a6; }
+  .mpx-tour-hero .mth-body { position: relative; display: flex; align-items: center; gap: 13px; }
+  .mpx-tour-hero .mth-trophy { flex: 0 0 auto; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+    color: #ffe9bd; background: linear-gradient(135deg, rgba(224,169,63,0.34), rgba(224,169,63,0.1));
+    border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 0 18px -4px rgba(224,169,63,0.5); }
+  .mpx-tour-hero .mth-trophy svg { width: 25px; height: 25px; }
+  .mpx-tour-hero .mth-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .mpx-tour-hero .mth-name { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; line-height: 1.1; color: #fff7e8;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 12px rgba(224,169,63,0.35); }
+  .mpx-tour-hero .mth-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.02em; color: #d8c39a; }
+  .mpx-tour-hero .mth-cta { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    padding: 12px 16px; border-radius: 12px; cursor: pointer;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: #2a1c08;
+    background: linear-gradient(180deg, #f4c463, #d99a2e); border: 1px solid rgba(255,224,150,0.6);
+    box-shadow: 0 8px 22px -8px rgba(224,169,63,0.6); transition: transform .12s ease, box-shadow .14s ease, filter .12s ease; }
+  .mpx-tour-hero .mth-cta svg { width: 17px; height: 17px; }
+  .mpx-tour-hero .mth-cta:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 28px -8px rgba(224,169,63,0.75); }
+  .mpx-tour-hero .mth-cta:active { transform: translateY(0); }
+  html.rr-reduce-motion .mpx-tour-hero .mth-cta { transition: none; }
+  html.rr-reduce-motion .mpx-tour-hero .mth-cta:hover { transform: none; }
 
   /* build60: header "?" help affordance */
   .mpx-help { position: absolute; top: 14px; right: 16px; z-index: 6; width: 28px; height: 28px; border-radius: 50%;
@@ -3686,6 +3760,7 @@
   .mpx-coach-row { display: flex; gap: 12px; align-items: flex-start; }
   .mpx-coach-row .mc-ico { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 15px;
     background: linear-gradient(135deg, rgba(255,31,46,0.26), rgba(255,122,74,0.1)); color: #ffd9c2; }
+  .mpx-coach-row .mc-ico svg { width: 17px; height: 17px; }   /* visual-overhaul: SVG icons replace emoji */
   .mpx-coach-row b { display: block; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; color: var(--ink, #f3eceb); }
   .mpx-coach-row span { display: block; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; line-height: 1.4; color: #b3a8a5; }
 
@@ -3725,6 +3800,7 @@
   .mpx-roomcard.full { opacity: 0.7; }
   .mpx-rc-spark { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 10px; display: grid; place-items: center;
     background: linear-gradient(135deg, rgba(255,31,46,0.28), rgba(255,122,74,0.12)); color: #ffd9c2; font-size: 17px; }
+  .mpx-rc-spark svg { width: 20px; height: 20px; }   /* visual-overhaul: SVG sparks replace off-brand emoji */
   .mpx-rc-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
   .mpx-rc-name { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; color: var(--ink, #f3eceb); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mpx-rc-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: #9c918e; display: flex; gap: 8px; align-items: center; }
@@ -4306,18 +4382,18 @@
         <!-- TIER 2 — two equal secondary tiles + a small tertiary CPU entry -->
         <div class="mpx-tier2">
           <button class="mpx-tile" id="mpx-act-friend" type="button">
-            <span class="mpx-tile-ico" aria-hidden="true">👥</span>
+            <span class="mpx-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.2 20a5 5 0 0 1 6.3-4.5"></path></svg></span>
             <span class="mpx-tile-t">Play a friend</span>
             <span class="mpx-tile-d">Room code or link</span>
           </button>
           <button class="mpx-tile" id="mpx-act-local" type="button">
-            <span class="mpx-tile-ico" aria-hidden="true">🎮</span>
+            <span class="mpx-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="4"></rect><path d="M7 11v3M5.5 12.5h3"></path><circle cx="16" cy="11.5" r="1"></circle><circle cx="18.5" cy="13.5" r="1"></circle></svg></span>
             <span class="mpx-tile-t">Local versus</span>
             <span class="mpx-tile-d">2 controllers · same screen</span>
           </button>
         </div>
         <button class="mpx-act-cpu-min" id="mpx-act-npc" type="button">
-          <span class="mac-ico" aria-hidden="true">🤖</span>Practice vs CPU — warm up, no waiting
+          <span class="mac-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"></rect><path d="M12 4.5V8M12 4.5a1.4 1.4 0 1 0 0-.05"></path><circle cx="9" cy="13" r="1.2"></circle><circle cx="15" cy="13" r="1.2"></circle><path d="M2.5 12v3M21.5 12v3"></path></svg></span>Practice vs CPU — warm up, no waiting
         </button>
 
         <!-- TIER 3 — collapsed "More ways to play" drawer (closed by default) -->
@@ -4328,21 +4404,42 @@
           <!-- build61: LIVE NOW — open tournaments/rooms; hidden when empty so the lobby never opens on a "nothing live" shell -->
           <div class="mpx-livenow" id="mpx-livenow" hidden>
             <div class="mpx-livenow-head"><span class="mln-dot">●</span><span class="mln-t">LIVE NOW</span><span class="mln-n" id="mpx-livenow-n"></span></div>
+            <!-- visual-overhaul: tournament HERO — promoted to FRONT-AND-CENTER by multiplayer.js whenever a bracket is
+                 live, joinable, or hosted by you. Empty/no-bracket = hidden; the quiet "host one" strip below shows instead. -->
+            <div class="mpx-tour-hero" id="mpx-tour-hero" hidden>
+              <span class="mth-glow" aria-hidden="true"></span>
+              <div class="mth-top">
+                <span class="mth-badge"><span class="mth-pulse" aria-hidden="true">●</span><span id="mpx-tour-hero-state">LIVE NOW</span></span>
+                <span class="mth-count" id="mpx-tour-hero-count"></span>
+              </div>
+              <div class="mth-body">
+                <span class="mth-trophy" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
+                <span class="mth-text">
+                  <span class="mth-name" id="mpx-tour-hero-name">Bracket</span>
+                  <span class="mth-sub" id="mpx-tour-hero-sub">Single-elimination · last one standing</span>
+                </span>
+              </div>
+              <button class="mth-cta" id="mpx-tour-hero-cta" type="button"><span id="mpx-tour-hero-cta-label">JOIN</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+              </button>
+            </div>
             <div class="mpx-livenow-list" id="mpx-livenow-list"></div>
             <div class="mpx-livenow-empty" id="mpx-livenow-empty" hidden>
-              <span class="mln-empty-txt">No live tournaments right now.</span>
-              <button class="rh-refresh" id="mpx-livenow-host" type="button">🏆 HOST ONE</button>
+              <span class="mln-empty-txt">No live tournaments right now — start one and pull a bracket together.</span>
+              <button class="mln-host-cta" id="mpx-livenow-host" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg>HOST ONE</button>
             </div>
           </div>
           <button class="mpx-act" id="mpx-act-browse" type="button">
-            <span class="a-t">🔎 Browse rooms <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span>
+            <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span>
+            <span class="mpx-act-txt"><span class="a-t">Browse rooms <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span></span>
           </button>
           <button class="mpx-act gold" id="mpx-act-tour" type="button">
-            <span class="a-t">🏆 Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span>
+            <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
+            <span class="mpx-act-txt"><span class="a-t">Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span></span>
           </button>
           <!-- v254: combat is a HOST-ONLY modifier — lives here, out of the pre-CTA zone -->
           <button class="mpx-combat-toggle" id="mpx-combat-toggle" type="button" aria-pressed="false" title="Your COMBAT default when YOU host a match. Combat is the host's match modifier — your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. NOT a lobby-wide switch — nobody can turn it on/off for everyone.">
-            <span class="ct-ico" aria-hidden="true">⚡</span><span class="ct-state">Combat (when I host): Off</span>
+            <span class="ct-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg></span><span class="ct-state">Combat (when I host): Off</span>
           </button>
           <!-- full roster lives in the drawer, not stacked mid-page -->
           <div class="mpx-roster" id="mpx-roster"></div>
@@ -4356,9 +4453,9 @@
         <div class="mpx-coach-card">
           <div class="mpx-coach-h">Multiplayer — how it works</div>
           <div class="mpx-coach-rows">
-            <div class="mpx-coach-row"><span class="mc-ico">▶</span><div><b>Play now</b><span>Instantly matched 1‑on‑1. Nobody around? You warm up against the CPU — we pair you with a human the moment one appears.</span></div></div>
-            <div class="mpx-coach-row"><span class="mc-ico">👥</span><div><b>Play with friends</b><span>Open a room and share a 4‑letter code or link — they drop straight in.</span></div></div>
-            <div class="mpx-coach-row"><span class="mc-ico">🏆</span><div><b>Tournaments</b><span>A bracket with a group — everyone plays the same song, beat your rival's score to advance. Last one standing wins.</span></div></div>
+            <div class="mpx-coach-row"><span class="mc-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 4 19 12 7 20 7 4" fill="currentColor" stroke="none"></polygon></svg></span><div><b>Play now</b><span>Instantly matched 1‑on‑1. Nobody around? You warm up against the CPU — we pair you with a human the moment one appears.</span></div></div>
+            <div class="mpx-coach-row"><span class="mc-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 20a5.5 5.5 0 0 1 11 0"></path><circle cx="17.5" cy="9" r="2.6"></circle><path d="M15.2 20a5 5 0 0 1 6.3-4.5"></path></svg></span><div><b>Play with friends</b><span>Open a room and share a 4‑letter code or link — they drop straight in.</span></div></div>
+            <div class="mpx-coach-row"><span class="mc-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span><div><b>Tournaments</b><span>A bracket with a group — everyone plays the same song, beat your rival's score to advance. Last one standing wins.</span></div></div>
           </div>
           <button class="ghost-btn primary" id="mpx-coach-go" type="button">Got it — let's play</button>
         </div>
@@ -5797,7 +5894,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=355"></script>
+<script src="telemetry.js?v=356"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5935,14 +6032,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=355"></script>
-<script src="game.js?v=355"></script>
-<script src="procbg.js?v=355"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=355"></script>
-<script src="catalog.js?v=355"></script>
-<script src="multiplayer.js?v=355"></script>
-<script src="share.js?v=355"></script>
-<script src="couch.js?v=355"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=356"></script>
+<script src="game.js?v=356"></script>
+<script src="procbg.js?v=356"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=356"></script>
+<script src="catalog.js?v=356"></script>
+<script src="multiplayer.js?v=356"></script>
+<script src="share.js?v=356"></script>
+<script src="couch.js?v=356"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

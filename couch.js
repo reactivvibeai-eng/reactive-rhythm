@@ -82,16 +82,16 @@
     el.innerHTML =
       '<div class="couch-card">' +
         '<h2 class="couch-title">Local Versus — Claim Your Player</h2>' +
-        '<p class="couch-sub">Press your KEY for P1 · press your CONTROLLER for P2</p>' +
+        '<p class="couch-sub">P1 — press a lane key · P2 — a game controller, or 1–5 to share this keyboard</p>' +
         '<div class="couch-slots">' +
           '<div class="couch-slot' + (P1 ? ' claimed' : '') + '" id="couch-p1"><div class="pn">P1</div><div class="dev">' + (P1 ? 'Keyboard ✓' : 'Keyboard') + '</div><div class="hint">' + (P1 ? 'Ready' : 'Press any lane key…') + '</div></div>' +
-          '<div class="couch-slot' + (P2 ? ' claimed' : '') + '" id="couch-p2"><div class="pn">P2</div><div class="dev">' + (P2 ? ('Controller ✓ (#' + P2.index + ')') : 'Controller') + '</div><div class="hint">' + (P2 ? 'Ready' : 'Press any button…') + '</div></div>' +
+          '<div class="couch-slot' + (P2 ? ' claimed' : '') + '" id="couch-p2"><div class="pn">P2</div><div class="dev">' + (P2 ? (P2.device === 'keyboard2' ? 'Keyboard 1–5 ✓' : ('Controller ✓ (#' + P2.index + ')')) : 'Controller / keys 1–5') + '</div><div class="hint">' + (P2 ? 'Ready' : 'Press a button… or 1–5') + '</div></div>' +
         '</div>' +
         '<div class="couch-actions">' +
           '<button class="couch-btn" id="couch-cancel">Cancel</button>' +
           '<button class="couch-btn go" id="couch-start"' + (P1 && P2 ? '' : ' disabled') + '>Start</button>' +
         '</div>' +
-        '<div class="couch-note">Two highways, one screen. Same song, independent scores.</div>' +
+        '<div class="couch-note">Two highways, one screen — same song, independent scores. A game controller for P2 feels best (your Guitar Hero controller works great here), or share this keyboard with the 1–5 keys.</div>' +
       '</div>';
     var c = document.getElementById('couch-cancel'); if (c) c.onclick = close;
     var st = document.getElementById('couch-start'); if (st) { st.onclick = function () { if (P1 && P2) startMatch(); }; if (P1 && P2) st.focus(); }   // focus Start when both ready so keyboard P1 can Enter — COUCH-FOCUS
@@ -100,7 +100,11 @@
   function onClaimKey(e) {
     if (e.key === 'Escape') { close(); return; }                       // Escape always closes (even after P1 claimed) — COUCH-ESC
     if (e.key === 'Enter' && P1 && P2) { startMatch(); return; }        // both ready → Enter starts (keyboard-friendly) — COUCH-FOCUS
-    if (P1) return;                                                     // first keyboard press claims P1
+    // build99R: SHARED-KEYBOARD P2 — once P1 is claimed, a number key 1..5 claims P2 on the SAME keyboard (P2
+    // plays lanes with 1..5; P1 keeps the normal letter keys). Lets two people share one keyboard AND makes
+    // Local Versus playable/testable with NO controller. A controller press still claims P2 (pollClaimPads).
+    if (P1 && !P2 && /^[1-5]$/.test(e.key)) { P2 = { device: 'keyboard2' }; renderClaim(); return; }
+    if (P1) return;                                                     // first non-number key press claims P1
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
     P1 = { device: 'keyboard' };
     renderClaim();
@@ -173,7 +177,9 @@
     try {
       _p2 = RG.createEngine({
         canvasId: 'hwy2', expose: 'RhythmGameP2', isP2: true,
-        gamepadIndex: P2 && P2.index, keyMap: {}, lsPrefix: 'p2_', noLevelFx: true,
+        gamepadIndex: (P2 && P2.device === 'gamepad') ? P2.index : null,
+        keyMap: (P2 && P2.device === 'keyboard2') ? { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4 } : {},   // build99R: shared-keyboard P2
+        lsPrefix: 'p2_', noLevelFx: true,
         onSongEnd: function (p2Score) { onMatchEnd(p2Score); }
       });
     } catch (e) { _p2 = null; }

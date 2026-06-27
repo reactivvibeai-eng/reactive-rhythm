@@ -15,6 +15,23 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99R — MP overhaul + co-op keyboard-P2 + controller readiness  ✅ verified
+Round-4 owner feedback.
+- **Multiplayer page rebuilt on-brand** (the "looks horrible" fix): off-brand WHITE "Browse rooms"/"Host a tournament"
+  buttons → warm-dark branded tiles (crimson border/hover); jammed label+description split into a bold title + quiet
+  sub; every emoji (purple controller/robot) → inline SVG icons matching the top bar; a **gold TOURNAMENT HERO** now
+  promotes a live/hosted bracket FRONT-AND-CENTER at the top (mine→MANAGE / open→JOIN / remote→WATCH), hidden when
+  none is live. All ids/handlers preserved. `index.html` + `multiplayer.js`.
+- **Co-op "does not work" fixed** — P2 required a controller (owner has none yet). Added **keyboard-P2**: once P1 is
+  claimed, keys **1–5** claim a shared-keyboard P2 (press = hit, no strum; e.repeat-guarded; listeners removed on
+  teardown). `createEngine` now consumes `opts.keyMap`. Verified: claim P1+P2 on one keyboard → Start enables. `game.js` + `couch.js`.
+- **Combat CONFIRMED** (owner's question) — every 30-combo milestone auto-fires a shock that stuns the rival's inputs
+  ~2.2s (they bleed combo/score); reciprocal, host-gated, human-only, send + 4s-receive cooldowns. Fully wired. No change needed.
+- **Controller readiness (Riffmaster)** — safe defensive fixes: strum POV-hat fallback no longer gated on a non-'standard'
+  mapping (P0-1; the `ax.length>=10` guard still excludes normal pads); auto-adopt the guitar profile for a 10+-axis
+  pad even with a tokenless XInput id (P0-3). Remaining input fixes need the real unit — see `CONTROLLER_READINESS.md`.
+- `?v` → 356. node --check on game/couch/multiplayer; 0 console errors.
+
 ### build99N — pre-launch polish swarm (AI Flixs full catalog + revenue integrity)  ✅ verified
 Driven by a 6-dimension audit swarm (perf / stability / AI Flixs / campaign / economy / UI) + owner-flagged AI Flixs bug.
 - **AI Flixs full catalog (P-03):** films were run through the *music* readiness gate (`trackReady`, needs decodable
