@@ -15,6 +15,33 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100 — ⚡ DAILY RIFT + 2 playable campaign video-levels (round-7 part 2)  ✅ verified
+Closes the two larger round-7 features. Touched ONLY `index.html` + `catalog.js` (no `game.js`/engine/scoring
+change). `?v` 359→360. Verified live on rr-verify (8790): 0 console errors through boot + flix launch + reward sim.
+- **Campaign video-levels** — **Elephant in the Closet** (After Eve) + **After Hours** (Mind Over Images) added to
+  the campaign as `flix:true` medium-tier levels (the only 2 of the round-7 picks with a decodable Mux audio rendition;
+  the other 3 — Straitjacket / Drop in the Rain / Crush You Like a Wave — are HLS-only and can't be charted client-side
+  until the Lovable audio-rendition backfill lands, see `LOVABLE_LAUNCH_HANDOFF.md` §7). New `flixCatalogTrack()`
+  resolves the catalog **video** row (videos live outside `rcReady`); the card shows the **real film poster** via
+  `posterFor` with a branded fallback. `launchLevel`'s new flix branch routes to **`RhythmCatalog.playFlix`** (the film
+  IS the stage — muted video full-screen behind the highway + a chart built from its audio), re-asserting `_activeLevel`
+  AFTER `playFlix`→`clearEnvironment` so the level still **credits its stars** and joins the tier's sequential unlock.
+  Verified: both cards render unlocked with posters loaded; Elephant launches → `#game.flix-mode`, the film's Mux stream
+  becomes the backdrop (held at frame 0 through lead-in, no error, readyState 4), a full **386-note musical chart**
+  builds across all 5 lanes, engine state `playing`.
+- **⚡ DAILY RIFT** — a once-a-day hardcore challenge tile (2nd in the menu grid, gold-accented). Deterministic daily
+  song (`dailyRiftTrack` = date-hash over the decodable music pool → **same pick for everyone, rotates at local
+  midnight**), launched on **HARD**, paying **×3 Bonus Sparks on the day's first clear only**. Tile paints today's
+  song + artist, a seeded "% cleared today · preview" global-completion line (`// LOVABLE:` seam for a real
+  `GET /daily/:date` count), and a "✓ Cleared today" done-state. Reward gating lives in `recordLocal`: the ×3 flag is
+  **captured + consumed once** (pass or fail), the ×3 multiplies **before** the ISO-week bonus cap (economy guardrail
+  intact), and a paid clear stamps `rr_dailyrift {done:true}`. **Verified the economy is not farmable** — first clear
+  +24 (8×3) & day stamped done; immediate replay +8 normal (no leak); re-arm after done +8 (controller passes
+  `!done`); a *failed* rift pays 0, does NOT burn the day (retry stays open), and does NOT leak ×3 to the next run.
+- **Owner action:** the gold tile art falls back to a CSS gradient until you drop the generated key-art at
+  **`assets/ui/daily-rift.jpg`** (prompt provided separately). Daily ×3 on the in-game *Retry* button is intentionally
+  not re-armed (re-launch from the tile to claim it) — the safe, non-farmable direction.
+
 ### build99V — menu: domain fix + Sign In button + easter-egg quips  ✅ verified
 Round-7 owner feedback (part 1 — the contained menu items).
 - **Domain fix:** the displayed wordmark `REACTIVVIBE.AI` → `REACTIVVIBEAI.COM` (the real website) in all 4 spots

@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=359" />
+<link rel="stylesheet" href="jukebox.css?v=360" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3446,6 +3446,29 @@
   #mh-store       { --ta: #e0a93f; }          /* gold — currency */
   #mh-leaderboard { --ta: #dad7d2; }          /* chrome — ranks */
   #mh-profile     { --ta: var(--crimson); }   /* crimson — your career */
+  /* DAILY RIFT (build100) — gold-accented reward tile. Tile art = assets/ui/daily-rift.jpg IF present (JS probes
+     + applies .has-art, reusing the existing .mh-art layer); the CSS fallback below paints a warm gold gradient +
+     a faint ⚡ rift glow so the tile reads even with NO image (the owner is generating the art). NO blue/purple. */
+  #mh-daily       { --ta: #e0a93f; }          /* gold — daily reward */
+  .mh-tile.mh-daily { background:
+      radial-gradient(120% 90% at 50% -10%, rgba(224,169,63,0.16), rgba(224,169,63,0) 60%),
+      linear-gradient(180deg, rgba(36,26,12,0.92), rgba(20,15,9,0.95)); }
+  .mh-tile.mh-daily::before { background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(224,169,63,0) 55%); }
+  .mh-tile.mh-daily .mh-ico { color: #e0a93f; filter: drop-shadow(0 0 10px rgba(224,169,63,0.55)); }
+  .mh-tile.mh-daily .mh-daily-tags { position: relative; z-index: 1; margin-top: 5px;
+    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: #f0c86e; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
+  .mh-tile.mh-daily .mh-daily-pct { position: relative; z-index: 1; margin-top: 3px;
+    font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #c9b48a; }
+  .mh-tile.mh-daily .mh-daily-pct[hidden] { display: none; }
+  .mh-tile.mh-daily .mh-daily-done { position: relative; z-index: 1; margin-top: 4px;
+    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #8fd39a; }   /* green is allowed on functional state chips, not UI chrome */
+  .mh-tile.mh-daily.is-done .mh-ico { opacity: 0.7; }
+  /* when the gold art lands, .has-art (shared loader) hides the SVG icon + dims the gradient so the painting reads */
+  .mh-tile.mh-daily.has-art { justify-content: flex-end; padding-bottom: 15px; }
+  .mh-tile.mh-daily.has-art .mh-daily-tags { color: #f4d488; }
   .mh-tile.primary::before { opacity: 0.7; }
   /* reduced-motion / fxLite: freeze the drifting edge + sheen to a calm static state */
   html.rr-reduce-motion .mh-tile::after { animation: none; opacity: 0.45; }
@@ -4447,6 +4470,14 @@
             <span class="mh-t">Campaign</span>
             <span class="mh-d">Climb the tiers — your guided path through every level</span>
           </span>
+        </button>
+        <button class="mh-tile mh-daily" id="mh-daily" type="button">
+          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"></path></svg></span>
+          <span class="mh-t">Daily Rift</span>
+          <span class="mh-d" id="mh-daily-song">Today's challenge</span>
+          <span class="mh-daily-tags" id="mh-daily-tags">HARDCORE · ×3 SPARKS</span>
+          <span class="mh-daily-pct" id="mh-daily-pct"></span>
+          <span class="mh-daily-done" id="mh-daily-done" hidden>✓ Cleared today — back tomorrow</span>
         </button>
         <button class="mh-tile" id="mh-quickplay" type="button">
           <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"></polygon></svg></span>
@@ -6035,12 +6066,12 @@
   // the Levels screen, the Environment Picker, and the multiplayer tournament stage picker — so promoting a level to
   // "done" is ONE edit here. Set early (before the module scripts + inline controllers run). Surfaces fail CLOSED
   // (to {} → everything Coming Soon) if this is ever missing, so an unfinished level can never leak public.
-  window.RR_FINISHED_LEVELS = { 'warm-01': 1, 'warm-02': 1, 'warm-03': 1, 'carnival-boss': 1, 'melody-boss': 1, 'frac-01': 1, 'bone-daddy': 1, 'alarm-clock-hero': 1, 'sasoka': 1, 'high-seas': 1, 'deadkin': 1, 'shorty-x': 1, 'triemrys': 1 };   // build53/54/55/56: traveling levels complete. build64: triemrys LIVE. build66 (launch-audit P0): the Easy WARM-UP tier is now shipped (warm-01/02/03 pinned to real songs) so the campaign has a real on-ramp; medium pulse-*/hard frac-02/frac-boss stay a follow-up content track (intentionally still gated)
+  window.RR_FINISHED_LEVELS = { 'warm-01': 1, 'warm-02': 1, 'warm-03': 1, 'carnival-boss': 1, 'melody-boss': 1, 'frac-01': 1, 'bone-daddy': 1, 'alarm-clock-hero': 1, 'sasoka': 1, 'high-seas': 1, 'deadkin': 1, 'shorty-x': 1, 'triemrys': 1, 'flix-elephant': 1, 'flix-afterhours': 1 };   // build53/54/55/56: traveling levels complete. build64: triemrys LIVE. build100: two AI-Flix playable video-levels (charted from the film's decodable audio, film plays as the stage). build66 (launch-audit P0): the Easy WARM-UP tier is now shipped (warm-01/02/03 pinned to real songs) so the campaign has a real on-ramp; medium pulse-*/hard frac-02/frac-boss stay a follow-up content track (intentionally still gated)
 </script>
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=359"></script>
+<script src="telemetry.js?v=360"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6178,14 +6209,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=359"></script>
-<script src="game.js?v=359"></script>
-<script src="procbg.js?v=359"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=359"></script>
-<script src="catalog.js?v=359"></script>
-<script src="multiplayer.js?v=359"></script>
-<script src="share.js?v=359"></script>
-<script src="couch.js?v=359"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=360"></script>
+<script src="game.js?v=360"></script>
+<script src="procbg.js?v=360"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=360"></script>
+<script src="catalog.js?v=360"></script>
+<script src="multiplayer.js?v=360"></script>
+<script src="share.js?v=360"></script>
+<script src="couch.js?v=360"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -6714,6 +6745,15 @@
       reactiveCards:{ miss:'assets/levels/bonedaddy-card-tomb.png', hit:'assets/levels/bonedaddy-card-chalice.png' },   // build22: HIS fate-pair — the tombstone cracks on misses, the chalice fills on hits
       mechanic:{ type:'skull', art:'assets/levels/bonedaddy-skull.png', jaw:'assets/levels/bonedaddy-skull-jaw.png' },   // the baron's skull crowns the spawn — jaw chatters on hits, eyes flare on milestones
       mods:{ speed:1.08 }, unlock:{ stars:1 } },
+    // ---- AI-FLIX PLAYABLE LEVELS (build100) — two films join the PULSE progression as playable campaign levels.
+    // A flix charts from the film's DECODABLE audio and plays the muted film full-screen behind the highway
+    // (RhythmCatalog.playFlix). Only these two films have decodable audio, so ONLY these two are chartable —
+    // do NOT add more (the rest are HLS-only). flixTrackId = the catalog VIDEO track id (resolved at launch +
+    // for the card poster via RhythmCatalog.posterFor). No song/guitarSkin/journey — the film IS the stage. ----
+    { id:'flix-elephant', tier:'medium', title:'Elephant in the Closet', flix:true, flixTrackId:'5b39c0b3-d029-4f82-84bc-c053d698299f', theme:'crimson',
+      cover:'assets/levels/flix-elephant-cover.jpg', unlock:{ stars:1 } },   // poster resolves dynamically from the catalog video row (posterFor); cover = branded fallback if the film row/poster 404s
+    { id:'flix-afterhours', tier:'medium', title:'After Hours', flix:true, flixTrackId:'07eb1fda-c756-4891-a4a0-34a2c1bbde2b', theme:'gold',
+      cover:'assets/levels/flix-afterhours-cover.jpg', unlock:{ stars:1 } },
     // ---- TIER III · FRACTURE (hard) ----
     { id:'frac-01', tier:'hard', title:'The World', song:{ trackId:'53613a30-84c6-417e-89dd-d2aa06549141' }, theme:'violet',
       cover:'assets/levels/tarot.jpg', bgArt:'assets/levels/skully-bg.jpg', bgVideo:'assets/levels/skully-loop.mp4',
@@ -6885,7 +6925,20 @@
   ];
   function authoredByTier(d) { return AUTHORED.filter(function (L) { return L.tier === d; }); }
   function hasAuthored() { return AUTHORED.length > 0; }
+  // build100: resolve the catalog VIDEO row backing a flix campaign level. Flix tracks are videos, so they live
+  // in RhythmCatalog.videoTracks()/allMedia() — NOT in `ready` (rcReady filters videos out). Used for the card
+  // poster (posterFor), the artist line, and the launch (playFlix). Returns null until the catalog has loaded.
+  function flixCatalogTrack(L) {
+    if (!L || !L.flix || !L.flixTrackId) return null;
+    try {
+      var RC = window.RhythmCatalog; if (!RC) return null;
+      var pool = (RC.videoTracks ? RC.videoTracks() : null) || (RC.allMedia ? RC.allMedia() : null) || [];
+      for (var i = 0; i < pool.length; i++) if (pool[i] && pool[i].id === L.flixTrackId) return pool[i];
+    } catch (e) {}
+    return null;
+  }
   function levelTrack(L, ready) {
+    if (L && L.flix) return flixCatalogTrack(L);   // build100: a flix level's "track" is the catalog video row (separate bucket from `ready`)
     if (!L || !ready || !ready.length) return null;
     if (L.song && L.song.trackId) { for (var i = 0; i < ready.length; i++) if (ready[i].id === L.song.trackId) return ready[i]; return null; }
     if (L.song && typeof L.song.stride === 'number') return ready[((L.song.stride % ready.length) + ready.length) % ready.length] || null;
@@ -7004,7 +7057,8 @@
       var artBox = $('rs-art');
       var initial = esc((L.title || (track && track.title) || 'L').charAt(0).toUpperCase());
       var bossTag = L.boss ? '<span class="rs-boss" style="position:absolute;left:8px;bottom:8px;">BOSS</span>' : '';
-      var coverSrc = L.cover || (track && track.artwork_url) || '';
+      var _flixPoster = ''; if (L.flix) { try { if (window.RhythmCatalog && window.RhythmCatalog.posterFor && track) _flixPoster = window.RhythmCatalog.posterFor(track); } catch (e) {} }
+      var coverSrc = _flixPoster || L.cover || (track && track.artwork_url) || '';
       if (coverSrc) {
         artBox.innerHTML = '<img src="' + esc(coverSrc) + '" alt="">' + bossTag;
         var img = artBox.querySelector('img');
@@ -7042,6 +7096,27 @@
       }
     } catch (e) {}
     var track = levelTrack(L, ready); if (!track) { try { window.RhythmGame.showToast('This level’s track isn’t ready yet', 'error'); } catch (e) {} return; }
+    // build100: FLIX campaign level — the film IS the stage. launchTrack REJECTS videos, so route to playFlix
+    // (charts from the film's decodable audio + plays the muted film full-screen behind the highway). We still
+    // set difficulty + show the themed splash, then re-assert _activeLevel AFTER playFlix because playFlix calls
+    // clearEnvironment() (which nulls _activeLevel) — keeping _activeLevel=L is what lets recordLevelClear credit
+    // this level's stars on completion, so it participates in the tier's sequential unlock like any other level.
+    if (L.flix) {
+      try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
+      // no applyLevelTheme/journey/level-guitar for a flix — playFlix uses the equipped/default guitar + the video backdrop
+      try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {}
+      showSplash(L, track);
+      close();
+      try {
+        window.RhythmCatalog.playFlix(track);
+      } catch (e) {
+        try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start this film', 'error'); } catch (e2) {}
+        return;
+      }
+      _activeLevel = L;   // re-assert AFTER playFlix→clearEnvironment so the results-screen hook credits this campaign level
+      try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
+      return;
+    }
     _activeLevel = L;
     try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
     try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
@@ -7814,10 +7889,14 @@
         var stN = starsForLevel(L, lt);
         var paid = !!(L.unlock && L.unlock.entitlement);
         var owns = paid ? ownsEntitlement(L.unlock.entitlement) || DEV : true;
-        var hasArt = !!(L.cover || (lt && lt.artwork_url));
+        // build100: a flix level uses the FILM'S poster from the catalog (posterFor) as its key art, with the
+        // static L.cover as the branded fallback if the catalog row/poster is missing or 404s.
+        var coverSrc = L.cover;
+        if (L.flix) { var _fp = ''; try { if (window.RhythmCatalog && window.RhythmCatalog.posterFor && lt) _fp = window.RhythmCatalog.posterFor(lt); } catch (e) {} coverSrc = _fp || L.cover; }
+        var hasArt = !!(coverSrc || (lt && lt.artwork_url));
         // authored cover art (the level's key art) takes priority; falls back to initial if not dropped yet
-        var art = L.cover
-          ? ('<img src="' + esc(L.cover) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + esc((L.title || 'L').charAt(0).toUpperCase()) + '</span>\'">')
+        var art = coverSrc
+          ? ('<img src="' + esc(coverSrc) + '" alt="" onerror="this.parentNode.classList.add(\'has-initial\');this.outerHTML=\'<span class=&quot;lv-initial&quot;>' + esc((L.title || 'L').charAt(0).toUpperCase()) + '</span>\'">')
           : artHTML(lt, ai);
         var soon = !LVL_FINISHED[L.id];   // Coming Soon unless it's a finished bespoke level
         var corner = soon ? '<span class="lv-soon">🔒 COMING SOON</span>' : (!unlocked ? '<span class="lv-lock">🔒</span>' : '');
@@ -9672,6 +9751,7 @@
   // navigation moments also get a soft low thump from the shockwave clip. ----
   var MAP = [
     ['#mh-campaign',          'explosion',      1.00, 0.30],
+    ['#mh-daily',             'star-pickup',    1.05, 0.28],
     ['#mh-quickplay',         'hit-burst',      1.00, 0.26],
     ['#mh-multiplayer',       'shockwave',      0.95, 0.26],
     ['#mh-store',             'star-pickup',    1.00, 0.26],
@@ -9722,6 +9802,7 @@
     try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
     hub.classList.add('active');
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
+    try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
     try { rollHubQuip(); } catch (e) {}       // build99V: random easter-egg quip under the subtitle
     try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
   }
@@ -9848,6 +9929,78 @@
     ['mh-skip',        toLibrary]
   ];
   W.forEach(function (p) { var el = $(p[0]); if (el) el.addEventListener('click', p[1]); });
+
+  // ===========================================================================
+  // DAILY RIFT (build100) — the once-a-day hardcore challenge tile.
+  //  • Today's song = a DETERMINISTIC, date-hashed pick over the decodable music pool (RhythmCatalog.dailyRiftTrack),
+  //    so it's the same song all day for everyone and rotates at local midnight.
+  //  • HARDCORE = launched on HARD (setDifficulty('hard')); ×3 = triple Bonus Sparks on the day's FIRST clear
+  //    (gated in catalog.js recordLocal via setDailyRift; subsequent same-day plays pay normal — no farming).
+  //  • Global completion % is a SEEDED PREVIEW (deterministic-by-date), clearly labeled — there is no shared backend
+  //    counter yet. // LOVABLE: replace dailyRiftSeedPct() with a real GET /daily/:date completion count when the
+  //    backend lands (e.g. completed_today / players_today). Mirrors the Leaderboard preview-ladder labeling.
+  //  • Tile art = assets/ui/daily-rift.jpg if present (probed below → .has-art); else the gold CSS fallback shows.
+  (function () {
+    var tile = $('mh-daily'); if (!tile) return;
+    // gold key-art probe (the owner is generating daily-rift.jpg; until then the CSS gold fallback reads).
+    (function () {
+      var src = 'assets/ui/daily-rift.jpg', probe = new Image();
+      probe.onload = function () {
+        if (tile.querySelector('.mh-art')) return;
+        var s = document.createElement('span'); s.className = 'mh-art'; s.setAttribute('aria-hidden', 'true');
+        s.style.backgroundImage = 'url("' + src + '")';
+        tile.insertBefore(s, tile.firstChild);
+        setTimeout(function () { tile.classList.add('has-art'); }, 0);
+      };
+      probe.src = src;
+    })();
+    // SEEDED PREVIEW global completion % — deterministic by date (24–86% band), NEVER claims real data.
+    function dailyRiftSeedPct(dateKey) {
+      var RC = window.RhythmCatalog; var h = 0;
+      try { if (RC && RC.hashStr) h = RC.hashStr('riftpct|' + dateKey) >>> 0; } catch (e) {}
+      return 24 + (h % 63);   // 24..86
+    }
+    function paintDailyRift() {
+      var RC = window.RhythmCatalog; if (!RC) return;
+      var dateKey = (RC.dailyRiftToday ? RC.dailyRiftToday() : '');
+      var t = null; try { t = RC.dailyRiftTrack ? RC.dailyRiftTrack(dateKey) : null; } catch (e) {}
+      var state = { done: false }; try { state = RC.dailyRiftState ? RC.dailyRiftState() : state; } catch (e) {}
+      var songEl = $('mh-daily-song'), pctEl = $('mh-daily-pct'), doneEl = $('mh-daily-done'), tagsEl = $('mh-daily-tags');
+      if (songEl) {
+        if (t) { songEl.textContent = (t.title || 'Untitled') + ' · ' + (t.artist_name || t.artist_credit_name || 'Unknown'); }
+        else { songEl.textContent = 'Loading today’s challenge…'; }
+      }
+      if (pctEl) {
+        if (t) { pctEl.textContent = dailyRiftSeedPct(dateKey) + '% cleared today · preview'; pctEl.hidden = false; }   // "preview" = seeded, not real (mirrors the leaderboard ladder)
+        else { pctEl.hidden = true; }
+      }
+      var done = !!state.done;
+      tile.classList.toggle('is-done', done);
+      if (doneEl) doneEl.hidden = !done;
+      if (tagsEl) tagsEl.textContent = done ? 'HARDCORE · ×3 PAID' : 'HARDCORE · ×3 SPARKS';
+    }
+    window.__rrPaintDailyRift = paintDailyRift;   // let showHub call it without exposing scope
+    function launchDailyRift() {
+      var RC = window.RhythmCatalog; if (!RC) return;
+      var t = null; try { t = RC.dailyRiftTrack ? RC.dailyRiftTrack() : null; } catch (e) {}
+      if (!t) { try { window.RhythmGame.showToast && window.RhythmGame.showToast('Today’s rift is still loading — try again in a moment', 'neutral'); } catch (e) {} return; }
+      var state = { done: false }; try { state = RC.dailyRiftState ? RC.dailyRiftState() : state; } catch (e) {}
+      // HARDCORE modifier = HARD difficulty (set BEFORE launch; the rift is a free-play run, so launchTrack clears any
+      // stale campaign level and plays at the engine's current difficulty).
+      try { window.RhythmGame.setDifficulty && window.RhythmGame.setDifficulty('hard'); } catch (e) {}
+      // arm the ×3 flag — triple only on the day's FIRST clear; recordLocal consumes the flag + stamps done.
+      try { RC.setDailyRift && RC.setDailyRift(true, !state.done); } catch (e) {}
+      hub.classList.remove('active');
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast(state.done ? 'Daily Rift — replay (×3 already claimed today)' : 'Daily Rift — HARDCORE · ×3 Bonus Sparks', state.done ? 'neutral' : 'success'); } catch (e) {}
+      var ok = false;
+      try { ok = !!(RC.launchTrack && RC.launchTrack(t, {})); } catch (e) {}
+      if (!ok) { try { RC.setDailyRift && RC.setDailyRift(false, false); } catch (e) {} try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start today’s rift', 'error'); } catch (e2) {} }
+    }
+    tile.addEventListener('click', launchDailyRift);
+  })();
+  // showHub() calls paintDailyRift through this thin shim (defined above as window.__rrPaintDailyRift).
+  function paintDailyRift() { try { if (window.__rrPaintDailyRift) window.__rrPaintDailyRift(); } catch (e) {} }
+
   var mb = $('menu-back'); if (mb) mb.addEventListener('click', showHub);
   var pb = $('mp-back');   if (pb) pb.addEventListener('click', showHub);
   window.addEventListener('keydown', function (e) {

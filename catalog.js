@@ -881,6 +881,41 @@
   }
   let currentTrack = null;
 
+  // ===========================================================================
+  // DAILY RIFT (build100) — a once-a-day hardcore challenge: the SAME deterministic
+  // song all day (rotates daily), launched on HARD, paying ×3 Bonus Sparks on the
+  // first clear of the day. The pick formula is shared/global (date-hashed), so every
+  // player sees the same song today. State lives in localStorage 'rr_dailyrift'.
+  // ===========================================================================
+  let _dailyRiftActive = false;   // set true by the menu controller when a rift run launches; CONSUMED in recordLocal (one-shot)
+  let _dailyRiftTriple = false;   // whether the ×3 is still owed today (false → rift replay pays normal)
+  // local YYYY-MM-DD (date-only key; the player's local day). Same string → same pick + same gate all day.
+  function dailyRiftToday() {
+    const d = new Date();
+    const mm = ('0' + (d.getMonth() + 1)).slice(-2), dd = ('0' + d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+  // deterministic pick: hash the date string (reuse hashStr) → index over the DECODABLE MUSIC pool (never a video).
+  // Same formula + same catalog ⇒ same song for everyone today. Returns null until the catalog has music loaded.
+  function dailyRiftTrack(dateKey) {
+    const pool = musicTracks();
+    if (!pool || !pool.length) return null;
+    const key = dateKey || dailyRiftToday();
+    const h = (typeof hashStr === 'function') ? (hashStr('rift|' + key) >>> 0) : 0;
+    return pool[h % pool.length] || null;
+  }
+  function dailyRiftState() {
+    let s = {}; try { s = JSON.parse(localStorage.getItem('rr_dailyrift') || '{}'); } catch (e) {}
+    const today = dailyRiftToday();
+    return { date: today, done: !!(s && s.date === today && s.done) };   // a stale (yesterday) record reads as NOT done today
+  }
+  // the menu controller calls this right before launching the rift. tripleReward=true only on the day's first clear
+  // (the controller checks dailyRiftState().done). The flag is consumed by recordLocal so it can't leak to later runs.
+  function setDailyRift(active, tripleReward) {
+    _dailyRiftActive = !!active;
+    _dailyRiftTriple = !!active && !!tripleReward;
+  }
+
   // ---------- catalog query helpers (consumed by the library UI) --------------
   function allTracks() { return catalogTracks; }
   function allMedia() { return catalogTracks.concat(catalogVideos); }   // music + videos, for cross-search (Phase 5)
@@ -1346,6 +1381,11 @@
     if (!results) return;
     const grade = results.grade || gradeFor(results.accuracy || 0);
     const failed = !!results.failed;
+    // build100 DAILY RIFT: CONSUME the rift flag exactly once per recordLocal (pass OR fail) so a failed/bailed rift
+    // run can never leak the ×3 onto a later normal run. The ×3 is applied below only for a NON-failed run; a failed
+    // rift earns nothing and does NOT stamp the day done, so the player can retry today for the bonus.
+    let _rift3x = false;
+    try { if (_dailyRiftActive) { _rift3x = !!_dailyRiftTriple; _dailyRiftActive = false; _dailyRiftTriple = false; } } catch (e) {}
     // 1) lifetime career aggregate — a FAILED run is an attempt, not a performance. Count it under
     // attempts/fails + timestamps only, and keep it OUT of runs/score/accuracy/grade-distribution so a
     // bailed run can't drag your lifetime accuracy down or stuff the grade chart with phantom low grades.
@@ -1423,15 +1463,22 @@
       // earns a small grade reward (+full-combo kicker), and the ISO-week cap (BONUS_WEEKLY_CAP=50) means even
       // the best grinder tops out near ~50/week — while the per-run "+N BONUS SPARKS" still gives the dopamine hit.
       const base = ({ S: 6, A: 4, B: 2, C: 1, D: 1 })[grade] || 1;
-      const want = base + (results.full_combo ? 2 : 0);     // 1–8 per run (S + full combo = 8)
-      const earned = Math.min(want, bonusWeekRemaining());  // hard weekly ceiling
+      let want = base + (results.full_combo ? 2 : 0);     // 1–8 per run (S + full combo = 8)
+      // build100 DAILY RIFT ×3: the once-a-day challenge pays TRIPLE Bonus Sparks on the day's FIRST clear (the flag
+      // is captured + consumed at the top of recordLocal). This is the ONLY place the 3x applies; normal runs untouched.
+      // The ISO-week ceiling still clamps the granted amount (below), so the economy guardrail holds. On a granted ×3
+      // we stamp rr_dailyrift done=true so the gate can't be farmed even if a surface forgets to mark it.
+      if (_rift3x) want = want * 3;
+      const earned = Math.min(want, bonusWeekRemaining());  // hard weekly ceiling (applies AFTER the ×3 so the cap still holds)
       if (earned > 0) {
         _bonusWeekAdd(earned);
-        const newBal = awardBonusSparks(earned, 'run_complete');
+        const newBal = awardBonusSparks(earned, _rift3x ? 'daily_rift_x3' : 'run_complete');
         results._bonusAwarded = earned;
         results._bonusBalance = newBal;
+        results._dailyRiftX3 = _rift3x;   // results screen / share card can flag the triple run
         try { renderBonusSparksLine(earned, newBal); } catch (e) {}
       }
+      if (_rift3x) { try { var _d = dailyRiftToday(); localStorage.setItem('rr_dailyrift', JSON.stringify({ date: _d, done: true })); } catch (e) {} }
     }
     // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
     // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.
@@ -1567,6 +1614,8 @@
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
     playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
+    // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.
+    dailyRiftTrack, dailyRiftState, dailyRiftToday, setDailyRift,
     search, sortTracks, sections, getBest,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,
