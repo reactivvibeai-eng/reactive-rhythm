@@ -15,6 +15,21 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 6) — host "Play in Reactive Rhythm" review shows the song + difficulty + level picker; chord fix  ✅ verified
+- **Review hook** (`/game?review=<token>`, how hosts/admins review content): the game already resolved the token + the
+  decodable audio, but it **played immediately**. The owner wants to SEE the song, pick how hard + which level, THEN play.
+  FIX (catalog.js `_resolveReview`): route the resolved track through `openSheet` (the same song card the `?trackId=`
+  deep-link uses) — a synthetic track carries the audio in `analysis_url` (→ `trackReady`/`trackAudioUrl`),
+  `chart_status:'pending'` (in-browser chart) + `_preview:true` so the sheet's Play path charts it but the run is NOT
+  scored (career/best/bonus + /plays + /score all skip via the `currentTrack._preview` gate). Verified live: the sheet
+  opens with title+artist, the Easy/Med/Hard grid, the level/environment picker, and an enabled Play. **Lovable side:**
+  the host's "Play in Reactive Rhythm" button must mint a signed `?review=<token>` link to `reactivvibeai.com/game` and
+  `GET /review/resolve?token=` must return `{ track_id, title, artist_name, artwork_url, analysis_url (decodable .m4a),
+  stream_url, duration_seconds }` (see LOVABLE_MASTER_PROMPT §6).
+- **Chord "bar won't clear"** (re-reported): the grouped-chord-resolve matched members by the `chordLanes` array
+  REFERENCE, which the per-level MIRROR mod breaks (it remaps each note's chordLanes to a fresh array). FIX: match on the
+  stable `chordId` scalar (never remapped). The partner gem (the "bar/sidebar") now clears on a mirrored level too.
+
 ### build100q (part 5) — controller setup overhaul (Xbox wizard robustness + Overdrive/pause binding + GH adapt)  ✅ node+boot verified (needs owner hardware confirm)
 Playtest: Xbox controller "button mapping doesn't match" + GH setup + "notes should adapt to the controller." A 3-agent
 audit pinned the pipeline; fixes (all game.js):

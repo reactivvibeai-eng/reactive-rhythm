@@ -1787,10 +1787,19 @@
         else { try { window.RhythmGame.showToast && window.RhythmGame.showToast('This review track isn’t playable yet', 'neutral'); } catch (e) {} }
         return;
       }
-      // mark the run PREVIEW so recordLocal skips ALL persistence (career/best/bonus) + the /plays + /score submit.
-      currentTrack = { id: r.track_id, title: r.title, artist_credit_name: r.artist_name, artwork_url: r.artwork_url, _preview: true };
-      window.RhythmGame.playUrl(aurl, { id: r.track_id, title: r.title, artist: r.artist_name, artwork: r.artwork_url, genre: r.genre, preview: true });
-      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review preview — this run is not scored', 'neutral'); } catch (e) {}
+      // build100q (#review): OPEN THE SONG SHEET (difficulty grid + environment/level picker) instead of playing
+      // immediately — the host asked to SEE the song, pick how hard + which level, THEN play. A synthetic track carries
+      // the decodable audio in analysis_url (→ trackReady + trackAudioUrl) + chart_status:'pending' (in-browser chart)
+      // + _preview:true so the sheet's Play path charts it but recordLocal/onSubmitResult skip ALL persistence
+      // (career/best/bonus + /plays + /score) via the currentTrack._preview gate (~1474). The run is NOT scored.
+      var _revTrack = {
+        id: r.track_id, title: r.title, artist_name: r.artist_name, artist_credit_name: r.artist_name,
+        artwork_url: r.artwork_url, genre: r.genre, duration_seconds: r.duration_seconds || 0,
+        audio_url: aurl, analysis_url: aurl, chart_status: 'pending',
+        _preview: true, _review: true
+      };
+      try { openSheet(_revTrack); } catch (e2) { window.RhythmGame.playUrl(aurl, { id: r.track_id, title: r.title, artist: r.artist_name, artwork: r.artwork_url, genre: r.genre, preview: true }); }
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review track — pick difficulty + level, then Play (not scored)', 'neutral'); } catch (e) {}
       // optional, fire-and-forget: log a preview use (auth optional, endpoint already live).
       try { if (r.track_id) logUse(r.track_id, 'preview', { review: true }); } catch (e) {}
     } catch (e) {
