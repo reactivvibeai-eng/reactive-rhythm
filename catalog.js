@@ -1426,6 +1426,7 @@
   // real play instead of only the mock seed. Leaderboard submit (below) stays separate.
   function recordLocal(results) {
     if (!results) return;
+    if ((currentTrack && currentTrack._preview) || (results && results.preview)) return;   // build100h+: host review preview — NO career/best/bonus/plays/score submit (scoring:'preview_only')
     const grade = results.grade || gradeFor(results.accuracy || 0);
     const failed = !!results.failed;
     // build100 DAILY RIFT: CONSUME the rift flag exactly once per recordLocal (pass OR fail) so a failed/bailed rift
@@ -1516,7 +1517,11 @@
         // build100h: SERVER-authoritative Bonus — report the completed run (+play_token); the server computes the grade
         // reward + ×3 daily-rift + 50/ISO-week cap (idempotent on play_token). No client mint. Results line fills async.
         try {
-          var _earnP = { play_token: (currentTrack && currentTrack.play_token) || null, grade: grade, full_combo: !!results.full_combo, daily_rift: _rift3x };
+          // CONTRACT (Lovable): POST /bonus-sparks/earn { play_id, play_token } — server reads game_plays + derives grade/full_combo.
+          // BLOCKERS before flip-on (flagged to Lovable): (1) the game must capture play_id from the /plays response + thread it
+          // here (today /plays' rank is read but play_id is dropped, and the in-browser path posts /score); (2) /earn has NO
+          // daily_rift flag, so the Daily Rift ×3 reward won't pay server-side — needs a daily_rift param OR a rework decision.
+          var _earnP = { play_id: (results && results.play_id) || (currentTrack && currentTrack.play_id) || null, play_token: (currentTrack && currentTrack.play_token) || (results && results.play_token) || null };
           _bonusSrvEarn(_earnP).then(function (r) {
             if (r && r.earned > 0) {
               try { results._bonusAwarded = r.earned; results._bonusBalance = r.balance; results._dailyRiftX3 = _rift3x; } catch (e) {}
@@ -1704,6 +1709,34 @@
   // ===========================================================================
   // BOOT
   // ===========================================================================
+  // build100h+ — "Play in Reactive Rhythm" HOST REVIEW handoff. A host clicks a button on the site that opens
+  // reactivvibeai.com/game?review=<signed token>. The token is OPAQUE to the game; we forward it to the catalog to
+  // resolve (keeps the audio URL + approval off the wire, lets the backend revoke). The resolved track plays in
+  // PREVIEW mode (scoring:'preview_only') — chart + audio + local HUD, but NO play_token / NO /plays / NO bonus mint.
+  async function _resolveReview(token) {
+    if (!token || !API_BASE) return;
+    try {
+      var r = await api('/review/resolve?token=' + encodeURIComponent(token), { auth: true });
+      if (!r || !r.track_id) return;
+      var aurl = r.analysis_url || '';                       // the decodable .m4a (chartable) — NOT the .m3u8 stream
+      if (!aurl || /\.m3u8(\?|$)/i.test(aurl)) {             // no decodable audio → can only WATCH the stream
+        if (r.stream_url) { try { openWatch(Object.assign({ id: r.track_id }, r), r.stream_url); } catch (e) {} }
+        else { try { window.RhythmGame.showToast && window.RhythmGame.showToast('This review track isn’t playable yet', 'neutral'); } catch (e) {} }
+        return;
+      }
+      // mark the run PREVIEW so recordLocal skips ALL persistence (career/best/bonus) + the /plays + /score submit.
+      currentTrack = { id: r.track_id, title: r.title, artist_credit_name: r.artist_name, artwork_url: r.artwork_url, _preview: true };
+      window.RhythmGame.playUrl(aurl, { id: r.track_id, title: r.title, artist: r.artist_name, artwork: r.artwork_url, genre: r.genre, preview: true });
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review preview — this run is not scored', 'neutral'); } catch (e) {}
+      // optional, fire-and-forget: log a preview use (auth optional, endpoint already live).
+      try { if (r.track_id) logUse(r.track_id, 'preview', { review: true }); } catch (e) {}
+    } catch (e) {
+      var msg = String((e && e.message) || '');
+      var t = /\b401\b|expired/i.test(msg) ? 'This review link expired — ask for a fresh one'
+            : (/\b403\b/.test(msg) ? 'This account isn’t a review host' : 'Couldn’t open the review track');
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast(t, 'error'); } catch (e2) {}
+    }
+  }
   async function boot() {
     if (!window.RhythmGame) { console.error('engine not loaded'); return; }
     await loadCatalog();
@@ -1720,6 +1753,9 @@
         openSheet(Object.assign({}, t));
       } catch (e) { console.warn('deep-link track load failed', e); }
     }
+
+    // deep link: /game?review=<signed token> → host review preview (resolve + play, not scored)
+    try { var _rev = new URLSearchParams(location.search).get('review'); if (_rev) await _resolveReview(_rev); } catch (e) {}
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
