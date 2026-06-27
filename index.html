@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=358" />
+<link rel="stylesheet" href="jukebox.css?v=359" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3332,7 +3332,18 @@
     letter-spacing: 0.03em; line-height: 0.96; color: var(--ink);
     text-shadow: 0 0 34px rgba(255,42,48,0.5); margin: 4px 0 2px; }
   .mh-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim);
-    letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 18px; max-width: 540px; }
+    letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 8px; max-width: 540px; }
+  /* build99V: random easter-egg quip under the subtitle — a dose of chaos each launch */
+  .mh-quip { font-family: 'Chakra Petch', monospace; font-size: 12px; font-style: italic; color: var(--gold, #e0a93f);
+    opacity: 0.88; letter-spacing: 0.03em; line-height: 1.4; margin: 0 0 18px; max-width: 560px; min-height: 1.1em; }
+  /* build99V: menu Sign In — sits to the left of the gear, opens the website login (mirrors the library Sign in) */
+  #menu-hub .mh-signin { position: absolute; top: 16px; right: 62px; height: 38px; display: inline-flex; align-items: center; gap: 7px;
+    padding: 0 15px; border-radius: 19px; cursor: pointer; color: #f0ebe7; background: linear-gradient(180deg, rgba(255,42,48,0.34), rgba(120,10,14,0.46));
+    border: 1px solid rgba(255,42,48,0.6); font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+    transition: filter .15s ease, transform .15s ease, box-shadow .15s ease; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  #menu-hub .mh-signin:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,31,46,0.32); }
+  #menu-hub .mh-signin svg { width: 15px; height: 15px; }
+  @media (max-width: 560px) { #menu-hub .mh-signin span { display: none; } #menu-hub .mh-signin { padding: 0; width: 38px; justify-content: center; border-radius: 50%; right: 62px; } }
   .mh-grid { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   /* build8: living tiles — per-tile accent (--ta), a soft radial bloom that wakes on hover,
      a glass top-sheen, and an animated accent hairline along the top edge. Default --ta=crimson;
@@ -4349,7 +4360,7 @@
     <div class="start-fore">
       <div class="start-brand">
         <img class="start-atom" src="assets/atom.png" alt="" />
-        <span>REACTIVVIBE.AI</span>
+        <span>REACTIVVIBEAI.COM</span>
       </div>
       <div class="start-wordmark">
         <img class="rr-wordmark" src="assets/rr-wordmark.png?v=262" alt="REACTIVE RHYTHM"
@@ -4403,7 +4414,11 @@
       <button class="mh-settings" id="mh-settings" type="button" aria-label="Settings" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
-      <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBE.AI</span></div>
+      <button class="mh-signin" id="mh-signin" type="button" title="Sign in on ReactivVibeAI.com">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path></svg>
+        <span>Sign In</span>
+      </button>
+      <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBEAI.COM</span></div>
       <div class="mh-pre">MAIN MENU</div>
       <!-- build19: produced TITLE WORDMARK slot (user order — crimson moon / chaos energy / anime,
            order in ASSET_ORDERS_GUITARS.md). Self-heals: file absent → text title stays; file
@@ -4413,6 +4428,7 @@
            onerror="this.style.display='none'" />
       <h1 class="mh-title">REACTIVE RHYTHM</h1>
       <p class="mh-sub">Choose your path. Every mode runs the same neck — pick how you want to play.</p>
+      <p class="mh-quip" id="mh-quip" aria-hidden="true"></p>
       <!-- build99L: slim "me" status strip — avatar + career rank + Sparks/Bonus balance (+ CONTINUE: last level).
            Render-only; filled by showHub() from RhythmCatalog career/wager getters. Hidden until populated. -->
       <div class="mh-status" id="mh-status" hidden>
@@ -5758,7 +5774,7 @@
     <div class="hud-panel left">
       <div class="brand-row">
         <span class="brand-dot"></span>
-        <span class="brand-name" style="font-size: 10px;">REACTIVVIBE.AI</span>
+        <span class="brand-name" style="font-size: 10px;">REACTIVVIBEAI.COM</span>
       </div>
 
       <div class="hud-block">
@@ -5920,7 +5936,7 @@
     <div class="results-wrap">
       <div class="brand-row">
         <span class="brand-dot"></span>
-        <span class="brand-name">REACTIVVIBE.AI · SESSION COMPLETE</span>
+        <span class="brand-name">REACTIVVIBEAI.COM · SESSION COMPLETE</span>
         <span class="signal-id" id="results-track">LUNAR WAVES // PULSE</span>
       </div>
       <div class="pre-title" style="margin-top: 32px; font-family: 'JetBrains Mono'; font-size: 12px; letter-spacing: 0.4em; color: var(--silver);">// SIGNAL STABILIZED</div>
@@ -6024,7 +6040,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=358"></script>
+<script src="telemetry.js?v=359"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6162,14 +6178,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=358"></script>
-<script src="game.js?v=358"></script>
-<script src="procbg.js?v=358"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=358"></script>
-<script src="catalog.js?v=358"></script>
-<script src="multiplayer.js?v=358"></script>
-<script src="share.js?v=358"></script>
-<script src="couch.js?v=358"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=359"></script>
+<script src="game.js?v=359"></script>
+<script src="procbg.js?v=359"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=359"></script>
+<script src="catalog.js?v=359"></script>
+<script src="multiplayer.js?v=359"></script>
+<script src="share.js?v=359"></script>
+<script src="couch.js?v=359"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -9706,8 +9722,34 @@
     try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
     hub.classList.add('active');
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
+    try { rollHubQuip(); } catch (e) {}       // build99V: random easter-egg quip under the subtitle
     try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
   }
+  // build99V: easter-egg quips — a random, outrageous line under the menu subtitle each visit (owner: "something
+  // funny, outrageous and random to mess with them"). On-brand cheeky/dark; PG. Add/remove freely.
+  var HUB_QUIPS = [
+    "Today's magical challenge: 10 waffles.",
+    "I can smell you all the way from here.",
+    "You're going to lose your first five matches. Sorry.",
+    "Statistically, you'll choke on the last note.",
+    "The moon is watching. It's unimpressed.",
+    "Warning: contains trace amounts of rhythm.",
+    "Your guitar called. It wants a better player.",
+    "The notes know what you did.",
+    "Somewhere, a metronome is judging you.",
+    "This is your villain origin story.",
+    "Achievement unlocked: opened the menu.",
+    "We believe in you. Marginally.",
+    "The crowd showed up for the snacks, not you.",
+    "Plot twist: the real rift was inside you all along.",
+    "Today's forecast: 100% chance of missed notes.",
+    "Legends say the green fret can sense fear.",
+    "Press buttons. Feel things. Maybe.",
+    "You smell faintly of a B+ run."
+  ];
+  function rollHubQuip() { var el = $('mh-quip'); if (!el) return; el.textContent = HUB_QUIPS[Math.floor(Math.random() * HUB_QUIPS.length)]; }
+  // build99V: menu Sign In → the website login (mirrors the library #rr-id). Wired once.
+  try { var _msi = $('mh-signin'); if (_msi) _msi.addEventListener('click', function () { try { window.open('https://reactivvibeai.com', '_blank', 'noopener'); } catch (e) {} }); } catch (e) {}
   // build99L: fill the hub status strip (avatar · rank · Sparks/Bonus · CONTINUE last level) and flip the
   // Campaign hero chip to CONTINUE for returning players. Reads existing RhythmCatalog/RhythmLibrary getters —
   // entirely additive, gameplay-untouched, and degrades silently if any getter is missing.

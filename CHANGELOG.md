@@ -15,6 +15,19 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99V — menu: domain fix + Sign In button + easter-egg quips  ✅ verified
+Round-7 owner feedback (part 1 — the contained menu items).
+- **Domain fix:** the displayed wordmark `REACTIVVIBE.AI` → `REACTIVVIBEAI.COM` (the real website) in all 4 spots
+  (start, menu hub, library top bar, results). Verified no `reactivvibe.ai` remains. Deep-links already pointed to
+  reactivvibeai.com; the meta/canonical `reactivvibe.com/play` (deploy front, not displayed) left as-is.
+- **Main-menu Sign In button** (`#mh-signin`) — a crimson pill left of the gear that opens reactivvibeai.com (mirrors
+  the library Sign in). Verified present + visible.
+- **Easter-egg quips** — a random outrageous one-liner under the menu subtitle each visit (owner: "something funny,
+  outrageous, random to mess with them"), e.g. "Today's magical challenge: 10 waffles." 18 quips, re-rolled in showHub().
+- `?v` → 359. 0 console errors.
+- **Still queued (round-7 part 2, bigger features):** ⚡ DAILY RIFT (daily challenge tile + mechanic; global-% needs
+  backend) and the 2 playable campaign video-levels (Elephant in the Closet + After Hours).
+
 ### build99U — "Raised glass" UI evolution (MP + Store + Leaderboard) + score-fit bug  ✅ verified
 Round-6 owner feedback. CSS-only (no logic/ids touched; whole-file braces 4140/4140).
 - **Score-overflow bug fixed** (the "YOU 9,070" that clipped its frame): confirmed DOM (not canvas), so all three
