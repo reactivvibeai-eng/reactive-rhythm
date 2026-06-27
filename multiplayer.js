@@ -381,6 +381,7 @@
     // build8: quick-match pairing broadcast (deterministic proposer avoids double-pair)
     lobbyCh.on('broadcast', { event: 'qm-pair' }, function (m) { onQuickPair(m.payload); });
     lobbyCh.subscribe(function (status) {
+      try { console.warn('[mp] lobby channel status:', status); } catch (e) {}   // build100n: live diagnostic — SUBSCRIBED = Realtime OK; CHANNEL_ERROR/TIMED_OUT = anon can't reach Realtime (Lovable: confirm anon broadcast authorization)
       if (status === 'SUBSCRIBED') {
         lobbySP.start();
         // build11: invite deep-link — ask hosts to re-advertise, then join the target bracket
@@ -400,7 +401,7 @@
           }, 6000);
         }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        banner('mpx-lobby-msg', 'Could not reach the live lobby. Check your connection and reopen.');
+        banner('mpx-lobby-msg', 'Could not reach the live lobby (' + status + '). Online multiplayer needs Realtime — retry shortly.');   // build100n: surface the exact status so a Realtime/anon issue is diagnosable
       }
     });
   }
