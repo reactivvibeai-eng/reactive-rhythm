@@ -53,3 +53,39 @@ full count and that ?q= / ?sort= work.
 Once `?q=`/`?sort=` exist server-side, I'll switch the search box to query the server (so we
 fetch only matches, not the whole library) — tell me when those params are live and I'll wire
 it. Until then the client-side search over the loaded set is fine for low thousands.
+
+---
+
+## STATUS UPDATE — 2026-06-19 (the gate is lifted; one small gap remains)
+
+**Good news:** the opt-in gate above is **DONE.** A live query of `game-catalog/tracks` now returns
+**1127 tracks**, and the game already loads **1111** of them (it pages the whole library and shows
+everything with decodable audio). If a player's GAME still shows only ~600, that's a **stale/older
+deployed build** — the current code (`catalog.js` `loadCatalog`, paging 200×up-to-60) pulls all
+1127. Action: just make sure the deployed `/play` build is current; no backend change needed for that.
+
+### The ONE remaining gap: 16 HLS-only tracks are hidden
+Of the 1127, **16 tracks are filtered out** because their ONLY audio is a **Mux HLS `.m3u8`**
+stream. The game charts notes by **decoding the audio in-browser** (Web Audio `decodeAudioData`),
+and **HLS `.m3u8` is a manifest of segments — it can't be `decodeAudioData`'d**, so those tracks
+can't be charted client-side. Example row (hidden): title "Back to the Deep You Go" — both
+`audio_url` and `stream_url` point at `https://stream.mux.com/<id>` (HLS), no progressive file.
+
+(The game's `trackReady()` accepts any of `audio_url / wav_url / analysis_url / stream_url` **as long
+as it is NOT a `.m3u8`** — so the moment any ONE of those is a direct file, the track lights up.)
+
+**Pick EITHER fix (only for the affected tracks):**
+
+1. **Expose a progressive/direct audio URL** (preferred, zero game-side work). Mux can emit a static
+   rendition — e.g. `https://stream.mux.com/<PLAYBACK_ID>/audio.m4a` (Mux "static renditions" /
+   `audio.m4a` or a low-res `.mp4`), OR surface the original uploaded file from storage. Put that
+   **CORS-readable** URL in `audio_url` for those rows. The file must send `Access-Control-Allow-Origin`
+   (the game fetches it with `mode:'cors'` to decode it). That's it — the 16 tracks become playable.
+
+2. **Pre-bake a server chart** for them (`chart_status:'ready'` + the chart payload the game's
+   `liveProvider` already consumes). Then the game plays them via the server chart and never needs to
+   decode the audio. More work, but it ALSO makes them leaderboard-safe (competitive), which the
+   in-browser path is not.
+
+Either way it's only ~16 rows today; option 1 is the quick win. Tell me when an affected row has a
+decodable `audio_url` and I'll confirm it appears + plays.
