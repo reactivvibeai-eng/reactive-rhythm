@@ -38,7 +38,8 @@
   const STRUM_DEBOUNCE_MS = 55;        // anti-double-strum (strum-up + strum-down funnel through here)
   let strumCfg = { btns: [12, 13], strumAxis: null, strumAxisDir: 0,
                    whammyAxis: 2, whammyMin: -1, whammyMax: 1,
-                   tiltAxis: 3, tiltThresh: 0.6, spBtn: 8 };
+                   tiltAxis: 3, tiltThresh: 0.6, spBtn: 8,
+                   odBtn: 5 };   // build100q: STANDARD-pad Overdrive/Star-Power button (default RB=5, a free button) — guitars still use spBtn under requireStrum. The wizard's OD step overrides this.
   let _frets = new Set();              // fret LANES currently held (GH require-strum mode)
   let _strumAxisPrev = 0, _lastStrumT = 0, _whammyPrev = 0, _tiltPrev = 0;
   function loadStrumCfg() { try { const sv = JSON.parse(localStorage.getItem(STRUMCFG_KEY) || 'null'); if (sv && typeof sv === 'object') strumCfg = Object.assign(strumCfg, sv); } catch (e) {} }
@@ -622,6 +623,10 @@
   function isGuitarPad(id) { return GH_ID_RE.test(String(id || '')); }
   function guitarPadId() { for (const id of gamepadList()) if (isGuitarPad(id)) return id; return null; }
   function applyGhPreset() {
+    // build100q: the GH preset implies a guitar → switch to the 5-string 'gh' profile FIRST so note design adapts
+    // (fret colors + 5-string art) and strum-gating can engage. Was: only wrote padMap → a guitar clicked off the
+    // 'standard' profile stayed in 6-lane, no-strum, standard-color mode (the "GH controller in standard mode" bug).
+    if (laneProfile !== 'gh') { try { applyLaneProfile('gh'); } catch (e) {} }
     // map the 5 GH frets to the active profile's lanes (clamped to LANE_COUNT so it's safe on standard too)
     const m = {}; const n = Math.min(GH_PRESET_BTN.length, LANE_COUNT);
     for (let lane = 0; lane < n; lane++) m[GH_PRESET_BTN[lane]] = lane;
@@ -2884,7 +2889,9 @@
   } catch (e) {}
   // while the test panel is open, poll gamepads (gameplay polls in its own loop)
   let probeRaf = 0;
-  function startProbePoll() { if (probeRaf) return; const tick = () => { if (!laneProbe && padRebindLane == null) { probeRaf = 0; return; } pollGamepad(); probeRaf = requestAnimationFrame(tick); }; probeRaf = requestAnimationFrame(tick); }
+  function startProbePoll() { if (probeRaf) return; try { _seedPadPrev(); } catch (e) {}   // build100q: seed current button states so a held/stuck button can't phantom-bind on the first frame
+    const tick = () => { if (!laneProbe && padRebindLane == null) { probeRaf = 0; return; } pollGamepad(); if (_wizActive) { try { _wizRender(); } catch (e) {} }   // build100q: live-refresh the wizard's "controller detected" sub-text the instant the pad wakes (Xbox pads stay hidden until pressed)
+      probeRaf = requestAnimationFrame(tick); }; probeRaf = requestAnimationFrame(tick); }
   function stopProbePoll() { if (probeRaf) cancelAnimationFrame(probeRaf); probeRaf = 0; }
 
   // ---------- TOUCH INPUT (tap-zones + mobile pause) ----------
@@ -3034,7 +3041,11 @@
   // ---- GH require-strum core ---------------------------------------------------------------
   // Only a DETECTED guitar on the 5-lane gh profile must fret + STRUM to score (authentic GH).
   // Keyboard + standard gamepads are byte-identical — everything below gates on requireStrum().
-  function requireStrum() { return laneProfile === 'gh' && !!guitarPadId(); }
+  // build100q: a guitar Chrome reports as a generic XInput pad (NO "guitar" token — common for the recommended PDP
+  // Riffmaster) still has the tell of a POV-hat instrument: >=10 axes. Match the same heuristic the gamepadconnected
+  // auto-adopt (~6288) and pollGuitarAxes (~3056) already use, so strum reliably engages instead of silently never firing.
+  function guitarShapedPad() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if (gp && (isGuitarPad(gp.id) || ((gp.axes || []).length >= 10))) return true; } catch (e) {} return false; }
+  function requireStrum() { return laneProfile === 'gh' && guitarShapedPad(); }
   function tryStrum(now) {
     if (now - _lastStrumT < STRUM_DEBOUNCE_MS) return;     // debounce: strum-up + strum-down both land here
     _lastStrumT = now;
@@ -3074,16 +3085,32 @@
       _tiltPrev = tv;
     }
   }
+  // build100q: a button counts as "pressed" only on a real, full press. Xbox analog triggers (LT/RT = buttons 6/7) can
+  // report .pressed=true while floating at a PARTIAL value near rest on some Windows/Chrome drivers — which, with no
+  // _padPrev seeding, registered a phantom rising edge the instant the wizard armed (auto-binding a lane to a trigger /
+  // auto-advancing the steps) and fired phantom in-game hits. Reject the analog-partial band (0 < value < 0.55); a real
+  // digital press is value 1 (or .pressed with value 0 on drivers that don't populate value, which we still honor).
+  function _btnPressed(btn) { return btn.pressed && !(btn.value > 0 && btn.value < 0.55); }
+  // Seed _padPrev for every connected pad's CURRENT state — call when the wizard/probe arms so a button already held (or
+  // a trigger stuck pressed at rest) is recorded as "was" and cannot register a phantom rising edge on the first frame.
+  function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = _btnPressed(gp.buttons[b]); } } catch (e) {} }
+  let _lastWizBindMs = 0;
   function pollGamepad() {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
     for (const gp of pads) {
       if (!gp) continue;
       for (let b = 0; b < gp.buttons.length; b++) {
-        const pressed = gp.buttons[b].pressed; const key = gp.index + ':' + b; const was = _padPrev[key];
+        const pressed = _btnPressed(gp.buttons[b]); const key = gp.index + ':' + b; const was = _padPrev[key];
         _padPrev[key] = pressed;
         if (pressed && !was) {
-          if (padRebindLane != null) { const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue; }
+          if (padRebindLane != null) {
+            // build100q: debounce binds so chatter / a bouncing analog button can't chew through multiple wizard lanes
+            // from one physical press. A second edge within 280ms is ignored (the lane stays armed for the right press).
+            if (_wizActive && performance.now() - _lastWizBindMs < 280) continue;
+            _lastWizBindMs = performance.now();
+            const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue;
+          }
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) {
             if (requireStrum()) { _frets.add(lane); if (state === 'playing') laneDown[lane] = true; }   // GH: fret HELD, no hit until a strum
@@ -3091,6 +3118,13 @@
           }
           if (requireStrum() && strumCfg.btns.indexOf(b) >= 0) tryStrum(performance.now());   // strum bar -> fire the held frets
           if (requireStrum() && b === strumCfg.spBtn) activateOverdrive();                    // Select (tilt fallback) -> Star Power
+          // build100q: STANDARD (non-guitar) pad — Overdrive on the configured odBtn (default RB=5). A controller-only
+          // player had NO way to fire Overdrive before (the only pad OD path was requireStrum-gated → guitars only).
+          // Skip if that button is also a lane (the lane wins). activateOverdrive() self-guards on state/od.
+          if (!requireStrum() && strumCfg.odBtn != null && b === strumCfg.odBtn && padMap[b] == null && state === 'playing') activateOverdrive();
+          // build100q: PAUSE/BACK on the Start button (9) for BOTH profiles — a controller-only player couldn't pause
+          // from the pad (only mouse #mpause / Escape / blur did). Skip if 9 is mapped to a lane.
+          if (b === 9 && padMap[b] == null && (state === 'playing' || state === 'paused')) { try { if (state === 'playing') pauseGame(); else resumeGame(); } catch (e) {} }
         } else if (!pressed && was) {
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (requireStrum()) _frets.delete(lane); onLaneRelease(lane); }
@@ -5929,6 +5963,7 @@
   function _wizListen() {
     // arm the existing pad-capture path for this lane (no #set-pad highlight needed — the wizard is modal)
     padRebindLane = _wizLane;
+    try { _seedPadPrev(); } catch (e) {}   // build100q: re-seed so a button still held from the previous lane (or a resting trigger) can't auto-bind THIS lane
     startProbePoll();
     _wizRender();
   }
@@ -5943,7 +5978,7 @@
         _wizLane++;
         if (_wizLane >= LANE_COUNT) {
           if (laneProfile === 'gh') { savePadMap(); startCalibration(); }   // guitar: continue into strum/whammy/tilt calibration
-          else { finishPadWizard(); }                                       // standard pad: frets are enough
+          else { savePadMap(); _startStdOdCapture(); }                       // build100q: standard pad → capture an OVERDRIVE button before finishing (was: frets only → OD unmappable)
           return;
         }
         _wizListen();
@@ -5954,10 +5989,29 @@
     renderDeviceStatus();
   }
   function _wizCleanup() {
-    _wizActive = false; onPadBound = null; padRebindLane = null;
+    _wizActive = false; onPadBound = null; padRebindLane = null; _wizStdOdActive = false;
     _stopCalRaf(); _calStep = -1;   // stop any in-flight strum/whammy/tilt sampler
     _wizSetVisible(false);
     try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
+  }
+  // build100q: STANDARD-pad Overdrive capture — after the 5 lanes, the standard-pad wizard captures ONE more button for
+  // Overdrive/Star Power (it had no way to bind it before). Reuses the calibration sampler (which seeds its own baseline,
+  // so a still-held lane button can't bind OD). Skip keeps the default odBtn (RB=5). Then finishPadWizard.
+  let _wizStdOdActive = false;
+  function _startStdOdCapture() {
+    _wizStdOdActive = true; onPadBound = null; padRebindLane = null;
+    const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Overdrive button';
+    const sw = wizEl('pad-wizard-swatch'); if (sw) sw.style.background = 'var(--gold, #e0a93f)';
+    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = 'Press the button for <b>OVERDRIVE</b> (Star Power)';
+    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = 'Pick a free button — a shoulder works well. Or Skip to keep the default.';
+    const dots = wizEl('pad-wizard-dots'); if (dots) dots.innerHTML = '';
+    const skip = wizEl('pad-wizard-skip'); if (skip) skip.style.display = 'inline-block';
+    _captureNextButton(15000, (b) => { if (b != null) { strumCfg.odBtn = b; saveStrumCfg(); } _finishStdOd(); });
+  }
+  function _finishStdOd() {
+    _wizStdOdActive = false; _stopCalRaf();
+    const skip = wizEl('pad-wizard-skip'); if (skip) skip.style.display = 'none';
+    finishPadWizard();
   }
   function cancelPadWizard() {
     if (!_wizActive) { _wizSetVisible(false); return; }
@@ -6267,7 +6321,7 @@
   { const gw = $('gh-setup'); if (gw) gw.addEventListener('click', startPadWizard); }
   { const gp = $('set-pad-ghpreset'); if (gp) gp.addEventListener('click', applyGhPreset); }
   { const wc = $('pad-wizard-cancel'); if (wc) wc.addEventListener('click', cancelPadWizard); }
-  { const ws = $('pad-wizard-skip'); if (ws) ws.addEventListener('click', () => { if (_calStep >= 0) _calSkip(); }); }   // skip the current strum/whammy/tilt step (keep its default)
+  { const ws = $('pad-wizard-skip'); if (ws) ws.addEventListener('click', () => { if (_wizStdOdActive) _finishStdOd(); else if (_calStep >= 0) _calSkip(); }); }   // build100q: skip the standard-pad Overdrive step (keep default RB) OR the current GH strum/whammy/tilt step
   { const wd = $('pad-wizard-done'); if (wd) wd.addEventListener('click', () => { if (_wizActive) cancelPadWizard(); else _wizSetVisible(false); }); }
   // advanced (manual per-lane caps) disclosure toggle
   { const adv = $('set-pad-advanced-toggle'); if (adv) adv.addEventListener('click', () => {
@@ -6286,9 +6340,13 @@
       // instrument) even when Chrome reports a generic XInput id with no "guitar"/"riffmaster" token. Normal gamepads
       // have 4 axes, so this never misfires on a standard pad; a flightstick edge case is recoverable in Settings.
       var _gp = e && e.gamepad, _looksGuitar = _gp && (isGuitarPad(_gp.id) || ((_gp.axes || []).length >= 10));
-      if (_looksGuitar && !localStorage.getItem('rr_padmap') && state !== 'playing') {
+      // build100q: gate on a DEDICATED one-time flag, not rr_padmap. The default profile is 'gh', whose pad map saves to
+      // rr_padmap_gh (NOT rr_padmap) — so the old guard never latched and every reconnect re-ran applyGhPreset(),
+      // clobbering a user's customized gh map. The flag latches once; a re-plug never overwrites their mapping.
+      if (_looksGuitar && !localStorage.getItem('rr_gh_autoadopted') && state !== 'playing') {
         if (laneProfile !== 'gh') applyLaneProfile('gh');
         applyGhPreset();
+        try { localStorage.setItem('rr_gh_autoadopted', '1'); } catch (e2) {}
       }
     } catch (err) {}
     if (settingsScreen.classList.contains('active')) renderDeviceStatus();
@@ -6512,6 +6570,7 @@
           }
           if (strum && strumCfg.btns.indexOf(b) >= 0) p2Strum(performance.now());     // strum bar → fire held frets
           if (strum && b === strumCfg.spBtn) { if (P.overdrive >= 1 && !P.odActive) { P.odActive = true; P._odUntil = songTime() + 6; } }   // Select → P2 Star Power
+          if (!strum && strumCfg.odBtn != null && b === strumCfg.odBtn && padMap[b] == null) { if (P.overdrive >= 1 && !P.odActive) { P.odActive = true; P._odUntil = songTime() + 6; } }   // build100q: standard-pad P2 Overdrive (mirror of P1)
         } else if (!pressed && was) {
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (strum) P.frets.delete(lane); P.laneDown[lane] = false; }

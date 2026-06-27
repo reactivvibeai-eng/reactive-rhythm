@@ -15,6 +15,30 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 5) — controller setup overhaul (Xbox wizard robustness + Overdrive/pause binding + GH adapt)  ✅ node+boot verified (needs owner hardware confirm)
+Playtest: Xbox controller "button mapping doesn't match" + GH setup + "notes should adapt to the controller." A 3-agent
+audit pinned the pipeline; fixes (all game.js):
+- **P0 — Xbox analog triggers (LT/RT = buttons 6/7) auto-bound / auto-advanced the wizard + fired phantom hits.** No value
+  threshold and no `_padPrev` seeding at arm-time, so a trigger reporting `pressed` at rest registered a phantom rising
+  edge the instant the wizard armed. FIX: `_btnPressed()` rejects the analog-partial band (0<value<0.55); `_seedPadPrev()`
+  records every pad's current state when the probe/wizard arms (so a held/stuck button can't phantom-bind); a 280ms
+  debounce stops chatter from chewing through lanes.
+- **P0 — a standard Xbox pad couldn't bind OR trigger Overdrive at all** (the only pad OD path was `requireStrum`-gated →
+  guitars only). FIX: a standard-pad OD trigger on `strumCfg.odBtn` (default RB=5, works out-of-box), a new **Overdrive
+  capture step** at the end of the standard-pad wizard, and the same for P2 couch co-op.
+- **P1 — no controller pause.** FIX: Start (button 9) toggles pause/back on any pad.
+- **P1 — `requireStrum` missed the recommended PDP Riffmaster** (Chrome reports it as a tokenless XInput pad). FIX:
+  `requireStrum` is now axis-aware (`>=10 axes` ⇒ guitar-shaped), matching the auto-adopt + strum-hat heuristics, so
+  strum reliably engages and the GH note design applies.
+- **P1 — "Apply Guitar Hero preset" didn't switch the profile** (left a guitar in 6-lane/no-strum/standard-color mode).
+  FIX: it now `applyLaneProfile('gh')` first, so the note design adapts + strum can engage.
+- **P1 — the auto-adopt-on-connect guard checked the wrong localStorage key** (`rr_padmap` vs the gh profile's
+  `rr_padmap_gh`), so it re-fired every reconnect and could clobber a customized map. FIX: a dedicated `rr_gh_autoadopted`
+  one-time flag.
+- Wizard now live-refreshes its "controller detected" text the instant an Xbox pad wakes.
+Verified: node --check + boot clean, `getStrumCfg().odBtn===5`. **Gamepad behavior needs the owner's physical Xbox/GH
+controller to confirm** — a `RhythmGame.padState()` test procedure was provided.
+
 ### build100q (part 4) — browse-tab fix + co-op tug-of-war bar + spectate-a-live-bracket  ✅ verified (browse live; MP wired)
 Three playtest asks:
 - **Browse: switching Hot/Surprise/New didn't update until you dragged.** ROOT CAUSE: `fillCover` early-returns when
