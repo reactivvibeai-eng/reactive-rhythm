@@ -611,7 +611,7 @@
             '</svg></span>';
         }
       }
-      const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().playFlix(t); });
+      const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });   // build100q: open the sheet (Easy/Med/Hard picker) instead of launching the flix directly
       const ib = hero.querySelector('.fm-info'); if (ib) ib.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });
     }
     render(films[0]);

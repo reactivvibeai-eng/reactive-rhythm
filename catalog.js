@@ -1171,7 +1171,7 @@
     { const _diffSec = $('diff-grid'); if (_diffSec) _diffSec.style.display = ''; }
     if (vid) {
       { const _es = $('env-section'); if (_es) _es.style.display = 'none'; }     // film = the video is the stage, no env picker
-      { const _dg = $('diff-grid'); if (_dg) _dg.style.display = 'none'; }       // film = no per-level difficulty picker
+      { const _dg = $('diff-grid'); if (_dg) _dg.style.display = ''; }           // build100q (owner): flix levels DO get the Easy/Med/Hard picker — videos chart from audio, so difficulty is meaningful
       // build98: AI FLIXS PLAYABLE LEVEL. If the film has DECODABLE audio, PLAY launches the rhythm level with the music
       // video full-screen behind the highway (notes charted to the song). HLS-only films (no decodable audio rendition \u2014
       // 31 of 143 today, pending a Lovable audio.m4a rendition) can't be charted client-side \u2192 a CLEAN Watch preview
