@@ -3125,7 +3125,11 @@
       if (n.time < t - diff.hitWindow) continue;
       if (n.time > t + diff.hitWindow) break;
       const d = Math.abs(n.time - t);
-      if (d < targetDiff) { targetDiff = d; target = n; }
+      // build100d (bug-swarm): on an EXACT distance tie, prefer a non-bomb over a bomb. A gap-fill tap can land on a
+      // bomb-row's exact lane+time (the bomb-collision guard runs before gap-fill), and the bomb sorts first in `notes`,
+      // so a strict `<` let the bomb win the tie → a CORRECT press ate a bomb penalty. The tie-break only fires on an
+      // exact tie where the current pick is a bomb and this one isn't, so normal charts are byte-identical.
+      if (d < targetDiff || (d === targetDiff && target && target.type === 'bomb' && n.type !== 'bomb')) { targetDiff = d; target = n; }
     }
     if (!target) {   // empty press — no note in window. build85: whiff cue (does NOT break combo or drain stability — keyboard-feel guardrail)
       // build89: warm-grey dash (#8a807c, R>=G>=B — brand law); skip the flash if a real judgment fired this frame so the dash can't clobber it

@@ -15,6 +15,36 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100d — critical-bug swarm fixes (8 real bugs, incl. a confirmed ×3 currency exploit)  ✅ verified
+A 6-domain critical-bug swarm (state-leaks / currency / scoring / data / netcode / boot) + adversarial verify. The
+workflow's auto-summary returned "0 confirmed" due to a bug in MY aggregator (it compared finding objects by identity
+across a serialization boundary) — but the raw verifier transcripts CONFIRMED the headline bug (4 independent verifiers,
+"real + reproducible, high confidence"). Fixed the 8 genuine playtest-path bugs; co-op/MP-online edge cases deferred with
+the hardware/2-peer test. `?v` 361→362. Verified live, 0 console errors.
+- **P1 CURRENCY EXPLOIT — DAILY RIFT ×3 flag leak (catalog.js):** the ×3 was a bare boolean armed at launch and cleared
+  only inside `recordLocal` (song-end). Quitting the rift mid-song never reached `endGame`→`recordLocal`, so the flag
+  stayed armed and the **next completed run (any song) banked the ×3 it didn't earn** + falsely stamped the day done.
+  **Fix:** bind the ×3 to the daily track id (`_dailyRiftArmedId`) — only *completing the daily song* honors it, so a
+  quit can't leak it. Verified live: after arming, a non-daily run pays +8 (no ×3, day not stamped); the actual daily
+  run still pays +24 (×3) and stamps done. A failed daily leaves the flag armed for a retry.
+- **Daily Rift cap-stamp (catalog.js):** the day was stamped done even when the ISO-week Bonus cap left earned=0 — losing
+  the ×3 with no payout. Moved the `done` stamp inside `if (earned > 0)` so a cap-blocked run re-arms next week.
+- **Real-money double-charge window (index.html):** `refreshEntitlements()` did `owns={}` then repopulated only from the
+  server — if the grant lagged, a just-bought item regressed to "Buy" and a re-click re-charged (the first buy deleted its
+  idempotency key). **Fix:** union the server set onto `owns` (don't wipe), so a purchased card can't regress.
+- **AI Flix dead-end (catalog.js):** a known-bad film (probed 404) with no watch URL fell through to `playUrl` with the
+  dead audio → stuck on the loading screen. Now bails cleanly with a "not playable yet" toast (always returns on a bad probe).
+- **Bomb/filler scoring (game.js):** a gap-fill tap could land on a bomb-row's exact lane+time (bomb-collision guard runs
+  before gap-fill); the bomb sorted first so a strict `<` let it win the tie → a CORRECT press ate a bomb penalty. Added
+  an exact-tie tie-break that prefers the non-bomb (normal charts byte-identical).
+- **`undefined` song title (jukebox.js):** songCard rendered the literal "undefined" for a live row with no title →
+  defaulted to "Untitled" (matches the marquee/videoCard guards).
+- **1v1 final not sanitized (multiplayer.js):** an inbound junk/NaN/string `final` score could flip the duel verdict +
+  local MP ladder → coerce the numerics (preserving name/display fields) before assigning.
+- **Deferred (co-op hardware / 2-peer, with task #156):** P2-keyboard blur sustain, P2 digit `preventDefault` scope,
+  Local Versus always-demo-song (`getCouchTrack` undefined), Quick-Match stranded-proposer watchdog, shared-keyboard
+  digit double-fire — all gated behind the local-versus hardware test or a live 2-peer MP session.
+
 ### build100c — DAILY RIFT tile art (generated) + real-run playtest  ✅ verified
 - **Daily Rift key-art generated + installed:** `assets/ui/daily-rift.jpg` (1280×850) — a black/crimson/gold "rift"
   splash (a molten-gold vertical tear in the void, a guitar pulled into it, crimson lightning) generated with

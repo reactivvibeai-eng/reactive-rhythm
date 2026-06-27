@@ -494,7 +494,7 @@
     // text
     const text = document.createElement('span'); text.className = 'sc-text';
     const sub = [t.artist_name, RC().cleanGenre(t.genre), t.bpm ? t.bpm + ' BPM' : '', RC().fmtDur(t.duration_seconds)].filter(Boolean).join(' · ');
-    text.innerHTML = '<span class="sc-title">' + RC().escapeHtml(t.title) + '</span><span class="sc-sub">' + RC().escapeHtml(sub) + '</span>';
+    text.innerHTML = '<span class="sc-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span><span class="sc-sub">' + RC().escapeHtml(sub) + '</span>';   // build100d: default title so a null/empty live row never renders the literal 'undefined'
     // GOLDEN BUZZER winner — dedicated backend flag (golden_buzzer); dark until the backend sets it.
     if (RC().goldenBuzzer(t)) {
       card.classList.add('gb-winner');

@@ -887,7 +887,11 @@
   // first clear of the day. The pick formula is shared/global (date-hashed), so every
   // player sees the same song today. State lives in localStorage 'rr_dailyrift'.
   // ===========================================================================
-  let _dailyRiftActive = false;   // set true by the menu controller when a rift run launches; CONSUMED in recordLocal (one-shot)
+  // build100d (bug-swarm P1 fix): the ×3 is armed for a SPECIFIC track id, NOT a bare boolean. A boolean leaked the ×3
+  // onto the NEXT completed run if the player quit the rift before song-end (endGame→recordLocal never fired, so the flag
+  // stayed armed and the next song banked unearned Bonus + falsely stamped the day done). Binding to the daily track id
+  // means ONLY completing the daily song can honor the ×3 — a non-matching run never gets it, so a quit can't leak it.
+  let _dailyRiftArmedId = null;   // the daily track id the ×3 is armed for (null = not armed)
   let _dailyRiftTriple = false;   // whether the ×3 is still owed today (false → rift replay pays normal)
   // local YYYY-MM-DD (date-only key; the player's local day). Same string → same pick + same gate all day.
   function dailyRiftToday() {
@@ -912,8 +916,8 @@
   // the menu controller calls this right before launching the rift. tripleReward=true only on the day's first clear
   // (the controller checks dailyRiftState().done). The flag is consumed by recordLocal so it can't leak to later runs.
   function setDailyRift(active, tripleReward) {
-    _dailyRiftActive = !!active;
-    _dailyRiftTriple = !!active && !!tripleReward;
+    if (active) { var _t = dailyRiftTrack(); _dailyRiftArmedId = _t ? _t.id : '__rift'; _dailyRiftTriple = !!tripleReward; }
+    else { _dailyRiftArmedId = null; _dailyRiftTriple = false; }
   }
 
   // ---------- catalog query helpers (consumed by the library UI) --------------
@@ -1240,8 +1244,14 @@
     const aurl = trackAudioUrl(track);            // decodable music → the chart + the audio + the clock
     const vurl = videoWatchUrl(track);            // the music video → the full-screen backdrop
     if (!aurl) { if (vurl) openWatch(track, vurl); return; }   // no chartable audio → fall back to the Watch preview
-    // known-bad audio (already probed 404) → don't dead-end on the loading screen; show the trailer instead
-    if (track && _flixAudioCache.get(track.id) === false) { if (vurl) { openWatch(track, vurl); return; } }
+    // known-bad audio (already probed 404) → don't dead-end on the loading screen; show the trailer instead.
+    // build100d (bug-swarm): ALWAYS return on a known-bad probe — if there's also no watch url, bail with a toast
+    // rather than falling through to playUrl with the dead audio (which 404s on the loading screen, no Watch fallback).
+    if (track && _flixAudioCache.get(track.id) === false) {
+      if (vurl) { openWatch(track, vurl); }
+      else { try { window.RhythmGame.showToast && window.RhythmGame.showToast('This film isn’t playable yet', 'neutral'); } catch (e) {} }
+      return;
+    }
     closeSheet(); stopPreview(); currentTrack = track;
     // build99e (owner): a flix uses the player's EQUIPPED guitar — the clean default crimson for anyone who hasn't
     // equipped a skin (so the music video reads), and their own skin if they chose one. Drop any leftover per-level
@@ -1385,7 +1395,14 @@
     // run can never leak the ×3 onto a later normal run. The ×3 is applied below only for a NON-failed run; a failed
     // rift earns nothing and does NOT stamp the day done, so the player can retry today for the bonus.
     let _rift3x = false;
-    try { if (_dailyRiftActive) { _rift3x = !!_dailyRiftTriple; _dailyRiftActive = false; _dailyRiftTriple = false; } } catch (e) {}
+    // build100d: honor the DAILY RIFT ×3 ONLY when THIS run IS the armed daily track AND it completed (not failed).
+    // Track-bound (not a boolean) so a quit/abandoned rift can't leak the ×3 onto a later non-matching run. A FAILED
+    // daily run leaves the flag armed so a retry can still claim it; a non-matching run leaves it armed (waiting).
+    try {
+      if (_dailyRiftArmedId && currentTrack && currentTrack.id === _dailyRiftArmedId && !failed) {
+        _rift3x = !!_dailyRiftTriple; _dailyRiftArmedId = null; _dailyRiftTriple = false;
+      }
+    } catch (e) {}
     // 1) lifetime career aggregate — a FAILED run is an attempt, not a performance. Count it under
     // attempts/fails + timestamps only, and keep it OUT of runs/score/accuracy/grade-distribution so a
     // bailed run can't drag your lifetime accuracy down or stuff the grade chart with phantom low grades.
@@ -1477,8 +1494,11 @@
         results._bonusBalance = newBal;
         results._dailyRiftX3 = _rift3x;   // results screen / share card can flag the triple run
         try { renderBonusSparksLine(earned, newBal); } catch (e) {}
+        // build100d: stamp the day done ONLY when the ×3 actually PAID (inside earned>0). Stamping it outside this guard
+        // marked the day done with ZERO reward when the ISO-week Bonus cap was already exhausted (earned=0) — silently
+        // forfeiting the ×3. Now: if the cap blocked the payout, the day stays un-done so the tile re-arms next week.
+        if (_rift3x) { try { localStorage.setItem('rr_dailyrift', JSON.stringify({ date: dailyRiftToday(), done: true })); } catch (e) {} }
       }
-      if (_rift3x) { try { var _d = dailyRiftToday(); localStorage.setItem('rr_dailyrift', JSON.stringify({ date: _d, done: true })); } catch (e) {} }
     }
     // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
     // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.

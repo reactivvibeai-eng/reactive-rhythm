@@ -1206,7 +1206,17 @@
     settleIfReady();
     _settleSafetyT = setTimeout(function () { _settleSafetyT = 0; settleIfReady(true); }, 8000);   // safety if opponent never reports (v258: handle stored so teardown/rematch can cancel it)
   }
-  function onFinal(p) { if (p) oppFinal = p; settleIfReady(); }
+  function onFinal(p) {
+    if (p) {
+      // build100d (bug-swarm): coerce the inbound numerics so a junk/NaN/string score from a peer can't flip the duel
+      // verdict or the local MP rank ladder. Inline (not sanitizeFinal) to preserve name + any display fields.
+      var sc = +p.score; if (!isFinite(sc) || sc < 0) sc = 0;
+      var ac = +p.acc; if (!isFinite(ac) || ac < 0) ac = 0; if (ac > 100) ac = 100;
+      var cb = +p.combo; if (!isFinite(cb) || cb < 0) cb = 0;
+      oppFinal = Object.assign({}, p, { score: sc, acc: ac, combo: cb });
+    }
+    settleIfReady();
+  }
   function settleIfReady(force) {
     if (!matchLive || !finishedLocal) return;
     if (!oppFinal && !force && !oppLeft) return;
