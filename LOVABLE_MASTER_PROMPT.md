@@ -218,6 +218,60 @@ host. ~20 lines of game-side reader once you pick the mechanism. Spec in the han
 
 ---
 
+## 6.5 🔴 PLAYTEST DATA GAPS (2026-06-27) — the game CALLS these; they return empty/404 today
+
+These are the exact backend contracts the **economy↔leaderboard unification** needs. The game already calls every one;
+they currently return `[]`, `404`, or omit a field, so the game falls back to mock/guest state. **Hard cross-cutting
+rule on every authed route below:** accept the SAME Supabase JWT the game's shared `supa` client holds, and send CORS
+`Access-Control-Allow-Origin` for the game origin allowing the `authorization` header — else `getToken()`-authed fetches
+fail and the game falls to guest/empty. **Confirm FIRST:** does the game origin carry a Supabase session on the live
+deploy (does `getToken()` return a JWT)? If the game is separate-origin/iframed from the site, the shared-localStorage
+session may not hold and NO contract change helps — fix session sharing first.
+
+**Economy (store buy "redirects home" + Sparks shows "—"):**
+1. **`GET /sparks/balance`** (Bearer JWT) → `{ balance:<int user_sparks>, signed_in:true, currency:"sparks" }` for a valid
+   token; `{ balance:0, signed_in:false }` for none.
+2. **`GET /store`** (authed) → MUST echo `signed_in:true` + `balance` for the bearer token. If it returns `signed_in:false`
+   for a logged-in owner, the store shows the guest "Sign in to buy" button (which opens the website home — the
+   "redirect home" bug). *(Game-side now also unions the local session + admin so a logged-in owner degrades gracefully,
+   but true unification needs this echo correct.)*
+3. **`POST /sparks/spend`** `{ item_type, item_id, idempotency_key }` → `{ ok, balance, granted, deduped }`; `402
+   insufficient_sparks`; `409 price_mismatch`. Debit the **same `user_sparks` ledger the website `/sparks` top-up credits**
+   (one shared economy).
+4. **`/sparks` page** (`SPARKS_TOPUP_URL`) MUST EXIST (not 404). Accept `?need=NN` to preselect a pack, credit
+   `user_sparks`; on return the game re-reads `/sparks/balance` on window-focus.
+5. **`GET /entitlements`** (authed) → `{ signed_in, owns:[{item_type,item_id}] }`. **Use the UNDERSCORE id form**
+   (`high_seas`, `shorty_x`) — canonical to the store/campaign. *(The game now also slug-normalizes hyphen↔underscore, so
+   either form reads as owned, but be canonical.)*
+
+**Global / per-song leaderboard (two testers show the SAME rank because the server returns nothing → both sit on the
+same mock house ladder):**
+6. **`POST /plays`** — validate JWT → upsert a per-`(user_id, track_id, difficulty)` **best** row → return
+   `{ play_id, rank_global }`. Key on the authenticated `user_id`, NOT the anon key. *(Note: the default in-browser-chart
+   path has no server `play_token`; decide whether to accept client-charted scores for pending-chart tracks or issue
+   play_tokens for them — until then only server-charted `chart_status:"ready"` runs can post.)*
+7. **`GET /leaderboard/global?limit=N`** — currently `[]`. Return real ranked rows across users (each user's best, desc):
+   `{ rank, display_name, score, accuracy(0..1), grade }`, include the caller's own row (or `you:true`). Distinct
+   per-user scores → distinct ranks (fixes "two testers, same rank"). The game swaps off its mock seed automatically the
+   moment this returns non-empty.
+8. **`GET /leaderboard/:id?difficulty=&limit=N`** — same row shape, per track. Currently `[]`.
+
+**Multiplayer leaderboard (the MP tab "global ladder" is a hardcoded preview; no cross-account record exists):**
+9. **Persist + pair `POST /mp/round/settle`** by `round_id` (two rows/round, one per `player_id`), re-judge `client_score`
+   (anti-cheat), decide the winner server-side, store per-player W/L/draw + RP/Elo. *(The game now records bracket W/L
+   LOCALLY so the MP tab shows your own record immediately; this is for the real cross-account ladder.)*
+10. **`GET /mp/leaderboard?limit=N`** (NEW) → `[{ rank, player_id, player_name, points, wins, losses, draws, streak }]` +
+    a "me" row. Then the game adds `fetchMpLeaderboard()` and the MP tab swaps its preview seed for these rows.
+11. **Guest writes:** `mpSettle` early-returns when not signed in, so guest matches never reach the server — decide accept
+    vs exclude. If the owner tested as a guest, even a correct ledger stays empty.
+
+**Realtime (multiplayer "not working"):** confirm Supabase **Realtime is enabled for anon** on the project (broadcast +
+presence). The MP transport rides Realtime broadcast; a runtime `CHANNEL_ERROR` (anon Realtime auth) — not the game —
+is what makes "Multiplayer doesn't work" when clicked. The game already uses broadcast-heartbeat soft-presence (never
+native presence).
+
+---
+
 ## 7. What the GAME already does (no backend change needed — for your confidence)
 - Reads `media_type`/`is_video`/`video_url` authoritatively; lists every watchable film; charts every decodable one.
 - Gates paid skins + levels on `ownsItem` entitlements; locked → routes to Store; refreshes entitlements on top-up return.
