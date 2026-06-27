@@ -7408,9 +7408,13 @@
       _bgSaved = null;
     }
   }
-  // CAMPAIGN gating: locked for testers until you flip CAMPAIGN_PUBLIC. ?dev=1 unlocks the live
-  // progression for us (persists). Progression is REAL under dev: sequential, star-gated unlocks.
-  var CAMPAIGN_PUBLIC = false;
+  // CAMPAIGN gating: build99N (owner: "campaign mode working — beat the first level, then the second, keep
+  // unlocking"). Flipped LIVE for the public launch. Progression is the existing owner-approved HYBRID: Easy +
+  // Medium tiers open from the start, sequential WITHIN each tier (clear the previous finished level for ≥1 star),
+  // and Hard (Fracture) unlocks only after Medium is cleared. The free chain = warm-01→02→03 (Easy), bone-daddy
+  // (Medium), frac-01 (Hard); the 7 premium story-levels interleave as purchasable LOCKED cards (revenue CTAs).
+  // authoredUnlocked skips unowned paid predecessors, so a paywall never dead-ends the chain. Reversible: set false.
+  var CAMPAIGN_PUBLIC = true;
   var ASPLAYER = false; try { ASPLAYER = /[?&]asplayer=1/.test(location.search); } catch (e) {}   // build60: "Simulate fresh player" — force the released-but-GATED, un-owned, no-dev view so the real campaign progression + paywall can be walked locally
   var DEV = false;
   try {

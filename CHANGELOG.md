@@ -41,6 +41,18 @@ Driven by a 6-dimension audit swarm (perf / stability / AI Flixs / campaign / ec
 - Deferred (assessed, low-reward/high-risk for a headless-only verify): note-scan early-break (draws are already
   window-gated), fretGeom cache (alignment-sensitive), particle save/restore, warped-guitar re-slice. `?v` → 355.
 
+### build99P — Campaign mode LIVE (sequential unlock)  ✅ verified
+Owner ask: "campaign mode working — beat the first level, then the second, keep unlocking." The sequential-unlock
+engine was already built and correct; it was just gated off by the `CAMPAIGN_PUBLIC=false` master switch (which made
+the Levels screen 100% locked for the public — audit P-28). Flipped it LIVE.
+- Existing owner-approved HYBRID progression: Easy + Medium tiers open from the start; sequential WITHIN a tier (clear
+  the previous finished level for ≥1 star); Hard (Fracture) unlocks only after Medium is cleared.
+- Free chain = warm-01→02→03 (Easy) · bone-daddy (Medium) · frac-01 (Hard). The 7 premium story-levels (sasoka,
+  deadkin, high-seas, shorty-x, triemrys, melody/carnival bosses) interleave as purchasable LOCKED cards → revenue CTAs.
+  `authoredUnlocked` skips unowned paid predecessors, so a paywall never dead-ends the chain.
+- Verified live as a fresh public guest (`?asplayer=1`): warm-01 + bone-daddy unlocked, warm-02/03 + frac-01 + all 7
+  premium levels locked; clearing warm-01 unlocks warm-02 (warm-03 stays locked); 0 console errors. Reversible (set false).
+
 ### 1. Desktop song-select — full-width "deck"  ✅ verified
 `jukebox.css` (new `@media (min-width:901px)` block; mobile untouched).
 - The library was a 720px column centered in black. Now at >900px `#view-jukebox`
