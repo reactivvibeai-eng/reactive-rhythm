@@ -3085,15 +3085,13 @@
       _tiltPrev = tv;
     }
   }
-  // build100q: a button counts as "pressed" only on a real, full press. Xbox analog triggers (LT/RT = buttons 6/7) can
-  // report .pressed=true while floating at a PARTIAL value near rest on some Windows/Chrome drivers — which, with no
-  // _padPrev seeding, registered a phantom rising edge the instant the wizard armed (auto-binding a lane to a trigger /
-  // auto-advancing the steps) and fired phantom in-game hits. Reject the analog-partial band (0 < value < 0.55); a real
-  // digital press is value 1 (or .pressed with value 0 on drivers that don't populate value, which we still honor).
-  function _btnPressed(btn) { return btn.pressed && !(btn.value > 0 && btn.value < 0.55); }
-  // Seed _padPrev for every connected pad's CURRENT state — call when the wizard/probe arms so a button already held (or
-  // a trigger stuck pressed at rest) is recorded as "was" and cannot register a phantom rising edge on the first frame.
-  function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = _btnPressed(gp.buttons[b]); } } catch (e) {} }
+  // build100q+: the analog-partial reject is for WIZARD CAPTURE ONLY (an Xbox trigger floating near rest must not
+  // auto-bind a lane). It must NEVER gate GAMEPLAY — some GH/clone drivers report a fret or the strum bar at an
+  // intermediate value, and rejecting those broke the BLUE fret + STRUM for a real player. Gameplay uses raw .pressed.
+  function _isPartialAnalog(btn) { return typeof btn.value === 'number' && btn.value > 0 && btn.value < 0.55; }
+  // Seed _padPrev for every connected pad's CURRENT (raw) state — call when the wizard/probe arms so a button already
+  // held (or a trigger stuck pressed at rest) is recorded as "was" and cannot register a phantom rising edge on frame 1.
+  function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = gp.buttons[b].pressed; } } catch (e) {} }
   let _lastWizBindMs = 0;
   function pollGamepad() {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
@@ -3101,10 +3099,12 @@
     for (const gp of pads) {
       if (!gp) continue;
       for (let b = 0; b < gp.buttons.length; b++) {
-        const pressed = _btnPressed(gp.buttons[b]); const key = gp.index + ':' + b; const was = _padPrev[key];
+        const pressed = gp.buttons[b].pressed; const key = gp.index + ':' + b; const was = _padPrev[key];   // RAW press → a real fret/strum always registers in gameplay
         _padPrev[key] = pressed;
         if (pressed && !was) {
           if (padRebindLane != null) {
+            // build100q: CAPTURE-ONLY guard — reject a partial-analog press (resting Xbox trigger) from auto-binding.
+            if (_isPartialAnalog(gp.buttons[b])) continue;
             // build100q: debounce binds so chatter / a bouncing analog button can't chew through multiple wizard lanes
             // from one physical press. A second edge within 280ms is ignored (the lane stays armed for the right press).
             if (_wizActive && performance.now() - _lastWizBindMs < 280) continue;
