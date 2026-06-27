@@ -55,6 +55,44 @@ keys here (see each section). Bump the `?v=NN` cache-bust query on `index.html`'
 
 ---
 
+## 0.5 🔴 CROSS-CUTTING LAUNCH-CRITICALS — read BEFORE you flip it live
+
+These are the **silent total breakers**: the game can look fully wired and do *nothing* if any of these is wrong,
+because they fail invisibly (CORS rejections, an empty auth session, a CSP block). Verify each from a real
+`reactivvibeai.com/game` page, signed in.
+
+1. **CORS — allow `https://reactivvibeai.com` on EVERY edge route.** The game fires ~20 endpoints on the `game-catalog`
+   base: `GET /me · /sparks/balance · /bonus-sparks/balance · /store · /entitlements · /track/:id · /tracks · /leaderboard/:id ·
+   /leaderboard/global · /review/resolve` and `POST /sparks/spend · /bonus-sparks/earn · /bonus-sparks/spend · /plays · /score ·
+   /uses · /mp/round/start · /mp/round/settle · /wager/* · /clientlog · /events`. Every one must return
+   `Access-Control-Allow-Origin: https://reactivvibeai.com` (or echo it) and allow the `authorization` + `content-type`
+   request headers on the `OPTIONS` preflight. If CORS was scoped to the old `/play` origin, **every authed call 403s and
+   the whole game is inert.** ✅ Test: an authed `GET /me` from `/game` returns 200, not a CORS error.
+2. **Auth session must be in `localStorage` under the DEFAULT supabase-js key** (`sb-bxiejoktoknybpraxebm-auth-token`) on
+   the `reactivvibeai.com` origin. The game spins up its OWN `supabase-js` client with default storage (no `storageKey`
+   override) and reads `auth.getSession()`. If the site persists the session via **`@supabase/ssr` cookies, a custom
+   `storageKey`, or any non-default mechanism, the game sees NO session** → every signed-in feature (save, Bonus, MP,
+   purchases, leaderboard, admin) silently behaves as logged-out. **Either** persist the session to localStorage under the
+   default key on this origin, **or** tell me your storageKey/mechanism and I'll match it in the game's client.
+3. **CSP on the `/game` route** must allow: `script-src` → `cdn.jsdelivr.net` (supabase-js loads from there) + `'unsafe-inline'`
+   (inline boot scripts); `style-src 'unsafe-inline'` + `fonts.googleapis.com`; `font-src fonts.gstatic.com`; `connect-src`
+   → `*.supabase.co` + `wss://*.supabase.co` (API + auth + **Realtime**) + `*.mux.com` + your Storage domain; `media-src`
+   → `*.mux.com` + Storage + `blob:`; `img-src data:` + Storage. **Easiest: serve `/game` without the React app's strict
+   CSP** (or give it its own relaxed policy).
+4. **Anon key currency** — `RHYTHM_CONFIG.SUPABASE_KEY` (project `bxiejoktoknybpraxebm`) must be the CURRENT anon key. If
+   it was rotated, update it (or override `RHYTHM_CONFIG` at build).
+5. **Audio CORS for charting** — the in-browser charter `fetch()`es a track's `audio_url` (Mux `.m4a` / Storage /
+   `analysis_url`) and decodes it via WebAudio. That cross-origin fetch needs `Access-Control-Allow-Origin` from the audio
+   host. Without it the song **streams but won't chart** → no playable level (the "plays ≠ charts" line). Confirm Mux
+   static renditions + any Storage audio are CORS-readable from `reactivvibeai.com`.
+6. **Decisions:** (a) **Open vs gated launch?** `BETA_API` is empty → the gate is OFF (open access). For invite-only, set
+   `BETA_API` + ship `/beta/status` + `/beta/redeem` (`BETA_GATE_BRIEF.md`). (b) **Admin email** — full-access unlocks key
+   on the signed-in email matching `ADMIN_EMAILS = ['reactivvibeai@gmail.com']` (in catalog.js); the owner must sign in
+   with that exact email. (c) Confirm `GET /tracks` still serves the full library with decodable `audio_url` + the
+   `media_type`/`is_video` tagging done (so videos bucket correctly).
+
+---
+
 ## 1. 🔴 PAYMENTS + ECONOMY (Sparks) — the revenue core  · brief: `LOVABLE_PAYMENT_BRIEF.md`
 
 Two currencies (do not blur them):
