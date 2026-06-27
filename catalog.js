@@ -151,7 +151,7 @@
   }
   function saveBonusSparks(n) { try { localStorage.setItem(BONUS_SPARKS_KEY, String(Math.max(0, n | 0))); } catch (e) {} }
   // current integer balance.
-  function getBonusSparks() { return loadBonusSparks(); }
+  function getBonusSparks() { return (bonusServerReady() && _bonusSrvBal != null) ? _bonusSrvBal : loadBonusSparks(); }   // build100h: server cache when authoritative, else local
   // add max(0, floor(n)) (clamped to BONUS_AWARD_CAP) to the balance; persists; returns the new balance.
   // No-op for n<=0. `reason` is for future telemetry / the swap-seam API body — unused locally.
   function awardBonusSparks(n, reason) {
@@ -206,6 +206,38 @@
     if (!res.ok) return { ok: false, error: 'insufficient_bonus', balance: res.balance };
     owns.push(key); saveBonusOwns(owns);
     return { ok: true, balance: res.balance };
+  }
+
+  // ── build100h — SERVER Bonus-Sparks seam (Lovable /bonus-sparks/{balance,earn,spend} on game-catalog) ───────────
+  // Authed via the SAME Supabase-session pattern as spendSparks (api(path,{auth:true}) → Bearer <jwt>). GATED by
+  // RHYTHM_CONFIG.BONUS_SERVER === true — DEFAULT OFF until the route contracts are confirmed. When ON + signed in the
+  // SERVER is authoritative (computes the award + 50/ISO-week cap + holds the balance); logged-out / OFF falls back to
+  // the client-side rr_bonus_sparks path above (the live game today). CONTRACT shapes below are best-effort — confirm
+  // with Lovable, then set BONUS_SERVER:true to flip it on (one edit; no other code change needed).
+  var _bonusSrvBal = null;   // cached authoritative balance for synchronous getBonusSparks() reads
+  function bonusServerOn() { try { return !!(window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.BONUS_SERVER) && !!API_BASE; } catch (e) { return false; } }
+  function bonusServerReady() { return bonusServerOn() && !!(_entitlements && _entitlements.signed_in); }
+  async function _bonusSrvBalance() {
+    if (!bonusServerOn()) return null;
+    try { var out = await api('/bonus-sparks/balance', { auth: true }); if (out && typeof out.balance === 'number') _bonusSrvBal = out.balance; } catch (e) {}
+    return _bonusSrvBal;
+  }
+  async function _bonusSrvEarn(payload) {
+    // CONTRACT (confirm): POST /bonus-sparks/earn { play_token, grade, full_combo, daily_rift } → server computes award +
+    // 50/ISO-week cap, idempotent on play_token → { balance, earned, capped }. Server-authoritative — game sends NO amount.
+    try { var out = await api('/bonus-sparks/earn', { method: 'POST', body: payload, auth: true });
+      if (out && typeof out.balance === 'number') _bonusSrvBal = out.balance;
+      return { earned: (out && +out.earned) || 0, balance: out && out.balance, capped: !!(out && out.capped) };
+    } catch (e) { return null; }
+  }
+  async function _bonusSrvSpend(item_type, item_id, amount) {
+    // CONTRACT (confirm): POST /bonus-sparks/spend { item_type, item_id, amount } → { ok, balance, deduped } (server
+    // enforces the cosmetics-only whitelist + debit). Wiring bonusBuy() to this needs the store's buyBonus caller made
+    // async — deferred until the contract lands (the helper is ready).
+    try { var out = await api('/bonus-sparks/spend', { method: 'POST', body: { item_type: item_type, item_id: item_id, amount: amount }, auth: true });
+      if (out && typeof out.balance === 'number') _bonusSrvBal = out.balance;
+      return { ok: !!(out && out.ok), balance: out && out.balance, deduped: !!(out && out.deduped) };
+    } catch (e) { var m = String((e && e.message) || ''); return { ok: false, error: /\b402\b|insufficient/i.test(m) ? 'insufficient_bonus' : 'spend_failed' }; }
   }
 
   // ===========================================================================
@@ -417,6 +449,7 @@
       // build50: tolerate BOTH shapes — the live backend returns { entitlements:[…] } but the brief asks for { owns:[…] }.
       const owns = Array.isArray(out && out.owns) ? out.owns : (Array.isArray(out && out.entitlements) ? out.entitlements : []);
       _setEntCache(owns, !!(out && out.signed_in));
+      if (bonusServerOn() && out && out.signed_in) { try { _bonusSrvBalance(); } catch (e) {} }   // build100h: prime the authoritative Bonus balance cache once we know who's signed in
       // return the NORMALIZED cache (not the raw backend list): store consumers key on {item_type,item_id},
       // so handing back raw {type,id}/string rows would make a purchased item read as unowned → double charge.
       return { signed_in: !!(out && out.signed_in), owns: _entitlements.owns.slice() };
@@ -1479,6 +1512,20 @@
     // (a failed run earns nothing). NEVER touches the cashable Sparks balance. The amount is
     // stashed on results._bonusAwarded so the results screen can show "+N BONUS SPARKS".
     if (!failed) {
+      if (bonusServerReady()) {
+        // build100h: SERVER-authoritative Bonus — report the completed run (+play_token); the server computes the grade
+        // reward + ×3 daily-rift + 50/ISO-week cap (idempotent on play_token). No client mint. Results line fills async.
+        try {
+          var _earnP = { play_token: (currentTrack && currentTrack.play_token) || null, grade: grade, full_combo: !!results.full_combo, daily_rift: _rift3x };
+          _bonusSrvEarn(_earnP).then(function (r) {
+            if (r && r.earned > 0) {
+              try { results._bonusAwarded = r.earned; results._bonusBalance = r.balance; results._dailyRiftX3 = _rift3x; } catch (e) {}
+              try { renderBonusSparksLine(r.earned, r.balance); } catch (e) {}
+              if (_rift3x) { try { localStorage.setItem('rr_dailyrift', JSON.stringify({ date: dailyRiftToday(), done: true })); } catch (e) {} }
+            }
+          });
+        } catch (e) {}
+      } else {
       // build73 ECONOMY REBALANCE (owner): Bonus Sparks spend on the WEBSITE (skips/boosts — the real revenue),
       // so the gameplay faucet is now TINY + weekly-capped. Dropped the runaway score/2000 term entirely; a run
       // earns a small grade reward (+full-combo kicker), and the ISO-week cap (BONUS_WEEKLY_CAP=50) means even
@@ -1503,6 +1550,7 @@
         // forfeiting the ×3. Now: if the cap blocked the payout, the day stays un-done so the tile re-arms next week.
         if (_rift3x) { try { localStorage.setItem('rr_dailyrift', JSON.stringify({ date: dailyRiftToday(), done: true })); } catch (e) {} }
       }
+      }   // build100h: close the BONUS_SERVER `else` (client-side local-bonus path)
     }
     // --- account leaderboard: in-browser runs also submit to your ReactivVibe account (beta-grade).
     // Feeds the existing game_plays / game_leaderboard. Logged out -> sign-in nudge; backend absent -> silent.
