@@ -242,6 +242,10 @@
     // build96 (playtest): surface AI FLIXS as a first-class jukebox button (was only buried inside Browse → owner couldn't find it)
     try { var _fx = $('jb-flixs'), _fc = $('jb-flixscount'), _nv = (RC().videoCount ? RC().videoCount() : 0); if (_fx) _fx.hidden = !_nv; if (_fc) _fc.textContent = _nv ? ' · ' + _nv : ''; } catch (e) {}
     pos = 0; target = 0;
+    // build100q FIX: invalidate the cover cache so the new section's songs actually paint. fillCover early-returns when
+    // c.idx === idx; switching a tab resets pos→0, so the center cover keeps idx 0 and fillCover SKIPS it → the rail
+    // showed the OLD section's covers until you dragged left/right (which forced a different idx). Force a full re-fill.
+    covers.forEach(function (c) { c.idx = -999; });
     [...$('jb-tabs').children].forEach(b => { var on = b.dataset.sec === key; b.classList.toggle('active', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });   // build71: keep ARIA tab state in sync (role=tablist/tab markup in index.html)
     layout(); settlePreview();
   }

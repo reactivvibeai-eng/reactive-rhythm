@@ -15,6 +15,22 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 4) — browse-tab fix + co-op tug-of-war bar + spectate-a-live-bracket  ✅ verified (browse live; MP wired)
+Three playtest asks:
+- **Browse: switching Hot/Surprise/New didn't update until you dragged.** ROOT CAUSE: `fillCover` early-returns when
+  `c.idx === idx`; switching a tab resets `pos→0`, so the center cover kept idx 0 and `fillCover` SKIPPED re-filling →
+  the rail showed the OLD section's covers until a drag forced a different idx. FIX: `setSection` now invalidates the
+  cover cache (`covers.forEach(c => c.idx = -999)`) before `layout()`, forcing a full re-fill. Verified live: clicking
+  Surprise immediately swapped the centered song (no drag needed).
+- **Co-op/versus: a top "tug-of-war" bar of who's winning.** Added a horizontal `#vs-tug` bar pinned to the top of the
+  versus deck — a "rope knot" that slides toward the leader; your gold half vs the opponent's crimson half grow with the
+  lead. Driven by the same eased score-diff (`_leadEase`) as the existing seam puck; named labels per side; mounts in
+  `mountVsHud`, cleared in `unmountVsHud`. (Renders only in a live 2-peer versus — wants the owner 2-device confirm.)
+- **Spectate: WATCH a live bracket you're not in.** `joinTour` blocked live brackets, so a LIVE tournament card showed a
+  dead "LIVE" button. Added `watchTour(tid)` — joins the tour channel as a pure watcher and calls the existing
+  `setSpectating(true)` (the same tested live panel + WATCH NEXT switcher eliminated players use); the live card's button
+  is now an enabled **WATCH**. Non-member → never settles a phantom result. (Wants the owner 2-device confirm.)
+
 ### build100q (part 3) — wager buy-in fix: host set 1 but entrants were charged 50  ✅ verified (live, solo-bracket)
 Playtest: host set the tournament BUY-IN to 1 ◆ but entrants were still asked to place **50**, and a "Free" bracket
 could still show a "PLACE YOUR BET — 50" button. ROOT CAUSE: a display/state divergence — `paintStakeRow` did

@@ -818,6 +818,15 @@
     var delta = _vsEl('div', 'vs-delta'); delta.textContent = 'EVEN'; seam.appendChild(delta);
     var lead = _vsEl('div', 'vs-lead'); lead.appendChild(_vsEl('i')); lead.appendChild(_vsEl('b')); seam.appendChild(lead);
     game.appendChild(seam);
+    // build100q (#tug-of-war): a horizontal TOP bar showing who's winning at a glance — the "rope knot" slides toward
+    // the leader's side; each half fills with that player's color. Driven by the same eased score-lead as the seam puck.
+    var tug = _vsEl('div', 'vs-tug');
+    var tOpp = _vsEl('div', 'vs-tug-opp'); tug.appendChild(tOpp);
+    var tYou = _vsEl('div', 'vs-tug-you'); tug.appendChild(tYou);
+    var tKnot = _vsEl('div', 'vs-tug-knot'); tug.appendChild(tKnot);
+    var tlO = _vsEl('span', null, 'vs-tug-lab opp'); tlO.textContent = (oppMeta && oppMeta.name ? oppMeta.name.slice(0, 12) : 'OPPONENT'); tug.appendChild(tlO);
+    var tlY = _vsEl('span', null, 'vs-tug-lab you'); tlY.textContent = 'YOU'; tug.appendChild(tlY);
+    game.appendChild(tug);
     // your score plate + OD bar (into .game-center)
     var center = game.querySelector('.game-center');
     if (center) {
@@ -838,7 +847,7 @@
   function unmountVsHud() {
     try { document.documentElement.classList.remove('rr-vs'); } catch (e) {}   // restore the level's reactive cards / mechanic for single-deck play
     try { if (window.RhythmGame.setVsMode) window.RhythmGame.setVsMode(false); } catch (e) {}   // restore full-deck cover-fit
-    ['vs-opp-deck', 'vs-seam', 'vs-you-score', 'vs-od-you', 'vs-intro-vs'].forEach(function (id) {
+    ['vs-opp-deck', 'vs-seam', 'vs-tug', 'vs-you-score', 'vs-od-you', 'vs-intro-vs'].forEach(function (id) {
       var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e);
     });
     var mg = $('mult-gauge'); if (mg) mg.classList.remove('boosted');
@@ -907,6 +916,13 @@
         _lastDeltaSign = sign; delta.style.opacity = frozen ? '0.65' : '1';
       }
     }
+    // build100q (#tug-of-war): horizontal top bar — knot at P% from the OPP (left) side. You ahead (_leadEase>0) → P
+    // shrinks → your gold (right) half grows; opp ahead → P grows → their crimson (left) half grows. 50% = even.
+    var tugP = Math.max(4, Math.min(96, 50 - _leadEase * 44));
+    var tOpp = $('vs-tug-opp'), tYou = $('vs-tug-you'), tKnot = $('vs-tug-knot');
+    if (tOpp) tOpp.style.width = tugP + '%';
+    if (tYou) tYou.style.width = (100 - tugP) + '%';
+    if (tKnot) { tKnot.style.left = tugP + '%'; tKnot.classList.toggle('you-lead', _leadEase > 0.04); tKnot.classList.toggle('opp-lead', _leadEase < -0.04); }
   }
 
   // P4: paint the opponent ghost highway — dim chrome strings (re-based from getLaneFrame's page coords into
@@ -1728,7 +1744,13 @@
         '<span class="mpx-rc-spark tour">' + SVG_TROPHY + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Bracket') + '</span>' +
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag ' + (live ? 'live">LIVE' : 'tour">BRACKET') + '</span> host ' + esc(r.hostName || 'host') + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 10) + '</span></span></span>' +
-        '<span class="mpx-rc-act"><button class="mpx-rc-join" data-jt="' + esc(tid) + '"' + (full || live ? ' disabled' : '') + '>' + (live ? 'LIVE' : full ? 'FULL' : 'JOIN') + '</button></span></div>';
+        '<span class="mpx-rc-act">' +
+          // build100q (#spectate): a LIVE bracket is no longer a dead "LIVE" button — it's a WATCH door into the live
+          // spectator view. Open/joinable brackets still JOIN; a full-but-not-live bracket is FULL.
+          (live
+            ? '<button class="mpx-rc-spec" data-wt="' + esc(tid) + '">WATCH</button>'
+            : '<button class="mpx-rc-join" data-jt="' + esc(tid) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button>') +
+        '</span></div>';
     }).join('');
     host.innerHTML = tourCards + ids.map(function (rid) {
       var r = roomsDir[rid], full = (r.count || 1) >= (r.max || 2);
@@ -1748,6 +1770,7 @@
     [].forEach.call(host.querySelectorAll('[data-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-join'), false); }); });
     [].forEach.call(host.querySelectorAll('[data-spec]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-spec'), true); }); });
     [].forEach.call(host.querySelectorAll('[data-jt]'), function (b) { b.addEventListener('click', function () { joinTour(b.getAttribute('data-jt')); }); });   // build9
+    [].forEach.call(host.querySelectorAll('[data-wt]'), function (b) { b.addEventListener('click', function () { watchTour(b.getAttribute('data-wt')); }); });   // build100q: WATCH a live bracket
   }
 
   // ===================== BUILD8: SPECTATE =====================
@@ -1805,6 +1828,20 @@
     tour = nullTour(); tour.id = tid; tour.name = meta.name; tour.isHost = false; tour.hostId = meta.hostId;
     joinTourChannel(tid);
     reannounce(); enterTourRoom();
+  }
+  // build100q (#spectate): WATCH a LIVE bracket you're not in — joinTour blocks live brackets, so this is the spectator
+  // door. Joins the tour channel as a pure watcher; the host's snapshot populates tour.alive, t-tick/t-state stream the
+  // focused player's real deck, and setSpectating mounts the same tested live panel + WATCH NEXT switcher eliminated
+  // players already use. Non-member → never settles a phantom result (spectating gates recordMpResult/mpSettle).
+  function watchTour(tid) {
+    if (!supa || !lobbyCh) return;
+    var meta = toursDir[tid]; if (!meta) { banner('mpx-rooms-msg', 'That bracket just closed.'); return; }
+    tour = nullTour(); tour.id = tid; tour.name = meta.name; tour.isHost = false; tour.hostId = meta.hostId; tour.meIn = false;
+    spectating = true;
+    joinTourChannel(tid);
+    reannounce(); enterTourRoom();
+    try { setSpectating(true); } catch (e) {}
+    banner('mpx-tour-msg', '👁 Spectating ' + (meta.name || 'the bracket') + ' — use WATCH NEXT to switch players.');
   }
   function advertiseTour() {
     if (!lobbyCh || !tour.id || !tour.isHost) return;
