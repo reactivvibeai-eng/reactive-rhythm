@@ -3093,9 +3093,14 @@
   // held (or a trigger stuck pressed at rest) is recorded as "was" and cannot register a phantom rising edge on frame 1.
   function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = gp.buttons[b].pressed; } } catch (e) {} }
   let _lastWizBindMs = 0;
+  function _anyPadBtnDown() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) if (gp.buttons[b].pressed) return true; } } catch (e) {} return false; }
   function pollGamepad() {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
+    // build100q FIX: RELEASE GATE — after a wizard fret binds, the next fret can't capture until EVERY button is
+    // released. This kills the "press blue → it auto-jumps to the next step" bug: a fret still held (or a noisy
+    // GH/clone button/strum reporting pressed) used to fire a fresh edge that auto-bound the next lane.
+    if (_wizActive && _wizNeedRelease && !_anyPadBtnDown()) _wizNeedRelease = false;
     for (const gp of pads) {
       if (!gp) continue;
       for (let b = 0; b < gp.buttons.length; b++) {
@@ -3103,6 +3108,7 @@
         _padPrev[key] = pressed;
         if (pressed && !was) {
           if (padRebindLane != null) {
+            if (_wizActive && _wizNeedRelease) continue;   // build100q: wait for a clean release before capturing the next fret
             // build100q: CAPTURE-ONLY guard — reject a partial-analog press (resting Xbox trigger) from auto-binding.
             if (_isPartialAnalog(gp.buttons[b])) continue;
             // build100q: debounce binds so chatter / a bouncing analog button can't chew through multiple wizard lanes
@@ -5968,7 +5974,7 @@
   // Walks the user lane-by-lane: highlight a lane, prompt big + clear, capture the NEXT gamepad button
   // press (reusing startProbePoll -> bindLaneButton via the onPadBound hook), confirm, advance. Works for
   // ANY controller including GH guitars (whose fret layout we can't assume). Cancel restores the prior map.
-  let _wizActive = false, _wizLane = 0, _wizPrevMap = null;
+  let _wizActive = false, _wizLane = 0, _wizPrevMap = null, _wizNeedRelease = false;
   function wizEl(id) { return $(id); }
   function _wizSetVisible(on) {
     const ov = wizEl('pad-wizard'); if (ov) ov.style.display = on ? 'flex' : 'none';
@@ -6013,9 +6019,11 @@
     _wizPrevMap = JSON.parse(JSON.stringify(padMap));   // for Cancel restore
     padMap = {};                                         // fresh map — every lane gets reassigned in order
     _wizLane = 0;
+    _wizNeedRelease = false;
     onPadBound = (lane) => {
       if (!_wizActive) return;
       if (lane === _wizLane) {
+        _wizNeedRelease = true;   // build100q FIX: require a CLEAN RELEASE of all buttons before the next fret can capture
         _wizLane++;
         if (_wizLane >= LANE_COUNT) {
           if (laneProfile === 'gh') { savePadMap(); startCalibration(); }   // guitar: continue into strum/whammy/tilt calibration
@@ -6030,7 +6038,7 @@
     renderDeviceStatus();
   }
   function _wizCleanup() {
-    _wizActive = false; onPadBound = null; padRebindLane = null; _wizStdOdActive = false;
+    _wizActive = false; onPadBound = null; padRebindLane = null; _wizStdOdActive = false; _wizNeedRelease = false;
     _stopCalRaf(); _calStep = -1;   // stop any in-flight strum/whammy/tilt sampler
     _wizSetVisible(false);
     try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
