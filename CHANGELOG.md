@@ -15,6 +15,19 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99S — Store purchase view polish (conversion)  ✅ verified
+Owner: the store click-to-detail UI must look premium and make the purchase info obvious to close a sale.
+- **Detail view (`openStoreHero`/`renderHero`)**: the product asset is now the star on a lit warm-dark stage (radial
+  key-light + vignette + rim, no flat box) with a graceful **branded-initial fallback** on a missing image. A framed
+  **price card** ("PRICE" label · big Sparks figure + glowing glyph · gold ≈ $X USD anchor · optional "or N BONUS")
+  and a full-width, unmissable crimson **BUY** (owned → EQUIP/EQUIPPED; level → "Unlocks in Levels"; guest → "Sign in
+  to buy") + a context reassurance line. Eye lands on price → BUY.
+- **Grid cards** tightened: richer surface, hover lift + crimson glow + image zoom, art vignette for legibility,
+  2-line description clamp, hairline divider above the price/buy footer, gold USD anchor.
+- Off-brand cleanup: dropped the `⚡` emoji from the armed-confirm label; gold reserved for price-anchor/owned/rarity.
+- All buy logic/ids/handlers preserved (buy/buyBonus/equip/isOwned/USD formula/armed-confirm). Verified live: Sasoka
+  hero opens (name + "Price 80 ≈ $4.00 or 2,400 Bonus" + BUY), 0 console errors. `?v` → 357.
+
 ### build99R — MP overhaul + co-op keyboard-P2 + controller readiness  ✅ verified
 Round-4 owner feedback.
 - **Multiplayer page rebuilt on-brand** (the "looks horrible" fix): off-brand WHITE "Browse rooms"/"Host a tournament"

@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=356" />
+<link rel="stylesheet" href="jukebox.css?v=357" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1100,19 +1100,20 @@
   .store-banner b { color: #e0a93f; font-weight: 700; }
   .store-banner a { color: var(--crimson); font-weight: 700; text-decoration: none; }
   .store-grid { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; min-height: 60px; }
-  .store-item { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: rgba(255,255,255,0.02); text-align: left; transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
-  .store-item:hover { transform: translateY(-3px); border-color: var(--crimson); box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(255,31,46,0.22); }
-  .store-art { position: relative; aspect-ratio: 16/10; width: 100%; background: linear-gradient(150deg, var(--si-a, #2a0a10), var(--si-b, #120407)); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .store-art img { width: 100%; height: 100%; object-fit: cover; }
+  .store-item { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)); text-align: left; transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease; }
+  .store-item:hover { transform: translateY(-4px); border-color: var(--crimson); box-shadow: 0 14px 34px rgba(0,0,0,0.55), 0 0 22px rgba(255,31,46,0.24); }
+  .store-art { position: relative; aspect-ratio: 16/10; width: 100%; background: radial-gradient(120% 100% at 50% 0%, rgba(60,18,22,0.55), transparent 60%), linear-gradient(150deg, var(--si-a, #2a0a10), var(--si-b, #120407)); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .store-art img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s cubic-bezier(.2,1,.3,1); }
+  .store-item:hover .store-art img { transform: scale(1.045); }
   .store-art .si-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 40px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 14px rgba(0,0,0,0.55); }
-  .store-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 72% 16%, rgba(255,122,74,0.20), transparent 60%); pointer-events: none; }
+  .store-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 72% 14%, rgba(255,122,74,0.20), transparent 58%), linear-gradient(180deg, transparent 58%, rgba(8,4,4,0.55)); pointer-events: none; }
   .store-type { position: absolute; top: 8px; left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--chrome); background: rgba(8,5,5,0.6); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; }
   .store-item.owned .store-art { filter: saturate(0.85); }
   .store-item.owned .store-art::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px rgba(224,169,63,0.5); pointer-events: none; z-index: 1; }
-  .store-body { display: flex; flex-direction: column; gap: 4px; padding: 12px 13px 13px; flex: 1; }
-  .store-item-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14px; color: var(--ink); line-height: 1.2; }
-  .store-item-d { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); line-height: 1.5; min-height: 15px; }
-  .store-foot { display: flex; flex-direction: column; align-items: stretch; gap: 7px; margin-top: auto; padding-top: 10px; }
+  .store-body { display: flex; flex-direction: column; gap: 3px; padding: 12px 13px 13px; flex: 1; }
+  .store-item-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14.5px; letter-spacing: 0.01em; color: var(--ink); line-height: 1.2; }
+  .store-item-d { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); line-height: 1.5; min-height: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .store-foot { display: flex; flex-direction: column; align-items: stretch; gap: 7px; margin-top: auto; padding-top: 11px; border-top: 1px solid rgba(255,255,255,0.05); }
   .store-payline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   /* Bonus-Sparks price + buy — gold accent (earned currency); distinct from the crimson real-Sparks buy */
   .store-price.bonus-px { color: var(--gold, #e0a93f); }
@@ -1123,8 +1124,9 @@
   .store-buy.bonus.bonus-secondary { background: none; border: none; box-shadow: none; padding: 4px 6px;
     font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--gold, #e0a93f); text-decoration: underline; text-underline-offset: 3px; opacity: 0.85; }
   .store-buy.bonus.bonus-secondary:hover, .store-buy.bonus.bonus-secondary:focus-visible { opacity: 1; box-shadow: none; }
-  .store-price { display: inline-flex; align-items: center; gap: 5px; font-family: 'Oxanium', monospace; font-weight: 800; font-size: 15px; color: var(--chrome); font-variant-numeric: tabular-nums; }
-  .store-price .spk-glyph { width: 13px; height: 13px; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 3px rgba(255,122,74,0.6)); }
+  .store-price { display: inline-flex; align-items: center; gap: 5px; font-family: 'Oxanium', monospace; font-weight: 800; font-size: 16px; color: var(--chrome); font-variant-numeric: tabular-nums; }
+  .store-price .spk-glyph { width: 14px; height: 14px; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 3px rgba(255,122,74,0.6)); }
+  .store-usd { font-family: 'Oxanium', monospace; font-size: 11px; font-weight: 700; color: var(--gold, #e0a93f); letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
   /* BETA: Coming-soon padlock on unfinished store assets (mirrors the Levels lock styling) */
   .store-item.soon { opacity: 0.9; }
   .store-item.soon:hover { transform: none; border-color: var(--line); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
@@ -1157,13 +1159,28 @@
     backdrop-filter:blur(14px) saturate(1.05); -webkit-backdrop-filter:blur(14px) saturate(1.05); }
   #store-hero.show{ display:flex; animation:shScrim .28s ease both; }
   .sh-deck{ display:flex; gap:clamp(20px,3vw,48px); align-items:center; width:100%; max-width:min(1180px,94vw); max-height:92vh; }
-  .sh-stage{ position:relative; flex:0 0 56%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-height:60vh; }
-  .sh-spot{ position:absolute; left:50%; top:-4%; transform:translateX(-50%); width:78%; height:108%; pointer-events:none; z-index:0; filter:blur(6px);
+  .sh-stage{ position:relative; flex:0 0 56%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; min-height:60vh;
+    border-radius:22px; overflow:hidden;
+    /* premium warm-dark product stage: soft top key-light bloom over a vignetted ember floor (R>=G>=B, no flat box) */
     background:
-      radial-gradient(60% 80% at 50% 4%, rgba(255,224,196,.16), transparent 62%),
-      conic-gradient(from 180deg at 50% 0%, transparent 156deg, rgba(255,201,150,.10) 174deg, rgba(255,201,150,.10) 186deg, transparent 204deg); }
+      radial-gradient(120% 78% at 50% -8%, rgba(255,224,196,.10), transparent 52%),
+      radial-gradient(90% 70% at 50% 116%, rgba(255,42,56,.12), transparent 60%),
+      radial-gradient(140% 120% at 50% 50%, rgba(28,12,12,.0), rgba(6,3,3,.62) 96%),
+      linear-gradient(180deg, rgba(22,11,12,.55), rgba(8,4,4,.78));
+    box-shadow:inset 0 1px 0 rgba(255,176,80,.06), inset 0 0 0 1px rgba(160,40,46,.18); }
+  .sh-spot{ position:absolute; left:50%; top:-6%; transform:translateX(-50%); width:82%; height:112%; pointer-events:none; z-index:0; filter:blur(7px);
+    background:
+      radial-gradient(58% 78% at 50% 2%, rgba(255,228,200,.22), transparent 60%),
+      conic-gradient(from 180deg at 50% 0%, transparent 152deg, rgba(255,206,156,.14) 172deg, rgba(255,206,156,.14) 188deg, transparent 208deg); }
   .sh-guitar{ position:relative; z-index:2; width:auto; height:auto; max-height:62vh; max-width:92%; object-fit:contain;
-    filter:drop-shadow(0 30px 50px rgba(0,0,0,.66)) drop-shadow(0 0 26px rgba(255,42,56,.16)); }
+    filter:drop-shadow(0 34px 56px rgba(0,0,0,.72)) drop-shadow(0 0 30px rgba(255,42,56,.20)); }
+  /* graceful branded fallback when the product art is missing / 404s — a big crimson-gold initial, never a blank stage */
+  .sh-fallback{ position:relative; z-index:2; display:none; width:min(46%,240px); aspect-ratio:1; border-radius:24px; align-items:center; justify-content:center;
+    font-family:'Unbounded',sans-serif; font-weight:800; font-size:clamp(64px,9vw,108px); color:var(--ink);
+    background:linear-gradient(150deg, rgba(255,31,46,.22), rgba(138,6,15,.16)); border:1px solid var(--r-ring, rgba(160,40,46,.4));
+    text-shadow:0 4px 26px rgba(0,0,0,.6); box-shadow:0 30px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,176,80,.14); }
+  #store-hero.show-fallback .sh-fallback{ display:flex; }
+  #store-hero.show-fallback .sh-guitar, #store-hero.show-fallback .sh-reflect{ display:none !important; }
   .sh-reflect{ position:absolute; z-index:1; bottom:2%; left:50%; transform:translateX(-50%) scaleY(-1); width:auto; max-height:24vh; object-fit:contain; opacity:.20; pointer-events:none; filter:blur(.5px);
     -webkit-mask-image:linear-gradient(to bottom, rgba(0,0,0,.55), transparent 70%); mask-image:linear-gradient(to bottom, rgba(0,0,0,.55), transparent 70%); }
   .sh-plinth{ position:absolute; z-index:0; bottom:0; left:50%; transform:translateX(-50%); width:58%; height:64px; border-radius:50%; filter:blur(2px);
@@ -1174,29 +1191,41 @@
   .sh-plinth::after{ content:''; position:absolute; left:50%; top:46%; transform:translateX(-50%); width:62%; height:2px; opacity:.5; background:linear-gradient(90deg, transparent, var(--gold), transparent); }
   #store-hero.is-cover .sh-guitar{ max-height:60vh; max-width:84%; object-fit:cover; border-radius:14px; box-shadow:0 26px 64px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12); }
   #store-hero.is-cover .sh-reflect{ object-fit:cover; border-radius:14px; }
-  .sh-info{ flex:1 1 44%; display:flex; flex-direction:column; gap:18px; padding-left:clamp(16px,3vw,40px); max-width:520px; border-left:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(100deg, rgba(255,31,46,.05), transparent 60%); }
+  .sh-info{ flex:1 1 44%; display:flex; flex-direction:column; gap:15px; padding-left:clamp(16px,3vw,40px); max-width:520px; border-left:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(100deg, rgba(255,31,46,.05), transparent 60%); }
   .sh-eyebrow{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); display:flex; align-items:center; gap:8px; }
   .sh-eyebrow-sep{ opacity:.5; }
   .sh-info .r-gem{ width:12px; height:12px; color:var(--r-gem,var(--gold)); }
   .sh-name{ margin:0; font-family:'Unbounded',sans-serif; font-weight:800; font-size:clamp(30px,4.2vw,46px); line-height:1.04; color:var(--ink); letter-spacing:-.01em; position:relative; padding-bottom:12px; }
   .sh-name::after{ content:''; position:absolute; left:0; bottom:0; width:46px; height:2px; background:linear-gradient(90deg, var(--crimson), transparent); box-shadow:0 0 10px rgba(255,31,46,.6); }
   .sh-rule{ height:1px; border:0; width:100%; margin:0; opacity:.6; background:linear-gradient(90deg, var(--gold), rgba(224,169,63,0)); }
-  .sh-lore{ margin:0; font-family:'Chakra Petch',monospace; font-weight:500; font-size:15px; line-height:1.65; color:var(--ink-dim); max-width:46ch; }
+  .sh-lore{ margin:0; font-family:'Chakra Petch',monospace; font-weight:500; font-size:15px; line-height:1.6; color:var(--ink-dim); max-width:46ch; }
   .sh-traits{ display:flex; flex-wrap:wrap; gap:8px; }
   .sh-trait{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.04em; color:var(--chrome); padding:5px 10px; border:1px solid var(--line, rgba(160,40,46,.32)); border-radius:999px; background:rgba(255,255,255,.02); }
-  .sh-pricebox{ display:flex; align-items:baseline; flex-wrap:wrap; gap:14px 22px; padding:14px 18px; border-radius:14px; border:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(180deg, rgba(255,255,255,.025), rgba(0,0,0,.18)); }
-  .sh-price{ display:inline-flex; align-items:center; gap:7px; font-family:'Oxanium',monospace; font-weight:800; font-size:30px; font-variant-numeric:tabular-nums; color:var(--chrome); line-height:1; }
-  .sh-price .spk-glyph{ width:22px; height:22px; color:var(--ember,#ff7a4a); }
-  .sh-price.bonus{ color:var(--gold); }
-  .sh-price.bonus .bonus-px-glyph{ width:22px; height:22px; color:var(--gold); }
+  /* PURCHASE CARD — the eye's anchor: price (with $ anchor) up top, BUY just below. Premium framed panel. */
+  .sh-pricebox{ display:flex; flex-direction:column; gap:6px; padding:16px 18px 14px; border-radius:16px; border:1px solid rgba(224,169,63,.30);
+    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.22)); box-shadow:inset 0 1px 0 rgba(255,176,80,.08), 0 10px 30px rgba(0,0,0,.32); }
+  .sh-price-label{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); }
+  .sh-price-row{ display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 14px; }
+  .sh-price{ display:inline-flex; align-items:center; gap:8px; font-family:'Oxanium',monospace; font-weight:800; font-size:38px; font-variant-numeric:tabular-nums; color:var(--chrome); line-height:1; text-shadow:0 0 22px rgba(255,122,74,.18); }
+  .sh-price .spk-glyph{ width:26px; height:26px; color:var(--ember,#ff7a4a); filter:drop-shadow(0 0 6px rgba(255,122,74,.55)); }
+  .sh-price.bonus{ color:var(--gold); font-size:30px; }
+  .sh-price.bonus .bonus-px-glyph{ width:22px; height:22px; color:var(--gold); filter:drop-shadow(0 0 5px rgba(224,169,63,.5)); }
+  .sh-usd{ font-family:'Oxanium',monospace; font-weight:700; font-size:17px; letter-spacing:.01em; color:var(--gold); font-variant-numeric:tabular-nums; }
   .sh-price-or{ font-family:'Chakra Petch',monospace; font-size:11px; letter-spacing:.18em; color:var(--ink-dim); text-transform:uppercase; align-self:center; }
-  .sh-owned-line{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:7px; }
-  .sh-owned-line .ic{ width:15px; height:15px; }
-  .sh-actions{ display:flex; gap:12px; align-items:stretch; }
-  .sh-actions .store-payline{ flex:1; display:flex; gap:12px; }
-  .sh-actions .store-buy{ flex:1; font-size:15px; letter-spacing:.12em; padding:18px 22px; border-radius:14px; }
+  .sh-owned-line{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:8px; }
+  .sh-owned-line .ic{ width:16px; height:16px; }
+  .sh-actions{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
+  .sh-actions .store-payline{ display:flex; gap:12px; align-items:stretch; }
+  .sh-actions .store-payline + .store-payline{ margin-top:0; }
+  /* primary BUY — unmissable crimson, full-width, the loudest thing on the panel */
+  .sh-actions .store-buy{ flex:1; font-size:16px; font-weight:800; letter-spacing:.14em; padding:19px 22px; border-radius:14px;
+    box-shadow:0 8px 24px rgba(255,31,46,.42), inset 0 1px 0 rgba(255,255,255,.22); }
+  .sh-actions .store-buy:hover, .sh-actions .store-buy:focus-visible{ box-shadow:0 10px 30px rgba(255,31,46,.6), inset 0 1px 0 rgba(255,255,255,.3); }
+  /* secondary "Use Bonus" sits quieter beneath the primary so the crimson BUY stays the one obvious CTA */
+  .sh-actions .store-payline.sh-bonus-row .store-buy{ box-shadow:none; font-size:13px; padding:13px 18px; }
   .sh-actions .store-price{ display:none; }
-  .sh-reassure{ font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; color:var(--ink-dim); }
+  .sh-reassure{ font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.06em; color:var(--ink-dim); display:flex; align-items:center; gap:7px; }
+  .sh-reassure .ic{ width:13px; height:13px; color:var(--gold); }
   .sh-close{ position:absolute; top:22px; right:24px; width:42px; height:42px; border-radius:50%; border:1px solid var(--line, rgba(160,40,46,.32)); background:rgba(10,7,6,.6); color:var(--chrome); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:3; transition:border-color .12s, color .12s, transform .12s; }
   .sh-close .ic{ width:18px; height:18px; }
   .sh-close:hover{ border-color:var(--crimson); color:var(--ink); transform:rotate(90deg); }
@@ -5289,6 +5318,7 @@
         <div class="sh-stage">
           <div class="sh-spot" aria-hidden="true"></div>
           <img class="sh-guitar" alt="">
+          <div class="sh-fallback" aria-hidden="true"></div>
           <img class="sh-reflect" alt="" aria-hidden="true">
           <div class="sh-plinth" aria-hidden="true"></div>
         </div>
@@ -5894,7 +5924,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=356"></script>
+<script src="telemetry.js?v=357"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6032,14 +6062,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=356"></script>
-<script src="game.js?v=356"></script>
-<script src="procbg.js?v=356"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=356"></script>
-<script src="catalog.js?v=356"></script>
-<script src="multiplayer.js?v=356"></script>
-<script src="share.js?v=356"></script>
-<script src="couch.js?v=356"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=357"></script>
+<script src="game.js?v=357"></script>
+<script src="procbg.js?v=357"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=357"></script>
+<script src="catalog.js?v=357"></script>
+<script src="multiplayer.js?v=357"></script>
+<script src="share.js?v=357"></script>
+<script src="couch.js?v=357"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8604,7 +8634,7 @@
     // build99k: anchor the cashable-Sparks price in real dollars (1 Spark = $0.05) so "50" reads as "$2.50", not an
     // abstract number — the swarm's top trust/conversion win. And label the Bonus figure so the two currencies don't blur.
     var usd = (Number(it.price_sparks) || 0) * 0.05;
-    var usdTxt = usd > 0 ? ' <span class="store-usd" style="font-family:\'Chakra Petch\',monospace;font-size:10px;font-weight:600;color:var(--ink-dim);">($' + usd.toFixed(2) + ')</span>' : '';
+    var usdTxt = usd > 0 ? ' <span class="store-usd">&#8776;&nbsp;$' + usd.toFixed(2) + '</span>' : '';
     var line = '<div class="store-payline"><span class="store-price">' + SPARK_SVG + fmt(it.price_sparks) + usdTxt + '</span>' + buyBtnHtml(it) + '</div>';
     var bp = bonusPriceFor(it);
     if (bp > 0) {
@@ -8696,9 +8726,16 @@
     hero.setAttribute('data-rarity', r);
     hero.classList.toggle('is-cover', !isSkin(it));
     var src = heroArt(it);
-    var g = $h('.sh-guitar'), rf = $h('.sh-reflect');
-    if (src) { g.onerror = function () { g.style.display = 'none'; rf.style.display = 'none'; }; g.src = src; g.style.display = ''; rf.src = src; rf.style.display = ''; }   // build86 (QA B84-1): hide on 404 instead of a broken-image glyph dead-center
-    else { g.onerror = null; g.removeAttribute('src'); g.style.display = 'none'; rf.style.display = 'none'; }
+    var g = $h('.sh-guitar'), rf = $h('.sh-reflect'), fb = $h('.sh-fallback');
+    // graceful branded fallback: a big crimson-gold initial on the stage instead of a blank void when art is missing/404
+    if (fb) fb.textContent = initial(it.title || it.item_id);
+    hero.classList.remove('show-fallback');
+    if (src) {
+      g.onerror = function () { hero.classList.add('show-fallback'); };   // build86 (QA B84-1) → polish: 404 → branded initial, never a broken-image glyph or blank stage
+      g.src = src; g.style.display = ''; rf.src = src; rf.style.display = '';
+    } else {
+      g.onerror = null; g.removeAttribute('src'); hero.classList.add('show-fallback');
+    }
     $h('.sh-rarity').textContent = rarityLabel(r);
     $h('.sh-type').textContent = typeLabel(it.item_type);
     $h('.sh-name').textContent = it.title || it.item_id || 'Item';
@@ -8711,23 +8748,50 @@
     try { var _sg = $('store-grid'); if (_sg) _sg.inert = true; } catch (e) {}   // build89: trap focus — keep the grid behind the aria-modal hero out of the tab order (no buying from behind the modal)
     var cb = $h('.sh-close'); if (cb) try { cb.focus(); } catch (e) {}
   }
+  // CHECK icon for the reassurance/owned lines (inline SVG, no emoji)
+  var SH_CHECK = '<svg class="ic"><use href="#ic-check"/></svg>';
   function renderHero(it) {
     if (!it || !_heroItem) return;
     var soon = !storeFinished(it);
-    var pb = $h('.sh-pricebox'), ac = $h('.sh-actions'), rea = $h('.sh-reassure');
-    if (soon) { pb.innerHTML = '<span class="sh-price-or">COMING SOON</span>'; ac.innerHTML = ''; rea.textContent = ''; return; }
+    var pb = $h('.sh-pricebox'), ac = $h('.sh-actions'), rea = $h('.sh-reassure'), lore = $h('.sh-lore');
+    // value-prop one-liner: what you actually get (skins → equip & play; levels → unlock in Levels)
+    if (lore) lore.textContent = blurb(it);
+    if (soon) {
+      pb.innerHTML = '<span class="sh-price-or">COMING SOON</span>';
+      ac.innerHTML = ''; rea.innerHTML = '';
+      return;
+    }
     if (isOwned(it)) {
-      pb.innerHTML = '<span class="sh-owned-line"><svg class="ic"><use href="#ic-check"/></svg>' + (isSkin(it) ? (equippedSkinId() === String(it.item_id) ? 'EQUIPPED' : 'OWNED') : 'OWNED') + '</span>';
-      ac.innerHTML = buyBtnHtml(it); rea.textContent = '';
+      var ownedTxt = isSkin(it) ? (equippedSkinId() === String(it.item_id) ? 'EQUIPPED' : 'IN YOUR COLLECTION') : 'OWNED';
+      pb.innerHTML = '<span class="sh-owned-line">' + SH_CHECK + ownedTxt + '</span>';
+      ac.innerHTML = buyBtnHtml(it);
+      rea.innerHTML = isSkin(it) ? (SH_CHECK + 'Equip to play it on the neck') : (SH_CHECK + 'Unlocked — play it from the Levels menu');
     } else {
-      var line = '<span class="sh-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>';
+      // PRICE — the focal point: big Sparks figure + the real-dollar anchor ($0.05/Spark) right beside it.
+      var usd = (Number(it.price_sparks) || 0) * 0.05;
+      var usdTxt = usd > 0 ? '<span class="sh-usd">&#8776;&nbsp;$' + usd.toFixed(2) + '</span>' : '';
+      var priceRow = '<div class="sh-price-row"><span class="sh-price">' + SPARK_SVG + fmt(it.price_sparks) + '</span>' + usdTxt;
       var bp = bonusPriceFor(it);
-      if (bp > 0) line += '<span class="sh-price-or">OR</span><span class="sh-price bonus">' + BONUS_PX_SVG + fmt(bp) + '</span>';
-      pb.innerHTML = line;
-      ac.innerHTML = footHtml(it, false);
-      rea.textContent = signedIn ? '' : 'SIGN IN ON REACTIVVIBE TO SPEND SPARKS';
+      if (bp > 0) priceRow += '<span class="sh-price-or">or</span><span class="sh-price bonus">' + BONUS_PX_SVG + fmt(bp) + ' <span style="font-size:11px;letter-spacing:.1em;opacity:.85;">BONUS</span></span>';
+      priceRow += '</div>';
+      pb.innerHTML = '<span class="sh-price-label">Price</span>' + priceRow;
+      // ACTIONS — primary crimson BUY (Sparks), optional quiet "Use Bonus" beneath. Reuse footHtml's button wiring.
+      ac.innerHTML = heroActionsHtml(it);
+      // reassurance / what-happens-next line under the buy
+      if (!signedIn) rea.innerHTML = SH_CHECK + 'Sign in on ReactivVibe to spend Sparks';
+      else if (!isSkin(it)) rea.innerHTML = SH_CHECK + 'Unlocks instantly in the Levels menu';
+      else rea.innerHTML = SH_CHECK + 'Yours forever — equip it any time';
     }
     wireBuys($('store-hero'));
+  }
+  // hero-only action markup: primary Sparks BUY on its own row, a quieter "Use Bonus" row beneath (no duplicate price text — the pricebox owns the numbers)
+  function heroActionsHtml(it) {
+    var out = '<div class="store-payline">' + buyBtnHtml(it) + '</div>';
+    var bp = bonusPriceFor(it);
+    if (bp > 0 && signedIn) {
+      out += '<div class="store-payline sh-bonus-row"><button class="store-buy bonus" data-act="buybonus" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '" data-bonus="' + bp + '">Use ' + fmt(bp) + ' Bonus Sparks</button></div>';
+    }
+    return out;
   }
   function closeStoreHero() {
     var hero = $('store-hero');
@@ -8777,7 +8841,7 @@
       _disarmBuy();
       var _it = itemById(btn.getAttribute('data-id'));
       _armedBuy = btn; if (btn._origLabel == null) btn._origLabel = btn.textContent;
-      btn.classList.add('armed'); btn.textContent = 'Confirm · ' + (_it ? fmt(_it.price_sparks) : '') + '⚡';
+      btn.classList.add('armed'); btn.textContent = 'Confirm · ' + (_it ? fmt(_it.price_sparks) + ' Sparks' : 'Buy');   // polish: drop the ⚡ emoji (off-brand) → clean wording
       _armTimer = setTimeout(_disarmBuy, 4000);
       return;
     }
