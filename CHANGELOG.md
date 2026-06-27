@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 9) — controller: multiple buttons per string + Overdrive in the manual map  ✅ UI verified (bind needs hardware)
+Playtester asks: "allow multiple buttons to the same string" + "no mapping of the overdrive on controller."
+- **Multiple buttons → one string:** the runtime already supported it (padMap is button→lane; `pollGamepad` maps each
+  pressed button independently) — only `bindLaneButton` enforced one-button-per-lane. Added a `keepExisting` (ADD) mode:
+  each string cap shows ALL its mapped buttons, and a **+** next to it adds another button to that string (the cap-click
+  still REPLACES). A button still maps to exactly one string.
+- **Overdrive on the controller:** added a gold **OD** cap to the Advanced manual map (`#set-pad`) — click it, press a
+  button, done. It was previously only reachable via the wizard. gh profile sets `strumCfg.spBtn` (Star Power); standard
+  pads set `strumCfg.odBtn`. Verified live: 5 string caps + 5 "+" + the OD cap (showing B8) all render, no errors. The
+  actual press-to-bind needs a physical controller. (No Lovable involvement — controller mapping is 100% game-side.)
+
 ### build100q (part 8) — store-purchase backend reconciliation (item-registry mismatch)  ✅ game-side; Lovable owns the registry
 Lovable confirmed the 4 store routes are LIVE (`/store`, `/sparks/spend`, `/sparks/balance`, `/entitlements`, CORS `*`,
 same-origin JWT). But there's an **item-id mismatch**: the game sells ~19 skins + `high_seas`/`shorty_x`/`melody_boss`

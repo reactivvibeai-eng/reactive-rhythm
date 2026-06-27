@@ -3109,7 +3109,10 @@
             // from one physical press. A second edge within 280ms is ignored (the lane stays armed for the right press).
             if (_wizActive && performance.now() - _lastWizBindMs < 280) continue;
             _lastWizBindMs = performance.now();
-            const ln = padRebindLane; padRebindLane = null; bindLaneButton(ln, b); continue;
+            const ln = padRebindLane; padRebindLane = null;
+            if (_padRebindOD) { _padRebindOD = false; _bindOdButton(b); }          // build100q: armed the Overdrive cap → set the OD/Star-Power button
+            else { bindLaneButton(ln, b, _padRebindAdd); _padRebindAdd = false; }   // build100q: ADD mode keeps the string's existing button(s)
+            continue;
           }
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) {
@@ -5896,32 +5899,68 @@
   // ---- custom controller buttons (mirrors the keyboard remap: one button per lane) ----
   function padGlyph(b) { return b == null ? '—' : ('B' + b); }
   let onPadBound = null;   // wizard hook: fired (lane,button) after a successful bind so it can advance
-  function bindLaneButton(lane, b) {
-    for (const k in padMap) if (padMap[k] === lane) delete padMap[k];   // each lane keeps one button
+  // build100q: `keepExisting` (ADD mode) lets MULTIPLE buttons drive the SAME string — runtime already supports it
+  // (padMap is button→lane; pollGamepad maps each pressed button independently). Default (replace) evicts the lane's
+  // prior button; ADD keeps it. A button still maps to exactly ONE lane (pressing it always hits the same string).
+  let _padRebindAdd = false;   // the current rebind is ADD-mode (don't evict the lane's existing button)
+  let _padRebindOD = false;    // the current rebind targets the OVERDRIVE/Star-Power button, not a lane
+  function bindLaneButton(lane, b, keepExisting) {
+    if (!keepExisting) { for (const k in padMap) if (padMap[k] === lane) delete padMap[k]; }   // replace: one button per string
     delete padMap[b];                                                   // each button maps to one lane
     padMap[b] = lane;
     savePadMap(); renderPadcaps(); renderDeviceStatus();
     if (onPadBound) { try { onPadBound(lane, b); } catch (e) {} }
   }
+  // build100q: bind the OVERDRIVE button — gh profile uses strumCfg.spBtn (Star Power), standard pads use strumCfg.odBtn.
+  function _bindOdButton(b) {
+    if (laneProfile === 'gh') strumCfg.spBtn = b; else strumCfg.odBtn = b;
+    saveStrumCfg();
+    try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
+    try { window.RhythmGame.showToast && window.RhythmGame.showToast('Overdrive button set to ' + padGlyph(b), 'success'); } catch (e) {}
+  }
+  function _padGlyphsForLane(lane) {   // ALL buttons mapped to this string (multi-button aware)
+    const bs = []; for (const k in padMap) if (padMap[k] === lane) bs.push(+k);
+    if (!bs.length) return '—';
+    return bs.sort((a, b) => a - b).map(padGlyph).join(' ');
+  }
   function resetPad() { padMap = identityPad(LANE_COUNT); savePadMap(); renderPadcaps(); }
-  function startPadRebind(lane) {
-    padRebindLane = lane;
+  function startPadRebind(lane, opts) {
+    opts = opts || {};
+    _padRebindAdd = !!opts.add; _padRebindOD = !!opts.od;
+    padRebindLane = opts.od ? -1 : lane;   // -1 = armed, but the next press sets the OD button (not a string)
     const host = $('set-pad'); if (!host) return;
-    [...host.children].forEach(c => c.classList.toggle('listening', +c.dataset.lane === lane));
-    const cap = host.children[lane]; if (cap) cap.textContent = '…';
+    [...host.querySelectorAll('.keycap')].forEach(c => c.classList.remove('listening'));
+    const target = opts.od ? host.querySelector('.keycap[data-od]') : host.querySelector('.keycap[data-lane="' + lane + '"]:not(.padadd)');
+    if (target) { target.classList.add('listening'); target.textContent = '…'; }
     startProbePoll();   // poll so the next controller button press is captured
   }
-  function cancelPadRebind() { padRebindLane = null; renderPadcaps(); }
+  function cancelPadRebind() { padRebindLane = null; _padRebindAdd = false; _padRebindOD = false; renderPadcaps(); }
   function renderPadcaps() {
     const host = $('set-pad'); if (!host) return;
     host.innerHTML = '';
     for (let lane = 0; lane < LANE_COUNT; lane++) {
       const cap = document.createElement('button');
       cap.className = 'keycap'; cap.dataset.lane = lane;
-      cap.textContent = padGlyph(padForLane(lane));
-      cap.addEventListener('click', () => startPadRebind(lane));
+      cap.textContent = _padGlyphsForLane(lane);   // build100q: show ALL buttons mapped to this string (multi-button)
+      cap.title = laneFretLabel(lane) + ' — click, then press a button to SET it (replaces)';
+      cap.addEventListener('click', () => startPadRebind(lane, {}));
       host.appendChild(cap);
+      // build100q: "+" adds ANOTHER button to the same string (multiple buttons → one string)
+      const add = document.createElement('button');
+      add.className = 'keycap padadd'; add.dataset.lane = lane; add.textContent = '+';
+      add.title = 'Add another button to ' + laneFretLabel(lane);
+      add.addEventListener('click', () => startPadRebind(lane, { add: true }));
+      host.appendChild(add);
     }
+    // build100q: OVERDRIVE / Star-Power button cap — surfaced here so a controller player can SEE + rebind it (was only
+    // reachable via the wizard). gh profile shows strumCfg.spBtn; standard pads show strumCfg.odBtn.
+    const odBtn = (laneProfile === 'gh') ? strumCfg.spBtn : strumCfg.odBtn;
+    const od = document.createElement('button');
+    od.className = 'keycap od-cap'; od.dataset.od = '1';
+    od.innerHTML = '<span class="od-lbl">OD</span>' + (odBtn != null ? padGlyph(odBtn) : '—');
+    od.title = 'Overdrive / Star Power button — click, then press a button';
+    od.addEventListener('click', () => startPadRebind(-1, { od: true }));
+    host.appendChild(od);
   }
   try { window.__rrPadMap = () => JSON.parse(JSON.stringify(padMap)); } catch (e) {}
 

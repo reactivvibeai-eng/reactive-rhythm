@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=390" />
+<link rel="stylesheet" href="jukebox.css?v=391" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5246,6 +5246,11 @@
     .set-keys .keycap:nth-child(even) { color: var(--chrome);  border-color: rgba(224,218,214,0.32); }
     .set-keys .keycap:hover { border-color: var(--silver); transform: translateY(-1px); }
     .set-keys .keycap.listening { background: rgba(255,31,46,0.2); border-color: var(--crimson); color: #fff; animation: odpulse 0.7s ease-in-out infinite; }
+    /* build100q: "+" add-a-button (narrow, neutral) + Overdrive cap (gold). After the nth-child rules so they win. */
+    .set-keys .keycap.padadd { flex: 0 0 auto; max-width: 22px; aspect-ratio: auto; font-size: 15px; color: var(--ink-dim) !important; border-color: rgba(224,216,212,0.18) !important; box-shadow: none; }
+    .set-keys .keycap.padadd:hover { color: var(--gold) !important; border-color: var(--gold) !important; }
+    .set-keys .keycap.od-cap { flex: 0 0 auto; max-width: 62px; aspect-ratio: auto; gap: 5px; padding: 0 8px; color: var(--gold) !important; border-color: rgba(224,169,63,0.5) !important; background: radial-gradient(120% 140% at 50% 0%, rgba(224,169,63,0.12), transparent 70%); }
+    .set-keys .keycap.od-cap .od-lbl { font-size: 8px; letter-spacing: 0.14em; opacity: 0.8; }
     .set-mini { padding: 9px 15px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; transition: all 0.12s ease; white-space: nowrap; }
     .set-mini:hover { color: var(--ink); border-color: rgba(224,218,214,0.4); }
     .set-mini.active { color: #fff; border-color: var(--crimson); background: rgba(255,31,46,0.16); box-shadow: 0 0 16px rgba(255,31,46,0.3); }
@@ -5731,7 +5736,7 @@
             <button class="set-mini" id="set-pad-reset">Reset</button>
           </div>
           <div class="set-keys" id="set-pad" style="margin-top:8px;"></div>
-          <span class="set-note" style="margin-top:8px;">Click a lane, then press the controller button for it. (Plug in &amp; press any button first so it's detected.)</span>
+          <span class="set-note" style="margin-top:8px;">Click a string, then press the controller button for it (replaces). Tap <b>+</b> to add ANOTHER button to the same string. The gold <b>OD</b> cap sets your Overdrive / Star Power button. (Plug in &amp; press any button first so it's detected.)</span>
         </div>
       </div>
 
@@ -6134,7 +6139,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=390"></script>
+<script src="telemetry.js?v=391"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6304,14 +6309,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=390"></script>
-<script src="game.js?v=390"></script>
-<script src="procbg.js?v=390"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=390"></script>
-<script src="catalog.js?v=390"></script>
-<script src="multiplayer.js?v=390"></script>
-<script src="share.js?v=390"></script>
-<script src="couch.js?v=390"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=391"></script>
+<script src="game.js?v=391"></script>
+<script src="procbg.js?v=391"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=391"></script>
+<script src="catalog.js?v=391"></script>
+<script src="multiplayer.js?v=391"></script>
+<script src="share.js?v=391"></script>
+<script src="couch.js?v=391"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
