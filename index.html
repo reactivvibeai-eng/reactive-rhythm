@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=353" />
+<link rel="stylesheet" href="jukebox.css?v=354" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -693,6 +693,11 @@
   .pl-tile.on { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 6px 18px rgba(255,31,46,0.28); }
   .pl-tile.on .pl-thumb { box-shadow: inset 0 0 0 2px rgba(255,31,46,0.55); }
   .pl-on { font-family: 'Chakra Petch', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.1em; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-radius: 5px; padding: 2px 6px; }
+  /* build99N (P-01): locked = paid skin not yet owned — dimmed + desaturated, gold LOCKED pill, click routes to Store */
+  .pl-tile.locked .pl-thumb img { filter: grayscale(0.5) brightness(0.78); transition: filter 0.12s ease; }
+  .pl-tile.locked:hover .pl-thumb img { filter: grayscale(0.12) brightness(0.94); }
+  .pl-tile.locked .pl-name { color: var(--ash, #b8b2ad); }
+  .pl-on.pl-lock { color: #1b1206; background: linear-gradient(180deg, #f3c969, #d99a2c); }
   #profile-reset { color: var(--ink-dim); }
   @media (max-width: 560px) { .profile-stats { grid-template-columns: repeat(2, 1fr); } .profile-title { font-size: 36px; } }
 
@@ -5211,7 +5216,7 @@
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="store-av-glyph"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6z"/></svg>
           </span>
           <div class="store-bals">
-            <div class="store-bal" id="store-bal" data-state="guest" title="Sparks — your real balance, spend or cash out">
+            <div class="store-bal" id="store-bal" data-state="guest" title="Sparks — your real balance · topped up on the website, spent in-game">
               <svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>
               <span class="store-bal-val" id="store-bal-val">—</span>
               <span class="store-bal-label">Sparks</span>
@@ -5231,7 +5236,7 @@
       <!-- build65: discoverable currency legend (was tooltip-only). Ethical-monetization transparency — make it obvious what
            costs real money vs what's earned by play, so nothing is hidden. -->
       <div class="store-legend" style="font-size:11.5px; color:var(--ink-dim); margin:0 auto 12px; line-height:1.55; text-align:center; max-width:520px;">
-        <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance (spend on anything or cash out) &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics. Purchases never pay-to-win.
+        <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance, topped up on the website · spend on anything &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics. Purchases never pay-to-win.
       </div>
       <div class="store-banner" id="store-banner" hidden></div>
       <div class="store-grid" id="store-grid"></div>
@@ -5737,6 +5742,7 @@
       </div>
       <div class="results-secondary-row">
         <button class="ghost-btn quiet" id="results-career">CAREER</button>
+        <button class="ghost-btn quiet" id="results-store" title="Spend your Sparks on guitars & levels"><span class="rs-store-glyph" aria-hidden="true">◆</span> STORE</button>
         <button class="ghost-btn quiet" id="results-menu">RETURN TO MENU</button>
       </div>
       <div class="results-keys" style="margin-top:14px;">
@@ -5788,7 +5794,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=324"></script>
+<script src="telemetry.js?v=354"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5926,14 +5932,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=324"></script>
-<script src="game.js?v=353"></script>
-<script src="procbg.js?v=324"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=353"></script>
-<script src="catalog.js?v=353"></script>
-<script src="multiplayer.js?v=353"></script>
-<script src="share.js?v=324"></script>
-<script src="couch.js?v=353"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=354"></script>
+<script src="game.js?v=354"></script>
+<script src="procbg.js?v=354"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=354"></script>
+<script src="catalog.js?v=354"></script>
+<script src="multiplayer.js?v=354"></script>
+<script src="share.js?v=354"></script>
+<script src="couch.js?v=354"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -6215,6 +6221,18 @@
   ];
   function equippedSkinId() { try { return localStorage.getItem('rr_skin_id') || ''; } catch (e) { return ''; } }
   function skinById(id) { for (var j = 0; j < SKINS.length; j++) if (SKINS[j].id === (id || '')) return SKINS[j]; return SKINS[0]; }
+  // build99N (launch-audit P-01): PAID guitar skins must be OWNED to equip. The loadout was equipping every skin
+  // for free — a direct revenue leak (paid skins both free to take here AND sold in the Store). Free/starter skins
+  // stay open: the default, the community guitar (celines_razor), and the base crimson (crimson_chaos, never sold).
+  // Everything else gates on RhythmCatalog.ownsItem('skin', id) — true for the owner/admin, localhost dev, and any
+  // genuinely purchased skin; false for a fresh public guest. Clicking a locked tile routes to the Store (a classy
+  // spend CTA at the exact want-it moment), it never silently equips.
+  var FREE_SKINS = { '': 1, celines_razor: 1, crimson_chaos: 1 };
+  function skinUnlocked(sid) {
+    if (FREE_SKINS[sid || '']) return true;
+    try { var C = window.RhythmCatalog; if (C && C.ownsItem && C.ownsItem('skin', sid)) return true; } catch (e) {}
+    return false;
+  }
   // Expose the equipped guitar's display name + src for the Share Card (SKINS lives in this
   // IIFE; share.js/game.js read it through RhythmGame). Resolves by saved id, falling back to
   // a src-match against the engine's equipped skin so it stays correct if the id is stale.
@@ -6242,10 +6260,11 @@
     setGuitarPreview(skinById(cur));   // showcase the equipped guitar
     wrap.innerHTML = SKINS.map(function (s) {
       var on = (cur || '') === s.id;
-      return '<button class="pl-tile' + (on ? ' on' : '') + '" data-id="' + s.id + '" title="' + s.title + '">' +
+      var locked = !skinUnlocked(s.id);
+      return '<button class="pl-tile' + (on ? ' on' : '') + (locked ? ' locked' : '') + '" data-id="' + s.id + '" title="' + s.title + (locked ? ' — locked · unlock in the Store' : '') + '">' +
         '<span class="pl-thumb"><img src="' + s.thumb + '" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>' +
         '<span class="pl-name">' + s.title + '</span>' +
-        (on ? '<span class="pl-on">EQUIPPED</span>' : '') +
+        (on ? '<span class="pl-on">EQUIPPED</span>' : (locked ? '<span class="pl-on pl-lock">LOCKED</span>' : '')) +
       '</button>';
     }).join('');
     var btns = wrap.querySelectorAll('.pl-tile');
@@ -6256,6 +6275,11 @@
       btn.addEventListener('focus', function () { setGuitarPreview(sk); });
       btn.addEventListener('mouseleave', function () { setGuitarPreview(skinById(equippedSkinId())); });
       btn.addEventListener('click', function () {
+        if (!skinUnlocked(sid)) {   // build99N (P-01): locked paid skin → route to the Store, never equip for free
+          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Unlock ' + (sk && sk.title ? sk.title : 'this guitar') + ' in the Store'); } catch (e) {}
+          try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e) {}
+          return;
+        }
         try { if (sid) localStorage.setItem('rr_skin_id', sid); else localStorage.removeItem('rr_skin_id'); } catch (e) {}
         try { if (window.RhythmGame && window.RhythmGame.equipGuitarSkin) window.RhythmGame.equipGuitarSkin(sk.src); } catch (e) {}
         renderLoadout();
@@ -6269,6 +6293,9 @@
   var ob = $('profile-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('profile-close'); if (cb) cb.addEventListener('click', close);
   var rcb = $('results-career'); if (rcb) rcb.addEventListener('click', open);
+  // build99N (P-09): a quiet STORE entry at the results screen — the peak "I just earned currency" moment — turns a
+  // dead-end celebration into a one-tap path to spend. Classy, never blocks the next run (PLAY AGAIN stays primary).
+  var rsb = $('results-store'); if (rsb) rsb.addEventListener('click', function () { try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e) {} });
 
   // ---- SHARE CAREER — build the career-recap "Signal Card" + native share / fallback panel ----
   // Gathers the same career aggregate the overlay renders (RhythmCatalog.getCareer), the rank via
@@ -7553,6 +7580,7 @@
               : tierLocked ? ('Clear the ' + (tierLabelFor('medium') || 'Pulse') + ' tier to unlock ' + (tierLabelFor('hard') || 'Fracture'))
               : (LIVE ? 'Clear the previous level in this tier to unlock' : 'Campaign unlocks at release — free-play any song anytime');
             try { window.RhythmGame.showToast(msg); } catch (e) {}
+            if (paidLocked) { try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e2) {} }   // build99N (P-08): a locked PAID level opens the Store (one tap to buy) instead of dead-ending on a toast
             return;
           }
           launchLevel(L, readyForClick);

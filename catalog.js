@@ -737,7 +737,9 @@
           // browse, search, pickers) is music-only for free; videos go to their own bucket.
           var ready = all.filter(trackReady);
           catalogTracks = ready.filter(function (t) { return !isVideo(t); });
-          catalogVideos = ready.filter(isVideo);
+          // build99N: videos gate on WATCHABILITY, not the music chartability gate (trackReady). A film can
+          // always be watched even with no decodable audio to chart — recovers ~30 of 142 films that were hidden.
+          catalogVideos = all.filter(function (t) { return isVideo(t) && videoReady(t); });
           catalogLive = true;
           return;
         } else {
@@ -755,7 +757,7 @@
     catalogRawCount = mock.length;
     var readyM = mock.filter(trackReady);   // preview also shows only playable
     catalogTracks = readyM.filter(function (t) { return !isVideo(t); });
-    catalogVideos = readyM.filter(isVideo);
+    catalogVideos = mock.filter(function (t) { return isVideo(t) && videoReady(t); });
   }
 
   // re-fetch the catalog (the library grows constantly on the platform)
@@ -782,6 +784,12 @@
   // SWAP-SEAM: a dedicated t.video_url lands with the backend video bucket; until then
   // stream_url (.mp4/.m3u8) is the fallback. .m3u8 → Chrome can't decode → openWatch new-tab fallback.
   function videoWatchUrl(t) { return (t && (t.video_url || t.stream_url || t.media_url)) || ''; }
+  // build99N: a film is "ready to LIST in AI Flixs" if it has ANY watchable source. Films can always be
+  // WATCHED; charting them as a playable level (playFlix) is a bonus that needs DECODABLE audio and
+  // gracefully degrades to the Watch preview when absent. This must NOT use trackReady (the MUSIC gate,
+  // which requires a decodable non-HLS audio file) — doing so silently hid 30 of 142 films that have no
+  // decodable audio rendition (e.g. After Eve's "Straitjacket MV"), dropping them from the grid/count/search.
+  function videoReady(t) { return !!t && (!!videoWatchUrl(t) || !!trackAudioUrl(t)); }
   function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — media type (music vs video). Prefer an AUTHORITATIVE backend
   // field (media_type / is_video). When Lovable ships it, ONLY mediaType() changes —

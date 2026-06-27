@@ -15,6 +15,20 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99N — pre-launch polish swarm (AI Flixs full catalog + revenue integrity)  ✅ verified
+Driven by a 6-dimension audit swarm (perf / stability / AI Flixs / campaign / economy / UI) + owner-flagged AI Flixs bug.
+- **AI Flixs full catalog (P-03):** films were run through the *music* readiness gate (`trackReady`, needs decodable
+  audio), so any film that could be **watched** but not **charted** was dropped entirely. Now gated on watchability
+  (`videoReady`). Live video count **112 → 142**; recovers 30 films incl. After Eve's "Straitjacket MV". `catalog.js`.
+- **Revenue leak closed (P-01):** the Profile guitar loadout equipped every **paid** skin for free. Now gates on
+  `RhythmCatalog.ownsItem('skin',id)` (owner/admin/purchased), free/starter skins stay open (default, celines_razor,
+  crimson_chaos); a locked tile shows a gold LOCKED pill and routes to the Store. Verified: 16/19 tiles locked as a guest.
+- **Spend funnel (P-08/P-09):** a locked PAID level now opens the Store instead of dead-ending on a toast; the results
+  screen gained a quiet **STORE** CTA at the peak "just earned currency" moment.
+- **Legal copy (P-11):** dropped the "cash out" claim from the Sparks legend/tooltip (no cash-out exists) → "topped up
+  on the website, spend in-game".
+- `?v` → 354. Verified live (videoCount 142, gate active under `?asplayer=1`, locked-click → Store, 0 console errors).
+
 ### 1. Desktop song-select — full-width "deck"  ✅ verified
 `jukebox.css` (new `@media (min-width:901px)` block; mobile untouched).
 - The library was a 720px column centered in black. Now at >900px `#view-jukebox`
