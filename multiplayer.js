@@ -107,6 +107,8 @@
   try { combatOn = localStorage.getItem('rr_mp_combat') === '1'; } catch (e) {}
   var matchCombat = false;        // EFFECTIVE combat mode for the live match (the host decides; broadcast in `start`)
   var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
+  var _lastOdActive = false;      // build100r: OD rising-edge tracker — activating Overdrive ("boost") fires a shock too
+  var SHOCK_COMBO_STEP = 15;      // build100r: combo milestones that SHOCK the rival. Was 30 — unreachable in a casual playtest (max combo ~10), so the rival was literally never zapped. 15 + the OD trigger make combat actually land.
   var _rankRecorded = false;      // guard: record each settled result exactly once (CPU warm-ups never record — oppMeta.bot)
   // build100i: server-authoritative round (Lovable /mp/round/{start,settle}). HOST opens a round at match start + gets a
   // uuid, broadcasts it ('round' event); both peers pass that uuid to /mp/round/settle at song end. All fail-open — the
@@ -1044,7 +1046,8 @@
     sel = s || sel;
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
-    _lastShockCombo = 0; _rankRecorded = false;   // v254: fresh combat-shock + ranked-record state per match
+    _lastShockCombo = 0; _lastOdActive = false; _rankRecorded = false;   // v254/build100r: fresh combat-shock (combo + OD) + ranked-record state per match
+    try { console.warn('[mp] match starting — combat (damage) =', matchCombat ? 'ON' : 'OFF'); } catch (e) {}   // build100r: confirm whether shocks will fire this match (combat is the HOST's setting)
     step('go'); startCountdown(atMs);   // synced 3·2·1·GO! in the centered card, off the shared atMs
     // register one-shot song-end handler BEFORE launch
     window.RhythmGame.onSongEnd(onLocalSongEnd);
@@ -1180,14 +1183,20 @@
         _lastSend = now;
         matchCh.send({ type: 'broadcast', event: 'tick', payload: { score: stt.score, combo: stt.combo, acc: stt.acc, prog: stt.progress, name: ME.name } });
       }
-      // v254: P-vs-P combat — your combo milestones SHOCK the rival (each new 30-streak fires once; re-arms on a combo break).
+      // build100r: P-vs-P combat — SHOCK the rival on (a) each new combo milestone (every SHOCK_COMBO_STEP, re-arms on a
+      // combo break) AND (b) the moment you activate Overdrive ("boost"). The old code only fired at combo≥30 and never on
+      // boost, so in a casual match (max combo ~10) the rival was never zapped.
       if (matchCombat && matchLive && matchCh && stt && !(oppMeta && oppMeta.bot)) {
         var _c = stt.combo || 0;
         if (_c < _lastShockCombo) _lastShockCombo = 0;                       // combo broke → re-arm
-        var _ms = Math.floor(_c / 30) * 30;
-        if (_ms >= 30 && _ms > _lastShockCombo) {
-          _lastShockCombo = _ms;
-          try { matchCh.send({ type: 'broadcast', event: 'shock', payload: { from: ME.name, combo: _c } }); } catch (e) {}
+        var _ms = Math.floor(_c / SHOCK_COMBO_STEP) * SHOCK_COMBO_STEP;
+        var _odRise = (!!stt.odActive && !_lastOdActive);                    // Overdrive just turned ON → a shock
+        _lastOdActive = !!stt.odActive;
+        var _comboHit = (_ms >= SHOCK_COMBO_STEP && _ms > _lastShockCombo);
+        if (_comboHit || _odRise) {
+          if (_comboHit) _lastShockCombo = _ms;
+          try { matchCh.send({ type: 'broadcast', event: 'shock', payload: { from: ME.name, combo: _c, od: _odRise } }); } catch (e) {}
+          try { console.warn('[mp] SHOCK sent →', _odRise ? 'OVERDRIVE' : ('combo ' + _c)); } catch (e) {}   // build100r: live diagnostic
           try { window.RhythmGame.mpShockSent && window.RhythmGame.mpShockSent(); } catch (e) {}   // "⚡ ZAP" feedback on your deck
           try { _spawnZapBolt(); } catch (e) {}   // v257: a lightning bolt streaks from your deck toward the rival's
         }
