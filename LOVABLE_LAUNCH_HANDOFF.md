@@ -70,11 +70,17 @@ seeded ladder is fine for launch). **Spec:** `MP_SERVER_SCORING_BRIEF.md`. **Pri
 
 ## 🟢 NICE-TO-HAVE (quality, not launch)
 
-### 7. Film audio renditions (make more films *playable*, not just watchable)
-**Context:** **30 of 142 films** have a `video_url` but **no decodable audio rendition**, so they're
-**Watch-only** (they appear in AI Flixs and play as a video, but can't be charted into a playable rhythm level).
-**Ask (optional):** generate an `audio_url` (a decodable, CORS-readable `.m4a`/`.mp3` — NOT an HLS `.m3u8`) for
-those films and they automatically become playable levels. **Priority: P3.**
+### 7. Film audio renditions — the ONLY way to make every film a PLAYABLE level (owner priority)
+**Context:** **31 of 143 films are HLS-only** — their only source is a Mux `.m3u8` stream (`stream.mux.com/….m3u8`),
+which a browser **cannot decode** for charting. So those 31 are **Watch-only** in AI Flixs (they appear + play as a
+video, but can't become a playable rhythm level). The other **112 films have a decodable audio rendition** (Mux
+`audio.m4a`) and ARE fully playable. The game already lists all 143 and cleanly shows Play (chartable) vs Watch
+(HLS-only) — the gap is purely the missing audio renditions.
+**Ask (now P1 — the owner: "lots of content is uploaded daily, make sure this system works"):** configure the **Mux
+ingest pipeline to ALWAYS generate a decodable, CORS-readable audio-only rendition** (`.m4a`/`.mp3`, NOT `.m3u8`) for
+**every** film, and expose it as `audio_url` on the track row. Backfill the existing 31. Then every film — today's and
+every future daily upload — **auto-becomes a playable level** with zero game-side changes (the engine already charts
+from `audio_url`). Without this, daily-uploaded films stay Watch-only. **Priority: P1.**
 
 ### 8. Landscape poster for films (`poster_url`)
 A 16:9 `poster_url` on video rows makes the AI Flixs grid sharper (today it cover-crops the square artwork).
