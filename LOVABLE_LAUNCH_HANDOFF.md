@@ -82,6 +82,30 @@ A 16:9 `poster_url` on video rows makes the AI Flixs grid sharper (today it cove
 
 ---
 
+## 🔵 INTEGRATION — Host "Play in Reactive Rhythm" review hook (owner flagged)
+
+**Context:** on the platform, hosts review songs/videos; a **"Play in Reactive Rhythm"** button sends a
+not-yet-approved track to the game to be **played live + judged on the spot**. It works on the website today; the
+owner wants the game + backend **ready to handle it cleanly** so it's not a last-minute scramble.
+
+**Game side — already 90% there:** the engine can chart + play any track from a decodable `audio_url` via
+`RhythmGame.playUrl(url, meta)` / the `?trackId=` deep link, with NO server chart required. What's missing is a
+defined, secure HANDOFF from the website to the game. Decide ONE mechanism with Lovable:
+- **(a) URL hand-off** — the host button opens `reactivvibe.com/play?review=<decodable_audio_url>&title=...&artist=...&token=<signed>`.
+  The game reads it on boot → `playUrl`. Simplest; works cross-tab. (A tiny client reader is the only game-side add.)
+- **(b) postMessage** — if the game is embedded in the review page, `window.postMessage({type:'rr-review-play', audioUrl, meta, token})`.
+
+**Backend asks for this hook:**
+1. **A signed, short-lived `token`** so an UNAPPROVED track is only playable by the reviewing host — not exposed
+   publicly via a guessable URL. The game forwards the token; the audio fetch (or a `/review/:id` resolve) validates it.
+2. **A decodable `audio_url`** for the under-review track (non-HLS `.m4a`/`.mp3`, CORS-readable) — same requirement
+   as the catalog. (HLS-only → the game can only *watch*, not chart.)
+3. **(optional) result callback** — `POST /review/:id/result { score, grade, accuracy }` so the host's moderation
+   screen can see how it judged. The game already computes all of this at song end.
+
+**Priority: P2** (not a launch blocker for public free play, but spec it now so the integration is a config change,
+not a rebuild). Tell me which mechanism (a/b) you pick and I'll wire the ~20-line game-side reader.
+
 ## Quick reference — what the CLIENT already does (no backend change needed)
 - Reads `media_type` / `is_video` / `video_url` authoritatively; lists every watchable film.
 - Gates paid skins + levels on `ownsItem` entitlements; locked → routes to Store.
