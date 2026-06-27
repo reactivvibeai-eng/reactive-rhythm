@@ -15,6 +15,18 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99U — "Raised glass" UI evolution (MP + Store + Leaderboard) + score-fit bug  ✅ verified
+Round-6 owner feedback. CSS-only (no logic/ids touched; whole-file braces 4140/4140).
+- **Score-overflow bug fixed** (the "YOU 9,070" that clipped its frame): confirmed DOM (not canvas), so all three
+  readouts — in-match versus plate (`#vs-you-score`), opponent panel (`.mo-score`), MP results scorecard (`.mpx-sc-score`)
+  — now use a container-query `clamp()` in `cqi` + `tabular-nums` so a 1–9-digit score AUTO-FITS. Verified: "9,070,070"
+  overflows 0px in both readouts.
+- **Raised-glass design language** (shared `--glass-*` tokens + `.rr-glass`): frosted, beveled, lifted panels + glossy
+  crimson/gold glass primary buttons + more generous padding, applied consistently to **Multiplayer** (lobby/hero/tiles/
+  rooms/tournament hero/results), the **Store** (grid cards + BUY/EQUIP + pricebox + chips), and the **Leaderboard**
+  (tab pills, podium plinths, rank rows, preview banner, DONE/SHARE). Warm darks only, crimson/gold, no blue/purple.
+- 0 console errors. (index.html inline CSS — served fresh; no ?v change needed.)
+
 ### build99T — AI Flixs flix-vs-watch + Browse redesign + MP de-dup  ✅ verified
 Round-5 owner feedback.
 - **Flix UI consistency (catalog.js):** a film is its OWN level — the video is the stage — so `openSheet` now hides
