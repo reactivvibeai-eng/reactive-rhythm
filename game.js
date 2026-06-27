@@ -2315,7 +2315,7 @@
     // cross-peer round start isn't thrown off. The gen-guard after it is mandatory (a level exit/relaunch during the 2s
     // buffer would otherwise orphan a second loop / double audio).
     if (!reduceMotion && !(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) {
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1200));   // build100t: trimmed — the longer ~10s countdown below is now the main "everything in view" settle window
       if (myGen !== _playGen || !player) return;
     }
     await runCountdown();
@@ -2377,10 +2377,11 @@
       await new Promise(r => setTimeout(r, 650));
       if (myGen !== _playGen) return;   // superseded — leave the new countdown's node untouched
       el.style.fontSize = '';   // digits revert to the big CSS default size
-      for (let i = 3; i >= 1; i--) {
+      for (let i = 10; i >= 1; i--) {   // build100t (owner): ~10s countdown — 3 was too short to get set before notes arrive. Counts 10→1 then GO.
         el.textContent = i;
+        el.style.fontSize = (i >= 10) ? 'clamp(80px, 22vw, 200px)' : '';   // "10" is 2 chars — nudge it down a touch so it fits the slot; single digits use the big default
         el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-        await new Promise(r => setTimeout(r, 700));
+        await new Promise(r => setTimeout(r, 800));
         if (myGen !== _playGen) return;
       }
       el.textContent = 'GO!';
@@ -3235,6 +3236,20 @@
     if (target.chordLead && target.chordLanes && target.chordLanes.length > 1) {
       try { const _cg = fretGeom(); let _cx = 0; for (let _ci = 0; _ci < target.chordLanes.length; _ci++) _cx += _cg.nearX[target.chordLanes[_ci]] || 0;
         emitFx('chord', 'chord', lane, _cx / target.chordLanes.length, _cg.nearY); } catch (e) {}
+    }
+    // build100t: GROUPED CHORD RESOLVE — pressing ANY ONE chord key clears the whole chord on keyboard (two-finger
+    // optional). Chord members share the SAME chordLanes array (lead = chordLead, partner(s) = chord, same time). Without
+    // this the partner gem ~2 lanes over sails past unjudged → forced MISS + combo break (the "broken half-bar that fails
+    // on hit" the player reported). Resolves the partner(s) at the lead's judgment + multiplier; no extra combo bump.
+    if (target.chordLanes && target.chordLanes.length > 1) {
+      for (const cn of notes) {
+        if (cn === target || cn.judged || cn.chordLanes !== target.chordLanes) continue;
+        cn.judged = true; cn.hit = kind;
+        counts[kind]++;
+        score += JUDGE[kind].score * mult;
+        lanePluckT[cn.lane] = 0;
+        try { spawnHitParticles(cn.lane, kind); emitFx('hit', kind, cn.lane); } catch (e) {}
+      }
     }
     // v253 (#92, GH feel): a judgment WORD on EVERY note spammed at speed (Hard ≈5/s). PERFECT is the common case and its
     // white burst + crimson shockwave already read as "perfect", so the word is suppressed — the climbing combo counter +

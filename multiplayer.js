@@ -89,8 +89,8 @@
   var lastOppState = null;        // versus P2: latest opponent render frame (ghost deck source)
   var _lastStateSend = 0, _vsActive = false;   // _vsActive: gate the high-rate 'state' stream (P4 turns it on)
   var _vsMode = false;            // versus P3: split-screen HUD is mounted/active for this match
-  var VS_LEADIN_MS = 3600;        // 1v1 lead-in: long enough for a visible 3·2·1·GO! before the decks reveal
-  var TOUR_LEADIN_MS = 5200;      // tournament lead-in: longer, for the 3-beat cinematic (ROUND card → VS reveal → 3·2·1·GO)
+  var VS_LEADIN_MS = 10000;       // build100t (owner): ~10s 1v1 lead-in (was 3.6s — too short to get set). Wall-clock synced via atMs; the longer window also buffers slower machines.
+  var TOUR_LEADIN_MS = 10000;     // build100t: ~10s tournament lead-in (host-adjustable via the lead-in control)
   var _countdownRaf = 0;          // the 1v1 lead-in 3·2·1·GO! loop (off shared atMs)
   var _tourCdRaf = 0, _verdictT = 0;   // the tournament cinematic-countdown loop (own rAF so it can't cancel the 1v1 one) + verdict auto-hide timer
   var _mountT = 0;                // deferred split-screen mount timer (beginMatch/onTourRound) — cleared on teardown so a mid-lead-in abort can't resurrect vs-mode
@@ -722,7 +722,7 @@
     var last = null;
     (function tick() {
       var rem = atMs - Date.now(), label;
-      if (rem > 600) { var n = Math.ceil((rem - 600) / 1000); label = n > 3 ? 'GET READY' : String(n); }
+      if (rem > 600) { var n = Math.ceil((rem - 600) / 1000); label = n > 9 ? 'GET READY' : String(n); }
       else { label = 'GO!'; }
       if (label !== last) { setGo(label, label === 'GO!' ? 'go' : ''); last = label; }
       if (rem > 0) _countdownRaf = requestAnimationFrame(tick);
@@ -750,7 +750,7 @@
       var beat = rem > total * 0.62 ? 'round' : rem > total * 0.30 ? 'vs' : 'go';
       if (beat !== lastBeat) { cd.setAttribute('data-beat', beat); lastBeat = beat; }
       if (beat === 'go') {
-        var label; if (rem > 600) { var n = Math.ceil((rem - 600) / 1000); label = n > 3 ? 'GET READY' : String(n); } else label = 'GO!';
+        var label; if (rem > 600) { var n = Math.ceil((rem - 600) / 1000); label = n > 9 ? 'GET READY' : String(n); } else label = 'GO!';
         if (label !== lastNum) {
           var g = $('mpx-tour-go');
           if (g) { g.textContent = label; g.classList.remove('pop', 'go'); void g.offsetWidth; g.classList.add('pop'); if (label === 'GO!') g.classList.add('go'); }
@@ -3225,7 +3225,7 @@
   // hostBeginRound's atMs; entrants just honor whatever atMs the host broadcasts, so no sync change. Default 5200 (unchanged).
   wire('mpx-tour-leadin', 'click', function (e) {
     var b = e.target.closest('button[data-lead]'); if (!b || !tour.isHost) return;
-    TOUR_LEADIN_MS = +b.getAttribute('data-lead') || 5200;
+    TOUR_LEADIN_MS = +b.getAttribute('data-lead') || 10000;   // build100t: default ~10s
     [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
   });
   // build66: WAGER — host sets the bracket STAKES (free | prize pool | side-bet) + the buy-in. BONUS SPARKS ONLY
