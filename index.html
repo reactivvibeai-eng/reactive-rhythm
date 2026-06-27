@@ -3177,8 +3177,11 @@
     .results-summary { grid-template-columns: 1fr 1fr; gap: 20px; }
     .results-leaderboard .lb-row { grid-template-columns: 36px 1fr auto auto; gap: 10px; font-size: 12px; }
 
-    /* tighter top-bar on phones so 4 icons + brand never overflow */
-    .lib-actions { gap: 7px; }
+    /* build99N (P-10): the top bar long outgrew "4 icons" — it now packs 10+ controls + Sparks + Sign-in.
+       Wrap the bar and drop the search to its own full-width second row so nothing overflows off-screen. */
+    .lib-bar { flex-wrap: wrap; }
+    .lib-search { order: 3; flex-basis: 100%; max-width: none; margin: 12px 0 0; }
+    .lib-actions { gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
     .lib-actions .icon-btn { width: 36px; height: 36px; }
     .lib-actions .icon-btn svg { width: 17px; height: 17px; }
     .lib-bar { padding-left: 14px; padding-right: 14px; }
