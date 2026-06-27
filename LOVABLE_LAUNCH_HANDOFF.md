@@ -68,19 +68,35 @@ seeded ladder is fine for launch). **Spec:** `MP_SERVER_SCORING_BRIEF.md`. **Pri
 
 ---
 
-## 🟢 NICE-TO-HAVE (quality, not launch)
+## 🔴 OWNER'S #1 CONTENT BLOCKER — make every film a PLAYABLE level
 
-### 7. Film audio renditions — the ONLY way to make every film a PLAYABLE level (owner priority)
-**Context:** **31 of 143 films are HLS-only** — their only source is a Mux `.m3u8` stream (`stream.mux.com/….m3u8`),
-which a browser **cannot decode** for charting. So those 31 are **Watch-only** in AI Flixs (they appear + play as a
-video, but can't become a playable rhythm level). The other **112 films have a decodable audio rendition** (Mux
-`audio.m4a`) and ARE fully playable. The game already lists all 143 and cleanly shows Play (chartable) vs Watch
-(HLS-only) — the gap is purely the missing audio renditions.
-**Ask (now P1 — the owner: "lots of content is uploaded daily, make sure this system works"):** configure the **Mux
-ingest pipeline to ALWAYS generate a decodable, CORS-readable audio-only rendition** (`.m4a`/`.mp3`, NOT `.m3u8`) for
-**every** film, and expose it as `audio_url` on the track row. Backfill the existing 31. Then every film — today's and
-every future daily upload — **auto-becomes a playable level** with zero game-side changes (the engine already charts
-from `audio_url`). Without this, daily-uploaded films stay Watch-only. **Priority: P1.**
+### 7. Mux audio renditions — the ONLY way a film becomes a playable level (PROVEN root cause)  ⬆️ now P0
+**The owner keeps hitting this:** "playing something in AI Flix shows a preview, not a game level — all videos should
+show game level." This is **100% a Mux ingest-config gap, not a game bug** — proven below.
+
+**Live data (catalog, 2026-06-27): 144 films total.**
+- **112 are already fully playable levels** — their `audio_url` is a Mux **static audio rendition**, e.g.
+  `https://stream.mux.com/XpGGG…/audio.m4a`. The engine decodes that `.m4a` and charts a real level. ✅
+- **32 are Watch-only** — their `audio_url` is just the **HLS manifest** itself (`https://stream.mux.com/GMBT….m3u8`),
+  with **no static audio rendition**. A browser **cannot decode an HLS `.m3u8`** into an offline buffer for charting,
+  so the game correctly falls back to the Watch preview. (Example the owner hit: *"I Bring the Pain" by Blacktide
+  Sirens / EpicSessionTracks*, id `1078be64-a554-4cc0-b01e-70abc44101e7`.)
+
+**PROOF it's the rendition, not the game:** for a Watch-only film I derived the would-be static URL
+`https://stream.mux.com/GMBTyfMEsnHM00QKFBtry3JwfhjRnck00Hc7ESJnCZpA8/audio.m4a` and `HEAD`-probed it → **HTTP 404**.
+The decodable audio track was **never generated** on that Mux asset. There is **no client-side workaround** (you can't
+decode HLS for offline charting), so the game can do nothing more here — the file simply must exist.
+
+**The fix (backend, ~one Mux setting + a backfill):**
+1. In the **Mux ingest pipeline**, enable a **static/MP4 audio rendition** on EVERY asset (Mux `mp4_support`, or an
+   `audio.m4a` static rendition) so `https://stream.mux.com/{PLAYBACK_ID}/audio.m4a` exists and is CORS-readable.
+2. Set the track row's **`audio_url` to that `.m4a`** (NOT the `.m3u8`). The game reads `audio_url` and charts from it.
+3. **Backfill the 32** existing Watch-only assets (re-run the rendition).
+4. **Verify:** `curl -I https://stream.mux.com/{PLAYBACK_ID}/audio.m4a` → must be `200`, not `404`.
+
+Once on, **every film — today's 32 and every future daily upload — auto-becomes a playable level with ZERO game
+changes** (the engine already charts from `audio_url`). This is the owner's repeated ask ("lots of content uploaded
+daily, make sure this works"). **Priority: P0 for the AI Flixs promise.**
 
 ### 8. Landscape poster for films (`poster_url`)
 A 16:9 `poster_url` on video rows makes the AI Flixs grid sharper (today it cover-crops the square artwork).
