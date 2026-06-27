@@ -15,6 +15,18 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 8) — store-purchase backend reconciliation (item-registry mismatch)  ✅ game-side; Lovable owns the registry
+Lovable confirmed the 4 store routes are LIVE (`/store`, `/sparks/spend`, `/sparks/balance`, `/entitlements`, CORS `*`,
+same-origin JWT). But there's an **item-id mismatch**: the game sells ~19 skins + `high_seas`/`shorty_x`/`melody_boss`
+levels, while the backend `/store` registered `starter_pack`/`boss_neon`/`theme_neon` — so a real game purchase hits the
+spend RPC with an unknown `item_id` → **404 item_not_found → buy fails.** (`boss_neon`/`theme_neon` were PULLED from the
+game in v262 as never-built.) Game-side reconciliation: `spendSparks` now maps `404 item_not_found` to a clear
+"isn't available for purchase yet" toast (was a generic fail); and the store merge DENIES the dead backend placeholders
+(`boss_neon`/`theme_neon`/`starter_pack`) so they can't resurrect as store cards. **Lovable must register every game
+item in the spend RPC** (exact list handed off): skins (50✦) violet_gothic, bone_daddy, melody_pink, crimson_fox,
+crimson_tarot, clockwork, shaman_wolf; skins (80✦) alarm_clock, sasoka, pirate_fox, deadkin, shorty_skin, razor,
+wormfeast, kitsune, triemrys; levels high_seas(140✦), shorty_x(120✦), melody_boss(100✦); celines_razor is FREE.
+
 ### build100q (part 7) — live-playtest P0s: store won't load, admin MP level lock, tournament round-2 boot  ✅ store+lock verified (round needs 2-device confirm)
 - **Store wouldn't load / purchases dead (revenue-critical):** the store `load()` had THREE sequential `await`s
   (`getStore` → `getUser` → `getEntitlements`) with NO timeout, so a slow/unreachable Lovable backend left it stuck on

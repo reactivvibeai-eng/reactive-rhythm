@@ -510,6 +510,7 @@
       const msg = String((e && e.message) || '');
       if (/\b402\b|insufficient/i.test(msg)) return { ok: false, error: 'insufficient_sparks' };
       if (/\b409\b|price_mismatch/i.test(msg)) return { ok: false, error: 'price_mismatch' };
+      if (/\b404\b|item_not_found|not_found/i.test(msg)) return { ok: false, error: 'item_not_found' };   // build100q: the backend's spend registry doesn't know this item_id yet — surface it instead of a generic fail
       return { ok: false, error: 'spend_failed', detail: msg };
     }
   }

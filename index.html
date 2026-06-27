@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=389" />
+<link rel="stylesheet" href="jukebox.css?v=390" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -6134,7 +6134,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=389"></script>
+<script src="telemetry.js?v=390"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6304,14 +6304,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=389"></script>
-<script src="game.js?v=389"></script>
-<script src="procbg.js?v=389"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=389"></script>
-<script src="catalog.js?v=389"></script>
-<script src="multiplayer.js?v=389"></script>
-<script src="share.js?v=389"></script>
-<script src="couch.js?v=389"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=390"></script>
+<script src="game.js?v=390"></script>
+<script src="procbg.js?v=390"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=390"></script>
+<script src="catalog.js?v=390"></script>
+<script src="multiplayer.js?v=390"></script>
+<script src="share.js?v=390"></script>
+<script src="couch.js?v=390"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -9193,6 +9193,7 @@
     if (err === 'insufficient_sparks') { toGetMore(btn); toast('Not enough Sparks — top up to unlock'); }
     else if (err === 'price_mismatch') { toast('Prices updated — refreshing'); load(); }
     else if (err === 'not-authed') { toast('Sign in to spend Sparks'); openSite('https://reactivvibeai.com'); }
+    else if (err === 'item_not_found') { toast('This item isn’t available for purchase yet — we’re on it'); }   // build100q: backend spend registry is missing this item_id (see Lovable item-registry handoff)
     else { toast('Purchase failed — try again'); }
   }
 
@@ -9277,9 +9278,13 @@
     var out = (await _storeRace(C.getStore(), 6000, null)) || {};
     var _backend = (out && out.items && out.items.length) ? out.items : [];
     var _keep = function (it) { var t = String(it.item_type || it.type || '').toLowerCase(); return t === 'skin' || t === 'guitar' || t === 'level'; };
+    // build100q: the backend still serves never-built placeholders (boss_neon=THE BREAKER, theme_neon=Neon Theme,
+    // starter_pack) that were intentionally PULLED from the game (v262). Deny them so the merge can't resurrect a dead
+    // store card. (themes/packs already fail _keep; boss_neon is a 'level' and would otherwise slip back in.)
+    var _DEAD = { boss_neon: 1, theme_neon: 1, starter_pack: 1 };
     var _merged = STORE_FALLBACK.slice(), _have = {};
     _merged.forEach(function (i) { _have[String(i.item_type || i.type) + ':' + String(i.item_id || i.id)] = 1; });
-    _backend.forEach(function (it) { var k = String(it.item_type || it.type) + ':' + String(it.item_id || it.id); if (_keep(it) && !_have[k]) { _merged.push(it); _have[k] = 1; } });
+    _backend.forEach(function (it) { var _id = String(it.item_id || it.id); var k = String(it.item_type || it.type) + ':' + _id; if (_keep(it) && !_DEAD[_id] && !_have[k]) { _merged.push(it); _have[k] = 1; } });
     items = _merged;   // client catalog (skins + levels) always shows; no song bundles
     // signedIn AUTHORITATIVE from the local Supabase session + admin, not solely /store's echo (so a logged-in owner gets
     // a real Buy button + an unmasked balance even if /store lags). Bounded so a hung /me can't block the store.
