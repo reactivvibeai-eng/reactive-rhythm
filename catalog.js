@@ -240,6 +240,25 @@
     } catch (e) { var m = String((e && e.message) || ''); return { ok: false, error: /\b402\b|insufficient/i.test(m) ? 'insufficient_bonus' : 'spend_failed' }; }
   }
 
+  // build100i: FOLDED server Bonus — read an authoritative Bonus award off a /score or /plays RESPONSE (no separate
+  // /bonus-sparks/earn round-trip, no play_id plumbing). The server computes grade reward + ×3 Daily Rift + the 50/ISO-
+  // week cap atomically per run and MAY return { bonus_earned, bonus_balance, bonus_capped }. When present it is
+  // AUTHORITATIVE: cache the balance + (re)paint the results line over the optimistic local mint. Absent (older backend)
+  // → the local mint already shown stands, so this never regresses. Signed-in getBonusSparks() prefers _bonusSrvBal, so
+  // the local localStorage mint is shadowed (no double-count). This is the active server-Bonus path (supersedes the
+  // gated _bonusSrvEarn seam, which stays dormant).
+  function _absorbServerBonus(out, results) {
+    try {
+      if (!out || typeof out.bonus_balance !== 'number') return false;
+      _bonusSrvBal = out.bonus_balance;
+      if (out.bonus_earned != null) {
+        if (results) { try { results._bonusAwarded = out.bonus_earned; results._bonusBalance = out.bonus_balance; } catch (e) {} }
+        try { renderBonusSparksLine(out.bonus_earned, out.bonus_balance); } catch (e) {}
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
   // ===========================================================================
   // RHYTHM WAGER (build66) — host-run tournament PRIZE POOLS: an entry-fee pool (winner takes
   // the pot) and a parimutuel SIDE-BET (pickers split the pot). The host picks the mode + buy-in.
@@ -661,12 +680,17 @@
             notes_total: results.notes_total,
             play_token: playToken,
             pack_id: packId,                 // 50/50 payout reconciliation (null = freeplay)
+            daily_rift: !!_runDailyRift,     // build100i: server VALIDATES the day's-first-clear claim + applies the ×3 Bonus (it must not trust the flag blindly)
           };
           const out = await api('/plays', { method: 'POST', body: payload, auth: true });
+          // build100i: capture play_id (forward-compat) + FOLD the Bonus award off the /plays response when the
+          // backend ships it (server-authoritative grade reward + ×3 + 50/wk cap, atomic per run). No /earn round-trip.
+          try { if (out && out.play_id != null && currentTrack) currentTrack.play_id = out.play_id; } catch (e) {}
+          _absorbServerBonus(out, null);
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10')); }
           catch (e) { /* leaderboard optional */ }
-          return { rank_global: out.rank_global, leaderboard: board };
+          return { rank_global: out.rank_global, play_id: out && out.play_id, leaderboard: board };
         },
       };
     };
@@ -926,6 +950,7 @@
   // means ONLY completing the daily song can honor the ×3 — a non-matching run never gets it, so a quit can't leak it.
   let _dailyRiftArmedId = null;   // the daily track id the ×3 is armed for (null = not armed)
   let _dailyRiftTriple = false;   // whether the ×3 is still owed today (false → rift replay pays normal)
+  let _runDailyRift = false;      // build100i: was the just-COMPLETED run the day's armed Daily Rift? — read by /score + /plays so the server can apply the ×3 Bonus server-side (reset each run in recordLocal)
   // local YYYY-MM-DD (date-only key; the player's local day). Same string → same pick + same gate all day.
   function dailyRiftToday() {
     const d = new Date();
@@ -1433,6 +1458,7 @@
     // run can never leak the ×3 onto a later normal run. The ×3 is applied below only for a NON-failed run; a failed
     // rift earns nothing and does NOT stamp the day done, so the player can retry today for the bonus.
     let _rift3x = false;
+    _runDailyRift = false;   // build100i: reset the server-Bonus daily flag each run so a prior rift can't leak ×3 onto this run's /score|/plays
     // build100d: honor the DAILY RIFT ×3 ONLY when THIS run IS the armed daily track AND it completed (not failed).
     // Track-bound (not a boolean) so a quit/abandoned rift can't leak the ×3 onto a later non-matching run. A FAILED
     // daily run leaves the flag armed so a retry can still claim it; a non-matching run leaves it armed (waiting).
@@ -1441,6 +1467,7 @@
         _rift3x = !!_dailyRiftTriple; _dailyRiftArmedId = null; _dailyRiftTriple = false;
       }
     } catch (e) {}
+    _runDailyRift = _rift3x;   // build100i: surface to liveProvider.submit (/plays) for the rare server-charted daily track
     // 1) lifetime career aggregate — a FAILED run is an attempt, not a performance. Count it under
     // attempts/fails + timestamps only, and keep it OUT of runs/score/accuracy/grade-distribution so a
     // bailed run can't drag your lifetime accuracy down or stuff the grade chart with phantom low grades.
@@ -1575,7 +1602,9 @@
             track_id: currentTrack.id, difficulty: results.difficulty,
             score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
             notes_hit: results.notes_hit, notes_total: results.notes_total,
+            daily_rift: _rift3x,   // build100i: server validates the day's-first-clear claim + applies the ×3 Bonus (it must not trust the flag)
           } });
+          _absorbServerBonus(out, results);   // build100i: FOLD the Bonus award off the /score response when present (else the optimistic local mint already shown stands — no regression)
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
@@ -1677,8 +1706,20 @@
     placeBet: wagerPlaceBet, betOdds: wagerBetOdds, settleBets: wagerSettleBets,
     getPool: wagerGetPool, serverMode: wagerServerMode, maxBuyIn: function () { return WAGER_MAX_BUYIN; }
   };
+  // build100i: server-authoritative MULTIPLAYER result recorder (anti-cheat ledger + global MP ladder). Each peer
+  // POSTs its OWN claimed result keyed by the shared round_id (matchId[:trackId]); the server re-judges + pairs the two
+  // submissions by round_id. FIRE-AND-FORGET on purpose — the in-match verdict stays peer-broadcast + client-trusted
+  // (multiplayer.js settleIfReady), so a missing/slow/erroring endpoint never blocks or regresses the live duel.
+  async function mpSettle(payload) {
+    try {
+      if (!API_BASE || !payload) return null;
+      var tk = await getToken(); if (!tk) return null;   // only signed-in results count toward the server ladder
+      return await api('/mp/round/settle', { method: 'POST', body: payload, auth: true });
+    } catch (e) { return null; }
+  }
+
   window.RhythmCatalog = {
-    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack,
+    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle,
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
     // BONUS SPARKS — platform-only soft currency (gameplay earn loop; NOT cashable). SWAP-SEAM in catalog.js.

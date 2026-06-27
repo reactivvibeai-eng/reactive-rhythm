@@ -62,6 +62,18 @@ Two currencies (do not blur them):
 3. **Endpoints the game already calls** (`game-catalog` function base, anon-read OK): `getSparks`/`spendSparks`
    (`/sparks/balance`, `/sparks/spend`), `getEntitlements` (`/entitlements`). Re-read price server-side on spend; never
    trust the client. Full request/response shapes + the spend-flow diagram are in `LOVABLE_PAYMENT_BRIEF.md`.
+4. **Bonus Sparks EARNING — fold it into the `/score` + `/plays` responses (build100i — game side is LIVE, waiting on
+   you):** the game now sends **`daily_rift: <bool>`** in the `/score` and `/plays` request bodies and reads an
+   authoritative Bonus award back **off those same responses**. Return, on each, `{ …, bonus_earned, bonus_balance,
+   bonus_capped }`. You are the source of truth: compute the grade reward (suggest **S=6 · A=4 · B=2 · C=1 · D=1**,
+   **+2 for a full combo**), apply **×3 when `daily_rift` is true — but VALIDATE it server-side** (it really is today's
+   daily track *and* this user's first clear today; never trust the client's flag), then **clamp to the 50/ISO-week cap**
+   and persist **idempotently per run** (the same run must never double-pay). When you return these fields the game shows
+   *your* number and stops minting locally; until you do, it falls back to a capped LOCAL mint, so nothing breaks while
+   you build it. **This SUPERSEDES the earlier `POST /bonus-sparks/earn {play_id, play_token}` idea** — folding the award
+   into `/score`+`/plays` removes the play_id-plumbing blocker (the in-browser-charted path = ~all plays posts `/score`
+   and has no `play_token`/`play_id`). Keep `/bonus-sparks/balance` (read) + `/bonus-sparks/spend` (authoritative debit)
+   exactly as specced. Bonus stays **NON-cashable** — see the guardrail above.
 
 Economy tuning + conversion rationale (pack sizing, the in-game acquisition funnel) is in `REVENUE_ROADMAP.md`.
 
@@ -103,6 +115,14 @@ live + competitive-safe:
    server-side using the single-use `play_token` the client already carries, so a modded client can't top the global
    board. The local/seeded ladder is fine until this lands; the **public** leaderboard should gate on it. Full spec in
    `MP_SERVER_SCORING_BRIEF.md`.
+   **The game now POSTs `POST /mp/round/settle` (build100i — game side is LIVE)** at each player's round-end —
+   fire-and-forget, human matches only (CPU warm-ups + spectators never report). Each peer sends its OWN result keyed by
+   a **shared `round_id`** (the match id, optionally `:trackId`): `{ round_id, track_id, difficulty, client_score,
+   client_accuracy (0..1), client_max_combo, notes_hit, notes_total, player_id, player_name }`. Pair the two
+   submissions by `round_id`, **re-judge/clamp each** (same logic as the `/score` re-judge), record to the **global MP
+   ladder**, and optionally return `{ leaderboard:[…] }`. The in-match win/lose verdict stays peer-broadcast
+   (client-trusted) so a missing/slow endpoint never blocks a duel — `/mp/round/settle` is the trustworthy
+   **system-of-record** for the public MP standings + an anti-cheat audit trail.
 3. **Rate-limit / guard the anon write endpoints** `POST /plays`, `/score`, `/uses` (the anon key is client-reachable).
 4. Combat (a combo streak shocks/freezes the opponent ~2 s), tournament wagers (Bonus-Sparks-only), and host-pacing are
    all client-side already — they just need #1 (Realtime) to be live to sync between real peers.

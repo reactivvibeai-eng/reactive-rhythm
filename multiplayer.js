@@ -1203,6 +1203,25 @@
     } : (window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : { score: 0, combo: 0, acc: 0, grade: 'D' });
     myFinal = s;
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'final', payload: Object.assign({ name: ME.name }, s) });
+    // build100i: report THIS player's result to the server MP ledger (anti-cheat + global ladder). FIRE-AND-FORGET —
+    // the on-screen verdict below stays peer-broadcast + client-trusted, so a missing/slow endpoint never blocks the
+    // duel. Human matches only: CPU warm-ups (oppMeta.bot) + spectators never record. Both peers POST the same
+    // round_id (matchId[:trackId]) so the server can pair + re-judge them.
+    try {
+      if (!spectating && !(oppMeta && oppMeta.bot) && window.RhythmCatalog && RhythmCatalog.mpSettle) {
+        RhythmCatalog.mpSettle({
+          round_id: matchId + (sel && sel.trackId ? (':' + sel.trackId) : ''),
+          track_id: (sel && sel.trackId) || null,
+          difficulty: (sel && sel.difficulty) || null,
+          client_score: results ? results.score : s.score,
+          client_accuracy: results ? results.accuracy : (s.acc / 100),
+          client_max_combo: results ? results.max_combo : s.combo,
+          notes_hit: results ? results.notes_hit : null,
+          notes_total: results ? results.notes_total : null,
+          player_id: ME.id, player_name: ME.name,
+        });
+      }
+    } catch (e) {}
     settleIfReady();
     _settleSafetyT = setTimeout(function () { _settleSafetyT = 0; settleIfReady(true); }, 8000);   // safety if opponent never reports (v258: handle stored so teardown/rematch can cancel it)
   }

@@ -15,6 +15,25 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100i — server-economy integration: fold Bonus into /score+/plays, wire /mp/round/settle  ✅ verified
+Owner: *"pick the best-knowledge choice — get it working on the site."* So I made the two open Lovable-integration calls
+myself instead of asking, and wired the game side to match.
+- **Bonus Sparks → folded into the `/score` + `/plays` responses** (not a separate `/bonus-sparks/earn`). The game now
+  sends `daily_rift:<bool>` in both bodies and a new `_absorbServerBonus(out)` reads `bonus_earned`/`bonus_balance` back
+  off the response — when present it's authoritative (caches the balance + repaints the results line over the optimistic
+  local mint); absent → the existing capped LOCAL mint stands, so **nothing regresses** while Lovable builds it. This
+  **dissolves both prior blockers**: no `play_id` plumbing (the ~all-plays `/score` path has no token), and the Daily
+  Rift ×3 is handled server-side (server validates the day's-first-clear claim — never trusts the client flag). Also
+  captures `play_id` off `/plays` (forward-compat) + resets a per-run `_runDailyRift` flag so a prior rift can't leak ×3.
+- **Multiplayer `/mp/round/settle`** — new `RhythmCatalog.mpSettle(payload)` (authed, fail-open). `multiplayer.js`
+  fire-and-forgets each player's result at round-end (human matches only; CPU/spectators skip) keyed by a shared
+  `round_id` (`matchId[:trackId]`) with score/acc/combo/notes/difficulty/player. The in-match verdict stays
+  peer-broadcast + client-trusted (zero regression to the delicate settle flow); the endpoint is the server
+  system-of-record for the global MP ladder + an anti-cheat trail.
+- `LOVABLE_MASTER_PROMPT.md` updated with both FINAL contracts (§1 economy, §3 MP). Verified live (`?v` 369→370):
+  clean boot, `catalog.js?v=370` loaded, `RhythmCatalog.mpSettle` exposed, bonus/career/daily reads healthy
+  (bonus=12, runs=3, dailyState=true), **0 console errors**. `node --check` clean on catalog.js + multiplayer.js.
+
 ### build100g — campaign: After Hours → Velvet Crime (owner swap)  ✅ verified
 Owner didn't like the After Hours video; swapped the campaign flix slot to **Velvet Crime** (same artist, Mind Over
 Images; gold-lettering-on-crimson, fits the gold theme). Both are in the 112-film decodable-audio (playable) set.
