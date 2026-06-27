@@ -142,6 +142,7 @@
       round: 0, alive: [], pairs: [], byes: [], sel: null, finals: {}, settled: {}, _settleT: {},
       rival: null, meIn: false, history: [], champ: null, awaiting: false, _next: null,
       size: 8, envPool: ['__random'], envName: 'Random',
+      combat: false, songPool: [],   // build100q: #172 per-tournament combat (host-set, snapshot-replicated); #173 host-curated per-round song list (empty = legacy random)
       version: 0, _joinAt: 0, _alive: {}, _awaitWinners: null, env: null, atMs: 0,
       stakes: 'free', buyIn: 0, currency: 'bonus', potId: null, paid: {}, bets: {}, pot: 0,   // build66: WAGER — host-run prize pool. stakes: free|pool|sidebet; paid: id->{at,idemKey} (HOST-verified roster); pot mirrors the escrow for display. Real cashable Sparks stay OFF (currency locked to 'bonus' client-side; see RhythmWager swap-seam).
       _lastSnapV: -1, _snapHost: null, _roundTok: null, _hostHold: false };   // build58: snapshot-version FLOOR lives per-bracket (was a session-global that starved the 2nd tournament + rejected a promoted host's low-versioned snapshots); _roundTok = per-emission round nonce. build61: _hostHold = streamer pause of the auto-advance timers (host-only; a promoted heir starts un-held)
@@ -251,6 +252,17 @@
     // build65 (cycle-3): RECEIVE-SIDE COOLDOWN — back-to-back shocks (a rival on a hot streak fires every 30 combo) could
     // chain-lock you with no comeback path. Ignore a new shock within 4s of the last. Cosmetic to scoring (it gates input
     // timing, never the score ceiling) → leaderboard-safe. Exact cadence is a feel call; this guard prevents the runaway.
+    var now = Date.now();
+    if (now - _lastStunAt < 4000) return;
+    _lastStunAt = now;
+    try { window.RhythmGame.mpStun && window.RhythmGame.mpStun(2.2, (p && p.from) || 'RIVAL'); } catch (e) {}
+  }
+  // build100q #172: TOURNAMENT combat shock receiver. Rounds flow over tour.ch (matchCh/matchLive are null mid-bracket),
+  // so the 1v1 onShock above never fires in a bracket. A t-shock broadcasts to EVERYONE on the channel, so gate strictly:
+  // only MY current rival can zap ME (p.to === my id AND p.from === my rival). Same 4s receive-cooldown; cosmetic to scoring.
+  function onTourShock(p) {
+    if (!p || !matchCombat || spectating) return;
+    if (p.to !== ME.id || p.fromId !== tour.rival) return;   // only the player I'm actually dueling can shock me
     var now = Date.now();
     if (now - _lastStunAt < 4000) return;
     _lastStunAt = now;
@@ -1830,6 +1842,7 @@
     ch.on('broadcast', { event: 't-round' },  function (m) { onTourRound(m.payload); });
     ch.on('broadcast', { event: 't-tick' },   function (m) { onTourTick(m.payload); });
     ch.on('broadcast', { event: 't-state' },  function (m) { onTourState(m.payload); });   // build44: rival's full render frame → real hits/misses on the ghost deck
+    ch.on('broadcast', { event: 't-shock' },  function (m) { onTourShock(m.payload); });   // build100q #172: combat shock over the tour channel (matchCh is null mid-bracket)
     ch.on('broadcast', { event: 't-final' },  function (m) { onTourFinal(m.payload); });
     ch.on('broadcast', { event: 't-result' }, function (m) { onTourResult(m.payload); });
     ch.on('broadcast', { event: 't-finalverdict' }, function (m) { onTourFinalVerdict(m.payload); });
@@ -1891,6 +1904,7 @@
     return { tid: tour.id, v: tour.version || 0, state: tour.state, round: tour.round, alive: tour.alive,
       pairs: tour.pairs, byes: tour.byes, settled: tour.settled, finals: fl, sel: tour.sel, env: tour.env || null,
       envName: tour.envName, size: tour.size, atMs: tour.atMs || 0, awaiting: !!tour.awaiting,
+      combat: !!tour.combat, songPool: tour.songPool || [],   // build100q: #172 per-tournament combat + #173 host-curated song list → entrants + a promoted heir inherit both
       awaitWinners: tour._awaitWinners || null, champ: tour.champ || null, hostId: tour.hostId, hostAt: tour._joinAt || 0,
       stakes: tour.stakes, buyIn: tour.buyIn, currency: tour.currency, potId: tour.potId, paid: tour.paid, bets: tour.bets, pot: tour.pot };   // build66: WAGER — replicate the buy-in + the HOST-verified paid roster to every entrant (and to a promoted heir on host migration)
   }
@@ -1927,6 +1941,8 @@
     if (s.sel) tour.sel = s.sel;
     if (s.envName != null) tour.envName = s.envName;
     if (s.size) tour.size = s.size;
+    if (s.combat != null) tour.combat = !!s.combat;   // build100q #172: adopt the host's combat choice
+    if (s.songPool) tour.songPool = s.songPool;        // build100q #173: adopt the host's per-round song list
     // build66: WAGER fields — buy-in/mode/currency + the HOST-verified paid roster + the live pot. Merge paid{} (never
     // shrink an entrant's view of who's in). A promoted heir inherits potId + paid, so settlement survives host migration.
     if (s.stakes) tour.stakes = s.stakes;
@@ -1950,7 +1966,7 @@
     }
     if (s.awaiting) tour.awaiting = true;
     if (s.state === 'done' && tour.state !== 'done') { tour.state = 'done'; clearPersistedTour(); }
-    try { paintTourRoom(); renderTourBoard(); renderTourBracket(); } catch (e) {}
+    try { paintTourRoom(); renderTourBoard(); renderTourBracket(); buildTourSongRow(); } catch (e) {}   // build100q #173: repaint the setlist chips when the host's snapshot lands
     if (!tour.isHost) persistTour();
     try { setTimeout(_wagerMaybePay, 350); } catch (e) {}   // build66: WAGER — once the staked snapshot lands, prompt the entrant to pay their buy-in (deferred out of the render path; self-guards against re-prompting)
   }
@@ -2068,14 +2084,15 @@
   }
   function broadcastTourTrack() {
     if (!tour.ch) return;
-    try { tour.ch.send({ type: 'broadcast', event: 't-track', payload: { sel: tour.sel, envName: tour.envName, size: tour.size } }); } catch (e) {}
+    try { tour.ch.send({ type: 'broadcast', event: 't-track', payload: { sel: tour.sel, envName: tour.envName, size: tour.size, songPool: tour.songPool || [] } }); } catch (e) {}   // build100q #173: carry the setlist so the filling room shows it live
   }
   function onTourTrack(p) {
     if (!p) return;
     if (p.sel) tour.sel = p.sel;
     if (p.envName != null) tour.envName = p.envName;
     if (p.size) tour.size = p.size;
-    buildTourEnvRow(); paintTourRoom();
+    if (p.songPool) tour.songPool = p.songPool;   // build100q #173: entrants adopt the host's setlist
+    buildTourEnvRow(); buildTourSongRow(); paintTourRoom();
   }
 
   // ---- build11: full-library SEARCH picker for the bracket (host) ----
@@ -2095,9 +2112,7 @@
     [].forEach.call(box.querySelectorAll('.mpx-result[data-i]'), function (el) {
       el.addEventListener('click', function () {
         var t = rows[+el.getAttribute('data-i')]; if (!t) return;
-        tour.sel = { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: tourDiff(), demo: (t.id === 'demo') };
-        var pk = $('mpx-tour-picker'); if (pk) pk.hidden = true;
-        broadcastTourTrack(); paintTourRoom();
+        addSongToPool(t);   // build100q #173: APPEND to the setlist (rounds rotate through it) instead of replacing the single pick — keep the picker open to add more
       });
     });
   }
@@ -2173,6 +2188,51 @@
       rowEl.appendChild(b);
     });
   }
+  // build100q #173: host's per-round SONG pool (mirrors envPool). Search results APPEND here; rounds cycle through it.
+  function addSongToPool(t) {
+    if (!tour.isHost || tour.state !== 'open' || !t) return;
+    var pool = (tour.songPool || []).slice();
+    if (pool.some(function (s) { return s.trackId === t.id; })) { banner('mpx-tour-msg', '“' + (t.title || 'Track') + '” is already in the setlist.'); return; }   // dedup
+    if (pool.length >= 12) { banner('mpx-tour-msg', 'Setlist is full (12 songs).'); return; }
+    pool.push({ trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, demo: (t.id === 'demo') });
+    tour.songPool = pool;
+    tour.sel = Object.assign({}, pool[0], { difficulty: tourDiff() });   // round-1/display song stays valid (paintTourRoom/snapshot rely on tour.sel)
+    broadcastTourTrack(); buildTourSongRow(); paintTourRoom();
+  }
+  function removeSongFromPool(id) {
+    if (!tour.isHost || tour.state !== 'open') return;
+    tour.songPool = (tour.songPool || []).filter(function (s) { return s.trackId !== id; });
+    if (tour.songPool.length) tour.sel = Object.assign({}, tour.songPool[0], { difficulty: tourDiff() });
+    broadcastTourTrack(); buildTourSongRow(); paintTourRoom();
+  }
+  function buildTourSongRow() {
+    var rowEl = $('mpx-tour-songrow'), head = $('mpx-tour-songhead'); if (!rowEl) return;
+    var pool = tour.songPool || [];
+    var show = tour.isHost && tour.state === 'open';
+    if (head) head.hidden = !(pool.length || show);   // entrants see the setlist read-only; host gets ✕ remove
+    rowEl.hidden = !(pool.length || show);
+    rowEl.innerHTML = '';
+    if (!pool.length) {
+      if (show) { var hint = document.createElement('span'); hint.style.cssText = 'font-size:11px;color:var(--ink-dim);padding:4px 2px'; hint.textContent = 'No songs added — each round rolls a random track. Tap SEARCH to build a setlist.'; rowEl.appendChild(hint); }
+      return;
+    }
+    pool.forEach(function (s, i) {
+      var chip = document.createElement('span');
+      chip.className = 'env-chip sel';
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:7px;padding:6px 10px';
+      chip.innerHTML = '<span style="opacity:.55;font-weight:700">' + (i + 1) + '</span><span>' + esc(s.title || 'Untitled') + '</span>';
+      if (show) {
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.setAttribute('aria-label', 'Remove ' + (s.title || 'song') + ' from setlist');
+        x.style.cssText = 'background:none;border:0;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:0 1px;opacity:.7';
+        x.textContent = '✕';
+        x.addEventListener('click', function (e) { e.stopPropagation(); removeSongFromPool(s.trackId); });
+        chip.appendChild(x);
+      }
+      rowEl.appendChild(chip);
+    });
+  }
   // host resolves the concrete stage for round n — cycles the pool so each round rotates stage (Random → fresh roll)
   function hostResolveEnv(n) {
     var pool = tour.envPool || [];
@@ -2205,13 +2265,14 @@
     if (ids.length < TOUR_MIN) { banner('mpx-tour-msg', 'Need at least ' + TOUR_MIN + ' players to start (add NPCs in the dev bar to solo-test).'); return; }
     try { if (window.RhythmGame.getAC) window.RhythmGame.getAC().resume(); } catch (e) {}   // unlock the AudioContext on the START gesture — the deferred play() fires ~5s later, outside any gesture
     for (var i = ids.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
-    hostBeginRound(1, ids, tour.sel);
+    hostBeginRound(1, ids, hostResolveSong(1));   // build100q #173: round 1 = first curated song (falls back to tour.sel/random when the pool is empty)
   }
   function hostBeginRound(n, alive, sel) {
     var pb = buildPairs(alive);
     tour.ch.send({ type: 'broadcast', event: 't-round', payload: {
       n: n, alive: alive, pairs: pb.pairs, byes: pb.byes, sel: sel,
       env: hostResolveEnv(n),                       // the STAGE this round is fought on (cycles the host's pool; null = arena)
+      combat: !!tour.combat,                         // build100q #172: carry the host's combat choice into every round (onTourRound sets matchCombat)
       atMs: Date.now() + TOUR_LEADIN_MS } });        // longer lead-in for the 3-beat cinematic (ROUND → VS → 3·2·1)
   }
   function hostNextTrack() {
@@ -2220,6 +2281,15 @@
     if (!all.length) return tour.sel;
     var t = all[Math.floor(Math.random() * all.length)];
     return { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: (tour.sel && tour.sel.difficulty) || 'medium', demo: (t.id === 'demo') };
+  }
+  // build100q #173: host resolves the concrete SONG for round n — cycles the host-curated songPool (mirrors hostResolveEnv).
+  // Empty pool = legacy random roll (back-compat with in-flight brackets + the dev solo harness). Preserves difficulty/demo.
+  function hostResolveSong(n) {
+    var pool = tour.songPool || [];
+    if (!pool.length) return hostNextTrack();
+    var pick = pool[((n || 1) - 1) % pool.length];     // cycle if rounds > songs
+    if (!pick) return hostNextTrack();
+    return Object.assign({}, pick, { difficulty: (tour.sel && tour.sel.difficulty) || tourDiff() });
   }
 
   // ---- uniform round handler (host included via self:true) ----
@@ -2239,6 +2309,9 @@
     tour.state = 'live'; tour.round = p.n; tour.alive = p.alive || []; tour.pairs = p.pairs || [];
     tour.byes = p.byes || []; tour.sel = p.sel; tour.finals = {}; tour.settled = {};
     tour.env = p.env || null; tour.atMs = p.atMs || 0; tour._alive = {};   // build42: per-round liveness reset + round env/atMs for snapshots
+    if (p.combat != null) { matchCombat = !!p.combat; tour.combat = !!p.combat; }   // build100q #172: this round's combat mode (parallels the 1v1 onStart) — drives shock send/receive gates
+    _lastShockCombo = 0; _lastOdActive = false; _lastStunAt = 0;   // build100q #172: re-arm combat-shock state for the new round
+    if (p.songPool) tour.songPool = p.songPool;   // build100q #173: keep entrants' songPool current as the bracket advances
     Object.keys(tour._settleT).forEach(function (k) { clearTimeout(tour._settleT[k]); }); tour._settleT = {};
     if (tour.isHost) { advertiseTour(); startTourHeartbeat(); broadcastSnapshot(); }
     var myPair = null;
@@ -2317,6 +2390,22 @@
       if (stt && tour.ch && tour.meIn && now - _tourLastSend > 350) {
         _tourLastSend = now;
         tour.ch.send({ type: 'broadcast', event: 't-tick', payload: { id: ME.id, score: stt.score, combo: stt.combo, prog: stt.progress } });
+      }
+      // build100q #172: TOURNAMENT combat — shock the rival on each combo milestone + on Overdrive activation (mirrors the
+      // 1v1 send, but over tour.ch and targeted at tour.rival). Humans only; the milestone/OD guards self-throttle so this
+      // doesn't need the 350ms gate. _lastShockCombo/_lastOdActive are re-armed per round in onTourRound.
+      if (matchCombat && stt && tour.ch && tour.meIn && tour.rival && !((tour.members[tour.rival] || {}).bot)) {
+        var _tc = stt.combo || 0;
+        if (_tc < _lastShockCombo) _lastShockCombo = 0;                          // combo broke → re-arm
+        var _tms = Math.floor(_tc / SHOCK_COMBO_STEP) * SHOCK_COMBO_STEP;
+        var _tod = (!!stt.odActive && !_lastOdActive); _lastOdActive = !!stt.odActive;
+        var _thit = (_tms >= SHOCK_COMBO_STEP && _tms > _lastShockCombo);
+        if (_thit || _tod) {
+          if (_thit) _lastShockCombo = _tms;
+          try { tour.ch.send({ type: 'broadcast', event: 't-shock', payload: { fromId: ME.id, from: ME.name, to: tour.rival, combo: _tc, od: _tod } }); } catch (e) {}
+          try { window.RhythmGame.mpShockSent && window.RhythmGame.mpShockSent(); } catch (e) {}
+          try { _spawnZapBolt(); } catch (e) {}
+        }
       }
       if (_vsMode) {
         if (window.RhythmGame.getRenderFrame && now - _lastStateSend > 72) {
@@ -2463,7 +2552,7 @@
       setTimeout(function () { try { tour.ch.send({ type: 'broadcast', event: 't-champ', payload: { id: winners[0], name: tourName(winners[0]) } }); } catch (e) {} }, 2600);
     } else {
       // host-controlled: stash the next round + put everyone in a "between rounds" state; the host clicks START
-      var nextSel = hostNextTrack(), nextN = tour.round + 1;
+      var nextN = tour.round + 1, nextSel = hostResolveSong(nextN);   // build100q #173: next round = next curated song (cycles the pool; empty = random, unchanged)
       tour._next = { n: nextN, winners: winners, sel: nextSel };
       try { tour.ch.send({ type: 'broadcast', event: 't-await', payload: { n: nextN, winners: winners } }); } catch (e) {}
     }
@@ -2695,9 +2784,14 @@
     var leadrow = $('mpx-tour-leadinrow'); if (leadrow) leadrow.hidden = !tour.isHost;
     var leadseg = $('mpx-tour-leadin');
     if (leadseg) [].forEach.call(leadseg.children, function (b) { b.disabled = !tour.isHost; b.classList.toggle('active', +b.getAttribute('data-lead') === TOUR_LEADIN_MS); });
+    // build100q #172: per-tournament COMBAT control — host-only; reflect tour.combat (locks once live, like stakes)
+    var combatrow = $('mpx-tour-combatrow'); if (combatrow) combatrow.hidden = !tour.isHost;
+    var combatseg = $('mpx-tour-combat');
+    if (combatseg) [].forEach.call(combatseg.children, function (b) { b.disabled = !tour.isHost; b.classList.toggle('active', (b.getAttribute('data-combat') === 'on') === !!tour.combat); });
     var stakerow = $('mpx-tour-stakerow'); if (stakerow) stakerow.hidden = !tour.isHost;   // build66: STAKES control is host-only; the pot banner + buy-in confirm are shown to everyone
     paintStakeRow();
     buildTourEnvRow();   // stage POOL chips (host multi-select; guests see the pick)
+    buildTourSongRow();  // build100q #173: SONG setlist chips (host adds via SEARCH; rounds rotate; guests see read-only)
     banner('mpx-tour-msg', '');
     paintHostPaceControls();   // build61: reset host-pacing controls on (re-)entry (hidden until a live round/await)
     paintTourRoom();
@@ -3022,6 +3116,7 @@
     tour.ch.on('broadcast', { event: 't-round' }, function (m) { onTourRound(m.payload); });
     tour.ch.on('broadcast', { event: 't-tick' }, function (m) { onTourTick(m.payload); });
     tour.ch.on('broadcast', { event: 't-state' }, function (m) { onTourState(m.payload); });
+    tour.ch.on('broadcast', { event: 't-shock' }, function (m) { onTourShock(m.payload); });   // build100q #172: combat shock over the tour channel
     tour.ch.on('broadcast', { event: 't-final' }, function (m) { onTourFinal(m.payload); });
     tour.ch.on('broadcast', { event: 't-result' }, function (m) { onTourResult(m.payload); });
     tour.ch.on('broadcast', { event: 't-finalverdict' }, function (m) { onTourFinalVerdict(m.payload); });
@@ -3249,6 +3344,13 @@
     var b = e.target.closest('button[data-lead]'); if (!b || !tour.isHost) return;
     TOUR_LEADIN_MS = +b.getAttribute('data-lead') || 10000;   // build100t: default ~10s
     [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
+  });
+  // build100q #172: host sets per-tournament COMBAT (locks once live, like stakes). Rides the t-snapshot to entrants.
+  wire('mpx-tour-combat', 'click', function (e) {
+    var b = e.target.closest('button[data-combat]'); if (!b || !tour.isHost || tour.state !== 'open') return;
+    tour.combat = b.getAttribute('data-combat') === 'on';
+    [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); });
+    broadcastSnapshot();
   });
   // build66: WAGER — host sets the bracket STAKES (free | prize pool | side-bet) + the buy-in. BONUS SPARKS ONLY
   // (cashable Sparks gated off behind RhythmWager WAGER_SERVER_MODE='local'). Stakes/buyIn/pot/paid ride the t-snapshot to entrants.

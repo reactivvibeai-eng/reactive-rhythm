@@ -15,6 +15,29 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 2) — MP combat relocation + tournament multi-song setlist  ✅ verified (live preview, solo-bracket)
+Two playtest asks, both pure-client (no backend; replication rides existing Realtime broadcasts). Plans from the
+mp-gameplay-fix investigation swarm.
+
+- **#172 — Combat moved OFF the confusing main-lobby toggle INTO per-room (already there) + per-TOURNAMENT settings.**
+  The lobby "Combat (when I host)" button read like a global switch but only seeded quick-match; the tester expected to
+  set it where they create the match. Added a host-only **COMBAT** segmented row to tournament-create (`#mpx-tour-combat`,
+  off/on), wired into `nullTour().combat`, the `t-round` payload, `onTourRound` (`matchCombat`), and the `t-snapshot`
+  (entrants + a promoted heir inherit it). The lobby toggle is now hidden (its `combatOn` var kept so quick-match still
+  reads a default, off). **Also made tournament combat actually DEAL DAMAGE** (it was inert — the 1v1 shock send/receive
+  gate on `matchCh`/`matchLive`, null mid-bracket): added a `t-shock` send in the tournament tick (combo-milestone + on
+  Overdrive, humans only) and an `onTourShock` receiver over `tour.ch`, strictly gated so only your current rival can zap
+  you (`p.to===me && p.fromId===rival`), same 4s cooldown; shock state re-arms each round. Verified live: the combat row
+  shows in a solo bracket and toggles off→on.
+- **#173 — Multi-song tournaments: the host curates a per-round SETLIST.** Was: rounds 2+ rolled a *random* song. Now the
+  host SEARCHes the library and each result APPENDS to a setlist (`tour.songPool`); rounds cycle through it
+  (`hostResolveSong(n)` mirrors the shipped `hostResolveEnv` stage-rotation), wrapping if rounds > songs. Empty pool =
+  legacy random (back-compat). Setlist replicates via `t-track` + `t-snapshot` so the filling room shows it live; chosen
+  songs render as numbered, removable chips (`#mpx-tour-songrow`). `game.js` unchanged — `onTourRound`/`resolveAndStart`
+  already honor whatever `sel` the host broadcasts each round. Verified live: search → append 2 chips ("1…", "2…") →
+  remove → count drops; no console errors. **2-device note:** combat-shock-landing + per-round song rotation across real
+  peers want an owner 2-machine test (Realtime needs 2 clients).
+
 ### build100q — economy + leaderboard fix burst (admin ownership, store buy, rank honesty, MP W/L)  ✅ verified (live preview)
 Playtest burst (owner + santaroxx) on the public build. A 4-agent investigation swarm pinned each root cause; all four
 fixes are **game-side** (the cross-account/real-data halves are Lovable backend items, spec'd in `LOVABLE_MASTER_PROMPT.md`).
