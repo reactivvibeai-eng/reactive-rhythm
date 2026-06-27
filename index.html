@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=366" />
+<link rel="stylesheet" href="jukebox.css?v=367" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5515,6 +5515,8 @@
       <div class="store-legend" style="font-size:11.5px; color:var(--ink-dim); margin:0 auto 12px; line-height:1.55; text-align:center; max-width:520px;">
         <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance, topped up on the website · spend on anything &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics. Purchases never pay-to-win.
       </div>
+      <!-- build100h: Commission a Custom Level ($59.95) — deep-links to the platform /commission page (Lovable backend). -->
+      <button class="store-commission" id="store-commission" type="button" title="Commission a bespoke level built from your own reference images ($59.95)" style="margin:0 auto 14px;display:block;max-width:520px;width:100%;padding:11px 16px;border-radius:12px;border:0.5px solid var(--gold,#e0a93f);background:linear-gradient(180deg,rgba(224,169,63,0.12),rgba(224,169,63,0.04));color:#f4d488;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:0.05em;cursor:pointer;">✦ COMMISSION YOUR OWN LEVEL — built from your reference images · $59.95 →</button>
       <div class="store-banner" id="store-banner" hidden></div>
       <div class="store-grid" id="store-grid"></div>
       <p class="store-empty" id="store-empty" hidden>The shop is restocking — check back soon.</p>
@@ -6061,7 +6063,13 @@
     // path once the Lovable backend exposes /beta/status + /beta/redeem (per BETA_GATE_BRIEF.md).
     BETA_API: '',
     SUPABASE_URL: 'https://bxiejoktoknybpraxebm.supabase.co',
-    SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4aWVqb2t0b2tueWJwcmF4ZWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNTExNDIsImV4cCI6MjA4NzgyNzE0Mn0.mXL_YUhYmMXGO0kh9ouDIu088Epgqc9rB0lX57WYimo'
+    SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4aWVqb2t0b2tueWJwcmF4ZWJtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNTExNDIsImV4cCI6MjA4NzgyNzE0Mn0.mXL_YUhYmMXGO0kh9ouDIu088Epgqc9rB0lX57WYimo',
+    // build100h — LIVE launch config (matches what the Lovable backend exposes). In the source repo so a
+    // build-time pull of main@HEAD is deploy-ready; Lovable may still override these at build/deploy time.
+    SITE_BASE: 'https://reactivvibeai.com',                                                  // the platform front
+    SPARKS_TOPUP_URL: 'https://reactivvibeai.com/sparks',                                     // Get Sparks → the /sparks top-up page (SparkPurchaseModal) → credits user_sparks
+    COMMISSION_URL: 'https://reactivvibeai.com/commission',                                   // Commission a Custom Level ($59.95) page
+    TELEMETRY_BASE: 'https://bxiejoktoknybpraxebm.supabase.co/functions/v1/game-catalog'      // /clientlog + /events live on game-catalog
   };
   // build50: SINGLE SOURCE OF TRUTH for which levels are FINISHED (beta-public). Read by EVERY level-pick surface —
   // the Levels screen, the Environment Picker, and the multiplayer tournament stage picker — so promoting a level to
@@ -6072,7 +6080,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=366"></script>
+<script src="telemetry.js?v=367"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6210,14 +6218,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=366"></script>
-<script src="game.js?v=366"></script>
-<script src="procbg.js?v=366"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=366"></script>
-<script src="catalog.js?v=366"></script>
-<script src="multiplayer.js?v=366"></script>
-<script src="share.js?v=366"></script>
-<script src="couch.js?v=366"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=367"></script>
+<script src="game.js?v=367"></script>
+<script src="procbg.js?v=367"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=367"></script>
+<script src="catalog.js?v=367"></script>
+<script src="multiplayer.js?v=367"></script>
+<script src="share.js?v=367"></script>
+<script src="couch.js?v=367"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8622,7 +8630,7 @@
   function toast(m) { try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast(m); } catch (e) {} }
   var SPARK_SVG = '<svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>';
   var BONUS_PX_SVG = '<svg class="bonus-px-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg>';
-  var SITE_SPARKS = 'https://reactivvibeai.com/live?sparks=open';
+  var SITE_SPARKS = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SPARKS_TOPUP_URL) || 'https://reactivvibeai.com/sparks';   // build100h: read the top-up URL from config (Lovable's /sparks page) so the deploy can repoint it without a code change
   // DUAL PRICING: cosmetics (skins/themes) can be bought with EARNED Bonus Sparks too.
   // Bonus price = real-Sparks price × BONUS_RATE (earned currency, so it costs more "units").
   // Premium LEVELS stay real-Sparks-only (marquee paid content). Tune BONUS_RATE to taste.
@@ -9185,6 +9193,8 @@
   var ob = $('store-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('store-close'); if (cb) cb.addEventListener('click', close);
   var gm = $('store-getmore'); if (gm) gm.addEventListener('click', openGetSparks);
+  // build100h: Commission a Custom Level → the platform /commission page (URL from config, Lovable can repoint).
+  var cm = $('store-commission'); if (cm) cm.addEventListener('click', function () { try { var u = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.COMMISSION_URL) || 'https://reactivvibeai.com/commission'; openSite(u); if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event('commission_open', {}); } catch (e) {} });
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
     // build89: when the showroom hero is open, let ITS Escape handler close just the hero — don't tear down the whole store
