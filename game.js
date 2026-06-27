@@ -3970,10 +3970,11 @@
     // announce once when the meter first fills, so players know Space is armed
     if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; flashJudgment('OVERDRIVE READY', '#ffd98a'); }
     else if (!odReady) odReadyAnnounced = false;
-    $('jc-perfect').textContent = counts.perfect;
-    $('jc-great').textContent = counts.great;
-    $('jc-good').textContent = counts.good;
-    $('jc-miss').textContent = counts.miss;
+    // build99N (P-06): null-guard these 4 like the rest of updateHUD — a missing id must not throw inside the rAF loop.
+    { const _jp = $('jc-perfect'); if (_jp) _jp.textContent = counts.perfect;
+      const _jg = $('jc-great'); if (_jg) _jg.textContent = counts.great;
+      const _jo = $('jc-good'); if (_jo) _jo.textContent = counts.good;
+      const _jm = $('jc-miss'); if (_jm) _jm.textContent = counts.miss; }
     // judgment composition bar — proportion of each judgment so far, at a glance
     { const jt = counts.perfect + counts.great + counts.good + counts.miss || 1;
       const setSeg = (id, c) => { const e = $(id); if (e) e.style.width = (c / jt * 100) + '%'; };
@@ -3982,7 +3983,7 @@
     const cd = $('combo-display');
     // Always write the number — vs-mode forces the capsule opaque, so a value left stale below the
     // single-player reveal threshold would read as a frozen combo. .show still gates the SP reveal at >=10.
-    $('combo-num').textContent = combo;
+    { const _cn = $('combo-num'); if (_cn) _cn.textContent = combo; }
     // combo TIER styling — recolor the readout + swap the label to the tier NAME past T0.
     // Only touch the DOM when the tier actually changes (per-frame cheap).
     if (cd) {
@@ -3996,13 +3997,12 @@
         if (_lab) _lab.textContent = _ti === 0 ? 'COMBO' : _tin.name;
       }
     }
-    if (combo >= 10) cd.classList.add('show');
-    else cd.classList.remove('show');
-    $('hud-stability').style.width = (stability * 100) + '%';
+    if (cd) { if (combo >= 10) cd.classList.add('show'); else cd.classList.remove('show'); }
+    { const _hsb = $('hud-stability'); if (_hsb) _hsb.style.width = (stability * 100) + '%'; }
     let stxt = 'STABLE';
     if (stability < 0.3) stxt = 'COLLAPSING'; else if (stability < 0.6) stxt = 'UNSTABLE';
     else if (stability < 0.85) stxt = 'FLUCTUATING';
-    $('stability-text').textContent = stxt + ' · ' + Math.floor(stability * 100) + '%';
+    { const _stx = $('stability-text'); if (_stx) _stx.textContent = stxt + ' · ' + Math.floor(stability * 100) + '%'; }
   }
 
   // ---------- RENDER HELPERS ----------

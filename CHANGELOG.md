@@ -29,6 +29,18 @@ Driven by a 6-dimension audit swarm (perf / stability / AI Flixs / campaign / ec
   on the website, spend in-game".
 - `?v` → 354. Verified live (videoCount 142, gate active under `?asplayer=1`, locked-click → Store, 0 console errors).
 
+### build99O — performance + robustness (weak-device)  ✅ verified
+- **P-04 video decoders:** `display:none` does NOT stop a GPU video decoder, so 3-4 menu/start/library backdrop
+  `<video>`s kept decoding during gameplay and capped frame-rate on phones. Added a read-only observer that pauses
+  any decorative backdrop whose owning screen is hidden and resumes it when visible (excludes the gameplay-managed
+  `#bg-video`). Verified: every `display:none` backdrop is paused, no leaks; a visible backdrop is never paused. `index.html`.
+- **P-24:** the deep scr-vidbg backdrops (profile/levels/leaderboard) drop `preload="auto"` → `"metadata"` (no eager
+  full-clip fetch on boot).
+- **P-06 robustness:** null-guarded the remaining unguarded HUD derefs in `updateHUD` (`jc-*`, `combo-num`,
+  `combo-display`, `hud-stability`, `stability-text`) so a missing id after a markup move can't throw inside the rAF loop.
+- Deferred (assessed, low-reward/high-risk for a headless-only verify): note-scan early-break (draws are already
+  window-gated), fretGeom cache (alignment-sensitive), particle save/restore, warped-guitar re-slice. `?v` → 355.
+
 ### 1. Desktop song-select — full-width "deck"  ✅ verified
 `jukebox.css` (new `@media (min-width:901px)` block; mobile untouched).
 - The library was a 720px column centered in black. Now at >900px `#view-jukebox`

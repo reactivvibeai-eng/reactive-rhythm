@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=354" />
+<link rel="stylesheet" href="jukebox.css?v=355" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5043,7 +5043,7 @@
        CAREER / CONTROLLER PROFILE — localStorage-backed progression
        ============================================================ -->
   <div class="screen profile-screen" id="profile-screen">
-    <video class="scr-vidbg" autoplay loop muted playsinline preload="auto" src="assets/moon-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
+    <video class="scr-vidbg" autoplay loop muted playsinline preload="metadata" src="assets/moon-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
     <div class="scr-vidbg-scrim" aria-hidden="true"></div>
     <div class="profile-card">
       <div class="profile-showcase">
@@ -5094,7 +5094,7 @@
        LEVELS — tiered Level Select (Warm-Up / Pulse / Fracture)
        ============================================================ -->
   <div class="screen levels-screen" id="levels-screen">
-    <video class="scr-vidbg" autoplay loop muted playsinline preload="auto" src="assets/moon-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
+    <video class="scr-vidbg" autoplay loop muted playsinline preload="metadata" src="assets/moon-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
     <div class="scr-vidbg-scrim" aria-hidden="true"></div>
     <div class="levels-card">
       <img class="lv-guitar-flair" id="lv-guitar-flair" src="assets/guitar.png" alt="" aria-hidden="true" onerror="this.style.display='none'" />
@@ -5115,7 +5115,7 @@
        falls back to local rr_career / rr_scores; "live when accounts connect" state)
        ============================================================ -->
   <div class="screen leaderboard-screen" id="leaderboard-screen">
-    <video class="scr-vidbg" autoplay loop muted playsinline preload="auto" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
+    <video class="scr-vidbg" autoplay loop muted playsinline preload="metadata" src="assets/levels/menu-loop.mp4" onerror="this.style.display='none'" aria-hidden="true"></video>
     <div class="scr-vidbg-scrim" aria-hidden="true"></div>
     <div class="lbd-card">
       <div class="pre-title" style="font-family:'JetBrains Mono';font-size:12px;letter-spacing:0.4em;color:var(--crimson);">// RANKINGS</div>
@@ -5794,7 +5794,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=354"></script>
+<script src="telemetry.js?v=355"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -5932,14 +5932,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=354"></script>
-<script src="game.js?v=354"></script>
-<script src="procbg.js?v=354"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=354"></script>
-<script src="catalog.js?v=354"></script>
-<script src="multiplayer.js?v=354"></script>
-<script src="share.js?v=354"></script>
-<script src="couch.js?v=354"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=355"></script>
+<script src="game.js?v=355"></script>
+<script src="procbg.js?v=355"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=355"></script>
+<script src="catalog.js?v=355"></script>
+<script src="multiplayer.js?v=355"></script>
+<script src="share.js?v=355"></script>
+<script src="couch.js?v=355"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -5979,6 +5979,47 @@
       });
     }
   } catch (e) {}
+})();
+</script>
+
+<!-- ===========================================================================
+     build99N (launch-audit P-04): PAUSE hidden backdrop <video> decoders. CSS only display:none's
+     these on inactive screens — which does NOT stop the GPU video decoder, so up to 3-4 menu/start/
+     library backdrops keep decoding during gameplay and cap the frame-rate on phones/weak laptops.
+     This read-only observer pauses any decorative backdrop whose owning screen is hidden (display:none
+     → offsetParent null) and resumes it when visible. EXCLUDES #bg-video (gameplay/flix/journey own it).
+     =========================================================================== -->
+<script>
+(function () {
+  if (!window.MutationObserver) return;
+  var SEL = '#start-video, #menu-hub-video, #menu-bg-video, .scr-vidbg';   // decorative only; NOT #bg-video
+  function shown(v) {
+    try { return v.offsetParent !== null && getComputedStyle(v).display !== 'none'; } catch (e) { return false; }
+  }
+  function sync() {
+    var vids = document.querySelectorAll(SEL);
+    for (var i = 0; i < vids.length; i++) {
+      var v = vids[i];
+      try {
+        if (shown(v)) { if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } }
+        else if (!v.paused) { v.pause(); }
+      } catch (e) {}
+    }
+  }
+  var raf = 0;
+  function schedule() { if (raf) return; raf = requestAnimationFrame(function () { raf = 0; sync(); }); }
+  var mo = new MutationObserver(schedule);
+  function arm() {
+    try {
+      document.querySelectorAll('.screen, #app, #start, #view-jukebox, #menu-hub').forEach(function (s) {
+        if (s) mo.observe(s, { attributes: true, attributeFilter: ['class', 'style'] });
+      });
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });   // rr-perf-bg / reduce-motion
+    } catch (e) {}
+    sync();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm); else arm();
+  setTimeout(sync, 1500);   // catch the first real screen after boot
 })();
 </script>
 
