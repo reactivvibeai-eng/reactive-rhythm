@@ -3354,14 +3354,20 @@
   });
   // build66: WAGER — host sets the bracket STAKES (free | prize pool | side-bet) + the buy-in. BONUS SPARKS ONLY
   // (cashable Sparks gated off behind RhythmWager WAGER_SERVER_MODE='local'). Stakes/buyIn/pot/paid ride the t-snapshot to entrants.
+  var DEFAULT_BUYIN = 50;   // build100q: single source for the default staked buy-in (was an inline `|| 50` in two spots that diverged from tour.buyIn)
   function paintStakeRow() {
     var seg = $('mpx-tour-stakes');
     if (seg) [].forEach.call(seg.children, function (b) { b.classList.toggle('active', b.getAttribute('data-stakes') === (tour.stakes || 'free')); b.disabled = !tour.isHost || tour.state !== 'open'; });
     var staked = tour.stakes && tour.stakes !== 'free', anyPaid = Object.keys(tour.paid || {}).length > 0;
+    // build100q (wager fix): the HOST seeds a real buy-in when a staked mode has none, so the field DISPLAY can never
+    // diverge from the replicated tour.buyIn. The old `bi.value = tour.buyIn || 50` showed "50" in the field while
+    // tour.buyIn was still 0 → entrants (and the host) got charged a phantom 50 even when the host meant a smaller
+    // amount. Entrants NEVER seed — they only ever show the host's snapshot value; a free bracket carries buyIn 0.
+    if (tour.isHost && staked && !tour.buyIn) { tour.buyIn = DEFAULT_BUYIN; }
     var bir = $('mpx-tour-buyinrow'); if (bir) bir.hidden = !(staked && tour.isHost);
     var bl = $('mpx-tour-buyinlbl'); if (bl) bl.textContent = (tour.stakes === 'sidebet') ? 'BET' : 'BUY-IN';
     var bi = $('mpx-tour-buyin');
-    if (bi) { bi.disabled = !tour.isHost || tour.state !== 'open' || anyPaid; if (document.activeElement !== bi) bi.value = tour.buyIn || 50; }
+    if (bi) { bi.disabled = !tour.isHost || tour.state !== 'open' || anyPaid; if (document.activeElement !== bi) bi.value = staked ? (tour.buyIn || DEFAULT_BUYIN) : ''; }
     var hint = $('mpx-tour-stakehint');
     if (hint) {
       if (!staked) hint.hidden = true;
@@ -3380,8 +3386,8 @@
     var b = e.target.closest('button[data-stakes]'); if (!b || !tour.isHost || tour.state !== 'open') return;
     if (Object.keys(tour.paid || {}).length > 0) { banner('mpx-tour-msg', 'Can’t change stakes after a buy-in has been paid.'); return; }
     tour.stakes = b.getAttribute('data-stakes') || 'free'; tour.currency = 'bonus';
-    if (tour.stakes === 'free') { tour.potId = null; tour.pot = 0; }
-    else { tour.buyIn = Math.max(1, Math.min(_wagerMax(), parseInt(($('mpx-tour-buyin') || {}).value, 10) || 50)); _wagerEnsurePool(); _wagerDeclined[tour.id] = false; try { setTimeout(_wagerMaybePay, 400); } catch (e) {} }   // host commits to its own buy-in too; re-selecting a mode re-prompts
+    if (tour.stakes === 'free') { tour.potId = null; tour.pot = 0; tour.buyIn = 0; }   // build100q: Free clears the buy-in too, so no stale bet amount lingers (was: pot zeroed but buyIn kept → "Free" + a phantom 50 bet)
+    else { tour.buyIn = Math.max(1, Math.min(_wagerMax(), parseInt(($('mpx-tour-buyin') || {}).value, 10) || DEFAULT_BUYIN)); _wagerEnsurePool(); _wagerDeclined[tour.id] = false; try { setTimeout(_wagerMaybePay, 400); } catch (e) {} }   // host commits to its own buy-in too; re-selecting a mode re-prompts
     paintStakeRow(); paintTourRoom(); broadcastSnapshot(); advertiseTour();
   });
   wire('mpx-tour-buyin', 'input', function () {

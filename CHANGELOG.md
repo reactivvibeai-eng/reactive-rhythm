@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 3) — wager buy-in fix: host set 1 but entrants were charged 50  ✅ verified (live, solo-bracket)
+Playtest: host set the tournament BUY-IN to 1 ◆ but entrants were still asked to place **50**, and a "Free" bracket
+could still show a "PLACE YOUR BET — 50" button. ROOT CAUSE: a display/state divergence — `paintStakeRow` did
+`bi.value = tour.buyIn || 50`, so the field **showed** 50 while `tour.buyIn` stayed 0; selecting a staked mode then
+committed that phantom 50, and the entrant's bet button (which reads `tour.buyIn`) showed 50 regardless of what the host
+typed. Switching to Free also never cleared `buyIn`, so a stale bet amount lingered. FIX: one `DEFAULT_BUYIN=50` const;
+the **host seeds a real `tour.buyIn`** when a staked mode has none so the field display always equals the replicated
+value (entrants never seed — they only show the host's snapshot value); the field shows '' when Free; and **switching to
+Free now clears `tour.buyIn=0`** + hides the bet button. Verified live: type buy-in 1 → bet button reads "PLACE YOUR
+BET — 1 ◆"; switch to Free → bet button hides + field clears. Entrants now see the host's actual amount.
+
 ### build100q (part 2) — MP combat relocation + tournament multi-song setlist  ✅ verified (live preview, solo-bracket)
 Two playtest asks, both pure-client (no backend; replication rides existing Realtime broadcasts). Plans from the
 mp-gameplay-fix investigation swarm.
