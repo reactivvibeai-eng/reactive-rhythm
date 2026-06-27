@@ -288,19 +288,52 @@
     if (nVid > 0) {
       const vt = document.createElement('button');
       vt.className = 'flixs-hero-card';
-      vt.innerHTML = '<span class="fh-badge">AI FLIXS</span>' +
-        '<span class="fh-sub">Music videos &amp; AI films</span>' +
-        '<span class="fh-count">' + nVid + ' film' + (nVid !== 1 ? 's' : '') + ' ▶</span>';
+      vt.innerHTML =
+        '<span class="fh-grain" aria-hidden="true"></span>' +
+        '<span class="fh-bloom" aria-hidden="true"></span>' +
+        '<span class="fh-ic" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="2.5" y="6.5" width="19" height="13" rx="2"></rect>' +
+            '<path d="M2.5 6.5l3.4-3.2 3.1 3.2M9 6.5l3.4-3.2 3.1 3.2M15.5 6.5l3.4-3.2 3.1 3.2"></path>' +
+          '</svg>' +
+        '</span>' +
+        '<span class="fh-txt">' +
+          '<span class="fh-kicker"><b>●</b> FLAGSHIP · NOW SHOWING</span>' +
+          '<span class="fh-badge">AI FLIXS</span>' +
+          '<span class="fh-sub">Play Guitar Hero to real music videos &amp; AI films</span>' +
+        '</span>' +
+        '<span class="fh-cta" aria-hidden="true">' +
+          '<span class="fh-count">' + nVid + ' film' + (nVid !== 1 ? 's' : '') + '</span>' +
+          '<span class="fh-go">▶</span>' +
+        '</span>';
       // 6th arg = posterMode (poster grid); scope defaults to 'flixs' (videos-only) from isVid
       vt.addEventListener('click', () => openSongs(RC().videoTracks(), 'AI Flixs', 'browse', '', true, true));
       gg.appendChild(vt);
     }
+    const maxCount = named.length ? named[0].count : 1;   // the biggest genre (sorted desc) → "energy bar" scale
     genres.forEach(g => {
       const isUncat = g.name === UNCAT_GENRE;
       const label = isUncat ? UNCAT_LABEL : g.name;
       const t = document.createElement('button');
       t.className = 'genre-tile'; setPal(t, label);
-      t.innerHTML = '<span class="gt-name">' + RC().escapeHtml(label) + '</span><span class="gt-count">' + g.count + ' track' + (g.count !== 1 ? 's' : '') + '</span>';
+      // hue variety WITHIN the warm palette: a deterministic accent slot per genre so the eye can scan/differentiate
+      // (purely cosmetic — class drives a CSS accent var; the data wiring below is untouched).
+      t.classList.add('gt-a' + (RC().hashStr(label) % 6));
+      if (isUncat) t.classList.add('gt-uncat');
+      // a fill fraction (0..1) for the relative-size "energy" rail under the count — bigger genre = fuller bar.
+      const frac = Math.max(0.16, Math.min(1, g.count / (maxCount || 1)));
+      t.style.setProperty('--gt-fill', (frac * 100).toFixed(0) + '%');
+      t.innerHTML =
+        '<span class="gt-watermark" aria-hidden="true">' + RC().escapeHtml(initial(label)) + '</span>' +
+        '<span class="gt-glow" aria-hidden="true"></span>' +
+        '<span class="gt-body">' +
+          '<span class="gt-name">' + RC().escapeHtml(label) + '</span>' +
+          '<span class="gt-meta">' +
+            '<span class="gt-count">' + g.count + '</span>' +
+            '<span class="gt-unit">track' + (g.count !== 1 ? 's' : '') + '</span>' +
+          '</span>' +
+          '<span class="gt-rail" aria-hidden="true"><i></i></span>' +
+        '</span>';
       t.addEventListener('click', () => openSongs(RC().byGenre(g.name), label, 'browse'));
       gg.appendChild(t);
     });
@@ -309,25 +342,26 @@
     const ag = $('artist-grid'); ag.innerHTML = '';
     const artists = RC().artistList();
     const solo = [];   // {name} of artists with exactly one track
+    const mkArtist = (cls, seed, glyph, name, countText) => {
+      const t = document.createElement('button');
+      t.className = 'artist-tile' + (cls ? ' ' + cls : '');
+      const av = document.createElement('span'); av.className = 'at-avatar'; setPal(av, seed);
+      av.innerHTML = '<span class="at-init">' + RC().escapeHtml(glyph) + '</span>';
+      const tx = document.createElement('span'); tx.className = 'at-text';
+      tx.innerHTML = '<span class="at-name">' + RC().escapeHtml(name) + '</span><span class="at-count">' + countText + '</span>';
+      const chev = document.createElement('span'); chev.className = 'at-chev'; chev.setAttribute('aria-hidden', 'true'); chev.textContent = '›';
+      t.appendChild(av); t.appendChild(tx); t.appendChild(chev);
+      return t;
+    };
     artists.forEach(a => {
       if (a.count <= 1) { solo.push(a); return; }
-      const t = document.createElement('button');
-      t.className = 'artist-tile';
-      const av = document.createElement('span'); av.className = 'at-avatar'; setPal(av, a.name); av.textContent = initial(a.name);
-      const tx = document.createElement('span'); tx.className = 'at-text';
-      tx.innerHTML = '<span class="at-name">' + RC().escapeHtml(a.name) + '</span><span class="at-count">' + a.count + ' song' + (a.count !== 1 ? 's' : '') + '</span>';
-      t.appendChild(av); t.appendChild(tx);
+      const t = mkArtist('', a.name, initial(a.name), a.name, a.count + ' song' + (a.count !== 1 ? 's' : ''));
       t.addEventListener('click', () => openSongs(RC().byArtist(a.name), a.name, 'browse'));
       ag.appendChild(t);
     });
     if (solo.length) {
       const label = 'Various Artists';
-      const t = document.createElement('button');
-      t.className = 'artist-tile';
-      const av = document.createElement('span'); av.className = 'at-avatar'; setPal(av, label); av.textContent = '♪';
-      const tx = document.createElement('span'); tx.className = 'at-text';
-      tx.innerHTML = '<span class="at-name">' + label + '</span><span class="at-count">' + solo.length + ' artist' + (solo.length !== 1 ? 's' : '') + '</span>';
-      t.appendChild(av); t.appendChild(tx);
+      const t = mkArtist('at-various', label, '♪', label, solo.length + ' artist' + (solo.length !== 1 ? 's' : ''));
       t.addEventListener('click', () => {
         // gather every 1-track artist's tracks into one list
         const list = [];
@@ -558,6 +592,24 @@
     } catch (e) {}
     return hero;
   }
+  // Branded film-card placeholder — used when a film has no poster (or its poster 404s). NEVER a blank/broken card.
+  // The film video_url's are HLS .m3u8 (Mux), which Chrome can't paint as a <video> first-frame — so this is a pure
+  // CSS/SVG placeholder: a warm-dark gradient frame + a clapperboard glyph + the film's title initial. The gold
+  // "AI FILM" cue (.vc-badge) is added by the caller and reads on top, so even a poster-less film looks intentional.
+  function fillNoArt(fr, t) {
+    fr.classList.add('vc-noart');
+    const ph = document.createElement('span'); ph.className = 'vc-ph';
+    ph.innerHTML =
+      '<span class="vc-ph-glyph" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="2.5" y="6.5" width="19" height="13" rx="2"></rect>' +
+          '<path d="M2.5 6.5l3.4-3.2 3.1 3.2M9 6.5l3.4-3.2 3.1 3.2M15.5 6.5l3.4-3.2 3.1 3.2"></path>' +
+        '</svg>' +
+      '</span>' +
+      '<span class="vc-ph-init">' + RC().escapeHtml(initial(t.title)) + '</span>';
+    fr.appendChild(ph);
+  }
+
   // 16:9 cinematic poster card for AI Flixs (vs the music songCard row). Phase 5 discovery surface.
   function videoCard(t) {
     const card = document.createElement('button');
@@ -567,9 +619,9 @@
     if (src) {
       const img = document.createElement('img');
       img.className = 'vc-poster'; img.loading = 'lazy'; img.src = src; img.alt = '';
-      img.onerror = () => { img.remove(); fr.classList.add('vc-noart'); };
+      img.onerror = () => { img.remove(); fillNoArt(fr, t); };   // poster 404 → branded fallback (never a bare play button)
       fr.appendChild(img);
-    } else { fr.classList.add('vc-noart'); }
+    } else { fillNoArt(fr, t); }
     const grad = document.createElement('span'); grad.className = 'vc-grad'; fr.appendChild(grad);
     if (t.duration_seconds) { const d = document.createElement('span'); d.className = 'vc-dur'; d.textContent = RC().fmtDur(t.duration_seconds); fr.appendChild(d); }
     // build99: films are PLAYABLE now (playFlix → the music video plays full-screen behind the highway while you

@@ -15,6 +15,23 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build99T — AI Flixs flix-vs-watch + Browse redesign + MP de-dup  ✅ verified
+Round-5 owner feedback.
+- **Flix UI consistency (catalog.js):** a film is its OWN level — the video is the stage — so `openSheet` now hides
+  BOTH the difficulty (`#diff-grid`) AND environment (`#env-section`) pickers for any film (the watch-only branch only
+  hid env before → the confusing "level picker + Watch" the owner saw). Verified: a watch-only film shows neither
+  picker + a clean "▶ Watch"; music tracks still show both pickers. **Note:** 31 of 143 films are HLS-only (`.m3u8`,
+  no decodable audio) so they CAN'T be charted into a playable level client-side — they degrade to Watch. The 112 with
+  a decodable audio rendition ARE playable. Making the 31 playable needs Lovable audio renditions (LOVABLE handoff §7).
+- **Browse page redesign (jukebox.js + jukebox.css):** owner called it "tacky / colors don't pop / not on-brand."
+  Genre tiles rebuilt with layered warm-dark surfaces + 6 distinct warm accent slots (all R≥G≥B) + energy rails +
+  embossed watermark + confident hover; cinematic gold AI-Flixs flagship hero; artist chips with depth-ring avatars.
+- **Film-card thumbnails:** films whose poster 404s now show a BRANDED placeholder (warm-dark cine panel + clapperboard
+  + title initial + gold AI FILM ribbon) instead of a blank card. (All films HAVE an artwork field — the URLs 404; the
+  real fix of correct posters is a Lovable `poster_url` data item.)
+- **MP de-dup:** removed the redundant "HOST ONE" button from the LIVE NOW empty state — the persistent "Host a
+  tournament" row is now the single host entry (owner: "Host a tournament is in there twice"). `?v` → 358. 0 console errors.
+
 ### build99S — Store purchase view polish (conversion)  ✅ verified
 Owner: the store click-to-detail UI must look premium and make the purchase info obvious to close a sale.
 - **Detail view (`openStoreHero`/`renderHero`)**: the product asset is now the star on a lit warm-dark stage (radial

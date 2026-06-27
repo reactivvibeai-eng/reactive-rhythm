@@ -1053,16 +1053,21 @@
     const playBtn = $('play-btn');
     const playLabel = playBtn ? playBtn.querySelector('span') : null;
     const vid = isVideo(track);   // a music video / film \u2014 never launchable into the rhythm engine (deferred)
-    // build98: env-picker shows for music; HIDDEN for a playable flix (the music video IS the stage). Reset each open.
+    // build99T: the DIFFICULTY + ENVIRONMENT pickers are for MUSIC tracks only. A film (AI Flix) is its OWN level \u2014
+    // the video IS the stage \u2014 so a film shows NEITHER picker (owner: "videos just play in the video level, no level
+    // picker"). Reset both visible each open (for music), then hide BOTH for any film below.
     { const _envSec = $('env-section'); if (_envSec) _envSec.style.display = ''; }
+    { const _diffSec = $('diff-grid'); if (_diffSec) _diffSec.style.display = ''; }
     if (vid) {
-      // build98: AI FLIXS PLAYABLE LEVEL. If the film has DECODABLE audio, PLAY launches the rhythm level with the
-      // music video full-screen behind the highway (notes charted to the song). No environment picker \u2014 the video is
-      // the stage. Falls back to the Watch preview only when there's no chartable audio.
+      { const _es = $('env-section'); if (_es) _es.style.display = 'none'; }     // film = the video is the stage, no env picker
+      { const _dg = $('diff-grid'); if (_dg) _dg.style.display = 'none'; }       // film = no per-level difficulty picker
+      // build98: AI FLIXS PLAYABLE LEVEL. If the film has DECODABLE audio, PLAY launches the rhythm level with the music
+      // video full-screen behind the highway (notes charted to the song). HLS-only films (no decodable audio rendition \u2014
+      // 31 of 143 today, pending a Lovable audio.m4a rendition) can't be charted client-side \u2192 a CLEAN Watch preview
+      // (never a fake level picker). build99N already lists all 143 films; this build98 path decides play-vs-watch.
       const aurl = trackAudioUrl(track);
       const wsrc = videoWatchUrl(track);
       if (aurl) {
-        const _es = $('env-section'); if (_es) _es.style.display = 'none';   // no level picker for a flix
         $('sheet-hint').textContent = 'AI Flix \u2014 the music video plays behind the highway. Tap PLAY.';
         if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('not-ready'); }
         if (playLabel) playLabel.textContent = '\u25b6 Play AI Flix';
@@ -1074,7 +1079,7 @@
       }
       // no decodable audio \u2192 Watch-only preview (the playable level needs a chartable audio track)
       $('sheet-hint').textContent = wsrc
-        ? 'AI Flixs film \u2014 tap Watch for a preview.'
+        ? 'AI Flixs film \u2014 a playable level is coming soon. Tap Watch for a preview.'
         : 'AI Flixs film \u2014 coming to the game soon.';
       if (playBtn) { playBtn.disabled = !wsrc; playBtn.classList.toggle('not-ready', !wsrc); }
       if (playLabel) playLabel.textContent = wsrc ? '\u25b6 Watch' : 'Coming soon';
