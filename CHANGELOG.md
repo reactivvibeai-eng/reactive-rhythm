@@ -15,6 +15,29 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100j — Lovable shipped the contracts → rewire to them + flip BONUS_SERVER ON  ✅ verified
+Lovable deployed `/bonus-sparks/{balance,earn,spend}` + `/mp/round/{start,settle}` and answered the 3 open questions.
+Rewired the game side to the REAL shapes (they kept the separate `/earn` call but solved both blockers) and turned the
+server economy on.
+- **Bonus EARN** = explicit per-run call, not folded: each scored run POSTs `/score`|`/plays` → captures the returned
+  **`play_id`** → `_bonusEarnForRun` POSTs `/bonus-sparks/earn { play_id, daily_rift }` → paints "+N" from the response
+  (`{ balance, earned, capped, grade, full_combo, reason }`). Server scale **S=4/A=3/B=2/C=1/D=0 +1 FC**, ×3 Daily Rift
+  + 50/wk cap validated server-side; the day stamps done only when the server's `reason==='daily_rift'`. Replaced the
+  folded `_absorbServerBonus` with this. The local capped mint stays the signed-out/flag-off fallback (unchanged).
+- **Bonus SPEND** = `bonusBuy` is now **async** + routes the store debit through `/bonus-sparks/spend` when signed in
+  (else a server-authoritative balance would never drop = infinite store spend); the Store `buyBonus` handler `await`s
+  it. Grants local cosmetic ownership on success either way.
+- **Bonus WAGERS gated:** the in-game wager pools/side-bets are a LOCAL escrow stand-in with no server credit path, so
+  signed-in Bonus wagers now return `bonus_wager_server_pending` (can't debit/refund a shadowed local balance). Signed-
+  out keeps the local economy. Flagged to Lovable (needs a wager escrow+credit endpoint).
+- **MP round lifecycle:** HOST POSTs `/mp/round/start {room_id, round_id:'r<n>', track_id, difficulty, mode, player_ids}`
+  at match start, broadcasts the returned server uuid ('round' event); both peers settle against that uuid (falls back to
+  the `matchId:trackId` id if start didn't return one). Reset on teardown/rematch. New `RhythmCatalog.mpRoundStart`.
+- **`BONUS_SERVER:true`** in `RHYTHM_CONFIG`. `LOVABLE_MASTER_PROMPT.md` §1+§3 updated to the shipped contracts. Verified
+  live (`?v` 370→371): clean boot, `BONUS_SERVER:true`, `bonusBuy` is AsyncFunction, `mpRoundStart`/`mpSettle` exposed,
+  signed-out local economy unchanged (bonus=12, career intact), **0 console errors**, `node --check` clean both files.
+  Signed-in server paths are dormant headless (no Supabase session) — they exercise on a real sign-in.
+
 ### build100i — server-economy integration: fold Bonus into /score+/plays, wire /mp/round/settle  ✅ verified
 Owner: *"pick the best-knowledge choice — get it working on the site."* So I made the two open Lovable-integration calls
 myself instead of asking, and wired the game side to match.

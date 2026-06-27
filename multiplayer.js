@@ -108,6 +108,12 @@
   var matchCombat = false;        // EFFECTIVE combat mode for the live match (the host decides; broadcast in `start`)
   var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
   var _rankRecorded = false;      // guard: record each settled result exactly once (CPU warm-ups never record — oppMeta.bot)
+  // build100i: server-authoritative round (Lovable /mp/round/{start,settle}). HOST opens a round at match start + gets a
+  // uuid, broadcasts it ('round' event); both peers pass that uuid to /mp/round/settle at song end. All fail-open — the
+  // in-match verdict stays peer-broadcast, so a missing endpoint never affects play.
+  var _serverRoundId = null;      // the server round uuid for the live round (from /mp/round/start)
+  var _roundSeq = 0;              // client round nonce counter → distinct (room_id, round_id) per rematch
+  var _roundStartFired = false;   // guard: HOST opens each round's server round exactly once
   // ---- build8: rooms + quick-match state ----
   var room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null,
                members: {}, p1: null, p2: null };   // current room (host or joined/spectating). build69: combat = the host's per-room modifier (set at openRoom, advertised, adopted by joiners)
@@ -514,6 +520,7 @@
     matchCh.on('broadcast', { event: 'tick' }, function (m) { onTick(m.payload); });
     matchCh.on('broadcast', { event: 'state' }, function (m) { onState(m.payload); });   // versus ghost-deck stream (additive)
     matchCh.on('broadcast', { event: 'final' }, function (m) { onFinal(m.payload); });
+    matchCh.on('broadcast', { event: 'round' }, function (m) { if (m && m.payload && m.payload.rid) _serverRoundId = m.payload.rid; });   // build100i: peer adopts the host's server round uuid for /mp/round/settle
     matchCh.on('broadcast', { event: 'rematch' }, function () { resetForRematch(); });
     matchCh.on('broadcast', { event: 'shock' }, function (m) { onShock(m.payload); });   // v254: P-vs-P combat — the rival's combo zapped you
     matchCh.subscribe(function (status) {
@@ -677,6 +684,24 @@
       matchCombat = (room.id && room.isHost) ? !!room.combat : !!combatOn;   // build69: a ROOM match uses the room's FIXED modifier (every match in the room is consistent); quick-match/challenge uses the host's default
       matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel, combat: matchCombat } });
       beginMatch(atMs, sel);
+      // build100i: HOST opens the SERVER round (Lovable /mp/round/start) so both peers can settle against a shared uuid
+      // for the trustworthy global MP ladder. Fire-and-forget; broadcast the uuid to the peer. Human matches only;
+      // _roundStartFired guards re-entry (maybeStart can fire more than once before the round goes live).
+      try {
+        if (!_roundStartFired && !(oppMeta && oppMeta.bot) && window.RhythmCatalog && RhythmCatalog.mpRoundStart) {
+          _roundStartFired = true; _roundSeq++;
+          RhythmCatalog.mpRoundStart({
+            room_id: (room && room.id) || matchId,
+            round_id: 'r' + _roundSeq,
+            track_id: sel.trackId || null,
+            difficulty: sel.difficulty || null,
+            mode: (tour && tour.id) ? 'tournament' : '1v1',
+            player_ids: [ME.id, oppMeta && oppMeta.id].filter(Boolean),
+          }).then(function (rid) {
+            if (rid) { _serverRoundId = rid; try { if (matchCh) matchCh.send({ type: 'broadcast', event: 'round', payload: { rid: rid } }); } catch (e) {} }
+          });
+        }
+      } catch (e) {}
     }
   }
   function onStart(p) { if (p && p.atMs) { matchCombat = !!p.combat; beginMatch(p.atMs, p.sel || sel); } }   // v254: adopt the host's combat mode
@@ -1210,7 +1235,7 @@
     try {
       if (!spectating && !(oppMeta && oppMeta.bot) && window.RhythmCatalog && RhythmCatalog.mpSettle) {
         RhythmCatalog.mpSettle({
-          round_id: matchId + (sel && sel.trackId ? (':' + sel.trackId) : ''),
+          round_id: _serverRoundId || (matchId + (sel && sel.trackId ? (':' + sel.trackId) : '')),   // build100i: the host's server round uuid when we have it; else a client id (server fail-open)
           track_id: (sel && sel.trackId) || null,
           difficulty: (sel && sel.difficulty) || null,
           client_score: results ? results.score : s.score,
@@ -1280,6 +1305,8 @@
   function resetForRematch() {
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
+    _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
+
     // FULLY tear down the prior split-screen so the rematch's beginMatch→mountVsHud re-seeds clean.
     // Without this, .vs-mode + #vs-seam linger → mountVsHud's idempotent guard skips the re-init and
     // round 2 lerps score plates from the PRIOR final, carries stale delta-sign + leftover ghost sparkles.
@@ -1303,6 +1330,7 @@
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false;
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
+    _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
     setLobbyInMatch(false);
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }

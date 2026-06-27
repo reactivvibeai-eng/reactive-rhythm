@@ -196,12 +196,21 @@
   }
   function saveBonusOwns(a) { try { localStorage.setItem('rr_bonus_owns', JSON.stringify(a)); } catch (e) {} }
   function getBonusOwns() { return loadBonusOwns().slice(); }
-  // buy a cosmetic with EARNED Bonus Sparks (client-side, no sign-in needed). Grants local ownership.
-  function bonusBuy(item_type, item_id, price) {
+  // buy a cosmetic with EARNED Bonus Sparks. ASYNC (build100i): when BONUS_SERVER + signed in, the debit is
+  // SERVER-authoritative (POST /bonus-sparks/spend) so it matches the server-authoritative balance — otherwise a
+  // signed-in user's balance (read from the server) would never drop. Signed-out / flag-off → the local debit. Grants
+  // local ownership on success either way (the game's Bonus cosmetics list reads rr_bonus_owns).
+  async function bonusBuy(item_type, item_id, price) {
     const cost = Math.max(0, Math.floor(Number(price) || 0));
     const key = String(item_type) + ':' + String(item_id);
     const owns = loadBonusOwns();
     if (owns.indexOf(key) >= 0) return { ok: true, deduped: true, balance: getBonusSparks() };
+    if (bonusServerReady()) {
+      const sr = await _bonusSrvSpend(item_type, item_id, cost);
+      if (!sr || !sr.ok) return { ok: false, error: (sr && sr.error) || 'spend_failed', balance: getBonusSparks() };
+      owns.push(key); saveBonusOwns(owns);
+      return { ok: true, deduped: !!sr.deduped, balance: (sr.balance != null ? sr.balance : getBonusSparks()) };
+    }
     const res = spendBonusSparks(cost);
     if (!res.ok) return { ok: false, error: 'insufficient_bonus', balance: res.balance };
     owns.push(key); saveBonusOwns(owns);
@@ -223,11 +232,13 @@
     return _bonusSrvBal;
   }
   async function _bonusSrvEarn(payload) {
-    // CONTRACT (confirm): POST /bonus-sparks/earn { play_token, grade, full_combo, daily_rift } → server computes award +
-    // 50/ISO-week cap, idempotent on play_token → { balance, earned, capped }. Server-authoritative — game sends NO amount.
+    // CONTRACT (Lovable, build100i — LIVE): POST /bonus-sparks/earn { play_id, daily_rift } → the server fetches the
+    // game_plays row BY play_id (no play_token needed), computes the grade reward (S=4 A=3 B=2 C=1 D=0, +1 full-combo),
+    // TRIPLES it on a server-VALIDATED daily_rift, clamps to the 50/ISO-week cap, idempotent per run →
+    // { balance, earned, capped, grade, full_combo, reason }. Server-authoritative — the game sends NO amount.
     try { var out = await api('/bonus-sparks/earn', { method: 'POST', body: payload, auth: true });
       if (out && typeof out.balance === 'number') _bonusSrvBal = out.balance;
-      return { earned: (out && +out.earned) || 0, balance: out && out.balance, capped: !!(out && out.capped) };
+      return { earned: (out && +out.earned) || 0, balance: out && out.balance, capped: !!(out && out.capped), reason: out && out.reason };
     } catch (e) { return null; }
   }
   async function _bonusSrvSpend(item_type, item_id, amount) {
@@ -240,23 +251,23 @@
     } catch (e) { var m = String((e && e.message) || ''); return { ok: false, error: /\b402\b|insufficient/i.test(m) ? 'insufficient_bonus' : 'spend_failed' }; }
   }
 
-  // build100i: FOLDED server Bonus — read an authoritative Bonus award off a /score or /plays RESPONSE (no separate
-  // /bonus-sparks/earn round-trip, no play_id plumbing). The server computes grade reward + ×3 Daily Rift + the 50/ISO-
-  // week cap atomically per run and MAY return { bonus_earned, bonus_balance, bonus_capped }. When present it is
-  // AUTHORITATIVE: cache the balance + (re)paint the results line over the optimistic local mint. Absent (older backend)
-  // → the local mint already shown stands, so this never regresses. Signed-in getBonusSparks() prefers _bonusSrvBal, so
-  // the local localStorage mint is shadowed (no double-count). This is the active server-Bonus path (supersedes the
-  // gated _bonusSrvEarn seam, which stays dormant).
-  function _absorbServerBonus(out, results) {
+  // build100i: server-authoritative Bonus EARN for a completed, SUBMITTED run. Called by the /score + /plays success
+  // handlers once the canonical play_id is known (Lovable: both return { id, play_id }). Threads play_id + the client's
+  // daily_rift intent into POST /bonus-sparks/earn; the SERVER validates the daily claim + computes the award. Gated on
+  // BONUS_SERVER + signed-in; otherwise the local capped mint in recordLocal handles it. Renders the "+N BONUS SPARKS"
+  // results line async and stamps the Daily Rift done ONLY when the SERVER actually granted the ×3 (reason==='daily_rift').
+  function _bonusEarnForRun(playId, results, dailyRift) {
     try {
-      if (!out || typeof out.bonus_balance !== 'number') return false;
-      _bonusSrvBal = out.bonus_balance;
-      if (out.bonus_earned != null) {
-        if (results) { try { results._bonusAwarded = out.bonus_earned; results._bonusBalance = out.bonus_balance; } catch (e) {} }
-        try { renderBonusSparksLine(out.bonus_earned, out.bonus_balance); } catch (e) {}
-      }
-      return true;
-    } catch (e) { return false; }
+      if (!bonusServerReady() || !playId) return;
+      _bonusSrvEarn({ play_id: playId, daily_rift: !!dailyRift }).then(function (r) {
+        if (!r) return;
+        if (r.earned > 0) {
+          if (results) { try { results._bonusAwarded = r.earned; results._bonusBalance = r.balance; results._dailyRiftX3 = (r.reason === 'daily_rift'); } catch (e) {} }
+          try { renderBonusSparksLine(r.earned, r.balance); } catch (e) {}
+        }
+        if (r.reason === 'daily_rift') { try { localStorage.setItem('rr_dailyrift', JSON.stringify({ date: dailyRiftToday(), done: true })); } catch (e) {} }
+      });
+    } catch (e) {}
   }
 
   // ===========================================================================
@@ -328,6 +339,10 @@
     if (!p) return { ok: false, error: 'no_pool' };
     if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };
     if (p.paid[playerId]) return { ok: true, deduped: true, balance: getBonusSparks(), escrowed: p.buyIn, pot: p.pot };   // already paid → never double-charge (covers refresh + idemKey replay)
+    // build100i: under server-authoritative Bonus the wager economy (a LOCAL escrow/payout stand-in with no backend) can't
+    // debit/credit the SERVER balance — a buy-in would hit a shadowed local balance with no way to refund. Gate signed-in
+    // Bonus wagers until Lovable ships a wager escrow + credit endpoint. Signed-out (local economy) keeps working.
+    if (bonusServerReady()) return { ok: false, error: 'bonus_wager_server_pending' };
     var res = spendBonusSparks(p.buyIn);
     if (!res.ok) return { ok: false, error: 'insufficient', balance: res.balance };
     p.paid[playerId] = { at: Date.now(), idemKey: idemKey || rrUuid() }; p.pot += p.buyIn; _saveWagerPools(pools);
@@ -367,6 +382,7 @@
     if (p.currency === 'sparks') return { ok: false, error: 'sparks_requires_backend' };   // cashable side-bets are a hard no-go (bookmaking) — never
     if (p.state !== 'open') return { ok: false, error: 'locked' };
     if (p.bets[bettorId]) return { ok: true, deduped: true, balance: getBonusSparks() };    // one bet per player; replay is a no-op
+    if (bonusServerReady()) return { ok: false, error: 'bonus_wager_server_pending' };       // build100i: see wagerJoinPool — no server escrow/credit yet, so gate signed-in Bonus side-bets
     stake = Math.max(1, Math.min(WAGER_MAX_BUYIN, Math.floor(Number(stake) || 0)));
     var res = spendBonusSparks(stake);
     if (!res.ok) return { ok: false, error: 'insufficient', balance: res.balance };
@@ -680,17 +696,18 @@
             notes_total: results.notes_total,
             play_token: playToken,
             pack_id: packId,                 // 50/50 payout reconciliation (null = freeplay)
-            daily_rift: !!_runDailyRift,     // build100i: server VALIDATES the day's-first-clear claim + applies the ×3 Bonus (it must not trust the flag blindly)
           };
           const out = await api('/plays', { method: 'POST', body: payload, auth: true });
-          // build100i: capture play_id (forward-compat) + FOLD the Bonus award off the /plays response when the
-          // backend ships it (server-authoritative grade reward + ×3 + 50/wk cap, atomic per run). No /earn round-trip.
-          try { if (out && out.play_id != null && currentTrack) currentTrack.play_id = out.play_id; } catch (e) {}
-          _absorbServerBonus(out, null);
+          // build100i: Lovable returns { id, play_id, rank_global }. Capture the canonical play_id, then earn server
+          // Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _runDailyRift carries this run's daily
+          // intent (set in recordLocal); the server validates it. No-op unless BONUS_SERVER + signed-in.
+          var _pid = out && (out.play_id || out.id);
+          try { if (_pid && currentTrack) currentTrack.play_id = _pid; } catch (e) {}
+          _bonusEarnForRun(_pid, null, !!_runDailyRift);
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10')); }
           catch (e) { /* leaderboard optional */ }
-          return { rank_global: out.rank_global, play_id: out && out.play_id, leaderboard: board };
+          return { rank_global: out.rank_global, play_id: _pid, leaderboard: board };
         },
       };
     };
@@ -1541,22 +1558,10 @@
     // stashed on results._bonusAwarded so the results screen can show "+N BONUS SPARKS".
     if (!failed) {
       if (bonusServerReady()) {
-        // build100h: SERVER-authoritative Bonus — report the completed run (+play_token); the server computes the grade
-        // reward + ×3 daily-rift + 50/ISO-week cap (idempotent on play_token). No client mint. Results line fills async.
-        try {
-          // CONTRACT (Lovable): POST /bonus-sparks/earn { play_id, play_token } — server reads game_plays + derives grade/full_combo.
-          // BLOCKERS before flip-on (flagged to Lovable): (1) the game must capture play_id from the /plays response + thread it
-          // here (today /plays' rank is read but play_id is dropped, and the in-browser path posts /score); (2) /earn has NO
-          // daily_rift flag, so the Daily Rift ×3 reward won't pay server-side — needs a daily_rift param OR a rework decision.
-          var _earnP = { play_id: (results && results.play_id) || (currentTrack && currentTrack.play_id) || null, play_token: (currentTrack && currentTrack.play_token) || (results && results.play_token) || null };
-          _bonusSrvEarn(_earnP).then(function (r) {
-            if (r && r.earned > 0) {
-              try { results._bonusAwarded = r.earned; results._bonusBalance = r.balance; results._dailyRiftX3 = _rift3x; } catch (e) {}
-              try { renderBonusSparksLine(r.earned, r.balance); } catch (e) {}
-              if (_rift3x) { try { localStorage.setItem('rr_dailyrift', JSON.stringify({ date: dailyRiftToday(), done: true })); } catch (e) {} }
-            }
-          });
-        } catch (e) {}
+        // build100i: SERVER-authoritative Bonus. The earn does NOT happen here — it fires from the /score|/plays success
+        // handler below, once the canonical play_id is known (POST /bonus-sparks/earn { play_id, daily_rift } → server
+        // validates the daily claim + computes the award; see _bonusEarnForRun). Nothing is minted locally. A run that
+        // never submits (tight/practice, demo, score 0, signed-out) earns no SERVER Bonus — that's by design.
       } else {
       // build73 ECONOMY REBALANCE (owner): Bonus Sparks spend on the WEBSITE (skips/boosts — the real revenue),
       // so the gameplay faucet is now TINY + weekly-capped. Dropped the runaway score/2000 term entirely; a run
@@ -1602,9 +1607,13 @@
             track_id: currentTrack.id, difficulty: results.difficulty,
             score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
             notes_hit: results.notes_hit, notes_total: results.notes_total,
-            daily_rift: _rift3x,   // build100i: server validates the day's-first-clear claim + applies the ×3 Bonus (it must not trust the flag)
           } });
-          _absorbServerBonus(out, results);   // build100i: FOLD the Bonus award off the /score response when present (else the optimistic local mint already shown stands — no regression)
+          // build100i: Lovable returns { id, play_id, rank_global } from /score (a /plays alias). Capture the canonical
+          // play_id, then earn server Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _rift3x carries
+          // the day's-first-clear intent; the server validates it. No-op unless BONUS_SERVER + signed-in.
+          var _pid = out && (out.play_id || out.id);
+          try { if (_pid && currentTrack) currentTrack.play_id = _pid; } catch (e) {}
+          _bonusEarnForRun(_pid, results, _rift3x);
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
@@ -1717,9 +1726,19 @@
       return await api('/mp/round/settle', { method: 'POST', body: payload, auth: true });
     } catch (e) { return null; }
   }
+  // build100i: HOST opens a server round at match start (Lovable: idempotent on (room_id, round_id); host JWT, host must
+  // be in player_ids). Returns the server round_id (uuid) that BOTH peers then pass to /mp/round/settle. Fail-open.
+  async function mpRoundStart(payload) {
+    try {
+      if (!API_BASE || !payload) return null;
+      var tk = await getToken(); if (!tk) return null;
+      var out = await api('/mp/round/start', { method: 'POST', body: payload, auth: true });
+      return (out && out.round_id) || null;
+    } catch (e) { return null; }
+  }
 
   window.RhythmCatalog = {
-    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle,
+    onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
     // BONUS SPARKS — platform-only soft currency (gameplay earn loop; NOT cashable). SWAP-SEAM in catalog.js.
