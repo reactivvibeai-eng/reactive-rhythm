@@ -1502,6 +1502,8 @@
       else if (spectating) { ws.textContent = 'Watching this room — the match starts when the host begins.'; }
       else if (room.isHost) { ws.textContent = 'You\'re hosting — waiting for 1 player. Share the code, or add a CPU to start now.'; }
       else { ws.textContent = 'Waiting for the host to start…'; }
+      // build100f (relatability): remind both players combat is on while they wait, so the mid-song freeze is expected.
+      if (room.combat) ws.textContent += ' ⚡ Combat ON — a combo streak shocks the rival ~2s.';
     }
   }
 
@@ -1664,7 +1666,11 @@
       return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
         '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
-        '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span> host ' + esc((r.hostName || 'host')) + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 2) + '</span></span></span>' +
+        '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span>' +
+          // build100f (relatability): disclose COMBAT on the room card so a joiner knows BEFORE joining that a combo can
+          // freeze them ~2s mid-song (previously the only cue was the post-hoc "RIVAL SHOCKED YOU" veil — read as a bug).
+          (r.combat ? '<span class="mpx-rc-tag" style="background:rgba(255,31,46,0.18);color:#ff6b78;margin-left:4px;" title="Combat ON — a combo streak shocks the rival for ~2s">⚡ COMBAT</span>' : '') +
+          ' host ' + esc((r.hostName || 'host')) + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 2) + '</span></span></span>' +
         '<span class="mpx-rc-act">' +
           '<button class="mpx-rc-join" data-join="' + esc(rid) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button>' +
           '<button class="mpx-rc-spec" data-spec="' + esc(rid) + '">WATCH</button>' +

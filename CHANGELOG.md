@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100f — MP combat disclosure (owner-flagged relatability)  ✅ node-checked
+The relatability swarm flagged that COMBAT mode is adopted silently — the only on-screen cue was the post-hoc "RIVAL
+SHOCKED YOU" veil AFTER a player is already frozen ~2s, so a newcomer reads the freeze as a bug/lag. Disclosed it where a
+joiner already looks (multiplayer.js, `?v` 363→364):
+- **Room browser card** (`renderRooms`): a "⚡ COMBAT" tag next to PUBLIC when the room's combat flag is on (the flag was
+  already in `roomsDir` from the room-meta broadcast), with a title "Combat ON — a combo streak shocks the rival for ~2s".
+- **Room waiting strip** (`paintRoomWaiting`): appends "⚡ Combat ON — a combo streak shocks the rival ~2s." to the waiting
+  status so both players are reminded before the song starts.
+- MP screen renders clean (0 console errors); the tag itself needs a live combat-host (2-peer) to see — same verification
+  gate as all MP-online features, batched with the MP hardware test.
+
 ### build100e — new-player relatability pass (8 comprehension fixes)  ✅ verified
 A 5-surface "first-time player" relatability swarm + adversarial filter (real + objective + not-already-handled). Confirmed
 onboarding already exists (RYO intro + tap-zone coachmark + How-To + MP coach card), so the swarm correctly surfaced specific
