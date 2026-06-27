@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=362" />
+<link rel="stylesheet" href="jukebox.css?v=363" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4566,7 +4566,7 @@
           <button class="mpx-tile" id="mpx-act-local" type="button">
             <span class="mpx-tile-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="10" rx="4"></rect><path d="M7 11v3M5.5 12.5h3"></path><circle cx="16" cy="11.5" r="1"></circle><circle cx="18.5" cy="13.5" r="1"></circle></svg></span>
             <span class="mpx-tile-t">Local versus</span>
-            <span class="mpx-tile-d">2 controllers · same screen</span>
+            <span class="mpx-tile-d">2 players, 1 screen · controller or shared keyboard</span>
           </button>
         </div>
         <button class="mpx-act-cpu-min" id="mpx-act-npc" type="button">
@@ -5379,7 +5379,7 @@
            onload="this.classList.add('on'); var t = this.parentNode.querySelector('.levels-title'); if (t) t.classList.add('img-replaced');"
            onerror="this.style.display='none'" />
       <h2 class="levels-title" id="levels-title">CAMPAIGN</h2>
-      <p class="levels-sub">Climb the tiers — each level is a track to clear. Free-play any song from the library anytime.</p>
+      <p class="levels-sub">Climb the tiers — clear a level to earn up to ★★★; stars unlock the next levels. Free-play any song from the library anytime.</p>
       <div class="lv-hero" id="levels-hero" hidden></div>
       <div class="levels-body" id="levels-body"></div>
       <button class="ghost-btn primary" id="levels-close" style="margin-top:20px;min-width:200px;">DONE</button>
@@ -5505,7 +5505,7 @@
             </div>
           </div>
         </div>
-        <button class="store-getmore" id="store-getmore">
+        <button class="store-getmore" id="store-getmore" title="Opens reactivvibeai.com to top up — your Sparks appear here when you come back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           Get Sparks
         </button>
@@ -5972,6 +5972,7 @@
       </div>
       <div class="pre-title" style="margin-top: 32px; font-family: 'JetBrains Mono'; font-size: 12px; letter-spacing: 0.4em; color: var(--silver);">// SIGNAL STABILIZED</div>
       <div class="results-grade" id="results-grade">S</div>
+      <div class="results-grade-scale" id="results-grade-scale" aria-hidden="true" style="font-family:'Oxanium',sans-serif;font-size:11px;letter-spacing:0.22em;color:#6e6661;margin-top:-2px;"></div>
       <div class="results-stars" id="results-stars" aria-hidden="true"></div>
       <div class="results-badges" id="results-badges"></div>
       <!-- v253 (#84): ENCORE moment — on a strong finish (S/A or Full Combo) the crowd "wants more", inviting another run. -->
@@ -6071,7 +6072,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=362"></script>
+<script src="telemetry.js?v=363"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6209,14 +6210,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=362"></script>
-<script src="game.js?v=362"></script>
-<script src="procbg.js?v=362"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=362"></script>
-<script src="catalog.js?v=362"></script>
-<script src="multiplayer.js?v=362"></script>
-<script src="share.js?v=362"></script>
-<script src="couch.js?v=362"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=363"></script>
+<script src="game.js?v=363"></script>
+<script src="procbg.js?v=363"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=363"></script>
+<script src="catalog.js?v=363"></script>
+<script src="multiplayer.js?v=363"></script>
+<script src="share.js?v=363"></script>
+<script src="couch.js?v=363"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -7866,6 +7867,7 @@
         + '<div class="lv-hero-sub">' + (LIVE ? 'Campaign progress' : 'Preview — unlocks at release') + ' · <span class="lv-hero-pct">' + pct + '%</span> complete</div></div>';
     }
     if (!LIVE) html += '<div class="lv-lockbadge">Campaign unlocks at release — free-play any song from the library anytime</div>';
+    var _startHerePlaced = false;   // build100e (relatability): tag only the FIRST unlocked + uncleared card with "START HERE" so a newcomer's eye lands on where to begin
     for (var ti = 0; ti < TIERS.length; ti++) {
       var tier = TIERS[ti];
       var authoredHere = finished.filter(function (L0) { return L0.tier === tier.d; });
@@ -7900,6 +7902,7 @@
           : artHTML(lt, ai);
         var soon = !LVL_FINISHED[L.id];   // Coming Soon unless it's a finished bespoke level
         var corner = soon ? '<span class="lv-soon">🔒 COMING SOON</span>' : (!unlocked ? '<span class="lv-lock">🔒</span>' : '');
+        if (!soon && unlocked && stN === 0 && !_startHerePlaced) { corner += '<span class="lv-starthere" style="position:absolute;top:8px;left:8px;z-index:3;background:linear-gradient(180deg,#ff3a45,#d4101e);color:#fff;font-family:\'Chakra Petch\',sans-serif;font-weight:700;font-size:10px;letter-spacing:0.1em;padding:3px 8px;border-radius:6px;box-shadow:0 3px 10px rgba(255,31,46,0.5);">▶ START HERE</span>'; _startHerePlaced = true; }
         var modBits = '';
         if (LEVELDESIGN_MODS && L.mods) { if (L.mods.speed && L.mods.speed !== 1) modBits += '<span class="lv-mod">' + (L.mods.speed > 1 ? 'fast' : 'slow') + '</span>'; if (L.mods.mirror) modBits += '<span class="lv-mod">mirror</span>'; if (L.mods.failOn) modBits += '<span class="lv-mod">no-fail-off</span>'; }
         var cls = 'lv-card authored' + (L.boss ? ' boss' : '') + (soon ? ' coming-soon' : (unlocked ? '' : ' locked')) + (stN > 0 ? ' cleared' : '');
@@ -8836,7 +8839,11 @@
       // build99L: for a GUEST, the Sparks "Sign in to buy" button is the primary CTA — demote "Use Bonus" to a
       // small secondary link so the guest path isn't two competing buttons. Signed-in users keep the full button.
       var bonusCls = 'store-buy bonus' + (!signedIn ? ' bonus-secondary' : '');
-      line += '<div class="store-payline"><span class="store-price bonus-px">' + BONUS_PX_SVG + fmt(bp) + ' <span style="font-size:9px;letter-spacing:0.1em;opacity:0.8;">BONUS</span></span>' +
+      // build100e (relatability): anchor the Bonus price to the player's standing so "1,500 BONUS" isn't a meaningless
+      // number to a newcomer — "· you have N" (can afford) or "· earn N more" (short, gives them a goal to keep playing).
+      var bbal = 0; try { var _rcB = RC(); bbal = (_rcB && _rcB.getBonusSparks) ? (_rcB.getBonusSparks() | 0) : 0; } catch (e) {}
+      var bStand = '<span style="font-size:9px;letter-spacing:0.05em;color:#9a9590;"> · ' + (bbal >= bp ? 'you have ' + fmt(bbal) : 'earn ' + fmt(bp - bbal) + ' more') + '</span>';
+      line += '<div class="store-payline"><span class="store-price bonus-px">' + BONUS_PX_SVG + fmt(bp) + ' <span style="font-size:9px;letter-spacing:0.1em;opacity:0.8;">BONUS</span>' + bStand + '</span>' +
         '<button class="' + bonusCls + '" data-act="buybonus" data-type="' + esc(it.item_type) + '" data-id="' + esc(it.item_id) + '" data-bonus="' + bp + '">Use Bonus</button></div>';
     }
     return line;

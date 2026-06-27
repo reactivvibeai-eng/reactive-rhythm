@@ -15,6 +15,30 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100e — new-player relatability pass (8 comprehension fixes)  ✅ verified
+A 5-surface "first-time player" relatability swarm + adversarial filter (real + objective + not-already-handled). Confirmed
+onboarding already exists (RYO intro + tap-zone coachmark + How-To + MP coach card), so the swarm correctly surfaced specific
+COMPREHENSION gaps instead. Implemented the 8 highest-value, concrete fixes — mostly economy clarity + navigation. `?v`
+362→363. node-checked; verified live (labels + START HERE badge), 0 console errors.
+- **Economy comprehension (the owner's conversion priority):** the results reward line now reads "+N BONUS SPARKS · Spend
+  in the Store on guitars & levels" (connects earning to spending); each store card's Bonus price now shows the player's
+  standing — "1,500 BONUS · you have N" / "· earn N more" (a goal, not a meaningless number); the "Get Sparks" button now
+  says "Opens reactivvibeai.com to top up — your Sparks appear here when you come back" (the off-site jump reads as
+  expected + reversible). (The store already has a Sparks-vs-Bonus legend, so the icon-distinction finding was left as-is.)
+- **Results grade scale:** a tiny "S · A · B · C · D · F" ladder under the grade with the earned letter highlighted, so a
+  newcomer can locate where their grade sits (best is S) instead of staring at a context-free letter.
+- **Campaign navigation:** a "▶ START HERE" crimson badge tags the FIRST unlocked + uncleared level so a newcomer's eye
+  lands on where to begin (verified: exactly 1 badge). The Campaign subtitle now states the star economy — "clear a level
+  to earn up to ★★★; stars unlock the next levels."
+- **AI Flix play-vs-watch clarity:** a watch-only film's button is now "👁 Watch preview" (was "▶ Watch") — the ▶ play
+  arrow is reserved for the chartable "▶ Play AI Flix" so playable-level vs video-preview read as clearly different.
+- **Local Versus accuracy:** the tile sub-label is now "2 players, 1 screen · controller or shared keyboard" (was "2
+  controllers") — it matches the claim screen, which supports keyboard-only P2 (keys 1–5), so a controller-less newcomer
+  no longer skips it.
+- **Deferred relatability notes** (MP-online / need 2-peer or P3): combat-mode disclosure on the room card/strip/VS bar,
+  tournament buy-in "Bonus = in-game only" helper, combo-tier first-time hint, Judgment-Log color legend, Sparks-chip
+  click-to-open — batched with the MP hardware/2-peer test.
+
 ### build100d — critical-bug swarm fixes (8 real bugs, incl. a confirmed ×3 currency exploit)  ✅ verified
 A 6-domain critical-bug swarm (state-leaks / currency / scoring / data / netcode / boot) + adversarial verify. The
 workflow's auto-summary returned "0 confirmed" due to a bug in MY aggregator (it compared finding objects by identity

@@ -2520,6 +2520,8 @@
 
   function renderResults(results, accPct, grade) {
     { const ge = $('results-grade'); ge.textContent = grade; ge.className = 'results-grade gr-' + (grade || 'D'); }   // tier class → color-coded grade (S=gold, A=crimson, …)
+    // build100e (relatability): a tiny S→F ladder under the grade so a newcomer can locate where their grade sits (best is S).
+    try { const gs = $('results-grade-scale'); if (gs) { const _g = grade || 'D'; gs.innerHTML = ['S', 'A', 'B', 'C', 'D', 'F'].map(function (L) { return L === _g ? '<b style="color:#f4efe9">' + L + '</b>' : L; }).join('&nbsp;·&nbsp;'); } } catch (e) {}
     // star rating — ONE shared 3-star scale across the results screen AND the campaign cards (build58: was a 5-star accuracy
     // curve that disagreed with the 3-star level cards, e.g. an A read 4/5 here but 3/3 on the card). S/A=3, B=2, C/D=1; a
     // FAILED run = 0. The letter grade above carries the finer nuance.

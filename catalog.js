@@ -1121,7 +1121,9 @@
         ? 'AI Flixs film \u2014 a playable level is coming soon. Tap Watch for a preview.'
         : 'AI Flixs film \u2014 coming to the game soon.';
       if (playBtn) { playBtn.disabled = !wsrc; playBtn.classList.toggle('not-ready', !wsrc); }
-      if (playLabel) playLabel.textContent = wsrc ? '\u25b6 Watch' : 'Coming soon';
+      // build100e (relatability): reserve the \u25b6 play arrow for the CHARTABLE "Play AI Flix" case. A watch-only film uses an
+      // eye + "Watch preview" so a newcomer reads playable-level vs video-preview as clearly different outcomes.
+      if (playLabel) playLabel.textContent = wsrc ? '\ud83d\udc41 Watch preview' : 'Coming soon';
       if (wsrc) {
         const _watchFn = () => { closeSheet(); openWatch(track, wsrc); };
         _watchFn._preview = true;
@@ -1379,7 +1381,9 @@
       '<span class="rbonus-amt">+' + Number(earned).toLocaleString() + '</span>' +
       BONUS_SPARK_GLYPH +
       '<span class="rbonus-label">BONUS SPARKS</span>' +
-      '<span class="rbonus-total">balance ' + Number(balance).toLocaleString() + '</span>';
+      '<span class="rbonus-total">balance ' + Number(balance).toLocaleString() + '</span>' +
+      // build100e (relatability): tell a newcomer what the reward is FOR — connect earning to spending in one line.
+      '<span class="rbonus-hint" style="flex-basis:100%;font-size:10px;letter-spacing:0.08em;color:#b9b2ac;margin-top:2px;">Spend in the Store on guitars &amp; levels</span>';
     el.style.display = '';
   }
 
