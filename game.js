@@ -3272,12 +3272,14 @@
         emitFx('chord', 'chord', lane, _cx / target.chordLanes.length, _cg.nearY); } catch (e) {}
     }
     // build100t: GROUPED CHORD RESOLVE — pressing ANY ONE chord key clears the whole chord on keyboard (two-finger
-    // optional). Chord members share the SAME chordLanes array (lead = chordLead, partner(s) = chord, same time). Without
-    // this the partner gem ~2 lanes over sails past unjudged → forced MISS + combo break (the "broken half-bar that fails
-    // on hit" the player reported). Resolves the partner(s) at the lead's judgment + multiplier; no extra combo bump.
-    if (target.chordLanes && target.chordLanes.length > 1) {
+    // optional). Without this the partner gem ~2 lanes over (the "bar/sidebar" the player tried to push) sails past
+    // unjudged → forced MISS + combo break. build100q FIX: match chord members by the STABLE chordId scalar, NOT by the
+    // chordLanes array REFERENCE — the per-level MIRROR mod (~1615) reassigns each note's chordLanes to a fresh mapped
+    // array, so the lead and partner no longer share a reference and the old `!==` test skipped the partner on mirrored
+    // levels → the bar never cleared. chordId survives the mirror (it remaps lanes only). Lead's judgment + mult; no combo bump.
+    if (target.chordId != null && target.chordLanes && target.chordLanes.length > 1) {
       for (const cn of notes) {
-        if (cn === target || cn.judged || cn.chordLanes !== target.chordLanes) continue;
+        if (cn === target || cn.judged || cn.chordId !== target.chordId) continue;
         cn.judged = true; cn.hit = kind;
         counts[kind]++;
         score += JUDGE[kind].score * mult;
