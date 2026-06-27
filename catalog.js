@@ -1763,7 +1763,7 @@
     previewSpectrum, previewBinCount, previewPlaying,
     fmtDur, cleanGenre, escapeHtml, hashStr,
     // readiness (no dead songs)
-    trackReady, trackStatus, statusLabel, readyCount, reloadCatalog,
+    trackReady, trackStatus, statusLabel, readyCount, reloadCatalog, trackAudioUrl,   // build100q: expose the HLS-skipping audio resolver so MP resolveAndStart never feeds an .m3u8 to the in-browser decoder (→ round never starts → watchdog aborts everyone to the room)
     totalCount: () => catalogTracks.length, rawCount,
     // revenue attribution
     getPackId, logUse,

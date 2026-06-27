@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=388" />
+<link rel="stylesheet" href="jukebox.css?v=389" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -6134,7 +6134,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=388"></script>
+<script src="telemetry.js?v=389"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6304,14 +6304,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=388"></script>
-<script src="game.js?v=388"></script>
-<script src="procbg.js?v=388"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=388"></script>
-<script src="catalog.js?v=388"></script>
-<script src="multiplayer.js?v=388"></script>
-<script src="share.js?v=388"></script>
-<script src="couch.js?v=388"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=389"></script>
+<script src="game.js?v=389"></script>
+<script src="procbg.js?v=389"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=389"></script>
+<script src="catalog.js?v=389"></script>
+<script src="multiplayer.js?v=389"></script>
+<script src="share.js?v=389"></script>
+<script src="couch.js?v=389"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -9256,33 +9256,39 @@
     } catch (e) {}
   }
 
+  // build100q (#176): a hung/unreachable backend must NEVER hang or blank the store. Race every backend await against a
+  // timeout so a slow /store, /me, or /entitlements can't stick the shop on "Loading shop…" forever.
+  function _storeRace(p, ms, fallback) {
+    return Promise.race([
+      Promise.resolve(p).catch(function () { return fallback; }),
+      new Promise(function (res) { setTimeout(function () { res(fallback); }, ms); })
+    ]);
+  }
   async function load() {
-    var grid = $('store-grid'), empty = $('store-empty');
-    grid.innerHTML = '<div class="store-empty" style="grid-column:1/-1">Loading shop…</div>'; empty.hidden = true;
     var C = RC();
-    if (!C || !C.getStore) { items = []; signedIn = false; setBalance(0); render(); return; }
-    try {
-      var out = await C.getStore();
-      // REFRAME: all 916 songs are FREE, so the backend's stale song/pack bundles are wrong. The client
-      // catalog (guitar SKINS + custom LEVELS + themes) is authoritative until the Lovable /store update
-      // lands; we drop song/pack/track/bundle items and merge in only NEW backend skins/levels.
-      var _backend = (out && out.items && out.items.length) ? out.items : [];
-      var _keep = function (it) { var t = String(it.item_type || it.type || '').toLowerCase(); return t === 'skin' || t === 'guitar' || t === 'level'; };
-      var _merged = STORE_FALLBACK.slice(), _have = {};
-      _merged.forEach(function (i) { _have[String(i.item_type || i.type) + ':' + String(i.item_id || i.id)] = 1; });
-      _backend.forEach(function (it) { var k = String(it.item_type || it.type) + ':' + String(it.item_id || it.id); if (_keep(it) && !_have[k]) { _merged.push(it); _have[k] = 1; } });
-      items = _merged;   // client catalog (skins + levels) always shows; no song bundles
-      // build100q: signedIn must be AUTHORITATIVE from the local Supabase session + admin, not solely /store's echo.
-      // When the backend doesn't return signed_in:true (cross-origin session / CORS / contract gap), the store fell to
-      // guest UI → the "Buy" button became a "Sign in to buy" CTA that opens the website home (the "redirect to home"
-      // bug) AND setBalance masked the Sparks number to "—". Union the local session/admin so a logged-in owner gets a
-      // real Buy button + an unmasked balance even if /store lags. (mirrors catalog.js getUser/isAdmin.)
-      var _localUser = null; try { _localUser = C.getUser ? await C.getUser() : null; } catch (e3) {}
-      signedIn = !!out.signed_in || !!_localUser || !!(C.isAdmin && C.isAdmin());
-      try { var e = C.getEntitlements ? await C.getEntitlements() : { owns: [] }; owns = {}; (e.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; }); } catch (e2) {}
-      setBalance(typeof out.balance === 'number' ? out.balance : 0);
-      render();
-    } catch (e) { items = []; render(); }
+    // build100q (#176): render the CLIENT CATALOG (skins + custom levels) IMMEDIATELY so the store always shows the
+    // buyable items — a slow/unreachable Lovable backend used to leave it stuck on "Loading shop…" (3 sequential awaits
+    // with no timeout) or, on a thrown /store, render EMPTY. Now: paint the fallback first, then enrich async (bounded).
+    items = STORE_FALLBACK.slice();
+    if (!C || !C.getStore) { signedIn = false; setBalance(0); render(); return; }
+    render();   // the store is usable instantly (guest pricing until the enrich resolves)
+    // REFRAME: all songs are FREE, so the backend's stale song/pack bundles are wrong. The client catalog (guitar SKINS +
+    // custom LEVELS) is authoritative until the Lovable /store update lands; merge in only NEW backend skins/levels.
+    var out = (await _storeRace(C.getStore(), 6000, null)) || {};
+    var _backend = (out && out.items && out.items.length) ? out.items : [];
+    var _keep = function (it) { var t = String(it.item_type || it.type || '').toLowerCase(); return t === 'skin' || t === 'guitar' || t === 'level'; };
+    var _merged = STORE_FALLBACK.slice(), _have = {};
+    _merged.forEach(function (i) { _have[String(i.item_type || i.type) + ':' + String(i.item_id || i.id)] = 1; });
+    _backend.forEach(function (it) { var k = String(it.item_type || it.type) + ':' + String(it.item_id || it.id); if (_keep(it) && !_have[k]) { _merged.push(it); _have[k] = 1; } });
+    items = _merged;   // client catalog (skins + levels) always shows; no song bundles
+    // signedIn AUTHORITATIVE from the local Supabase session + admin, not solely /store's echo (so a logged-in owner gets
+    // a real Buy button + an unmasked balance even if /store lags). Bounded so a hung /me can't block the store.
+    var _localUser = await _storeRace(C.getUser ? C.getUser() : null, 2500, null);
+    signedIn = !!out.signed_in || !!_localUser || !!(C.isAdmin && C.isAdmin());
+    var _ent = (await _storeRace(C.getEntitlements ? C.getEntitlements() : null, 4000, null)) || { owns: [] };
+    owns = {}; (_ent.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; });
+    setBalance(typeof out.balance === 'number' ? out.balance : 0);
+    render();   // final enriched render (signed-in state, balance, owned cards)
   }
 
   var pendingTopup = false;

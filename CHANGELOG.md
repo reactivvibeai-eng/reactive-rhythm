@@ -15,6 +15,24 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 7) — live-playtest P0s: store won't load, admin MP level lock, tournament round-2 boot  ✅ store+lock verified (round needs 2-device confirm)
+- **Store wouldn't load / purchases dead (revenue-critical):** the store `load()` had THREE sequential `await`s
+  (`getStore` → `getUser` → `getEntitlements`) with NO timeout, so a slow/unreachable Lovable backend left it stuck on
+  "Loading shop…" forever, and a thrown `/store` rendered an EMPTY store. FIX: paint the client catalog (STORE_FALLBACK
+  skins + custom levels) IMMEDIATELY, then enrich each backend call behind a timeout race (`_storeRace`, 6s/2.5s/4s) so a
+  hung endpoint can never block or blank the shop. Verified live: the store renders 17 buyable items instantly.
+  **Lovable still owns the actual purchase** (`/store` echo, `/sparks/spend`, `/sparks` page — see §1).
+- **Admin can't select premium levels in MP ("I own everything but it says unlock"):** the tournament stage picker
+  (`buildTourEnvRow`) locked paid stages on the purged **`rr_dev`** flag (`e.paid && !dev`) instead of ownership — so the
+  admin/owner (not "dev") saw premium stages as locked. FIX: gate the lock on `ownsItem('level', e.entId||e.id)` (true for
+  admin/owner/purchaser, per #166); the room picker filter uses `entId` too.
+- **Tournament round-2 booted everyone back to the room without playing:** the start-watchdog aborts a round to the room
+  if it never reaches the game screen. `resolveAndStart` read `t.audio_url` DIRECTLY (not the HLS-skipping `trackAudioUrl`),
+  so a round whose track is `.m3u8`-only can't decode in-browser → never starts → abort. Round 1 worked (host-picked,
+  decodable); round 2's RANDOM pick (`hostNextTrack`, filtered only by `trackReady`) could land on an HLS-only track. FIX:
+  exposed `trackAudioUrl`; `resolveAndStart` uses it (HLS → falls to demo, never a dead decode); `hostNextTrack` +
+  `hostResolveSong` now require DECODABLE audio. **If it still boots, grab the `[mp]` console error — needs a 2-device repro.**
+
 ### build100q (part 6) — host "Play in Reactive Rhythm" review shows the song + difficulty + level picker; chord fix  ✅ verified
 - **Review hook** (`/game?review=<token>`, how hosts/admins review content): the game already resolved the token + the
   decodable audio, but it **played immediately**. The owner wants to SEE the song, pick how hard + which level, THEN play.

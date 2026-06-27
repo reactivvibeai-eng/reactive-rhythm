@@ -627,7 +627,7 @@
         if (e.isRandom) return false;
         if (e.isDefault) return true;
         if (!fin[e.id]) return false;
-        if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.id)); } catch (x) { return false; } }
+        if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.entId || e.id)); } catch (x) { return false; } }   // build100q: entId (underscore entitlement id) — admin/owner/purchaser owns it
         return true;
       });
     } catch (e) { return []; }
@@ -1116,7 +1116,10 @@
       } else if (RC && RC.liveProvider && RC.trackReady && RC.trackReady(t) && hasServerChart(t)) {
         prov = RC.liveProvider(t.id);
       } else {
-        var url = t.audio_url || t.wav_url || (t.audio && t.audio.url);
+        // build100q (#174): use the HLS-skipping resolver — a track can be "ready" with an .m3u8 audio_url that the
+        // in-browser decoder CANNOT decode → the round never reaches #game → the start-watchdog aborts EVERYONE back to
+        // the room ("round 2 never played"). trackAudioUrl returns null for HLS-only → we fall through to the demo below.
+        var url = (RC && RC.trackAudioUrl ? RC.trackAudioUrl(t) : null) || (!/\.m3u8(\?|$)/i.test(String(t.audio_url || '')) ? t.audio_url : null) || t.wav_url || (t.audio && t.audio.url);
         // tight-sync path: if the engine exposes __buffered, build a deferred provider so
         // startAt() can schedule it precisely. (Added by the hooks doc to the Object.assign.)
         if (url && window.RhythmGame.__buffered) {
@@ -2196,18 +2199,21 @@
     // too (peers may not own them, and hostResolveEnv refuses to roll a paid stage anyway).
     if (list) list = list.filter(function (e) {
       if (_envComingSoon(e)) return false;
-      if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.id)); } catch (x) { return false; } }
+      if (e.paid) { try { var rc = window.RhythmCatalog; return !!(rc && rc.ownsItem && rc.ownsItem('level', e.entId || e.id)); } catch (x) { return false; } }   // build100q: query the ENTITLEMENT id (entId, underscore) — admin/owner/purchaser owns it
       return true;
     });
     var show = !!list && tour.isHost && tour.state === 'open';
     if (head) head.hidden = !list;
     rowEl.hidden = !list;
     if (!list) return;
-    var dev = false; try { dev = localStorage.getItem('rr_dev') === '1'; } catch (e) {}
     rowEl.innerHTML = '';
     list.forEach(function (e) {
       var comingSoon = _envComingSoon(e);
-      var locked = !!((e.paid && !dev) || comingSoon);
+      // build100q (#175): a paid stage is LOCKED only if the player does NOT own it — was gated on the purged rr_dev flag
+      // (`e.paid && !dev`), so it locked premium stages even for the ADMIN/owner ("I own everything but it says unlock").
+      // ownsItem returns true for admin/owner/dev + real purchasers (entId = the underscore entitlement id, per #166).
+      var _ownsPaid = true; if (e.paid) { try { var _rcL = window.RhythmCatalog; _ownsPaid = !!(_rcL && _rcL.ownsItem && _rcL.ownsItem('level', e.entId || e.id)); } catch (x) { _ownsPaid = false; } }
+      var locked = !!((e.paid && !_ownsPaid) || comingSoon);
       var on = poolHas(e.id) || (e.isRandom && (!tour.envPool || !tour.envPool.length));
       var b = document.createElement('button');
       b.type = 'button';
@@ -2314,7 +2320,9 @@
   }
   function hostNextTrack() {
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
+    // build100q (#174): require DECODABLE audio (trackAudioUrl skips HLS), not just trackReady — else a random round-N
+    // pick could land on an .m3u8-only track that can't chart in-browser → the round never starts → watchdog aborts.
+    if (RC) all = all.filter(function (t) { return (!RC.trackReady || RC.trackReady(t)) && !(RC.isVideo && RC.isVideo(t)) && (!RC.trackAudioUrl || !!RC.trackAudioUrl(t)); });
     if (!all.length) return tour.sel;
     var t = all[Math.floor(Math.random() * all.length)];
     return { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: (tour.sel && tour.sel.difficulty) || 'medium', demo: (t.id === 'demo') };
@@ -2325,7 +2333,17 @@
     var pool = tour.songPool || [];
     if (!pool.length) return hostNextTrack();
     var pick = pool[((n || 1) - 1) % pool.length];     // cycle if rounds > songs
-    if (!pick) return hostNextTrack();
+    if (!pick || !pick.trackId) return hostNextTrack();
+    // build100q (#174): re-validate the pool pick is PLAYABLE + DECODABLE right now — if it drifted out of the catalog
+    // or is HLS-only, round N would fail to start and the watchdog would abort everyone to the room. Fall back to a
+    // guaranteed-decodable random roll. (demo always plays.)
+    if (!pick.demo) {
+      try {
+        var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
+        var ft = all.filter(function (x) { return x.id === pick.trackId; })[0];
+        if (!ft || (RC.isVideo && RC.isVideo(ft)) || (RC.trackAudioUrl && !RC.trackAudioUrl(ft))) return hostNextTrack();
+      } catch (e) { return hostNextTrack(); }
+    }
     return Object.assign({}, pick, { difficulty: (tour.sel && tour.sel.difficulty) || tourDiff() });
   }
 
