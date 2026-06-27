@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100k — LAUNCH: open multiplayer to the public (MP_PUBLIC=true)  ✅ verified
+Live-site bug report: the MULTIPLAYER tile "felt locked / did nothing." Root cause = the intentional beta gate
+`MP_PUBLIC=false` (MP was held until scores were server-recorded). Now that the server round start/settle is wired
+(build100j), flipped `MP_PUBLIC=true` in BOTH index.html (`toMultiplayer` gate) and multiplayer.js (the ranked flag).
+On the live site a guest now ENTERS the lobby instead of getting the "opens soon" toast. ⚠️ HARD DEP: this needs
+**Supabase Realtime enabled** on the project (Lovable) — the lobby/match broadcast channels error without it; an empty
+lobby degrades to a CPU warm-up. Verified live (`?v` 371→372): clean boot, RhythmMP present, 0 console errors.
+(Not flipped: the two other live-report items are NOT game bugs — "SIGN IN shown" = the game can't see the site's
+Supabase session = the auth-bridge, a Lovable deploy-config fix [master prompt §0.5 #2]; "campaign open" = the
+by-design no-sign-in Easy/Medium on-ramp, with logged-out scores saved locally-only until sign-in.)
+
 ### build100j — Lovable shipped the contracts → rewire to them + flip BONUS_SERVER ON  ✅ verified
 Lovable deployed `/bonus-sparks/{balance,earn,spend}` + `/mp/round/{start,settle}` and answered the 3 open questions.
 Rewired the game side to the REAL shapes (they kept the separate `/earn` call but solved both blockers) and turned the

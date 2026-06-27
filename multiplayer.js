@@ -126,7 +126,7 @@
   var TOUR_MAX = 10, TOUR_MIN = 3;          // copy advertises 5–10; 3 makes a real bracket testable
   // build42: the BEFORE-PUBLIC gate. Keep FALSE until server-authoritative scoring (re-judge) is live — see
   // MP_SERVER_SCORING_BRIEF.md. While false, brackets are friends/solo only and no MP result is marked "ranked".
-  var MP_PUBLIC = false;
+  var MP_PUBLIC = true;   // build100k LAUNCH: MP public (mirror of index.html). Needs Supabase Realtime enabled on the project to sync.
   var tour = nullTour();
   var toursDir = {};                         // tid -> {tid,name,hostId,hostName,count,max,state,at}
   var _tourRaf = 0, _tourLastSend = 0;
