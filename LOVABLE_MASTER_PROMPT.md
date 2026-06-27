@@ -24,9 +24,22 @@ game-code rewrite is needed** — your job is (1) serve it at `/game` and (2) st
 `share.js`, `telemetry.js`, and **`assets/`**.
 **Do NOT deploy:** `serve.py`, `launch-game.bat`, `design-source/`, any `*.md` (briefs/changelog), `*.py` tooling.
 
-**Mount:** serve it as a **static route at `/game`** (it's plain static files — fastest + zero rewrite). All in-game
-asset references are **relative** (`assets/…`, `game.js`, …), so serve them under the same `/game/` base. If your host
-needs an absolute base, set it so `/game/index.html` resolves `/game/game.js` and `/game/assets/...` correctly.
+**Mount — DECIDED: static route, NO React shell, NO iframe (option (a)).** Serve the files at **`/game` and `/game/*`**
+as a SPA-bypass static route (the game is the top document — it owns the canvas, fullscreen, and keyboard capture; an
+iframe shell just adds focus/sizing friction for zero benefit). It's same-origin with the React app, so the user's
+Supabase session (in `localStorage`) carries automatically — sign-in "just works." All in-game asset references are
+**relative** (`assets/…`, `game.js?v=NN`, …), so they resolve under the `/game/` base with zero rewrite.
+
+**Getting the files in — DECIDED: sync from this public repo (don't paste/zip).** The churning surface is 10 code/CSS
+files; assets are a one-time import. Use **`deploy/sync-game.mjs`** (in this repo) as a prebuild step in your repo
+(`"prebuild": "node scripts/sync-game.mjs"`) — it fetches the 10 files from
+`raw.githubusercontent.com/reactivvibeai-eng/reactive-rhythm/main/…` into `public/game/`. **Verified 2026-06-27: every
+URL returns 200, `main` HEAD = `9241c72`.** This means the two remaining game-side fast-follows (wager-escrow wiring +
+the pre-public dev-hook strip) **auto-roll-out on your next build** — no re-coordination. **Assets** are a one-time
+import (grab the repo tarball `codeload.github.com/reactivvibeai-eng/reactive-rhythm/tar.gz/refs/heads/main`): light
+assets → `public/game/assets/`; the heavy `assets/levels/*.mp4` (~1 GB) → **Supabase Storage** — the game references
+them by the **relative** path `assets/levels/<name>.mp4` (55 refs, all in index.html), so map `/game/assets/levels/*`
+→ the Storage bucket and the game resolves them with **zero code change**.
 
 **⚠️ Heavy media decision (`assets/` is ~1.1 GB, mostly traveling-level `.mp4` videos):**
 - The light assets (guitar art, note PNGs, covers, SFX, the moon-loop backdrop) are small and belong in the deploy.
