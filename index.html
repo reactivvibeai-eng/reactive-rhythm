@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=360" />
+<link rel="stylesheet" href="jukebox.css?v=361" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -899,7 +899,7 @@
   #profile-screen:not(.active) .scr-vidbg, #levels-screen:not(.active) .scr-vidbg, #leaderboard-screen:not(.active) .scr-vidbg { display: none !important; }
   .profile-screen > .profile-card, .levels-screen > .levels-card, .leaderboard-screen > .lbd-card { position: relative; z-index: 1; }
   .screen.active .lbd-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
-  .lbd-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 32px 18px; text-align: center; }
+  .lbd-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 32px 28px; text-align: center; }
   .lbd-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
   /* v254 (#86): leaderboard wordmark IMAGE — shown when assets/lbd/lbd-wordmark.png loads (mirrors the MP wordmark: lives on
      pure black → mix-blend screen melts it into the panel). Self-heals to the styled text title if the file is absent. */
@@ -939,7 +939,7 @@
   .lbd-board .lb-row.lb-you-claim { margin-top: 8px; opacity: 0.92; }
   .lbd-board .lb-row.lb-you-claim .lb-rank { color: var(--ink-dim); }
   .lbd-board .lb-head { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--silver); margin-bottom: 8px; text-align: left; }
-  .lbd-board .lb-row { display: grid; grid-template-columns: 48px 1fr auto auto auto; gap: 14px; align-items: baseline; padding: 11px 12px; border-bottom: 1px solid rgba(222,216,212,0.06); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: left; }
+  .lbd-board .lb-row { display: grid; grid-template-columns: 48px 1fr auto auto auto; gap: 14px; align-items: center; padding: 11px 12px; border-bottom: 1px solid rgba(222,216,212,0.06); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: left; }
   .lbd-board .lb-rank { color: var(--crimson); font-weight: 700; }
   .lbd-board .lb-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-board .lb-name .lb-sub { color: var(--ink-dim); font-size: 11px; }
@@ -6071,7 +6071,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=360"></script>
+<script src="telemetry.js?v=361"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6209,14 +6209,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=360"></script>
-<script src="game.js?v=360"></script>
-<script src="procbg.js?v=360"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=360"></script>
-<script src="catalog.js?v=360"></script>
-<script src="multiplayer.js?v=360"></script>
-<script src="share.js?v=360"></script>
-<script src="couch.js?v=360"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=361"></script>
+<script src="game.js?v=361"></script>
+<script src="procbg.js?v=361"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=361"></script>
+<script src="catalog.js?v=361"></script>
+<script src="multiplayer.js?v=361"></script>
+<script src="share.js?v=361"></script>
+<script src="couch.js?v=361"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8901,7 +8901,7 @@
       btns[i].addEventListener('click', function () {
         var act = this.getAttribute('data-act');
         if (act === 'signin') { openSite('https://reactivvibeai.com'); return; }
-        if (act === 'getmore') { openGetSparks(); return; }
+        if (act === 'getmore') { openGetSparks(this.getAttribute('data-need')); return; }
         if (act === 'equip') { var it = itemById(this.getAttribute('data-id')); if (it) equipSkin(it); return; }
         if (act === 'unequip') { unequipSkin(); return; }
         if (act === 'buybonus') { buyBonus(this); return; }
@@ -9015,11 +9015,19 @@
   })();
 
   function openSite(url) { try { window.open(url, '_blank', 'noopener'); } catch (e) {} }
-  function openGetSparks() { pendingTopup = true; openSite(SITE_SPARKS); }
+  // build100b: thread the blocked item's price into the top-up deep-link as &need=NN so the website top-up page can
+  // pre-select the smallest Sparks pack that covers it (the conversion nudge in REVENUE_ROADMAP.md). No arg = generic top-up.
+  function openGetSparks(need) {
+    pendingTopup = true;
+    var url = SITE_SPARKS, n = parseInt(need, 10);
+    if (n > 0) url += (url.indexOf('?') >= 0 ? '&' : '?') + 'need=' + n;
+    openSite(url);
+  }
 
   function toGetMore(btn) {
     btn.className = 'store-buy getmore'; btn.removeAttribute('disabled'); btn.classList.remove('is-busy');
     btn.textContent = 'Get Sparks'; btn.setAttribute('data-act', 'getmore');
+    try { var _it = itemById(btn.getAttribute('data-id')); if (_it && _it.price_sparks) btn.setAttribute('data-need', _it.price_sparks); } catch (e) {}
   }
 
   // build66 (launch-audit P1): one idempotency key per purchase INTENT, reused across retries so a lost-response re-click
@@ -9153,6 +9161,9 @@
     if (!pendingTopup) return; pendingTopup = false;
     var C = RC(); if (!C || !C.getSparks) return;
     Promise.resolve(C.getSparks()).then(function (b) { if (typeof b === 'number') setBalance(b); }).catch(function () {});
+    // build100b: a top-up may also have granted/restored an entitlement (or the user bought a skin/level on the site) —
+    // re-fetch so owned items flip to Owned/Equip on return without a manual reload. Gated to the active store screen.
+    try { if (screen.classList.contains('active')) refreshEntitlements(); } catch (e) {}
   }
   window.addEventListener('focus', recheckBalance);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) recheckBalance(); });

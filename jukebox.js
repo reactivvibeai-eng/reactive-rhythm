@@ -578,7 +578,20 @@
           '</span>' +
           '<span class="fm-note">The music video plays behind the highway — hit the notes to the song.</span>' +
         '</span>';
-      if (poster) { const bg = hero.querySelector('.fm-bg'); if (bg) bg.style.backgroundImage = 'url("' + poster.replace(/"/g, '%22') + '")'; }
+      const bg = hero.querySelector('.fm-bg');
+      if (bg) {
+        if (poster) { bg.style.backgroundImage = 'url("' + poster.replace(/"/g, '%22') + '")'; }
+        else {
+          // build100b: a featured film with no catalog poster_url no longer renders a flat dark panel — paint the same
+          // branded clapperboard backdrop the cards use (fillNoArt) so the hero is never blank ("everything should have thumbnails").
+          bg.style.background = 'radial-gradient(120% 100% at 50% 0%, #2a0d12 0%, #140709 62%, #0a0707 100%)';
+          bg.innerHTML = '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,42,48,0.15)">' +
+            '<svg width="128" height="128" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round">' +
+              '<rect x="2.5" y="6.5" width="19" height="13" rx="2"></rect>' +
+              '<path d="M2.5 6.5l3.4-3.2 3.1 3.2M9 6.5l3.4-3.2 3.1 3.2M15.5 6.5l3.4-3.2 3.1 3.2"></path>' +
+            '</svg></span>';
+        }
+      }
       const pb = hero.querySelector('.fm-play'); if (pb) pb.addEventListener('click', (e) => { e.stopPropagation(); RC().playFlix(t); });
       const ib = hero.querySelector('.fm-info'); if (ib) ib.addEventListener('click', (e) => { e.stopPropagation(); RC().openSheet(t); });
     }

@@ -15,6 +15,32 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100b — playtest-ready polish pass (audit swarm → confirmed fixes)  ✅ verified
+A 6-surface audit swarm (MP, store, leaderboard, campaign/flix, whole-UI brand, correctness/perf) + adversarial
+verify came back **clean on every P0/P1** — the owner's explicitly-flagged items (MP combat→shock→freeze, tournament
+front-and-center when live, no double "Host a tournament", MP score-fit, campaign sequential unlock, film thumbnails,
+flix-vs-watch routing, brand) are all already handled in the current code. Fixed the 5 genuine smaller items it surfaced.
+`?v` 360→361. Verified live on rr-verify (8790), 0 console errors.
+- **Store — top-up return now refreshes entitlements:** `recheckBalance()` (the `pendingTopup` focus/visibility path)
+  now also calls `refreshEntitlements()` when the store is active, so an item granted/restored during a website top-up
+  flips to **Owned/Equip** without a manual reload (was repainting only the balance number). Closes the game side of
+  `LOVABLE_PAYMENT_BRIEF.md §3.2`.
+- **Store — insufficient-Sparks CTA carries item context:** `openGetSparks(need)` now appends **`&need=<item price>`**
+  to the top-up deep-link (`…/live?sparks=open&need=NN`) and `toGetMore()` stamps the blocked item's price, so the
+  website top-up page can pre-select the smallest covering pack (the conversion nudge in `REVENUE_ROADMAP.md`). Verified
+  live: per-item → `&need=120`, generic "Get Sparks" → no param.
+- **Leaderboard — spacing/alignment polish (owner ask):** `.lbd-card` side padding 18px→28px + column gap 14px→18px
+  (more breathing room); `.lbd-board .lb-row` `align-items: baseline`→`center` so the padded grade chip sits on the row's
+  optical center (verified: chip-center delta 0px, was dropping below the rank/score baseline).
+- **AI Flixs — featured hero never blank:** the NOW-SHOWING hero now paints the same branded clapperboard backdrop the
+  cards use (`fillNoArt`) when a featured film has no catalog `poster_url`, instead of a flat dark panel. Real films
+  often lack posters (verified the featured "Angel Bones" has none) so this genuinely bites — now a warm crimson gradient
+  + clapperboard glyph. Matches the owner's "everything should have thumbnails."
+- **Doc:** `LOVABLE_PAYMENT_BRIEF.md` — marked §3.2 game-side DONE; added a guest Bonus-Sparks reconciliation note
+  (merge local `rr_bonus_owns` into the account on sign-in so earned skins survive a device change — P3 backend).
+- Audit non-issues (left as-is): the per-level violet art accent (`--rr-lvl-accent #a64dff`) is a deliberate per-level
+  backdrop wash, fenced off from UI chrome (same class of exception as the GH fret-1 green gem) — not a brand leak.
+
 ### build100 — ⚡ DAILY RIFT + 2 playable campaign video-levels (round-7 part 2)  ✅ verified
 Closes the two larger round-7 features. Touched ONLY `index.html` + `catalog.js` (no `game.js`/engine/scoring
 change). `?v` 359→360. Verified live on rr-verify (8790): 0 console errors through boot + flix launch + reward sim.
