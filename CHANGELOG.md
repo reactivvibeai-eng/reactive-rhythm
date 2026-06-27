@@ -15,6 +15,27 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100o — live-test fixes: menu sign-in state, cover thumbnails, section diagnostic  ✅ verified
+Real tester (santaroxx) on the public build surfaced three:
+- **Menu "SIGN IN" showed even when logged in** (the library chip correctly showed the user, but the menu button was
+  never wired to auth). Fixed: `#mh-signin` now HIDES when `RhythmCatalog.getUser()` resolves a user (re-runs on
+  `onAuthChange`), and its click opens `LOGIN_URL` (the `/login?redirect=/game` deep-link).
+- **Browse covers showed green placeholders + "tabs don't switch songs"** — ONE root cause: cover `artwork_url`s are
+  full-res **~1.2 MB PNGs** on Supabase Storage, so they load slowly and the green palette placeholder shows; switching
+  tabs then shows more green-loading covers, reading as "nothing changed." Added `thumb()` — rewrites the Storage object
+  URL to the **image-transform endpoint** (`/render/image/public/…?width=&quality=72`) so coverflow (w400) + browse-grid
+  (w160) covers load as fast thumbnails. Verified live: covers now request `/render/image/public/…`. Also added the
+  missing **onerror fallback** to coverflow covers (thumbnail → original → branded initial; never a bare green palette).
+- **Section/tab switching diagnostic:** `setSection` now `console.warn`s the rail + first titles, so we can confirm the
+  tab IS switching the songs (the slow covers were masking it) vs a real wiring bug.
+- Verified live (`?v` 375→376): clean boot, covers use the transform endpoint, 0 console errors, node-check clean.
+  ⚠️ Backend follow-up: ship a real small `thumbnail_url` (covers should be ~20–40 KB webp, not 1.2 MB PNG).
+
+### build100n — MP lobby connection diagnostic (surface Realtime status)  ✅ node-checked
+Added `console.warn('[mp] lobby channel status:', status)` + the lobby error banner now shows the exact status
+(`Could not reach the live lobby (CHANNEL_ERROR)`), so the MP failure (anon can't reach Realtime vs network) is
+diagnosable on-screen + in console. (Deploy was already current; MP_PUBLIC=true, CORS *, no CSP, JS all loads.)
+
 ### build100m — auth-hardening: local session is the source of truth for "signed in"  ✅ verified
 Lovable confirmed the site uses standard supabase-js localStorage (default storageKey) — NO bridge needed; the game
 reads the same `sb-bxiejoktoknybpraxebm-auth-token`. Anon key in the repo matches the live key (verified). Hardened the

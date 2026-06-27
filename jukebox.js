@@ -40,6 +40,19 @@
   // JUKEBOX COVERFLOW
   // =========================================================================
   const POOL = 13, HALF = 6;
+  // build100o: covers are full-res ~1MB+ PNGs on Supabase Storage → too heavy for a coverflow/grid (they load slowly,
+  // leaving the green palette placeholder showing). Rewrite the Storage object URL to the image-TRANSFORM endpoint with a
+  // width cap so each cover is a fast thumbnail. Non-Supabase / non-storage URLs pass through untouched; an onerror at the
+  // call site falls back to the original full URL, then to branded art. (Backend should ship a real thumbnail_url too.)
+  function thumb(url, w) {
+    try {
+      if (!url || typeof url !== 'string') return url || '';
+      if (/supabase\.co\/storage\/v1\/object\/public\//.test(url)) {
+        return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + (url.indexOf('?') >= 0 ? '&' : '?') + 'width=' + (w || 360) + '&quality=72';
+      }
+    } catch (e) {}
+    return url;
+  }
   let stage, jukebox, covers = [];
   let jbList = [], sectionKey = 'new';   // open on the freshest (most recently added) music
   let pos = 0, target = 0, raf = 0, dragging = false, down = false, startX = 0, startPos = 0, justDragged = 0;
@@ -94,8 +107,12 @@
     if (t.artwork_url) {
       let im = art.querySelector('img');
       if (!im) { im = document.createElement('img'); art.appendChild(im); }
-      im.src = t.artwork_url; art.style.display = ''; mark.textContent = '';
-      let ri = refl.querySelector('img'); if (!ri) { ri = document.createElement('img'); refl.appendChild(ri); } ri.src = t.artwork_url;
+      art.style.display = ''; mark.textContent = '';
+      // build100o: load a fast thumbnail; on failure fall back to the original full URL, then to the branded initial
+      // (never leave the bare green palette showing). Tracks the failed URL on the element so we only retry once.
+      im.onerror = function () { if (im.dataset.full !== '1') { im.dataset.full = '1'; im.src = t.artwork_url; } else { im.onerror = null; im.remove(); mark.textContent = initial(t.title); } };
+      im.dataset.full = ''; im.src = thumb(t.artwork_url, 400);
+      let ri = refl.querySelector('img'); if (!ri) { ri = document.createElement('img'); refl.appendChild(ri); } ri.onerror = function () { ri.onerror = null; ri.src = t.artwork_url; }; ri.src = thumb(t.artwork_url, 400);
     } else { art.innerHTML = ''; mark.textContent = initial(t.title); refl.innerHTML = ''; }
     // grade chip
     const best = RC().getBest(t.id);
@@ -220,6 +237,7 @@
   function setSection(key) {
     sectionKey = key;
     jbList = RC().sections()[key] || [];
+    try { console.warn('[jb] section', key, '→', jbList.length, 'songs; first:', jbList.slice(0, 3).map(function (t) { return t && t.title; })); } catch (e) {}   // build100o: live diagnostic — confirms tab switching changes the rail (vs slow covers masking it)
     try { var _ac = $('jb-allcount'); if (_ac) { var _n = (RC().allTracks() || []).length; _ac.textContent = _n ? ' · ' + _n : ''; } } catch (e) {}
     // build96 (playtest): surface AI FLIXS as a first-class jukebox button (was only buried inside Browse → owner couldn't find it)
     try { var _fx = $('jb-flixs'), _fc = $('jb-flixscount'), _nv = (RC().videoCount ? RC().videoCount() : 0); if (_fx) _fx.hidden = !_nv; if (_fc) _fc.textContent = _nv ? ' · ' + _nv : ''; } catch (e) {}
@@ -485,8 +503,9 @@
     let artEl;
     if (t.artwork_url) {
       artEl = document.createElement('img');
-      artEl.className = 'sc-art'; artEl.loading = 'lazy'; artEl.src = t.artwork_url;
-      artEl.onerror = () => artEl.replaceWith(procArt(t));
+      artEl.className = 'sc-art'; artEl.loading = 'lazy';
+      artEl.onerror = () => { if (artEl.dataset.full !== '1') { artEl.dataset.full = '1'; artEl.src = t.artwork_url; } else { artEl.replaceWith(procArt(t)); } };   // build100o: thumbnail → original → procedural art
+      artEl.dataset.full = ''; artEl.src = thumb(t.artwork_url, 160);
     } else {
       artEl = procArt(t);
     }
