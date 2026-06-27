@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100c — DAILY RIFT tile art (generated) + real-run playtest  ✅ verified
+- **Daily Rift key-art generated + installed:** `assets/ui/daily-rift.jpg` (1280×850) — a black/crimson/gold "rift"
+  splash (a molten-gold vertical tear in the void, a guitar pulled into it, crimson lightning) generated with
+  **gpt_image_2** (2K, brand-locked: no purple/blue, no baked text). The tile's gold CSS fallback is now replaced by
+  real art — verified live: `#mh-daily` gains `.has-art` and `.mh-art` loads the jpg, 0 console errors. A second option
+  is saved as `assets/ui/daily-rift-alt.jpg` (a fiery-vortex variant) — swap by renaming if preferred.
+- **Real-run playtest (headless):** launched the DAILY RIFT for real — it charts on **HARDCORE** (912-note Hard chart,
+  all 5 lanes), the song clock advances, and driving live note-presses climbed the score **0→250** (input→hit→scoring
+  confirmed live). Verified the full ×3 loop is wired: launch arms the flag → `endGame` (game.js:2475) calls
+  `RhythmCatalog.recordLocal` → recordLocal applies the ×3 + stamps the day done (math verified by simulation).
+
 ### build100b — playtest-ready polish pass (audit swarm → confirmed fixes)  ✅ verified
 A 6-surface audit swarm (MP, store, leaderboard, campaign/flix, whole-UI brand, correctness/perf) + adversarial
 verify came back **clean on every P0/P1** — the owner's explicitly-flagged items (MP combat→shock→freeze, tournament
