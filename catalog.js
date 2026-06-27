@@ -472,7 +472,13 @@
     var _asPlayer = false; try { _asPlayer = /[?&]asplayer=1/.test(location.search); } catch (e) {}
     if (!_asPlayer && (_isAdmin || _isDevUnlock())) return true;   // admin/dev owns everything; a fresh-player sim owns ONLY real entitlements
     try { if (loadBonusOwns().indexOf(t + ':' + i) >= 0) return true; } catch (e) {}   // earned-Bonus-Sparks purchase (local, legit even for a fresh player)
-    return _entitlements.owns.some(function (o) { return o.item_type === t && o.item_id === i; });
+    // build100q: normalize hyphen/underscore on BOTH sides — authored level ids are hyphen ('high-seas') while the
+    // store/campaign entitlement ids are underscore ('high_seas'). Exact compare made the env-pick/launch gate query an
+    // id never in the cache → a real purchaser (and the admin during the async _isAdmin resolve window) saw paid levels
+    // as locked. Compare slug-insensitively so the two id forms agree.
+    var _nm = function (s) { return String(s).replace(/-/g, '_'); };
+    var _ni = _nm(i);
+    return _entitlements.owns.some(function (o) { return o.item_type === t && _nm(o.item_id) === _ni; });
   }
   async function getEntitlements() {
     if (!API_BASE) { _setEntCache([], false); return { signed_in: false, owns: [] }; }

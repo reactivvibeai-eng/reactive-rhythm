@@ -2593,6 +2593,28 @@
       var mine = p.detail.filter(function (d) { return d.a === ME.id || d.b === ME.id; })[0];
       if (mine && mine.win != null) showTourVerdict(mine.win === ME.id ? 'YOU ADVANCE' : 'ELIMINATED', mine.win === ME.id);
     }
+    // build100q (#169): record THIS player's bracket round (ANY round, incl. the FINAL) into the MP ladder so the
+    // Leaderboard's MULTIPLAYER tab shows real W/L after a tournament. Previously ONLY the 1v1 path (showWinner) called
+    // recordMpResult, so every bracket game wrote nothing → "No matches yet" even after playing. Detail rows carry
+    // { a, b, as, bs, win } (built in settlePairs). Humans only — skip bot-fill opponents (matches the 1v1 oppMeta.bot
+    // exclusion); per-round guard (tour._recordedRounds[p.n]) so a re-broadcast/snapshot t-result can't double-count.
+    try {
+      if (tour.meIn && !spectating && p.detail) {
+        var myd = p.detail.filter(function (d) { return d.a === ME.id || d.b === ME.id; })[0];
+        tour._recordedRounds = tour._recordedRounds || {};
+        if (myd && myd.win != null && !tour._recordedRounds[p.n]) {
+          var _oppId = (myd.a === ME.id) ? myd.b : myd.a;
+          if (!((tour.members[_oppId] || {}).bot)) {
+            tour._recordedRounds[p.n] = true;
+            var _myS = (myd.a === ME.id) ? (myd.as || 0) : (myd.bs || 0);
+            var _opS = (myd.a === ME.id) ? (myd.bs || 0) : (myd.as || 0);
+            recordMpResult(myd.win === ME.id ? 'win' : (_myS === _opS ? 'draw' : 'loss'),
+              { op: tourName(_oppId), song: (tour.sel && tour.sel.title) || '', my: _myS, ops: _opS });
+            try { paintRankChip(); } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {}
     if (tour.meIn && !survived) banner('mpx-tour-msg', 'Eliminated in round ' + p.n + '. Stick around — the bracket rolls on.');
     else if (survived && p.winners.length > 1) banner('mpx-tour-msg', 'You advance! Next round starts in a moment…');
     var chip = $('mpx-tour-chip'); if (chip) { chip.setAttribute('data-state', 'live'); chip.textContent = 'ROUND ' + p.n + ' DONE'; }

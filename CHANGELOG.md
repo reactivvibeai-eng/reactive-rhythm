@@ -15,6 +15,40 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q — economy + leaderboard fix burst (admin ownership, store buy, rank honesty, MP W/L)  ✅ verified (live preview)
+Playtest burst (owner + santaroxx) on the public build. A 4-agent investigation swarm pinned each root cause; all four
+fixes are **game-side** (the cross-account/real-data halves are Lovable backend items, spec'd in `LOVABLE_MASTER_PROMPT.md`).
+
+- **#166 P0 — Admin/owner owns paid levels but can't play/select them.** Root cause: an **id-slug mismatch**. Authored
+  levels use a **hyphen** id (`high-seas`, `shorty-x`) but the store/campaign entitlement uses an **underscore** id
+  (`high_seas`, `shorty_x`). The env-picker/launch paywall queried `ownsItem('level', e.id)` (hyphen) which was never in
+  the entitlements cache, so during the async `_isAdmin` resolve window the level locked to "Unlock in Store" and
+  `applyEnvironment` silently dropped to plain Arena. **Also latent for every real purchaser.** Fix (surgical): carry the
+  entitlement id onto the env object as `entId` (`envFromAuthored`, index.html) and query `ownsItem('level', e.entId||e.id)`
+  in both gates (`applyEnvironment` + the sheet env-picker chip lock). Belt-and-suspenders in `catalog.js ownsItem`:
+  slug-normalize hyphen↔underscore on both sides so the two id forms always agree. Verified live: env objects carry
+  `entId:'high_seas'`/`'shorty_x'`; both id forms resolve owned for the owner.
+- **#167/#168 — Store "buy" redirects home + Sparks shows "—".** ONE root cause: the store derived `signedIn` SOLELY from
+  `/store`'s `signed_in` echo. When the backend doesn't return it (cross-origin session / CORS / contract gap), the store
+  fell to guest UI → the buy button became a "Sign in to buy" CTA that `window.open`s the website home (the "redirect
+  home"), and `setBalance` masked the number to "—". Fix: make `signedIn` **authoritative from the local Supabase
+  session + admin** (`signedIn = !!out.signed_in || !!getUser() || isAdmin()`), mirroring `catalog.js`. Degrades
+  gracefully (still honest guest UI with no session). **Backend-blocked half:** the real cashable balance + a working
+  `/sparks` top-up page + `/store` echoing `signed_in` are Lovable items.
+- **#170 — Global/MP rank inaccurate (two testers, same "#N").** Root cause: `/leaderboard/global` returns `[]`, so the
+  UI fell to a **client seed** (VEX/KUNNING/RYO-9…) and **injected the player into the sort with a real `rank=i+1`** —
+  a FAKE global number. Two testers with comparable local bests collided on the same slot. Fix: house seeds stay ranked
+  #1–#5 as **aspirational preview**, but the player's own row pins SEPARATELY as **UN-ranked** ("#— · your local best").
+  Applied to BOTH the Global tab (`renderGlobalLocal`) and the Multiplayer tab seed ladder. The real server ladder
+  auto-replaces this whole block the moment Lovable returns rows. Verified live: YOU row reads "#—" on both tabs.
+- **#169 — Leaderboard MP tab shows no win/loss after playing.** Root cause: `recordMpResult` was called from EXACTLY one
+  site — the **1v1** `showWinner` path. The **tournament** settle path (`onTourResult`) never recorded, so every bracket
+  game (the headline MP mode) wrote nothing → "No matches yet." Fix: in `onTourResult`, record THIS player's bracket round
+  (any round incl. the final) into the local `rr_mp_rank` ladder — humans only (skip bot-fill opponents, matching the 1v1
+  `oppMeta.bot` exclusion), with a per-round dedup guard (`tour._recordedRounds[p.n]`) so a re-broadcast t-result snapshot
+  can't double-count. Detail rows carry `{a,b,as,bs,win}` (from `settlePairs`). Verified live: the MP hero card + history
+  render real W/L from `rr_mp_rank`. **Backend half:** a real cross-account `GET /mp/leaderboard` is a Lovable item.
+
 ### build100o — live-test fixes: menu sign-in state, cover thumbnails, section diagnostic  ✅ verified
 Real tester (santaroxx) on the public build surfaced three:
 - **Menu "SIGN IN" showed even when logged in** (the library chip correctly showed the user, but the menu button was

@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=381" />
+<link rel="stylesheet" href="jukebox.css?v=382" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -6109,7 +6109,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=381"></script>
+<script src="telemetry.js?v=382"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6279,14 +6279,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=381"></script>
-<script src="game.js?v=381"></script>
-<script src="procbg.js?v=381"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=381"></script>
-<script src="catalog.js?v=381"></script>
-<script src="multiplayer.js?v=381"></script>
-<script src="share.js?v=381"></script>
-<script src="couch.js?v=381"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=382"></script>
+<script src="game.js?v=382"></script>
+<script src="procbg.js?v=382"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=382"></script>
+<script src="catalog.js?v=382"></script>
+<script src="multiplayer.js?v=382"></script>
+<script src="share.js?v=382"></script>
+<script src="couch.js?v=382"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8129,7 +8129,8 @@
         reactiveCards: L.reactiveCards || null, mechanic: L.mechanic || null, boss: !!L.boss,
         procBg: L.procBg || null,                       // build72: carry the procedural reactive-backdrop onto the env/free-play/MP path (Easy warm-ups were rendering a static poster there)
         fxKit: L.fxKit || '',                           // build72: carry the bespoke per-level hit-particle kit (paid showcases lost their signature FX on the env path)
-        paid: !!(L.unlock && L.unlock.entitlement)
+        paid: !!(L.unlock && L.unlock.entitlement),
+        entId: (L.unlock && L.unlock.entitlement && L.unlock.entitlement.item_id) || L.id   // build100q: carry the ENTITLEMENT id (underscore, e.g. 'high_seas') so the env paywall queries the same id the store/campaign own — L.id is the hyphen slug ('high-seas') which never matched the cache
       };
     }
     function environments() {
@@ -8161,7 +8162,7 @@
       // build60 PAYWALL backstop: a PAID level's environment requires OWNERSHIP to use anywhere (browse-a-song env-pick, an MP
       // host's random/stale stage roll) — premium content stays purchase-gated everywhere, not just the campaign card. ownsItem
       // returns true for the owner/admin/dev; a non-owner gets the plain Arena instead of a free premium stage.
-      if (e.paid) { var _ownEnv = false; try { var _rcE = window.RhythmCatalog; _ownEnv = !!(_rcE && _rcE.ownsItem && _rcE.ownsItem('level', e.id)); } catch (e3) {} if (!_ownEnv) { clearEnvironment(); return; } }
+      if (e.paid) { var _ownEnv = false; try { var _rcE = window.RhythmCatalog; _ownEnv = !!(_rcE && _rcE.ownsItem && _rcE.ownsItem('level', e.entId || e.id)); } catch (e3) {} if (!_ownEnv) { clearEnvironment(); return; } }
       var synthetic = { id: 'env:' + e.id, title: e.name, tier: e.tier || 'medium', theme: e.theme,
         cover: e.cover, bgArt: e.bgArt, bgVideo: e.bgVideo, guitarSkin: e.guitarSkin || '', intenseVideo: e.intenseVideo || '', intenseVideos: e.intenseVideos || null, journey: e.journey || null, lens: e.lens || null, reactiveCards: e.reactiveCards, mechanic: e.mechanic || null, procBg: e.procBg || null, fxKit: e.fxKit || '', boss: false, _isEnv: true };   // build53: carry journey onto the synthetic env so traveling levels work via the env/MP/random path too (build72: + procBg reactive backdrop + fxKit signature hit kit)
       _activeLevel = synthetic;
@@ -8390,15 +8391,22 @@
     banner('<b>Preview ladder — beat these.</b> Global rankings go live when accounts connect; for now this seeds aspirational targets next to your best.');
     var runs = localRuns();
     var best = runs.length ? runs[0] : null;
-    // build the combined ladder: house seeds + the player (real best, or an unranked placeholder)
-    var pool = GLOBAL_SEED.map(function (s) { return { name: s.name, score: s.score, acc: s.acc, grade: s.grade, you: false }; });
-    if (best) pool.push({ name: 'YOU', sub: best.title, score: best.score, acc: best.accuracy, grade: best.grade, you: true });
-    pool.sort(function (a, b) { return b.score - a.score; });
-    var items = pool.map(function (p, i) { p.rank = i + 1; return p; });
+    // build100q: the YOU row must NOT be injected into the seed sort and handed a numeric "#N global rank" — that's a
+    // FAKE rank (no cross-account data exists yet), and two testers with comparable local bests sorted into the same
+    // slot among the 5 house scores → both saw an identical "#4 global". Render the house seeds as aspirational targets
+    // (ranked #1–#5, clearly "preview"), and pin the player's own row SEPARATELY as an UNRANKED local-best line. No one
+    // gets a fake global number; the real ladder (server rows) replaces this whole block the moment Lovable returns data.
+    var pool = GLOBAL_SEED.map(function (s, i) { return { rank: i + 1, name: s.name, score: s.score, acc: s.acc, grade: s.grade, you: false }; });
     empty.hidden = true;
     var head = '<div class="lb-head">All-time · Top players <span class="lb-head-tag">preview</span></div>';
-    var html = boardHtml(head, items);
-    if (!best) {
+    var html = boardHtml(head, pool);
+    if (best) {
+      // pinned, UN-ranked YOU row — your local best, NOT a claimed global rank
+      html += '<div class="lb-row you lb-you-claim"><span class="lb-rank">#—</span>' +
+        '<span class="lb-name">YOU <span class="lb-sub">· ' + esc(best.title || 'your local best') + '</span></span>' +
+        '<span class="lb-gradecol">' + gradeBadge(best.grade) + '</span><span class="lb-score">' + fmt(best.score) + '</span>' +
+        '<span class="lb-acc">' + (best.accuracy != null ? (best.accuracy * 100).toFixed(1) + '%' : '—') + '</span></div>';
+    } else {
       // no run yet → a pinned, un-ranked YOU row inviting the first play
       html += '<div class="lb-row you lb-you-claim"><span class="lb-rank">#—</span>' +
         '<span class="lb-name">YOU <span class="lb-sub">· play a song to claim your spot</span></span>' +
@@ -8508,14 +8516,20 @@
         '<div><b>' + (r.streak > 0 ? '🔥' + r.streak : (r.streak < 0 ? String(r.streak) : '—')) + '</b><span>STREAK</span></div>' +
         '<div><b>' + r.best + '</b><span>BEST&nbsp;RP</span></div>' +
       '</div></div>';
+    // build100q: same fix as the global tab — don't inject YOU into the seed sort and hand it a fake "#N global rank"
+    // (no cross-account MP ladder exists yet; two testers collided on an identical number). House seeds rank #1–#5 as
+    // aspirational preview; YOU pins below as an UN-ranked local-record row. Real rows replace this once Lovable ships
+    // GET /mp/leaderboard.
     var seed = [{ n: 'VEX', p: 1460 }, { n: 'KUNNING', p: 840 }, { n: 'RYO-9', p: 520 }, { n: 'NIGHT-OWL', p: 300 }, { n: 'ECH0', p: 150 }];
-    var lrows = seed.concat([{ n: 'YOU', p: r.points, you: true }]).sort(function (a, b) { return b.p - a.p; }).slice(0, 5);
     var ladder = '<div class="lb-head" style="margin-top:18px">Top players · preview ladder (global goes live when accounts connect)</div>' +
-      lrows.map(function (e, i) {
-        return '<div class="lb-row mp' + (e.you ? ' you' : '') + '"><span class="lb-rank">#' + (i + 1) + '</span>' +
-          '<span class="lb-name">' + esc(e.n) + (e.you ? ' <span class="lb-sub">that\'s you</span>' : '') + '</span>' +
+      seed.map(function (e, i) {
+        return '<div class="lb-row mp"><span class="lb-rank">#' + (i + 1) + '</span>' +
+          '<span class="lb-name">' + esc(e.n) + '</span>' +
           '<span class="lb-score">' + e.p + ' RP</span></div>';
-      }).join('');
+      }).join('') +
+      '<div class="lb-row mp you"><span class="lb-rank">#—</span>' +
+        '<span class="lb-name">YOU <span class="lb-sub">your record · ' + r.wins + 'W-' + r.losses + 'L</span></span>' +
+        '<span class="lb-score">' + r.points + ' RP</span></div>';
     var hist = (r.history || []).slice(0, 6);
     var matchups = hist.length ? ('<div class="lb-head" style="margin-top:18px">Recent matchups</div>' +
       hist.map(function (h) {
@@ -9233,7 +9247,13 @@
       _merged.forEach(function (i) { _have[String(i.item_type || i.type) + ':' + String(i.item_id || i.id)] = 1; });
       _backend.forEach(function (it) { var k = String(it.item_type || it.type) + ':' + String(it.item_id || it.id); if (_keep(it) && !_have[k]) { _merged.push(it); _have[k] = 1; } });
       items = _merged;   // client catalog (skins + levels) always shows; no song bundles
-      signedIn = !!out.signed_in;
+      // build100q: signedIn must be AUTHORITATIVE from the local Supabase session + admin, not solely /store's echo.
+      // When the backend doesn't return signed_in:true (cross-origin session / CORS / contract gap), the store fell to
+      // guest UI → the "Buy" button became a "Sign in to buy" CTA that opens the website home (the "redirect to home"
+      // bug) AND setBalance masked the Sparks number to "—". Union the local session/admin so a logged-in owner gets a
+      // real Buy button + an unmasked balance even if /store lags. (mirrors catalog.js getUser/isAdmin.)
+      var _localUser = null; try { _localUser = C.getUser ? await C.getUser() : null; } catch (e3) {}
+      signedIn = !!out.signed_in || !!_localUser || !!(C.isAdmin && C.isAdmin());
       try { var e = C.getEntitlements ? await C.getEntitlements() : { owns: [] }; owns = {}; (e.owns || []).forEach(function (o) { owns[String(o.item_type) + ':' + String(o.item_id)] = true; }); } catch (e2) {}
       setBalance(typeof out.balance === 'number' ? out.balance : 0);
       render();
@@ -9725,7 +9745,7 @@
       e.comingSoon = !(e.isDefault || e.isRandom) && !FINISHED[e.id];
       // build60: a PAID env chip is pickable only if OWNED (ownsItem honors owner/admin/dev; a fresh player owns none). The
       // old `!dev` test read the now-purged rr_dev flag, so it locked paid envs even for owners — gate on real ownership.
-      var _ownsPaid = true; if (e.paid) { try { var _rcC = window.RhythmCatalog; _ownsPaid = !!(_rcC && _rcC.ownsItem && _rcC.ownsItem('level', e.id)); } catch (e3) { _ownsPaid = false; } }
+      var _ownsPaid = true; if (e.paid) { try { var _rcC = window.RhythmCatalog; _ownsPaid = !!(_rcC && _rcC.ownsItem && _rcC.ownsItem('level', e.entId || e.id)); } catch (e3) { _ownsPaid = false; } }
       e.locked = !!((e.paid && !_ownsPaid) || e.comingSoon);
     });
     // v253: unfinished ("Coming Soon") environments are HIDDEN from the picker entirely — the user asked to drop
