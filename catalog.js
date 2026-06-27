@@ -41,28 +41,25 @@
   // ONE source of truth for "who is signed in" — reads the SHARED website supabase-js session
   // (same client `supa` used by getToken). Stays null/guest when supabase-js or config absent.
   async function getUser() {
-    // LIVE: prefer GET /me (the site profile — display_name + avatar). It returns 200 {user:null}
-    // when logged out, and we fall back to the raw supabase session if the endpoint ever hiccups.
-    if (API_BASE) {
+    // build100m (auth-hardening): the LOCAL Supabase session is the SOURCE OF TRUTH for "is someone signed in" — a local
+    // read (getSession), NO network + NO CORS dependency. /me only ENRICHES with the site profile (display_name + avatar);
+    // it must NEVER demote a valid local session to "logged out". The OLD code returned null on /me {user:null} or any
+    // /me hiccup → a logged-in owner showed as a GUEST when /me had a CORS issue or didn't recognize the token. No local
+    // session → genuinely logged out. (The server still validates the JWT on every authed call — this is just identity.)
+    if (!supa) return null;
+    let su = null;
+    try { const { data } = await supa.auth.getSession(); su = data && data.session && data.session.user; } catch (e) {}
+    if (!su) return null;   // no local session → logged out
+    if (API_BASE) {         // enrich from the site profile when reachable (best display name + avatar)
       try {
         const out = await api('/me', { auth: true });
-        if (out && 'user' in out) {
-          const u = out.user;
-          if (u && u.id) return { id: u.id, name: u.display_name || 'Player', email: u.email || null, avatar_url: u.avatar_url || null };
-          return null;   // explicit logged-out
-        }
-      } catch (e) { /* backend hiccup → fall back to the session below */ }
+        if (out && out.user && out.user.id) return { id: out.user.id, name: out.user.display_name || 'Player', email: out.user.email || null, avatar_url: out.user.avatar_url || null };
+      } catch (e) { /* CORS/backend hiccup → fall through to the local session's own user (still signed in) */ }
     }
-    if (!supa) return null;
-    try {
-      const { data } = await supa.auth.getUser();
-      const u = data && data.user;
-      if (!u) return null;
-      const m = u.user_metadata || {};
-      const name = m.display_name || m.full_name || m.name
-        || (u.email ? u.email.split('@')[0] : null) || 'Player';
-      return { id: u.id, name: name, email: u.email || null, avatar_url: m.avatar_url || null };
-    } catch (e) { return null; }
+    const m = su.user_metadata || {};
+    const name = m.display_name || m.full_name || m.name
+      || (su.email ? su.email.split('@')[0] : null) || 'Player';
+    return { id: su.id, name: name, email: su.email || null, avatar_url: m.avatar_url || null };
   }
 
   // ---------- ADMIN identity (full access for the owner; everyone else stays gated) ----------

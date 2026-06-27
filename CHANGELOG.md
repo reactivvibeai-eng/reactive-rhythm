@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100m — auth-hardening: local session is the source of truth for "signed in"  ✅ verified
+Lovable confirmed the site uses standard supabase-js localStorage (default storageKey) — NO bridge needed; the game
+reads the same `sb-bxiejoktoknybpraxebm-auth-token`. Anon key in the repo matches the live key (verified). Hardened the
+remaining failure mode Lovable flagged: `getUser()` used to call `GET /me` FIRST and treat `{user:null}` (or any /me
+hiccup) as **explicit logged-out** — so a CORS issue or an unrecognized token showed a logged-in owner as a GUEST.
+Now the **LOCAL session (`getSession`) is the source of truth** (no network, no CORS dependency); `/me` only ENRICHES
+the display name + avatar and can never demote a valid session to logged-out. This makes sign-in + admin resolve
+reliably from the stored session (the server still validates the JWT on every authed call). Also set `LOGIN_URL` to the
+`/login?redirect=/game` deep-link (Lovable's Login.tsx honors `?redirect`). Verified live (`?v` 373→374): clean boot,
+`getUser()` returns null cleanly when signed-out, 0 console errors, node-check clean.
+
 ### build100l — LOGIN REQUIRED: sign-in gate before entering the game  ✅ verified
 Owner decree: require a logged-in ReactivVibe session before playing, so EVERY run/score/rank tracks to the player's
 account (no anonymous local-only progress). Repurposed the existing (disabled) `#beta-gate` full-screen overlay into a
