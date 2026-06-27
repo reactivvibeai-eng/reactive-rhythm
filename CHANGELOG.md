@@ -15,6 +15,15 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100g — campaign: After Hours → Velvet Crime (owner swap)  ✅ verified
+Owner didn't like the After Hours video; swapped the campaign flix slot to **Velvet Crime** (same artist, Mind Over
+Images; gold-lettering-on-crimson, fits the gold theme). Both are in the 112-film decodable-audio (playable) set.
+Renamed the AUTHORED id `flix-afterhours`→`flix-velvetcrime` + updated `RR_FINISHED_LEVELS`, `flixTrackId`
+(`ec1ad7a5-…`), title, and cover. Verified live (`?v` 364→365): the card renders "Velvet Crime" (After Hours gone),
+launches in flix-mode with the film's Mux stream as the backdrop, and charts a real **329-note medium level** across
+all 5 lanes; 0 console errors. Also: elevated the Mux audio-rendition fix to P0 in `LOVABLE_LAUNCH_HANDOFF.md §7` with
+proof (the 32 stream-only films' derived `/audio.m4a` returns 404 — backend must generate the rendition).
+
 ### build100f — MP combat disclosure (owner-flagged relatability)  ✅ node-checked
 The relatability swarm flagged that COMBAT mode is adopted silently — the only on-screen cue was the post-hoc "RIVAL
 SHOCKED YOU" veil AFTER a player is already frozen ~2s, so a newcomer reads the freeze as a bug/lag. Disclosed it where a
