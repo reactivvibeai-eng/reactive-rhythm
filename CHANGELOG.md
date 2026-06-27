@@ -15,6 +15,19 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100l — LOGIN REQUIRED: sign-in gate before entering the game  ✅ verified
+Owner decree: require a logged-in ReactivVibe session before playing, so EVERY run/score/rank tracks to the player's
+account (no anonymous local-only progress). Repurposed the existing (disabled) `#beta-gate` full-screen overlay into a
+**SIGN-IN gate**: on boot, if no Supabase session is detected → show "Sign in to play" (a Sign-In-to-Play button that
+opens `LOGIN_URL`, an "I've signed in — Continue" recheck, and a live status line) instead of the menu. Auto-detects
+sign-in via `focus` + cross-tab `storage` events + a 1.5s poll, then reveals the game. **Robust detection:** reads the
+exact `sb-<ref>-auth-token` AND scans any `sb-*-auth-token` key (covers a project-ref/key mismatch). Config:
+`RHYTHM_CONFIG.REQUIRE_SIGNIN` (default **true**; set false to open) + `LOGIN_URL`. **Localhost always bypasses** (the
+builder's dev env). ⚠️ DEPENDS on the site exposing the Supabase session to **localStorage on this origin** — if the
+site uses HttpOnly cookies, the gate can't see the login and would block everyone (set `REQUIRE_SIGNIN:false` until the
+auth bridge lands — see master prompt §0.5 #2). Verified live (`?v` 372→373): clean boot (localhost bypass → game
+loads), forcing the signin state shows the sign-in CTA (flex) + hides the beta-code form (none), 0 console errors.
+
 ### build100k — LAUNCH: open multiplayer to the public (MP_PUBLIC=true)  ✅ verified
 Live-site bug report: the MULTIPLAYER tile "felt locked / did nothing." Root cause = the intentional beta gate
 `MP_PUBLIC=false` (MP was held until scores were server-recorded). Now that the server round start/settle is wired
