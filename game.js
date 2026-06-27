@@ -3045,7 +3045,13 @@
   // Riffmaster) still has the tell of a POV-hat instrument: >=10 axes. Match the same heuristic the gamepadconnected
   // auto-adopt (~6288) and pollGuitarAxes (~3056) already use, so strum reliably engages instead of silently never firing.
   function guitarShapedPad() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if (gp && (isGuitarPad(gp.id) || ((gp.axes || []).length >= 10))) return true; } catch (e) {} return false; }
-  function requireStrum() { return laneProfile === 'gh' && guitarShapedPad(); }
+  // build100q: HIT MODE override. Default = strum (authentic GH, owner decree). But if a player's strum bar can't be
+  // detected by the driver (POV-hat quirks), require-strum leaves them holding frets that never fire → every note misses.
+  // The Settings "Hit mode" toggle flips this to PRESS-to-hit so a GH controller is always playable. Persisted.
+  let _strumRequired = true; try { _strumRequired = localStorage.getItem('rr_strum_off') !== '1'; } catch (e) {}
+  function requireStrum() { return _strumRequired && laneProfile === 'gh' && guitarShapedPad(); }
+  window.RhythmGame.getStrumRequired = function () { return _strumRequired; };
+  window.RhythmGame.setStrumRequired = function (on) { _strumRequired = !!on; try { localStorage.setItem('rr_strum_off', on ? '0' : '1'); } catch (e) {} try { _frets.clear(); } catch (e2) {} return _strumRequired; };
   function tryStrum(now) {
     if (now - _lastStrumT < STRUM_DEBOUNCE_MS) return;     // debounce: strum-up + strum-down both land here
     _lastStrumT = now;
@@ -3125,7 +3131,10 @@
             if (requireStrum()) { _frets.add(lane); if (state === 'playing') laneDown[lane] = true; }   // GH: fret HELD, no hit until a strum
             else { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }   // legacy: fret-press = hit (keyboard/standard pad)
           }
-          if (requireStrum() && strumCfg.btns.indexOf(b) >= 0) tryStrum(performance.now());   // strum bar -> fire the held frets
+          // build100q: fire the strum on the configured button(s) OR the standard D-pad up/down (12/13) — the calibration
+          // can mis-capture a fret as the strum button, and most GH strum bars enumerate as the D-pad. Belt-and-suspenders
+          // alongside the POV-hat axis strum in pollGuitarAxes; tryStrum self-debounces so a double-trigger is harmless.
+          if (requireStrum() && (strumCfg.btns.indexOf(b) >= 0 || b === 12 || b === 13)) tryStrum(performance.now());   // strum bar -> fire the held frets
           if (requireStrum() && b === strumCfg.spBtn) activateOverdrive();                    // Select (tilt fallback) -> Star Power
           // build100q: STANDARD (non-guitar) pad — Overdrive on the configured odBtn (default RB=5). A controller-only
           // player had NO way to fire Overdrive before (the only pad OD path was requireStrum-gated → guitars only).

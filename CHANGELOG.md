@@ -15,6 +15,24 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100q (part 10) — GH controller plays but every note misses (frets register, strum never fires)  ✅ verified (?v=395)
+Playtester: "the notes come down, we see buttons pushing, but it doesn't hit the notes — it's just missing with the guitar
+controller." Root cause: GH controllers are **require-strum** (owner decree) — pressing a fret only HOLDS it (catcher
+lights, hence "buttons pushing"); the note isn't scored until you **strum**. If the strum bar isn't being detected (or the
+calibration captured the wrong button for it), the held frets never fire → 100% miss. Two-part fix, both game-side:
+- **Broadened strum trigger** (`pollGamepad`): `tryStrum` now also fires on the standard D-pad up/down (buttons **12/13**),
+  not just the calibrated `strumCfg.btns`. Most GH strum bars enumerate as the D-pad, so a mis-captured strum button no
+  longer leaves the player unable to score. `tryStrum` self-debounces, so the extra trigger is harmless alongside the
+  existing POV-hat axis-9 strum fallback.
+- **HIT MODE toggle** (Settings → controller): a segmented control — **Strum to hit** (authentic GH, the default, owner
+  decree preserved) vs **Press to hit** (a fret press alone scores). A player whose strum bar truly won't register can flip
+  to Press-to-hit and play immediately. Backed by `RhythmGame.setStrumRequired/getStrumRequired` (persisted to
+  localStorage `rr_strum_off`); flipping clears any held `_frets`. Press-to-hit routes GH presses through the existing
+  immediate-hit path (line 3132) and keeps Overdrive on `odBtn`. Verified live (?v=395): toggle flips the flag + persists
+  both ways, default stays strum-required, no console errors. Diagnostic for hard-tuning a stubborn strum: `RhythmGame.padState()`
+  prints the live pressed-button indices + axis values so the real strum index can be read off the controller. (No Lovable
+  involvement — controller input is 100% game-side.)
+
 ### build100q (part 9) — controller: multiple buttons per string + Overdrive in the manual map  ✅ UI verified (bind needs hardware)
 Playtester asks: "allow multiple buttons to the same string" + "no mapping of the overdrive on controller."
 - **Multiple buttons → one string:** the runtime already supported it (padMap is button→lane; `pollGamepad` maps each
