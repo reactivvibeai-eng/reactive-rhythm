@@ -15,6 +15,44 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build100r — strum STILL not firing on a guitar controller (POV-hat strum the old detector missed)  ✅ logic-verified (?v=396)
+Playtest follow-up: on v395, "Press to hit" works but **strum still does nothing** with the guitar controller. Deeper
+root cause: this controller's strum bar is a **POV-hat/axis whose UNPRESSED value is a driver-specific NON-zero** (e.g.
+3.28), and (a) the wizard's STRUM step only captured a *button*, so an axis strum was never mapped, and (b) the gameplay
+strum detector used a **sign-flip-around-zero** heuristic that silently fails when rest isn't ~0. Fix (all game-side):
+- **Deviation-from-rest gameplay detector** (`pollGuitarAxes`): a strum now = the axis leaving its learned rest (rising
+  edge of `|v − strumRest|` crossing 0.5) → exactly one hit per stroke, no double-fire on the return-to-rest; a
+  zero-crossing branch still covers clean bipolar analog (rest 0). Added `strumCfg.strumRest`. Verified by exact-replica
+  simulation: POV-hat(rest 3.28)→2 fires for 2 strokes, analog(rest 0)→3 fires for 3 strokes, jittery hat→0 fires.
+- **`RhythmGame.detectStrum()` auto-learn** + an in-Settings **"🎸 Test / fix my strum bar"** button (no console): the
+  player taps it and strums for ~3s; it learns whatever the strum IS — a button OR an axis + its resting value — writes
+  `strumCfg`, and flips HIT MODE back to Strum. Live status flashes while it detects; graceful "no controller" /
+  "no movement" messages. The **wizard's STRUM step** now uses the same auto-detect (was button-only).
+- Why a button-only wizard missed it: most GH strum bars enumerate as a hat on a high axis index, not buttons 12/13.
+Verified live (?v=396): button present, `detectStrum` exposed, no-controller path graceful, no console errors. The
+end-to-end capture needs a real controller (headless can't drive `requestAnimationFrame`/gamepads). Game-side only.
+
+### build100r-fix — strum "only fires on a full up+down saw" + adversarial-review hardening  ✅ logic-verified (?v=397)
+Playtest follow-up: strum worked, but only when strummed up AND down together — a single up-stroke or down-stroke alone
+wouldn't reliably score (correct GH behavior is each stroke = one hit). Root cause + a 21-agent adversarial review of the
+build100r diff surfaced four real issues, all fixed:
+- **Direction independence (the report):** `detectStrum` preferred capturing a single one-directional *button* over the
+  *axis*. A strum bar/POV-hat reports as ONE axis that covers BOTH strokes, so it's now preferred; if the strum is
+  button-based, we capture ALL fired strum buttons (up + down), not just the strongest. The gameplay deviation-from-rest
+  detector already fires each direction independently, so an axis binding gives true single-stroke hits both ways.
+- **Poisoned rest (review MAJOR):** rest was sampled on `detectStrum`'s FIRST frame — if the player was mid-stroke then,
+  the "rest" was a deflected value and gameplay strum silently died. Now rest = the **centroid of the most-occupied 0.2
+  bucket** (the bar's true spring-home). Verified: a hat truly resting at 3.28 but mid-stroke on frame 1 → recovers 3.28
+  (old code → −1); analog resting at 0 mid-stroke → recovers 0 (old code → −0.8).
+- **Whammy/tilt mis-map (review MAJOR):** the axis pick now excludes the configured `whammyAxis`/`tiltAxis` so a hard
+  whammy wiggle can't get learned as the strum.
+- **Wizard Skip (review minor):** `_stopCalRaf` now also cancels the `detectStrum` rAF + the STRUM-step callback guards on
+  `_calStep`, so skipping mid-capture can't leave a dangling detector that double-advances the wizard.
+- **Device-status row (review minor):** Settings "Strum" status now reflects an axis binding ("Strum bar (axis N)"), not
+  just buttons, so a learned axis strum reads as configured instead of "Not set".
+Verified live (?v=397): v397 served, modal-rest math proven on worst-case mid-stroke inputs, no console errors,
+keyboard/standard-pad paths untouched (all gated behind `requireStrum()`). Game-side only — nothing for Lovable.
+
 ### build100q (part 10) — GH controller plays but every note misses (frets register, strum never fires)  ✅ verified (?v=395)
 Playtester: "the notes come down, we see buttons pushing, but it doesn't hit the notes — it's just missing with the guitar
 controller." Root cause: GH controllers are **require-strum** (owner decree) — pressing a fret only HOLDS it (catcher

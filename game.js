@@ -36,7 +36,7 @@
   // calibration wizard / live tester is the load-bearing path that overwrites them. See CHANGELOG.
   const STRUMCFG_KEY = 'rr_strumcfg';
   const STRUM_DEBOUNCE_MS = 55;        // anti-double-strum (strum-up + strum-down funnel through here)
-  let strumCfg = { btns: [12, 13], strumAxis: null, strumAxisDir: 0,
+  let strumCfg = { btns: [12, 13], strumAxis: null, strumAxisDir: 0, strumRest: 0,
                    whammyAxis: 2, whammyMin: -1, whammyMax: 1,
                    tiltAxis: 3, tiltThresh: 0.6, spBtn: 8,
                    odBtn: 5 };   // build100q: STANDARD-pad Overdrive/Star-Power button (default RB=5, a free button) — guitars still use spBtn under requireStrum. The wizard's OD step overrides this.
@@ -3066,14 +3066,22 @@
     // when the user hasn't configured a strumAxis and the pad is non-standard with a hat, auto-use axis 9. A sign-flip
     // in the configured dir = a strum edge. (The Settings wizard's strum sampler still overrides this precisely.)
     let sAxis = strumCfg.strumAxis;
-    // build99R (controller P0-1): the POV-hat strum fallback was gated on gp.mapping !== 'standard'. On Windows/Chrome
-    // the Riffmaster often enumerates as a "standard" XInput pad even though its strum is a hat on axis 9 — so strum
-    // died out of the box (the single biggest plug-and-play risk). Drop the mapping gate; the ax.length >= 10 guard
-    // already excludes normal gamepads (4 axes), so only guitar-shaped pads ever read axis 9. NEEDS REAL-HARDWARE VERIFY.
-    if (sAxis == null && ax.length >= 10) sAxis = 9;
+    let sRest = (typeof strumCfg.strumRest === 'number') ? strumCfg.strumRest : 0;
+    // build99R/build100r (controller P0-1): the POV-hat strum fallback was gated on gp.mapping !== 'standard'. On
+    // Windows/Chrome the Riffmaster often enumerates as a "standard" XInput pad even though its strum is a hat on axis 9
+    // — so strum died out of the box (the single biggest plug-and-play risk). Drop the mapping gate; the ax.length >= 10
+    // guard already excludes normal gamepads (4 axes), so only guitar-shaped pads ever read axis 9.
+    if (sAxis == null && ax.length >= 10) { sAxis = 9; sRest = 0; }   // last-ditch default; the in-Settings "Test strum" learns the real one
     if (sAxis != null && ax.length > sAxis) {
       const v = ax[sAxis] || 0;
-      if (Math.abs(v) > 0.5 && Math.sign(v) !== Math.sign(_strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) tryStrum(performance.now());
+      // build100r: DEVIATION-FROM-REST detection — robust to POV hats whose unpressed value is a driver-specific
+      // NON-zero (e.g. 3.28), where the old sign-flip heuristic silently failed (this was the reported all-miss-on-strum
+      // bug). A strum = the axis leaving its learned rest (rising edge of |v-rest| crossing 0.5) → one hit per stroke,
+      // no double-fire on the return-to-rest. PLUS, for a clean bipolar analog strum (rest 0) where back-to-back
+      // down/up strokes never settle at 0, a zero-crossing past 0.5 is still a fresh stroke.
+      const dev = Math.abs(v - sRest), prevDev = Math.abs(_strumAxisPrev - sRest);
+      if (dev > 0.5 && prevDev <= 0.5) tryStrum(performance.now());
+      else if (sRest === 0 && Math.abs(v) > 0.5 && Math.abs(_strumAxisPrev) > 0.5 && Math.sign(v) !== Math.sign(_strumAxisPrev) && (!strumCfg.strumAxisDir || Math.sign(v) === strumCfg.strumAxisDir)) tryStrum(performance.now());
       _strumAxisPrev = v;
     }
     // whammy -> Overdrive charge: wiggling the whammy (while OD not active) builds the meter; clamp at 1
@@ -6097,11 +6105,11 @@
   // timeout → keep-default + a Skip button, so a missing control can't strand the wizard.
   let _calStep = -1, _calRaf = 0, _calTimer = 0;
   const CAL_STEPS = [
-    { title: 'STRUM',      prompt: 'Hit the <b>STRUM BAR</b>',                          sub: 'Strum up or down — we’ll capture it.' },
+    { title: 'STRUM',      prompt: 'Strum the <b>STRUM BAR</b> a few times',             sub: 'Keep strumming up/down for ~2s — we’ll learn it (button or bar).' },
     { title: 'WHAMMY',     prompt: 'Wiggle the <b>WHAMMY BAR</b> through its full range', sub: 'Push it all the way and release, for ~1.5s.' },
     { title: 'STAR POWER', prompt: 'Tilt the guitar <b>UP</b> — or press <b>Select</b>',  sub: 'This becomes your Star Power / Overdrive trigger.' },
   ];
-  function _stopCalRaf() { if (_calRaf) { try { cancelAnimationFrame(_calRaf); } catch (e) {} _calRaf = 0; } if (_calTimer) { clearTimeout(_calTimer); _calTimer = 0; } }
+  function _stopCalRaf() { if (_calRaf) { try { cancelAnimationFrame(_calRaf); } catch (e) {} _calRaf = 0; } if (_calTimer) { clearTimeout(_calTimer); _calTimer = 0; } if (_strumDetectRaf) { try { cancelAnimationFrame(_strumDetectRaf); } catch (e) {} _strumDetectRaf = 0; } }   // build100r-fix: the STRUM step now runs detectStrum on its OWN raf — kill it too so wizard Skip can't leave a dangling capture that double-advances
   function _padsNow() { try { return navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : []; } catch (e) { return []; } }
   function _captureNextButton(timeoutMs, cb) {
     _stopCalRaf(); const t0 = performance.now(); let base = null;
@@ -6123,6 +6131,77 @@
     };
     _calRaf = requestAnimationFrame(tick);
   }
+  // build100r: STRUM AUTO-DETECT — learns whatever the strum input IS on THIS controller (a button OR an axis/POV-hat),
+  // including the axis's RESTING value, so gameplay can fire one strum per stroke without the player ever touching the
+  // browser console. Drives the in-Settings "Test strum" button (and the wizard's STRUM step). Tell the player to move
+  // ONLY the strum bar for ~2.5s; whatever moves the most wins. onProgress({remaining,moving}) fires each frame for the
+  // live UI flash; onDone({type:'button'|'axis'|'none', index, rest?, range?}) fires once at the end. Writes strumCfg.
+  let _strumDetectRaf = 0;
+  function detectStrum(durationMs, onProgress, onDone) {
+    if (_strumDetectRaf) { try { cancelAnimationFrame(_strumDetectRaf); } catch (e) {} _strumDetectRaf = 0; }
+    const t0 = performance.now();
+    const fretBtns = new Set(); try { for (const k in padMap) fretBtns.add(+k); } catch (e) {}   // exclude mapped frets from the button candidate
+    let baseBtn = null; const axMin = {}, axMax = {}, axBase = {}, axHist = {}, btnHits = {};
+    const tick = () => {
+      const pads = _padsNow();
+      if (!baseBtn) { baseBtn = {}; pads.forEach(g => { baseBtn[g.index] = g.buttons.map(b => b.pressed); for (let a = 0; a < g.axes.length; a++) axBase[g.index + ':' + a] = g.axes[a]; }); }
+      let moving = false;
+      for (const g of pads) {
+        const bs = baseBtn[g.index] || [];
+        for (let b = 0; b < g.buttons.length; b++) {
+          const p = g.buttons[b].pressed;
+          if (p && !bs[b] && !fretBtns.has(b) && b !== 8 && b !== 9) { btnHits[b] = (btnHits[b] || 0) + 1; moving = true; }   // new non-fret, non-system press
+          bs[b] = p;
+        }
+        baseBtn[g.index] = bs;
+        for (let a = 0; a < g.axes.length; a++) {
+          const v = g.axes[a], k = g.index + ':' + a;
+          if (axMin[k] == null || v < axMin[k]) axMin[k] = v;
+          if (axMax[k] == null || v > axMax[k]) axMax[k] = v;
+          // build100r-fix: histogram per axis (0.2 buckets) so REST = the value the bar sits at MOST (its spring-home),
+          // NOT the t0 sample — an eager player is often mid-stroke on frame 1, which would poison strumRest.
+          const bk = Math.round(v / 0.2); const h = axHist[k] || (axHist[k] = {}); const hb = h[bk] || (h[bk] = { n: 0, s: 0 }); hb.n++; hb.s += v;
+          if (Math.abs(v - (axBase[k] || 0)) > 0.4) moving = true;
+        }
+      }
+      if (onProgress) { try { onProgress({ remaining: Math.max(0, durationMs - (performance.now() - t0)), moving: moving }); } catch (e) {} }
+      if (performance.now() - t0 > durationMs) {
+        _strumDetectRaf = 0;
+        // ALL non-fret strum buttons that fired, strongest first — capture BOTH directions (up AND down), not just one.
+        const btnList = Object.keys(btnHits).map(k => +k).sort((a, b) => btnHits[b] - btnHits[a]);
+        // REST = the centroid of the most-occupied 0.2 bucket of an axis (its spring-home), robust to a mid-stroke t0.
+        const restOf = (key) => { const h = axHist[key]; if (!h) return axBase[key] || 0; let best = null, bestN = -1; for (const bk in h) { if (h[bk].n > bestN) { bestN = h[bk].n; best = h[bk]; } } return best ? best.s / best.n : (axBase[key] || 0); };
+        // best AXIS by range, EXCLUDING the already-mapped whammy/tilt so the strum can't accidentally land on them.
+        let bestAx = null, bestRange = 0.8, bestRest = 0;
+        for (const k in axMin) {
+          const a = +k.split(':')[1];
+          if (a === strumCfg.whammyAxis || a === strumCfg.tiltAxis) continue;
+          const range = axMax[k] - axMin[k];
+          if (range > bestRange) { bestRange = range; bestAx = a; bestRest = restOf(k); }
+        }
+        let result;
+        // build100r-fix: PREFER an AXIS over a button — a single axis (strum bar / POV-hat) covers BOTH the up AND the
+        // down stroke, whereas a captured button is ONE direction only. This is the reported "strum only fires when I
+        // do up AND down together" bug: detection had grabbed a single one-way button. The gameplay deviation detector
+        // already fires each direction independently; STRUM_DEBOUNCE_MS dedupes a hat that reports as both axis + button.
+        if (bestAx != null) {
+          strumCfg.strumAxis = bestAx; strumCfg.strumRest = +(+bestRest).toFixed(2); strumCfg.strumAxisDir = 0;
+          if (btnList.length) strumCfg.btns = btnList.slice(0, 3);   // keep any strum buttons too (both directions)
+          saveStrumCfg();
+          result = { type: 'axis', index: bestAx, rest: strumCfg.strumRest, range: +bestRange.toFixed(2), btns: strumCfg.btns };
+        } else if (btnList.length) {
+          strumCfg.btns = btnList.slice(0, 3); strumCfg.strumAxis = null; saveStrumCfg();   // both up + down strum buttons
+          result = { type: 'button', index: btnList[0], btns: strumCfg.btns };
+        } else { result = { type: 'none' }; }
+        if (onDone) { try { onDone(result); } catch (e) {} }
+        return;
+      }
+      _strumDetectRaf = requestAnimationFrame(tick);
+    };
+    _strumDetectRaf = requestAnimationFrame(tick);
+  }
+  try { window.RhythmGame.detectStrum = detectStrum; } catch (e) {}
+
   function _captureTilt(durationMs, cb) {
     _stopCalRaf(); const t0 = performance.now(); let base = null; const mn = {}, mx = {};
     const tick = () => {
@@ -6149,7 +6228,7 @@
   }
   function _armCalStep() {
     _calRender(null);
-    if (_calStep === 0) _captureNextButton(15000, (b) => { if (b != null) { strumCfg.btns = [b]; saveStrumCfg(); _calRender('Strum = button ' + b); } _calNext(800); });
+    if (_calStep === 0) detectStrum(2600, null, (r) => { if (_calStep !== 0) return; if (r.type === 'button') _calRender('Strum = button ' + r.index); else if (r.type === 'axis') _calRender('Strum = axis ' + r.index); else _calRender('Strum = D-pad (default)'); _calNext(900); });   // build100r: capture a BUTTON or an AXIS/POV-hat strum (was button-only → axis strums silently un-mapped); _calStep guard so a Skip mid-capture can't double-advance
     else if (_calStep === 1) _sampleAxes(1600, 0.4, (axis, lo, hi) => { if (axis != null) { strumCfg.whammyAxis = axis; strumCfg.whammyMin = +(+lo).toFixed(2); strumCfg.whammyMax = +(+hi).toFixed(2); saveStrumCfg(); _calRender('Whammy = axis ' + axis); } else _calRender('Whammy = default (none found)'); _calNext(800); });
     else if (_calStep === 2) _captureTilt(2200, (res) => { if (res && res.spBtn != null) { strumCfg.spBtn = res.spBtn; saveStrumCfg(); _calRender('Star Power = button ' + res.spBtn); } else if (res && res.tiltAxis != null) { strumCfg.tiltAxis = res.tiltAxis; strumCfg.tiltThresh = res.tiltThresh; saveStrumCfg(); _calRender('Star Power = tilt axis ' + res.tiltAxis); } else _calRender('Star Power = Select (default)'); _calNext(900); });
   }
@@ -6186,7 +6265,11 @@
       else rows.push(['MIDI', midiInputs.length ? midiInputs.join(', ') : 'No device detected', midiInputs.length > 0]);
       rows.push(['Controller', pads.length ? pads[0].slice(0, 26) : 'No device detected', pads.length > 0]);
       if (ghId) {   // GH-3: surface the calibrated strum/whammy/tilt mapping so a guitar player can confirm setup
-        rows.push(['Strum', (strumCfg.btns && strumCfg.btns.length) ? ('Button ' + strumCfg.btns.join('/')) : 'Not set', !!(strumCfg.btns && strumCfg.btns.length)]);
+        // build100r-fix: reflect an AXIS/POV-hat strum too — detectStrum can bind strumCfg.strumAxis (not just btns), so a
+        // learned strum bar must read as "set" here, not "Not set".
+        { const _hasAx = (strumCfg.strumAxis != null); const _hasBtn = !!(strumCfg.btns && strumCfg.btns.length);
+          const _sv = _hasAx ? ('Strum bar (axis ' + strumCfg.strumAxis + ')') : (_hasBtn ? ('Button ' + strumCfg.btns.join('/')) : 'Not set');
+          rows.push(['Strum', _sv, _hasAx || _hasBtn]); }
         rows.push(['Whammy', strumCfg.whammyAxis != null ? ('Axis ' + strumCfg.whammyAxis) : 'Not set', strumCfg.whammyAxis != null]);
         rows.push(['Tilt / Star Power', strumCfg.tiltAxis != null ? ('Tilt axis ' + strumCfg.tiltAxis) : ('Button ' + strumCfg.spBtn), true]);
       }
