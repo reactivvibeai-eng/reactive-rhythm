@@ -1825,6 +1825,26 @@
   // may not own the stage — applyEnvironment's ownership backstop would silently split the two players'
   // cosmetics); solo-only cards keep them.
   var _rvEnvSel = null;
+  // build102y step5: challenger SEAT POLICY under GO LIVE — 'artist' (default, today's behavior byte-identical),
+  // 'confirm' (open seat, host still ACCEPTs), 'auto' (FIRST COME — BUILT but DARK per the rollout gate: the chip
+  // only renders on ?dev=1 until one real show soaks; the multiplayer.js auto-accept path ships regardless).
+  var _rvSeatPol = 'artist';
+  function _wireSeatPol() {
+    var row = _rvEl('rvl-seatpol'); if (!row) return;
+    var devOn = false; try { devOn = /[?&]dev=1/.test(location.search); } catch (e) {}
+    row.querySelectorAll('button').forEach(function (b) {
+      var pol = b.getAttribute('data-seat');
+      if (pol === 'auto') b.hidden = !devOn;   // rollout gate — FIRST COME stays dark
+      b.classList.toggle('active', pol === _rvSeatPol);
+      if (!b._wired) {
+        b._wired = true;
+        b.addEventListener('click', function () {
+          _rvSeatPol = pol;
+          row.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+        });
+      }
+    });
+  }
   function _rvStageList(hidePaid) {
     try {
       var L = window.RhythmLevels; if (!L || !L.environments) return [];
@@ -1871,6 +1891,7 @@
     // build102y step4 (edge case 2): fresh card = fresh stage — no chip carries over run-to-run, and any env a
     // prior run applied is dropped NOW (mirror of the review-fix-1 "never inherit" pattern).
     _rvEnvSel = null;
+    _rvSeatPol = 'artist';   // build102y step5: seat policy resets with the card too — a new show never inherits OPEN SEAT
     try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
     var art = _rvEl('rvl-art'); if (art && track.artwork_url) art.src = track.artwork_url;
     var ti = _rvEl('rvl-title'); if (ti) ti.textContent = track.title || 'Untitled';
@@ -1917,6 +1938,8 @@
     // never a dead button, and solo PLAY above stays the untouched primary (owner's non-negotiable).
     var gl = _rvEl('rvl-golive'), glh = _rvEl('rvl-golive-hint');
     var _canLive = ((track._role || 'host') === 'host') && !!(window.RhythmMP && window.RhythmMP.openShowRoom);
+    // build102y step5: the seat-policy selector rides with GO LIVE (hidden when live isn't available)
+    { var sp = _rvEl('rvl-seatpol'); if (sp) { sp.hidden = !_canLive; if (_canLive) _wireSeatPol(); } }
     if (gl) {
       gl.hidden = !_canLive; if (glh) glh.hidden = !_canLive;
       if (_canLive && !gl._wired) {
@@ -1933,6 +1956,7 @@
                 difficulty: (window.RhythmGame.getDifficulty && window.RhythmGame.getDifficulty()) || 'medium',
                 submitterId: track._submitterId || null, submitterName: track._submitterName || '',
                 env: _rvEnvSel || null,   // build102y step4: the picked stage rides sel.env — beginMatch applies it on BOTH seats, the show snap carries it to late joiners
+                openSeat: _rvSeatPol,     // build102y step5: challenger seat policy ('artist'|'confirm'|'auto') — multiplayer routes it onto the room
                 revToken: _revRawToken
               });
               ok = true;
@@ -1958,10 +1982,18 @@
   // Token = the ORIGINAL review token (module-local, exactly like showInvite; /livematch/end accepts expired
   // tokens + is idempotent). FIRE-AND-FORGET with swallowed errors on purpose: the show must never block on
   // the chip. No-ops without a token (a non-review host has no chip to drive).
-  function livematchAnnounce(roomId) {
+  function livematchAnnounce(roomId, extra) {
     try {
       if (!_revRawToken || !roomId) return;
-      api('/livematch/announce', { method: 'POST', auth: true, body: { token: _revRawToken, room: String(roomId) } }).catch(() => {});
+      var body = { token: _revRawToken, room: String(roomId) };
+      // build102y step5: additive chip fields (backend accepts {title, open} as of tonight) — title is the plain-
+      // text 'Song — Artist' (clamped), open = the seat policy is not artist-only. Still fire-and-forget: a
+      // backend that ignores them changes nothing game-side.
+      if (extra && typeof extra === 'object') {
+        if (extra.title) body.title = String(extra.title).slice(0, 80);
+        if (extra.open != null) body.open = extra.open ? 1 : 0;
+      }
+      api('/livematch/announce', { method: 'POST', auth: true, body: body }).catch(() => {});
     } catch (e) {}
   }
   function livematchEnd(roomId) {

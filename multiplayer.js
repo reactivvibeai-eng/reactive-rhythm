@@ -1779,9 +1779,18 @@
   function advertiseRoom() {
     if (!lobbyCh || !room.id || !room.isHost) return;
     var count = 1 + (room.p2 ? 1 : 0);
+    // build102y step5: BILLBOARD fields (additive — old clients ignore unknown keys). All peer-facing strings
+    // are clamped here AND esc()/safeUrl()-guarded at render (renderLiveNow). Empty/zero for non-show rooms.
+    var _bbStage = '';
+    try { if (room.show && sel && sel.env && window.RhythmLevels && window.RhythmLevels.envById) { var _bbe = window.RhythmLevels.envById(sel.env); _bbStage = (_bbe && _bbe.name) ? String(_bbe.name).slice(0, 24) : ''; } } catch (e) {}
     lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
       rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now(),
-      show: room.show ? 1 : 0, live: matchLive ? 1 : 0 } });   // build102s: additive show/live flags (old clients ignore unknown fields; joiners adopt `show` for the seat policy)
+      show: room.show ? 1 : 0, live: matchLive ? 1 : 0,   // build102s: additive show/live flags (old clients ignore unknown fields; joiners adopt `show` for the seat policy)
+      open: (room.show && room.openSeat && room.openSeat !== 'artist') ? 1 : 0,
+      title: room.show ? String(((sel && sel.title) || '') + ((sel && sel.artist) ? ' — ' + sel.artist : '')).slice(0, 40) : '',
+      art: room.show ? ((sel && sel.art) || '') : '',
+      stage: _bbStage,
+      specN: room.show ? (_specNCache || 0) : 0 } });
   }
   function closeRoom(silent) {
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
@@ -1824,7 +1833,8 @@
           // build102x: SITE CHIP — the show room is now reachable by viewers → announce it on the site Navbar.
           // This SUBSCRIBED branch is hit by BOTH openShowRoom (via _consumeShowRoom) and maybeReconnectShowRoom,
           // so a host refresh re-announces too. Fire-and-forget inside catalog (token stays module-local there).
-          try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id); } catch (e) {}
+          // build102y step5: + {title, open} so the chip can read "LIVE: Song — seat open".
+          try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id, _lmExtra()); } catch (e) {}
         }
       }
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -1854,6 +1864,12 @@
         if (!pend) pend = joiners[0] || null;
       }
       if (pend !== room.pendingChal) { room.pendingChal = pend; sendShowSnap(); }
+      // build102y step5: FIRST-COME policy — auto-seat the pending challenger through the SAME acceptChallenger()
+      // a manual ACCEPT uses, so every downstream invariant (advertise count, snap p2Id, persist) stays identical.
+      // Hard gates: never mid-run (!matchLive), never over a seated challenger, submitter-priority already ran
+      // above so the artist wins any race, and declined{} was honored building `pend`. 'artist'/'confirm' change
+      // nothing here — the ACCEPT/DECLINE card still waits for the host.
+      if (room.openSeat === 'auto' && room.pendingChal && !room.p2 && !matchLive) { try { acceptChallenger(); } catch (e) {} }
     } else if (room.isHost) {
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
@@ -2010,7 +2026,7 @@
     var list = $('mpx-livenow-list'), empty = $('mpx-livenow-empty'), nEl = $('mpx-livenow-n');
     // OPEN tournaments lead (joinable only while still filling), then OPEN public rooms with a seat free.
     var tids = Object.keys(toursDir).filter(function (tid) { var r = toursDir[tid]; return r && r.state !== 'live' && r.state !== 'done'; });
-    var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && (r.count || 1) < (r.max || 2); });
+    var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && ((r.count || 1) < (r.max || 2) || r.show); });   // build102y step5: show rooms stay listed even with a full seat — they're always WATCHable
     wrap.hidden = false;
     // visual-overhaul (owner ask): a LIVE / hostable tournament gets promoted to a FRONT-AND-CENTER hero card.
     var heroShown = renderTourHero(tids);
@@ -2039,11 +2055,21 @@
     var roomHtml = rids.map(function (rid) {
       var r = roomsDir[rid], cnt = r.count || 1, max = r.max || 2;
       if (r.show) {   // build102t: LIVE NOW mirrors the browser — show rooms are WATCH-first (seat is host-granted)
-        return '<div class="mpx-roomcard">' +
-          '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
-          '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Live Show') + '</span>' +
-          '<span class="mpx-rc-sub"><span class="mpx-rc-tag live">🔴 LIVE SHOW</span> host ' + esc(r.hostName || 'host') + '</span></span>' +
-          '<span class="mpx-rc-act"><button class="mpx-rc-join" data-ln-watch="' + esc(rid) + '">WATCH</button></span></div>';
+        // build102y step5: BILLBOARD — cover thumb, 「Song — Artist」, stage, watcher count, OPEN SEAT tag, and a
+        // crimson TAKE THE SEAT beside WATCH when the host opened the seat and it's free. TAKE THE SEAT routes
+        // through the EXISTING joinRoom(rid,false) → pending/auto-seated host-side; zero new join code.
+        // esc()/safeUrl() on EVERYTHING peer-supplied (title/art/stage/hostName are broadcast strings).
+        var openSeat = !!r.open && (r.count || 1) < (r.max || 2);
+        var stageTx = r.stage ? ' · on ' + esc(String(r.stage).slice(0, 24)) : '';
+        var watchTx = (typeof r.specN === 'number' && r.specN > 0) ? ' · ' + (r.specN > 10 ? '10+' : r.specN) + ' watching' : '';
+        var thumb = r.art ? '<img class="mpx-rc-thumb" src="' + esc(safeUrl(r.art)) + '" alt="" onerror="this.style.display=&quot;none&quot;">' : '<span class="mpx-rc-spark">' + SVG_PICK + '</span>';
+        return '<div class="mpx-roomcard show">' + thumb +
+          '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(String(r.title || r.name || 'Live Show').slice(0, 40)) + '</span>' +
+          '<span class="mpx-rc-sub"><span class="mpx-rc-tag live">🔴 LIVE</span> host ' + esc(r.hostName || 'host') + stageTx + watchTx +
+          (openSeat ? ' · <span class="mpx-rc-tag open">OPEN SEAT</span>' : '') + '</span></span>' +
+          '<span class="mpx-rc-act">' +
+          (openSeat ? '<button class="mpx-rc-join seat" data-ln-seat="' + esc(rid) + '">TAKE THE SEAT</button>' : '') +
+          '<button class="mpx-rc-join" data-ln-watch="' + esc(rid) + '">WATCH</button></span></div>';
       }
       return '<div class="mpx-roomcard">' +
         '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
@@ -2056,6 +2082,7 @@
     [].forEach.call(list.querySelectorAll('[data-ln-jt]'), function (b) { b.addEventListener('click', function () { joinTour(b.getAttribute('data-ln-jt')); }); });
     [].forEach.call(list.querySelectorAll('[data-ln-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-join'), false); }); });
     [].forEach.call(list.querySelectorAll('[data-ln-watch]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-watch'), true); }); });   // build102t: show rooms join as WATCHER
+    [].forEach.call(list.querySelectorAll('[data-ln-seat]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-seat'), false); }); });   // build102y step5: TAKE THE SEAT = the same non-spec join the artist uses → host-side pending/auto-seat
   }
 
   // visual-overhaul: pick the single most prominent active tournament and paint the gold hero card at the top of
@@ -2278,7 +2305,8 @@
     try { if (room.id) closeRoom(true); } catch (e) {}
     teardownMatch();   // never inherit stale match state into the show
     room = { id: newRoomId(), name: ((spec.title || 'Review') + ' — LIVE').slice(0, 28), priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null,
-      show: true, submitterId: spec.submitterId || null, submitterName: spec.submitterName || '', revToken: spec.revToken || null, invited: false, pendingChal: null, declined: {} };
+      show: true, submitterId: spec.submitterId || null, submitterName: spec.submitterName || '', revToken: spec.revToken || null, invited: false, pendingChal: null, declined: {},
+      openSeat: (spec.openSeat === 'confirm' || spec.openSeat === 'auto') ? spec.openSeat : 'artist' };   // build102y step5: challenger seat policy from the launch card (whitelisted — junk collapses to today's artist-only)
     // the review song is PRE-LOCKED; audioUrl is the NEW sel field resolveShowStart routes on (never the demo)
     // build102y step4: env rides in from the launch card's stage picker — beginMatch applies sel.env on BOTH
     // seats and sendShowSnap ships sel wholesale, so the challenger + late joiners inherit the stage for free.
@@ -2329,10 +2357,21 @@
     if (!room.ch || !room.id || !room.isHost || !room.show) return;
     var specN = 0;
     try { specN = Object.keys(room.members).filter(function (id) { return room.members[id].seat === 'spec'; }).length; } catch (e) {}
+    // build102y step5: HOST-AUTHORITATIVE seat queue (additive fields) — ordered pending ids so every watcher
+    // agrees on "#N in line" (each client computing its own index = the two-both-see-#1 bug the judges flagged).
+    // Order: current pendingChal first (the artist already jumped the queue in onRoomPeers), then the rest
+    // lexicographic — deterministic across snaps, stable for everyone.
+    var pq = [];
+    try {
+      var dec = room.declined || {};
+      pq = Object.keys(room.members).filter(function (id) { return id !== ME.id && id !== room.p2 && room.members[id].seat !== 'spec' && !dec[id]; }).sort();
+      if (room.pendingChal) { var pi = pq.indexOf(room.pendingChal); if (pi > 0) { pq.splice(pi, 1); pq.unshift(room.pendingChal); } }
+    } catch (e) { pq = []; }
     try {
       room.ch.send({ type: 'broadcast', event: 'show-snap', payload: {
         rid: room.id, mid: matchId || null, live: !!matchLive, sel: sel, atMs: _showAtMs || 0,
-        p2Id: room.p2 || null, pend: room.pendingChal || null, specN: specN, invited: !!room.invited, at: Date.now() } });
+        p2Id: room.p2 || null, pend: room.pendingChal || null, specN: specN, invited: !!room.invited, at: Date.now(),
+        openSeat: room.openSeat || 'artist', pendIds: pq.slice(0, 10), pendN: pq.length } });   // build102y step5: additive — old clients ignore unknown keys
     } catch (e) {}
   }
   function startShowHeartbeat() {
@@ -2344,12 +2383,18 @@
       sendShowSnap(); persistShowRoom();
       // v405: SITE-CHIP KEEPALIVE — the backend now expires an unrefreshed live_match after ~5min (ghost-chip TTL),
       // so the host re-announces every 30th snap tick (= 120s). Idempotent server-side; fire-and-forget in catalog.
-      if (++_lmTick >= 30) { _lmTick = 0; try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id); } catch (e) {} }
+      if (++_lmTick >= 30) { _lmTick = 0; try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id, _lmExtra()); } catch (e) {} }   // build102y step5: keepalive re-sends the chip fields too
       try { paintShowRoom(); } catch (e) {}   // keeps the 60s NUDGE re-arm honest without extra timers
     }, 4000);
     sendShowSnap();
   }
   function stopShowHeartbeat() { if (_showHbT) { clearInterval(_showHbT); _showHbT = 0; } }
+  // build102y step5: the site chip's display payload — plain-text 'Song — Artist' + whether the seat is open.
+  // Read at SEND time so a policy change mid-show rides the next keepalive.
+  function _lmExtra() {
+    var t = (sel && sel.title) ? (sel.title + ((sel && sel.artist) ? ' — ' + sel.artist : '')) : (room.name || '');
+    return { title: String(t).slice(0, 80), open: !!(room.openSeat && room.openSeat !== 'artist') };
+  }
   function onShowSnap(p) {
     // SECURITY (review fix 6): a snap only means anything inside a room ALREADY known to be a show room
     // (room.show is adopted from the host's room-meta at join time). Without the room.show gate a forged
@@ -2371,6 +2416,11 @@
       banner('mpx-setup-msg', 'You\'re seated — the host starts the match.');
     }
     room._snapSpecN = (typeof p.specN === 'number') ? p.specN : null;   // build102t: watching-count for the stage chip (10+ rule)
+    // build102y step5: adopt the host's seat policy + authoritative queue (drives TAKE THE STAGE + "#N in line")
+    room._snapOpenSeat = (p.openSeat === 'confirm' || p.openSeat === 'auto') ? p.openSeat : 'artist';
+    room._snapPendIds = Array.isArray(p.pendIds) ? p.pendIds.slice(0, 10) : [];
+    room._snapPendN = (typeof p.pendN === 'number') ? p.pendN : room._snapPendIds.length;
+    try { _paintSpecTake(); } catch (e) {}
     if (p.atMs && !_specAtMs) { _specAtMs = p.atMs; try { _syncSpecAudio(); } catch (e) {} }   // build102t: late catch-up — the snap carries the shared start the one-shot 'start' already spent
     if (p.live && _specStage && !_specFedReal) _specLastFeedAt = Date.now();   // build102t/102u: the heartbeat vouches ONLY until the first real tick/state — after that a frozen host (paused tab, wedged engine) must trip the 12s recovery, not be kept alive by its own 4s snap (review fix 2b)
     if (p.live && p.mid && room.seat === 'spec' && !matchCh && !matchLive) {
@@ -2456,12 +2506,15 @@
       '<div class="mss-decks"><canvas id="mss-deck1"></canvas><canvas id="mss-deck2"></canvas></div>' +
       '<div class="mss-sync" id="mss-sync"><span class="mss-sync-dot"></span>&nbsp;SYNCING — locking to the live run…</div>' +
       '<div class="mss-verdict" id="mss-verdict" hidden></div>' +
-      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
+      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden>🎸 TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
     document.body.appendChild(st);
     _specStage = st;
     _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, 'HOST');
     _specPlate('2', (_specIds.p2 && room.members[_specIds.p2]) || null, 'CHALLENGER');
     var lv = $('mss-leave'); if (lv) lv.addEventListener('click', function () { endSpectate('You left the live view — still in the room.'); });
+    // build102y step5: raise-your-hand from the live view — same toggle as the waiting card; painted by snaps
+    var tk = $('mss-take'); if (tk) tk.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; toggleTakeStage(); });
+    try { _paintSpecTake(); } catch (e) {}
     // per-deck render pools — INDEPENDENT per deck (a shared pool bleeds one player's FX onto the other's board)
     function pool() { var spk = []; for (var i = 0; i < 40; i++) spk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); return { ctx: null, flash: [0, 0, 0, 0, 0, 0], flashCr: [false, false, false, false, false, false], spk: spk }; }
     _specDecks = { d1: pool(), d2: pool() };
@@ -2704,6 +2757,28 @@
         pendTxt.classList.toggle('artist', isArtist);
       }
     }
+    // build102y step5: SWAP IN THE ARTIST — gold pill when the artist is PRESENT in the room but someone else
+    // holds the seat. Demote-by-snap contract: the old challenger self-demotes to watcher (NOT declined).
+    var swap = $('mpx-show-swap');
+    if (swap) swap.hidden = !(room.isHost && room.p2 && room.submitterId && room.p2 !== room.submitterId && room.members[room.submitterId]);
+    // build102y step5: TAKE THE STAGE / WITHDRAW — spectator entry on the waiting card. Only when the host's
+    // policy opens the seat ('confirm'/'auto'); ARTIST ONLY rooms keep today's spectate-only reality.
+    var takeRow = $('mpx-show-take-row'), takeBtn = $('mpx-show-take'), takeq = $('mpx-show-takeq');
+    if (takeRow) {
+      var openPol = room.isHost ? (room.openSeat || 'artist') : (room._snapOpenSeat || 'artist');
+      var meSeated = seatedId === ME.id;
+      var showTake = !!(room.id && room.show && !room.isHost && openPol !== 'artist' && !meSeated);
+      takeRow.hidden = !showTake;
+      if (showTake) {
+        var wanting = room.seat !== 'spec';
+        if (takeBtn) takeBtn.textContent = wanting ? '↩ WITHDRAW' : '🎸 TAKE THE STAGE';
+        var pos = 0;
+        try { var _ids = room._snapPendIds || []; var _ix = _ids.indexOf(ME.id); if (_ix >= 0) pos = _ix + 1; } catch (e) {}
+        if (takeq) takeq.textContent = wanting
+          ? (pos ? ('#' + pos + ' in line' + (openPol === 'confirm' ? ' — the host confirms' : '')) : 'in line…')
+          : (openPol === 'auto' ? 'Seat is FIRST COME — grab it' : 'Open seat — the host confirms');
+      }
+    }
     // CALL IN THE ARTIST (host-only; needs a known submitter from /review/resolve)
     var invRow = $('mpx-show-invite-row'), invBtn = $('mpx-show-invite'), nudge = $('mpx-show-nudge');
     var canInvite = !!(room.isHost && room.submitterId);
@@ -2729,6 +2804,40 @@
     room.declined = room.declined || {};
     room.declined[room.pendingChal] = 1; room.pendingChal = null;   // the snap's p2Id/pend mismatch self-demotes them to spectator
     sendShowSnap(); paintRoomWaiting();
+  }
+  // build102y step5: SWAP IN THE ARTIST — the artist takes the seat over whoever holds it. Pure state + snap:
+  // the displaced challenger isn't p2Id in the next snap → the existing self-heal demotes them to watcher
+  // (NOT declined — they can queue again). Mid-run swap is allowed; the seat applies at the next room-start.
+  function swapInArtist() {
+    if (!room.isHost || !room.show || !room.submitterId || !room.members[room.submitterId] || room.p2 === room.submitterId) return;
+    room.p2 = room.submitterId; room.pendingChal = null;
+    advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
+    banner('mpx-setup-msg', '👑 ' + ((room.submitterName || 'The artist')) + ' takes the seat' + (matchLive ? ' — lands for the NEXT run.' : ' — START runs the versus.'));
+  }
+  // build102y step5: TAKE THE STAGE / WITHDRAW — a spectator raises (or lowers) their hand by flipping their
+  // OWN presence seat ('spec' ↔ 'p2'); joinRoomChannel's getMeta closure reads room.seat live, so the next
+  // softPresence heartbeat carries it and the HOST's roster pass does the seating (confirm card or auto-seat).
+  // Races resolve by the snap contract: not p2Id in the snap = still a watcher (existing self-heal).
+  function toggleTakeStage() {
+    if (!room.id || !room.show || room.isHost) return;
+    if ((room._snapP2 || null) === ME.id) return;   // already seated — nothing to raise
+    if (room.seat === 'spec') { room.seat = 'p2'; spectating = false; room._demoted = false; }
+    else { room.seat = 'spec'; spectating = true; }
+    try { if (roomSP) roomSP.refresh(); } catch (e) {}
+    paintRoomWaiting();
+    try { _paintSpecTake(); } catch (e) {}
+  }
+  // build102y step5: the same affordance on the spectator dual-deck stage (mss-foot) — painted from snaps.
+  function _paintSpecTake() {
+    var tk = $('mss-take'); if (!tk) return;
+    var pol = room._snapOpenSeat || 'artist';
+    var meSeated = (room._snapP2 || null) === ME.id;
+    tk.hidden = !(room.id && room.show && !room.isHost && pol !== 'artist' && !meSeated);
+    if (!tk.hidden) {
+      var wanting = room.seat !== 'spec';
+      var pos = 0; try { var ids = room._snapPendIds || []; var ix = ids.indexOf(ME.id); if (ix >= 0) pos = ix + 1; } catch (e) {}
+      tk.textContent = wanting ? ('↩ IN LINE' + (pos ? ' #' + pos : '') + ' — WITHDRAW') : '🎸 TAKE THE STAGE';
+    }
   }
   // ---- CALL IN THE ARTIST → RhythmCatalog.showInvite → POST /show/invite (token stays in catalog.js; never on the wire here)
   function callInArtist(renotify) {
@@ -2793,6 +2902,7 @@
         // review fix 4b: the SEAT survives a host refresh — the reconnect snap must carry the true p2Id or the
         // accepted challenger would read an empty seat (and a mis-demote). Name kept for the paint fallback.
         p2: room.p2 || null, p2Name: (room.p2 && room.members[room.p2] && room.members[room.p2].name) || '',
+        openSeat: room.openSeat || 'artist',   // build102y step5: the seat policy survives a host refresh too
         pend: room.pendingChal || null, at: Date.now() }));
     } catch (e) {}
   }
@@ -2807,7 +2917,8 @@
       room = { id: P.rid, name: P.name || 'LIVE SHOW', priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id,
         p2: P.p2 || null,   // review fix 4b: restore the accepted challenger's seat across the refresh
         show: true, submitterId: P.submitterId || null, submitterName: P.submitterName || '', revToken: null, invited: !!P.invited,
-        pendingChal: P.pend || null, declined: {} };
+        pendingChal: P.pend || null, declined: {},
+        openSeat: (P.openSeat === 'confirm' || P.openSeat === 'auto') ? P.openSeat : 'artist' };   // build102y step5: restore the seat policy (same whitelist)
       room._p2Name = P.p2Name || '';                       // paint fallback until their presence re-syncs
       room._graceUntil = Date.now() + 15000;               // presence warm-up: don't clear the restored seat before their heartbeat lands
       if (P.sel) sel = P.sel;
@@ -4463,6 +4574,9 @@
   wire('mpx-show-nudge', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(true); });
   wire('mpx-show-accept', 'click', acceptChallenger);
   wire('mpx-show-decline', 'click', declineChallenger);
+  // build102y step5: open-the-room controls (elements only ever visible while room.show)
+  wire('mpx-show-swap', 'click', function (ev) { if (ev && ev.isTrusted === false) return; swapInArtist(); });
+  wire('mpx-show-take', 'click', function (ev) { if (ev && ev.isTrusted === false) return; toggleTakeStage(); });
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
   wire('mpx-ready', 'click', toggleReady);
   wire('mpx-diff', 'click', function (e) {
