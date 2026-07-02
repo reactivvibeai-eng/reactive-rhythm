@@ -35,7 +35,7 @@
   // indices and tells users to calibrate). So these seed values are a convenience layer; the
   // calibration wizard / live tester is the load-bearing path that overwrites them. See CHANGELOG.
   const STRUMCFG_KEY = 'rr_strumcfg';
-  const STRUM_DEBOUNCE_MS = 55;        // anti-double-strum (strum-up + strum-down funnel through here)
+  let STRUM_DEBOUNCE_MS = 35;          // anti-double-strum (strum-up + strum-down funnel through here). build102w: 55→35 — real GH supports rapid up/down alternation and 55ms ate the second stroke; `let` so __rrStrumFeel can dial it live (owner hardware pass)
   let strumCfg = { btns: [12, 13], strumAxis: null, strumAxisDir: 0, strumRest: 0,
                    whammyAxis: 2, whammyMin: -1, whammyMax: 1,
                    tiltAxis: 3, tiltThresh: 0.6, spBtn: 8,
@@ -631,9 +631,13 @@
     const m = {}; const n = Math.min(GH_PRESET_BTN.length, LANE_COUNT);
     for (let lane = 0; lane < n; lane++) m[GH_PRESET_BTN[lane]] = lane;
     padMap = m; savePadMap();
+    // build102v: applying the GH preset IS an explicit "I have a guitar" declaration → strum-to-hit. With identity
+    // detection gone from requireStrum() (build102u), the setup flow is the declaration point — a preset click is
+    // the strongest signal we get. (setStrumRequired dispatches 'rr-strummode' so the Settings HIT MODE seg re-syncs.)
+    try { window.RhythmGame.setStrumRequired(true); } catch (e) {}
     try { renderPadcaps(); } catch (e) {}
     try { renderDeviceStatus(); } catch (e) {}
-    try { window.RhythmGame.showToast('Guitar Hero 5-fret preset applied — Test Input or run the wizard to fine-tune', 'success'); } catch (e) {}
+    try { window.RhythmGame.showToast('Guitar Hero 5-fret preset applied — HIT MODE: Strum to hit', 'success'); } catch (e) {}
   }
   // Friendly per-lane label for the active profile: GH frets get colour names, standard uses ordinals.
   const GH_FRET_NAMES = ['GREEN', 'RED', 'YELLOW', 'BLUE', 'ORANGE'];
@@ -2372,6 +2376,7 @@
     const _go = () => {
       player.play();
       state = 'playing';
+      try { if (requireStrum()) _ensureFastPoll(); } catch (e) {}   // build102w: run begin = arm the ~4ms strum-mode input poller HERE (not only in loop() — a throttled rAF must not delay first-strum latency)
       try { window.RhythmProcBg && window.RhythmProcBg.play(); } catch (e) {}   // build66: drive the procedural reactive backdrop in lockstep (covers the deferred pre-roll resume too)
       // telemetry: song_start — the run actually begins (audio + chart playing). NON-PII (track id + difficulty only).
       try {
@@ -2703,6 +2708,7 @@
     // would be a no-op on a player that never played) instead of resuming.
     if (_deferredStart) { var _f = _deferredStart; _deferredStart = null; $('pause-overlay').classList.remove('show'); _f(); return; }
     player.resume(); state = 'playing';
+    try { if (requireStrum()) _ensureFastPoll(); } catch (e) {}   // build102w: resume = re-arm the strum-mode input poller (it self-disarmed on pause)
     try { window.RhythmProcBg && window.RhythmProcBg.resume(); } catch (e) {}   // build66: resume the reactive backdrop
     $('pause-overlay').classList.remove('show');
     lastFrame = performance.now();
@@ -2802,7 +2808,7 @@
     if (lane == null || lane < 0 || lane >= LANE_COUNT) return;
     if (laneProbe) { try { laneProbe(lane, source); } catch (e) {} }
     if (performance.now() < _mpStunUntil) return;   // v254: MP combat — your inputs are shocked/dead for the stun window
-    if (state === 'playing') handleHit(lane, evTime);
+    if (state === 'playing') handleHit(lane, evTime, source);   // build102w: source rides along so guitar-strum empties can be free
   }
   // lane physically released (key-up / pointer-up) — ends any active sustain in that lane
   function onLaneRelease(lane) {
@@ -3099,14 +3105,33 @@
   function anyPadConnected() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if (gp) return true; } catch (e) {} return false; }
   function requireStrum() { return _strumRequired && laneProfile === 'gh' && anyPadConnected(); }
   window.RhythmGame.getStrumRequired = function () { return _strumRequired; };
-  window.RhythmGame.setStrumRequired = function (on) { _strumRequired = !!on; try { localStorage.setItem('rr_strum_off', on ? '0' : '1'); } catch (e) {} try { _frets.clear(); } catch (e2) {} return _strumRequired; };
+  // build102v: dispatch 'rr-strummode' so UI (the Settings HIT MODE seg, device status) re-syncs no matter WHO flips
+  // it — the seg's old sync only fired on settings-screen open, so a wizard/preset flip mid-session showed stale state.
+  window.RhythmGame.setStrumRequired = function (on) { _strumRequired = !!on; try { localStorage.setItem('rr_strum_off', on ? '0' : '1'); } catch (e) {} try { _frets.clear(); } catch (e2) {} try { window.dispatchEvent(new CustomEvent('rr-strummode', { detail: { on: _strumRequired } })); } catch (e3) {} try { renderDeviceStatus(); } catch (e4) {} return _strumRequired; };
+  // build102w: STRUM FEEL PACK (owner hardware playtest: "really had to push hard on the strum", holds "weird and
+  // tiring"). Everything here gates on requireStrum() — keyboard and press-mode stay byte-identical.
+  let _strumBufT = 0, _strumBufMs = 70;   // STRUM BUFFER: a strum landing a hair BEFORE the fret press is banked for _strumBufMs; the fret press consumes it (classic GH order forgiveness). Single-shot.
   function tryStrum(now) {
     if (now - _lastStrumT < STRUM_DEBOUNCE_MS) return;     // debounce: strum-up + strum-down both land here
     _lastStrumT = now;
-    if (_frets.size === 0) return;                         // strum with no fret held = no-op (no phantom hit)
-    for (const lane of _frets) onLaneInput(lane, 'guitar', now);   // chord-safe: one hit per held fret, judged at the strum instant
+    if (_frets.size === 0) { _strumBufT = now; return; }   // build102w: no fret YET — bank this strum (was a hard no-op, so strum-then-fret ate the stroke and players compensated by slamming the bar)
+    let _fired = false;
+    for (const lane of _frets) {
+      // build102w: a lane mid-SUSTAIN is INERT to strum edges — the old path fired onLaneInput for EVERY held fret,
+      // so strumming other lanes while banking a hold re-judged the sustaining lane: early-ate its next note (or a
+      // BOMB → combo break), REPLACED the live sustain if that note was another hold (payout silently abandoned),
+      // or whiff-flashed/plucked it on every stroke. That spam was the "weird and tiring" hold feel.
+      if (holdNote[lane]) continue;
+      _fired = true;
+      onLaneInput(lane, 'guitar', now);   // chord-safe: one hit per held fret, judged at the strum instant
+    }
+    // v405 review fix: a stroke that FIRED spends any banked stroke (one strum never pays twice). But a stroke where
+    // every held fret was hold-inert used to be swallowed AND un-banked — so strum-then-fret-B while sustaining lane A
+    // still ate the stroke (the exact holds complaint build102w targeted). No live lane fired → treat it like an
+    // empty strum and BANK it; the fret press ≤ _strumBufMs later consumes it (single-shot, zeroed there).
+    _strumBufT = _fired ? 0 : now;
   }
-  function pollGuitarAxes(gp) {
+  function pollGuitarAxes(gp, liteAxes) {
     const ax = gp.axes || [];
     // strum: a STANDARD-mapped guitar fires strum on the D-pad buttons 12/13 (handled in pollGamepad). But most
     // instrument controllers (incl. the Riffmaster under many drivers) get a NON-standard mapping, where the D-pad
@@ -3133,7 +3158,12 @@
       _strumAxisPrev = v;
     }
     // whammy -> Overdrive charge: wiggling the whammy (while OD not active) builds the meter; clamp at 1
-    if (strumCfg.whammyAxis != null && ax.length > strumCfg.whammyAxis) {
+    // v405 review fix: the whammy charge is a per-sample DELTA gate (|w − prev| > 0.03), so its behavior depends on
+    // the sampling rate — the build102w ~4ms fast poll shrank per-sample deltas ~4-8x, which made a casual wiggle
+    // charge NOTHING (delta never crossed 0.03) and a fast wiggle charge ~4x + spam updateHUD at 250Hz. The fast-poll
+    // path passes liteAxes=true and SKIPS this block (doesn't touch _whammyPrev), so whammy keeps its rAF-rate deltas.
+    // Strum + tilt below are threshold-CROSSING edges — rate-robust, and fast sampling only improves their latency.
+    if (!liteAxes && strumCfg.whammyAxis != null && ax.length > strumCfg.whammyAxis) {
       const raw = ax[strumCfg.whammyAxis] || 0;
       const span = (strumCfg.whammyMax - strumCfg.whammyMin) || 1;
       const w = Math.max(0, Math.min(1, (raw - strumCfg.whammyMin) / span));
@@ -3156,7 +3186,7 @@
   function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = gp.buttons[b].pressed; } } catch (e) {} }
   let _lastWizBindMs = 0;
   function _anyPadBtnDown() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) if (gp.buttons[b].pressed) return true; } } catch (e) {} return false; }
-  function pollGamepad() {
+  function pollGamepad(liteAxes) {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
     // build100q FIX: RELEASE GATE — after a wizard fret binds, the next fret can't capture until EVERY button is
@@ -3184,7 +3214,15 @@
           }
           const lane = padMap[b];
           if (lane != null && lane >= 0 && lane < LANE_COUNT) {
-            if (requireStrum()) { _frets.add(lane); if (state === 'playing') laneDown[lane] = true; }   // GH: fret HELD, no hit until a strum
+            if (requireStrum()) {
+              _frets.add(lane); if (state === 'playing') laneDown[lane] = true;   // GH: fret HELD, no hit until a strum
+              // build102w: STRUM BUFFER consume — a strum fired ≤ _strumBufMs ago with no fret down; THIS fret press
+              // completes the pair → hit now (judged at the fret instant). Zeroed on consume (single-shot) so the same
+              // stroke can't also pay a later fret; a real follow-up strum is a NEW stroke and fires normally (the
+              // note is judged by then, and guitar-source empties are inert — no double anything).
+              const _bnw = performance.now();
+              if (_strumBufT && (_bnw - _strumBufT) <= _strumBufMs && !holdNote[lane]) { _strumBufT = 0; onLaneInput(lane, 'guitar', _bnw); }
+            }
             else { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }   // legacy: fret-press = hit (keyboard/standard pad)
           }
           // build100q: fire the strum on the configured button(s) OR the standard D-pad up/down (12/13) — the calibration
@@ -3195,7 +3233,10 @@
           // build100q: STANDARD (non-guitar) pad — Overdrive on the configured odBtn (default RB=5). A controller-only
           // player had NO way to fire Overdrive before (the only pad OD path was requireStrum-gated → guitars only).
           // Skip if that button is also a lane (the lane wins). activateOverdrive() self-guards on state/od.
-          if (!requireStrum() && strumCfg.odBtn != null && b === strumCfg.odBtn && padMap[b] == null && state === 'playing') activateOverdrive();
+          // build102v: + spBtn — the profile is pinned 'gh', so the wizard's STAR POWER step and the manual OD cap both
+          // write strumCfg.spBtn now; a PRESS-mode pad player's captured OD button must fire too (odBtn stays the RB=5
+          // seed / legacy stores). Same padMap[b]==null lane-wins guard.
+          if (!requireStrum() && ((strumCfg.odBtn != null && b === strumCfg.odBtn) || (strumCfg.spBtn != null && b === strumCfg.spBtn)) && padMap[b] == null && state === 'playing') activateOverdrive();
           // build100q: PAUSE/BACK on the Start button (9) for BOTH profiles — a controller-only player couldn't pause
           // from the pad (only mouse #mpause / Escape / blur did). Skip if 9 is mapped to a lane.
           if (b === 9 && padMap[b] == null && (state === 'playing' || state === 'paused')) { try { if (state === 'playing') pauseGame(); else resumeGame(); } catch (e) {} }
@@ -3204,9 +3245,35 @@
           if (lane != null && lane >= 0 && lane < LANE_COUNT) { if (requireStrum()) _frets.delete(lane); onLaneRelease(lane); }
         }
       }
-      if (requireStrum()) pollGuitarAxes(gp);   // strum-axis / whammy->OD / tilt->SP (guitars only)
+      if (requireStrum()) pollGuitarAxes(gp, liteAxes);   // strum-axis / whammy->OD / tilt->SP (guitars only; liteAxes skips the rate-sensitive whammy block on fast-poll calls)
     }
   }
+  // build102w: LOW-LATENCY INPUT POLL — pollGamepad rode the rAF loop only (16-33ms worst case; worse on a 30fps
+  // machine), and that queue delay reads as "the strum needs a hard push". While a STRUM-MODE run is live, a dedicated
+  // ~4ms interval polls too. Edge detection (_padPrev) is stateful + synchronous, so extra calls are safe — the rAF
+  // frame-top call stays and whoever runs first simply wins the edge. The interval self-disarms the moment the run
+  // ends / pauses or strum mode flips off; loop() re-arms it next playing frame. One interval max (_fastPollId guard).
+  let _fastPollId = 0, _strumPollMs = 4;
+  function _ensureFastPoll() {
+    if (_fastPollId) return;
+    _fastPollId = setInterval(() => {
+      if (state !== 'playing' || !requireStrum()) { clearInterval(_fastPollId); _fastPollId = 0; return; }
+      try { pollGamepad(true); } catch (e) {}   // liteAxes: buttons + strum/tilt edges only — whammy stays rAF-sampled (delta-gated, rate-sensitive)
+    }, _strumPollMs);
+  }
+  // dev hook (strip at content-freeze): live strum-feel dials for the owner's hardware pass —
+  // __rrStrumFeel.get() / .set({ bufMs: 90, debounceMs: 30, pollMs: 2 })
+  try { window.__rrStrumFeel = {
+    get: () => ({ bufMs: _strumBufMs, debounceMs: STRUM_DEBOUNCE_MS, pollMs: _strumPollMs, fastPollLive: !!_fastPollId }),
+    set: (o) => { o = o || {};
+      if (o.bufMs != null) _strumBufMs = Math.max(0, +o.bufMs || 0);
+      if (o.debounceMs != null) STRUM_DEBOUNCE_MS = Math.max(0, +o.debounceMs || 0);
+      if (o.pollMs != null) { _strumPollMs = Math.max(1, Math.round(+o.pollMs) || 4); if (_fastPollId) { clearInterval(_fastPollId); _fastPollId = 0; _ensureFastPoll(); } }
+      return window.__rrStrumFeel.get(); }
+  }; } catch (e) {}
+  // dev hook (strip at content-freeze): synchronous pollGamepad driver — headless verification mocks
+  // navigator.getGamepads and steps button edges deterministically (rAF + timers are throttled there).
+  try { window.__rrPollPad = () => { try { pollGamepad(); } catch (e) {} }; } catch (e) {}
   function gamepadList() { if (!navigator.getGamepads) return []; const out = []; for (const gp of navigator.getGamepads()) if (gp) out.push(gp.id); return out; }
 
   // ---------- HIT LOGIC ----------
@@ -3218,7 +3285,7 @@
     if (Math.abs(target - curGain) > 0.001) { curGain = target; if (player && player.setGain) player.setGain(target); }
   }
 
-  function handleHit(lane, evTime) {
+  function handleHit(lane, evTime, src) {   // build102w: src ('guitar' = strum-driven) — only the empty-press branch reads it
     lanePulse[lane] = 1.0;        // press feedback: button pushes down + lights
     lanePluckT[lane] = 0;         // pluck/vibrate this lane's string on EVERY press
     // Judge at the instant the player ACTUALLY pressed, not when this handler ran.
@@ -3243,6 +3310,10 @@
       if (d < targetDiff || (d === targetDiff && target && target.type === 'bomb' && n.type !== 'bomb')) { targetDiff = d; target = n; }
     }
     if (!target) {   // empty press — no note in window. build85: whiff cue (does NOT break combo or drain stability — keyboard-feel guardrail)
+      // build102w: an EMPTY STRUM is FREE. In strum mode, alternate-strumming between notes is normal technique —
+      // the whiff dash + whiff SFX + catcher recoil on every stroke read as constant complaints (part of the "weird
+      // and tiring" report). Guitar-source empties do NOTHING; keyboard/touch/press-mode keep the build85 cue.
+      if (src === 'guitar') return;
       // build89: warm-grey dash (#8a807c, R>=G>=B — brand law); skip the flash if a real judgment fired this frame so the dash can't clobber it
       if (performance.now() - _lastRealJudgeMs > 30) flashJudgment('—', '#8a807c', true);
       playWhiffSfx();
@@ -4193,6 +4264,7 @@
     if (!fxLite && !_qAutoDone) _qSample(_rawMs);   // build66: adaptive-quality sampler (only while actually playing)
 
     pollGamepad();              // poll at frame-top so a controller/guitar press is judged this frame
+    if (requireStrum()) _ensureFastPoll();   // build102w: arm the ~4ms low-latency poller for strum-mode runs (self-disarms on run end / pause / mode off)
     const t = songTime();
     const jt = t - audioOffset;
     const diff = DIFFICULTY[difficulty];
@@ -5983,6 +6055,8 @@
     if (onPadBound) { try { onPadBound(lane, b); } catch (e) {} }
   }
   // build100q: bind the OVERDRIVE button — gh profile uses strumCfg.spBtn (Star Power), standard pads use strumCfg.odBtn.
+  // build102v: profile is pinned 'gh' → this always writes spBtn; gameplay's press-mode OD path now accepts spBtn too
+  // (pollGamepad ~3198), so the cap works in BOTH hit modes. The odBtn arm is inert plumbing kept with LANE_PROFILES.standard.
   function _bindOdButton(b) {
     if (laneProfile === 'gh') strumCfg.spBtn = b; else strumCfg.odBtn = b;
     saveStrumCfg();
@@ -6057,8 +6131,9 @@
     if (sub) {
       const seen = guitarPadId() || (gamepadList()[0] || null);
       sub.textContent = seen
-        ? 'Listening for a button press…  (controller: ' + String(seen).slice(0, 28) + ')'
+        ? 'Listening for a button press…  (controller: ' + _padIdShort(seen, 28) + ')'   // build102v: clean trim (was a raw mid-word slice)
         : 'No controller detected yet — plug it in and press any button to wake it.';
+      sub.title = seen ? String(seen) : '';
     }
     // progress dots
     const dots = wizEl('pad-wizard-dots');
@@ -6091,8 +6166,11 @@
         _wizNeedRelease = true;   // build100q FIX: require a CLEAN RELEASE of all buttons before the next fret can capture
         _wizLane++;
         if (_wizLane >= LANE_COUNT) {
-          if (laneProfile === 'gh') { savePadMap(); startCalibration(); }   // guitar: continue into strum/whammy/tilt calibration
-          else { savePadMap(); _startStdOdCapture(); }                       // build100q: standard pad → capture an OVERDRIVE button before finishing (was: frets only → OD unmappable)
+          // build102v: standard-pad fork RETIRED — the profile is pinned 'gh' (bootLaneProfile, build102u), so EVERY
+          // controller flows into the strum/whammy/star-power calibration. That's on purpose: the STRUM step is now the
+          // HIT-MODE declaration point (strum learned → Strum-to-hit; nothing/Skip → Press-to-hit), and its STAR POWER
+          // step covers the OD-button capture the old _startStdOdCapture branch existed for.
+          savePadMap(); startCalibration();
           return;
         }
         _wizListen();
@@ -6108,6 +6186,9 @@
     _wizSetVisible(false);
     try { renderPadcaps(); renderDeviceStatus(); } catch (e) {}
   }
+  // build102v: RETIRED — profile pinned 'gh' (bootLaneProfile), so the standard-pad wizard tail below (_startStdOdCapture
+  // → _finishStdOd → finishPadWizard) is unreachable: every wizard run ends in startCalibration() instead. Kept as
+  // archaeology (harmless dead code; _wizStdOdActive can never go true) in case a non-guitar profile ever returns.
   // build100q: STANDARD-pad Overdrive capture — after the 5 lanes, the standard-pad wizard captures ONE more button for
   // Overdrive/Star Power (it had no way to bind it before). Reuses the calibration sampler (which seeds its own baseline,
   // so a still-held lane button can't bind OD). Skip keeps the default odBtn (RB=5). Then finishPadWizard.
@@ -6274,24 +6355,45 @@
     onPadBound = null; padRebindLane = null; _wizPrevMap = null;   // frets are committed; cal can't be cancelled back to a fret remap
     _calStep = 0; _armCalStep();
   }
+  // build102v: HIT-MODE SELF-CONFIGURATION — the wizard's STRUM step is now the declaration point. build102u dropped
+  // the guitarShapedPad() identity check from requireStrum() (real GH guitars enumerate as plain "Xbox 360 Controller
+  // (XInput)"), so a REGULAR pad player landed in strum mode by default: frets held, notes needed a D-pad strum,
+  // total confusion. Now: strum LEARNED (button or axis) → Strum-to-hit; nothing detected / step SKIPPED →
+  // Press-to-hit. Either way the player is told, and the Settings HIT MODE seg stays one tap away to override.
+  function _declareHitMode(strumFound) {
+    try { window.RhythmGame.setStrumRequired(!!strumFound); } catch (e) {}
+    try { window.RhythmGame.showToast(strumFound ? 'Strum bar set — HIT MODE: Strum to hit' : 'No strum bar — HIT MODE: Press to hit (change anytime in Settings)', strumFound ? 'success' : 'neutral'); } catch (e) {}
+  }
   function _armCalStep() {
     _calRender(null);
-    if (_calStep === 0) detectStrum(2600, null, (r) => { if (_calStep !== 0) return; if (r.type === 'button') _calRender('Strum = button ' + r.index); else if (r.type === 'axis') _calRender('Strum = axis ' + r.index); else _calRender('Strum = D-pad (default)'); _calNext(900); });   // build100r: capture a BUTTON or an AXIS/POV-hat strum (was button-only → axis strums silently un-mapped); _calStep guard so a Skip mid-capture can't double-advance
+    if (_calStep === 0) detectStrum(2600, null, (r) => { if (_calStep !== 0) return; const found = (r.type === 'button' || r.type === 'axis'); if (r.type === 'button') _calRender('Strum = button ' + r.index); else if (r.type === 'axis') _calRender('Strum = axis ' + r.index); else _calRender('No strum bar — press frets to hit'); _declareHitMode(found); _calNext(900); });   // build100r: capture a BUTTON or an AXIS/POV-hat strum (was button-only → axis strums silently un-mapped); _calStep guard so a Skip mid-capture can't double-advance. build102v: result now DECLARES the hit mode (see _declareHitMode)
     else if (_calStep === 1) _sampleAxes(1600, 0.4, (axis, lo, hi) => { if (axis != null) { strumCfg.whammyAxis = axis; strumCfg.whammyMin = +(+lo).toFixed(2); strumCfg.whammyMax = +(+hi).toFixed(2); saveStrumCfg(); _calRender('Whammy = axis ' + axis); } else _calRender('Whammy = default (none found)'); _calNext(800); });
     else if (_calStep === 2) _captureTilt(2200, (res) => { if (res && res.spBtn != null) { strumCfg.spBtn = res.spBtn; saveStrumCfg(); _calRender('Star Power = button ' + res.spBtn); } else if (res && res.tiltAxis != null) { strumCfg.tiltAxis = res.tiltAxis; strumCfg.tiltThresh = res.tiltThresh; saveStrumCfg(); _calRender('Star Power = tilt axis ' + res.tiltAxis); } else _calRender('Star Power = Select (default)'); _calNext(900); });
   }
   function _calNext(delayMs) { clearTimeout(_calTimer); _calTimer = setTimeout(() => { _calTimer = 0; if (_calStep < 0) return; _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }, delayMs || 600); }
-  function _calSkip() { if (_calStep < 0) return; clearTimeout(_calTimer); _calTimer = 0; _stopCalRaf(); _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep(); }
+  function _calSkip() {
+    if (_calStep < 0) return;
+    // build102v: skipping the STRUM step mid-capture = "I have no strum bar" → declare Press-to-hit. _calTimer set
+    // means the capture already FINISHED (we're in the 900ms confirm pause, hit mode already declared) — a Skip there
+    // just advances early and must NOT overwrite a successful strum declaration.
+    const _midCapture = !_calTimer;
+    clearTimeout(_calTimer); _calTimer = 0; _stopCalRaf();
+    if (_calStep === 0 && _midCapture) _declareHitMode(false);
+    _calStep++; if (_calStep > 2) finishCalibration(); else _armCalStep();
+  }
   function finishCalibration() {
     _stopCalRaf(); _calStep = -1; _wizActive = false; saveStrumCfg();
-    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = '✅ Guitar ready — <b>fret + strum</b> to play.';
-    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = 'Whammy charges Overdrive · tilt / Select fires Star Power. Re-run anytime to remap.';
+    // build102v: the finish copy follows the DECLARED hit mode — telling a press-to-hit pad player "fret + strum to
+    // play" was exactly the confusion this wizard exists to kill.
+    let _strumOn = true; try { _strumOn = window.RhythmGame.getStrumRequired(); } catch (e) {}
+    const big = wizEl('pad-wizard-prompt'); if (big) big.innerHTML = _strumOn ? '✅ Guitar ready — <b>fret + strum</b> to play.' : '✅ Controller ready — <b>press a fret button</b> to hit.';
+    const sub = wizEl('pad-wizard-sub'); if (sub) sub.textContent = _strumOn ? 'Whammy charges Overdrive · tilt / Select fires Star Power. Re-run anytime to remap.' : 'Your Star Power button fires Overdrive. Re-run anytime to remap — HIT MODE lives in Settings.';
     const stepEl = wizEl('pad-wizard-step'); if (stepEl) stepEl.textContent = 'Done';
     const skip = wizEl('pad-wizard-skip'); if (skip) skip.style.display = 'none';
     const dots = wizEl('pad-wizard-dots'); if (dots) dots.querySelectorAll('.wiz-dot').forEach(d => { d.className = 'wiz-dot done'; });
     const dn = wizEl('pad-wizard-done'); if (dn) dn.textContent = 'DONE';
     try { renderDeviceStatus(); } catch (e) {}
-    try { window.RhythmGame.showToast('Guitar calibrated — fret + strum!', 'success'); } catch (e) {}
+    try { window.RhythmGame.showToast(_strumOn ? 'Guitar calibrated — fret + strum!' : 'Controller ready — press to hit!', 'success'); } catch (e) {}
   }
   try { window.__rrPadWizard = () => ({ active: _wizActive, lane: _wizLane, total: LANE_COUNT, calStep: _calStep }); } catch (e) {}
   // dev hook (strip at content-freeze): drive the strum-cal flow headless (samplers need real hardware; skip advances)
@@ -6303,6 +6405,17 @@
     const keys = []; for (let l = 0; l < LANE_COUNT; l++) keys.push(keyGlyph(keyForLane(l)));
     el.textContent = 'Touch · Keys ' + keys.join(' ');
   }
+  // build102v: clean display-trim for controller ids — the old raw slice() cut mid-parenthesis ("Xbox 360 Controller
+  // (XIn"). Cut at max chars, drop an unclosed "(…" tail, back off trailing separators, then a single ellipsis. The
+  // FULL id always rides a title attribute at the call sites so hover reveals it.
+  function _padIdShort(id, max) {
+    id = String(id || ''); max = max || 28;
+    if (id.length <= max) return id;
+    let s = id.slice(0, max);
+    const op = s.lastIndexOf('('); if (op >= 0 && s.indexOf(')', op) < 0) s = s.slice(0, op);   // never end inside "(…"
+    s = s.replace(/[\s\-·:,(]+$/, '');
+    return s + '…';
+  }
   function renderDeviceStatus() {
     const el = $('set-devices');
     const pads = gamepadList();
@@ -6311,7 +6424,7 @@
       const rows = [['Keyboard', 'Ready', true]];
       if (!navigator.requestMIDIAccess) rows.push(['MIDI', 'Unsupported browser', false]);
       else rows.push(['MIDI', midiInputs.length ? midiInputs.join(', ') : 'No device detected', midiInputs.length > 0]);
-      rows.push(['Controller', pads.length ? pads[0].slice(0, 26) : 'No device detected', pads.length > 0]);
+      rows.push(['Controller', pads.length ? _padIdShort(pads[0], 26) : 'No device detected', pads.length > 0, pads.length ? pads[0] : null]);   // build102v: clean trim + full id on hover (r[3] → title)
       if (ghId) {   // GH-3: surface the calibrated strum/whammy/tilt mapping so a guitar player can confirm setup
         // build100r-fix: reflect an AXIS/POV-hat strum too — detectStrum can bind strumCfg.strumAxis (not just btns), so a
         // learned strum bar must read as "set" here, not "Not set".
@@ -6321,33 +6434,37 @@
         rows.push(['Whammy', strumCfg.whammyAxis != null ? ('Axis ' + strumCfg.whammyAxis) : 'Not set', strumCfg.whammyAxis != null]);
         rows.push(['Tilt / Star Power', strumCfg.tiltAxis != null ? ('Tilt axis ' + strumCfg.tiltAxis) : ('Button ' + strumCfg.spBtn), true]);
       }
-      el.innerHTML = rows.map(r => '<div class="dev-row"><span class="dev-n">' + r[0] + '</span><span class="dev-v' + (r[2] ? ' ok' : '') + '">' + escDev(r[1]) + '</span></div>').join('');
+      el.innerHTML = rows.map(r => '<div class="dev-row"><span class="dev-n">' + r[0] + '</span><span class="dev-v' + (r[2] ? ' ok' : '') + '"' + (r[3] ? ' title="' + escDev(r[3]) + '"' : '') + '>' + escDev(r[1]) + '</span></div>').join('');
     }
     // Guitar-Hero auto-detect badge + "set up my guitar" affordance
     const badge = $('gh-badge');
     if (badge) {
       badge.style.display = ghId ? 'flex' : 'none';
-      const nm = $('gh-badge-name'); if (nm) nm.textContent = String(ghId || '').slice(0, 30);
+      const nm = $('gh-badge-name'); if (nm) { nm.textContent = _padIdShort(ghId, 30); nm.title = String(ghId || ''); }   // build102v: clean trim + full id on hover
       // GH-1: surface that REQUIRE STRUM is active so a new guitar player doesn't think the controller is broken
       const ss = $('gh-strum-status'); if (ss) { const on = requireStrum(); ss.textContent = on ? 'REQUIRE STRUM: ON — hold a fret + strum' : 'REQUIRE STRUM: OFF'; ss.style.color = on ? '#e0a93f' : 'var(--ink-dim)'; }
     }
     // pad-status hint near the wizard button
     const padHint = $('pad-status-hint');
     if (padHint) {
+      // build102v: clean trim (no more "Xbox 360 Controller (XIn") + full id on hover + a "· strum mode" tell when
+      // HIT MODE=Strum is live for this pad — the one line a confused press-vs-strum player actually reads.
+      const strumTag = (pads.length && requireStrum()) ? ' · strum mode' : '';
+      padHint.title = pads.length ? String(pads[0]) : '';
       padHint.textContent = pads.length
-        ? (ghId ? '🎸 Guitar Hero controller ready' : '🎮 Controller detected: ' + String(pads[0]).slice(0, 24))
+        ? ((ghId ? '🎸 Guitar Hero controller ready' : '🎮 Controller detected: ' + _padIdShort(pads[0], 28)) + strumTag)
         : 'No controller yet — plug one in and press any button.';
       padHint.classList.toggle('ok', pads.length > 0);
     }
   }
-  function escDev(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+  function escDev(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }   // build102v: + double-quote (ids now ride title="" attributes)
   function setTest(on) {
     const pips = $('set-test-pips'), btn = $('set-test-btn');
     if (btn) { btn.textContent = on ? 'STOP TEST' : 'TEST INPUT'; btn.classList.toggle('active', on); }
     if (pips) {
-      // build pips to match the ACTIVE profile's lane count (gh=5, standard=6) — the static markup is 6,
-      // so on the default 5-lane profile the 6th pip was dead. Rebuild when the count diverges (also on a
-      // mid-session profile switch) and drive the grid columns off LANE_COUNT.
+      // build pips to match the ACTIVE profile's lane count — build102v: the static markup is now 5 (the game is
+      // 5-lane only), so this rebuild is normally a no-op; it stays as the guard for any future count divergence
+      // and drives the grid columns off LANE_COUNT.
       if (on && pips.children.length !== LANE_COUNT) {
         pips.innerHTML = '';
         for (let i = 0; i < LANE_COUNT; i++) pips.appendChild(document.createElement('span'));
@@ -6377,7 +6494,7 @@
     { const nv = $('set-notes'); if (nv) { const on = window.RhythmGame.getNoteVariety(); [...nv.children].forEach(b => b.classList.toggle('active', (b.dataset.notes === 'on') === on)); } }
     { const th = $('set-timinghint'); if (th) { const on = (localStorage.getItem('rr_timinghint') !== '0'); [...th.children].forEach(b => b.classList.toggle('active', (b.dataset.thint === 'on') === on)); } }
     { const bg = $('set-bg'); if (bg) [...bg.children].forEach(b => b.classList.toggle('active', (b.dataset.bg === 'performance') === (s.bgMode === 'performance'))); }
-    { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.classList.toggle('active', b.dataset.lanemode === laneProfile)); }
+    // build102v: #set-lanemode paint removed — the Lane Mode toggle left the markup in build102u (5-lane only).
     renderKeycaps(); renderPadcaps(); updateInputsStatus(); renderDeviceStatus();
     settingsScreen.classList.add('active');
   }
@@ -6496,12 +6613,8 @@
     [...bg.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
     window.RhythmGame.applySettings({ bgMode: b.dataset.bg });
   })); }
-  { const lm = $('set-lanemode'); if (lm) [...lm.children].forEach(b => b.addEventListener('click', () => {
-    if (state === 'playing' || state === 'paused') { try { window.RhythmGame.showToast('Finish the run first to switch lane mode'); } catch (e) {} return; }
-    [...lm.children].forEach(x => x.classList.remove('active')); b.classList.add('active');
-    applyLaneProfile(b.dataset.lanemode);
-    try { window.RhythmGame.showToast(b.dataset.lanemode === 'gh' ? '5-String Guitar mode — plug in a guitar controller & set it up in Settings' : '6-Lane Keyboard mode'); } catch (e) {}
-  })); }
+  // build102v: #set-lanemode click wiring removed — the Lane Mode toggle left the markup in build102u ("we don't do
+  // six strings"); bootLaneProfile pins 'gh', so the block could never find its element again.
   { const rk = $('set-keys-reset'); if (rk) rk.addEventListener('click', resetKeys); }
   { const rp = $('set-pad-reset'); if (rp) rp.addEventListener('click', resetPad); }
   { const tb = $('set-test-btn'); if (tb) tb.addEventListener('click', () => setTest(!laneProbe)); }
@@ -6538,6 +6651,7 @@
         try { localStorage.setItem('rr_gh_autoadopted', '1'); } catch (e2) {}
       }
     } catch (err) {}
+    try { if (state === 'playing' && requireStrum()) _ensureFastPoll(); } catch (err2) {}   // build102w: pad plugged in MID-RUN → arm the strum-mode poller now (don't wait on a possibly-throttled rAF frame)
     if (settingsScreen.classList.contains('active')) renderDeviceStatus();
   });
   window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); _frets.clear(); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining. build79-fix(B78-2): also clear GH held-fret Set so an unplugged-mid-hold guitar can't leave phantom frets that the next strum fires.

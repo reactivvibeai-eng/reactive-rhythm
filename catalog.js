@@ -1776,6 +1776,8 @@
     // revenue attribution
     getPackId, logUse,
     showInvite,   // build102s (Phase-2 C1): live-show artist call-in — POST /show/invite (token stays module-local here)
+    livematchAnnounce, livematchEnd,   // build102x: site Navbar LIVE MATCH chip (review token stays module-local; fire-and-forget)
+    matchQueue, matchStatus,           // build102x: server matchmaking queue (authed REST; throws on !ok)
   };
 
   // ===========================================================================
@@ -1886,6 +1888,26 @@
     if (!_revRawToken) throw new Error('no review token in this session');
     return api('/show/invite', { method: 'POST', auth: true, body: { token: _revRawToken, room: String(roomId || ''), renotify: !!renotify } });
   }
+  // build102x: LIVE MATCH SITE CHIP — announce/clear the host's live show room on the site Navbar chip.
+  // Token = the ORIGINAL review token (module-local, exactly like showInvite; /livematch/end accepts expired
+  // tokens + is idempotent). FIRE-AND-FORGET with swallowed errors on purpose: the show must never block on
+  // the chip. No-ops without a token (a non-review host has no chip to drive).
+  function livematchAnnounce(roomId) {
+    try {
+      if (!_revRawToken || !roomId) return;
+      api('/livematch/announce', { method: 'POST', auth: true, body: { token: _revRawToken, room: String(roomId) } }).catch(() => {});
+    } catch (e) {}
+  }
+  function livematchEnd(roomId) {
+    try {
+      if (!_revRawToken || !roomId) return;
+      api('/livematch/end', { method: 'POST', auth: true, body: { token: _revRawToken, room: String(roomId) } }).catch(() => {});
+    } catch (e) {}
+  }
+  // build102x: MATCHMAKING queue wrappers (PHASE3_MATCHMAKING_DESIGN.md — server pairs the two oldest waiting).
+  // Authed REST, THROW on !ok so multiplayer.js can distinguish 401 (signed-out banner) from transient errors.
+  async function matchQueue(on) { return api('/match/queue', { method: 'POST', body: { on: !!on }, auth: true }); }
+  async function matchStatus(authWaitMs) { return api('/match/status', { auth: true, authWaitMs: authWaitMs || 0 }); }   // v405: optional auth-hydration grace for the ?mpqm=resume boot path
   // ---- results auto-return ("Returning to the show in Ns") — armed only while the review track is current ----
   var _rvTimer = 0, _rvPill = null;
   function _cancelReturnCountdown() { if (_rvTimer) { clearInterval(_rvTimer); _rvTimer = 0; } if (_rvPill) { try { _rvPill.remove(); } catch (e) {} _rvPill = null; } }

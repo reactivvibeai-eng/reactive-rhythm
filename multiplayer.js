@@ -180,6 +180,11 @@
   try { var _mj = location.search.match(/[?&]mpjoin=(t[a-z0-9]+)/); if (_mj) _pendingTourJoin = _mj[1]; } catch (e) {}
   var _pendingRoomJoin = null;   // build60: ?mproom=<rid> deep link — join the friend's room once the lobby is up
   try { var _mr = location.search.match(/[?&]mproom=([a-z0-9]+)/i); if (_mr) _pendingRoomJoin = _mr[1]; } catch (e) {}
+  // build102x: ?mpqm=resume — the SITE Navbar matchmaking toggle deep-links here ("MATCH FOUND — Jump in", one URL,
+  // no role leakage). MP auto-opens at boot; the lobby SUBSCRIBED handler asks GET /match/status ONCE and routes by
+  // role ('matched'), resumes SEARCHING ('waiting'), or just shows the lobby with a nudge ('idle').
+  var _pendingQmResume = false;
+  try { if (/[?&]mpqm=resume\b/i.test(location.search)) _pendingQmResume = true; } catch (e) {}
   // build102 (Phase-2 judge blocker): &spectate=1 riding ?mproom= = join as a WATCHER — without this, a public
   // spectate link would take the CHALLENGER seat (first fan to click steals the artist's spot in a live-show room).
   var _pendingRoomSpec = false;
@@ -389,6 +394,7 @@
     try { closeRoom(true); } catch (e) {}    // build8: host closes / guest leaves room cleanly
     try { closeTour(true); } catch (e) {}    // build9: host dissolves / entrant forfeits the bracket
     QM.looking = false;                       // build8: drop quick-match queue
+    try { qmStop(true); } catch (e) {}        // build102x: leaving MP stops the server matchmaking search + clears my queue row
     teardownMatch();
     try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {}
     lobbyCh = null; lobbySP = null; lobby = {};
@@ -448,6 +454,8 @@
             if (_pendingRoomJoin && !room.id) { banner('mpx-lobby-msg', 'That room isn\'t open anymore — hit PLAY NOW, or open your own room.'); _pendingRoomJoin = null; }
           }, 6000);
         }
+        // build102x: ?mpqm=resume — the lobby is up; ask the server where my match queue stands (one-shot).
+        if (_pendingQmResume) { _pendingQmResume = false; qmResume(); }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         banner('mpx-lobby-msg', 'Could not reach the live lobby (' + status + '). Online multiplayer needs Realtime — retry shortly.');   // build100n: surface the exact status so a Realtime/anon issue is diagnosable
       }
@@ -1542,6 +1550,135 @@
     startMatchChannel(p.mid, 'guest', lobby[p.aId]);  // I'm the callee = guest
   }
 
+  // ===================== build102x: SERVER MATCHMAKING (PHASE3_MATCHMAKING_DESIGN.md) =====================
+  // Site-wide queue: POST /match/queue {on} + GET /match/status via RhythmCatalog wrappers (authed REST — no
+  // tokens on the wire, no presence roster). The server pairs the two oldest waiting and mints matched_room
+  // ('qm########'); the pair lands in a NORMAL private room — host picks the song, guest READYs, the standard
+  // start/versus/settle machinery runs. Everything here is behind the _qm state — normal MP is byte-identical.
+  // (Distinct from QM above, the build8 lobby-presence quick-match; the two never share state.)
+  var _qm = { on: false, pollT: 0, hbT: 0 };
+  function paintQmPill(state) {
+    var b = $('mpx-qm-pill'); if (!b) return;
+    b.classList.remove('searching', 'matched');
+    if (state === 'searching') { b.classList.add('searching'); b.textContent = '🎯 SEARCHING… tap to cancel'; }
+    else if (state === 'matched') { b.classList.add('matched'); b.textContent = '🎯 MATCHED!'; }
+    else b.textContent = '🎯 FIND ME A MATCH';
+    b.setAttribute('aria-pressed', state === 'searching' ? 'true' : 'false');
+  }
+  function qmStartTimers() {
+    if (_qm.pollT) clearInterval(_qm.pollT);
+    if (_qm.hbT) clearInterval(_qm.hbT);
+    _qm.pollT = setInterval(qmPollTick, 4000);                                    // status poll
+    _qm.hbT = setInterval(function () { if (_qm.on) qmPost(); }, 30000);          // heartbeat re-POST {on:true} (45s server freshness)
+  }
+  // stop searching. postOff=true also clears my server queue row ({on:false}) — teardown/leave paths use it;
+  // the 'matched' path must NOT (the row was consumed server-side and an off-POST could race the pair).
+  function qmStop(postOff) {
+    if (_qm.pollT) { clearInterval(_qm.pollT); _qm.pollT = 0; }
+    if (_qm.hbT) { clearInterval(_qm.hbT); _qm.hbT = 0; }
+    var was = _qm.on; _qm.on = false;
+    paintQmPill('off');
+    if (postOff && was) { try { window.RhythmCatalog.matchQueue(false).catch(function () {}); } catch (e) {} }
+  }
+  function qmFail(e) {
+    var msg = String((e && e.message) || '');
+    if (/\b401\b/.test(msg)) { qmStop(false); banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.'); return; }
+    // build102x: /match/* went LIVE 2026-07-02 (an edge-fn redeploy shipped them; all four probe 401-for-anon). This
+    // branch stays as a deploy-regression guard — a route that 404s never pairs anyone, so stop the search honestly
+    // instead of pulsing "Looking…" forever.
+    if (/\b404\b/.test(msg)) { qmStop(false); banner('mpx-lobby-msg', 'Matchmaking isn\'t live yet — check back soon.'); return; }
+    // transient error (network blip / 5xx): keep searching quietly — the 4s poll + 30s heartbeat retry on their own
+  }
+  function qmPost() {
+    try {
+      window.RhythmCatalog.matchQueue(true).then(function (st) {
+        if (!_qm.on) return;
+        if (st && st.status === 'matched' && st.matched_room) qmMatched(st);   // paired_now: the POST itself can pair
+      }).catch(qmFail);
+    } catch (e) { qmFail(e); }
+  }
+  function qmPollTick() {
+    if (!_qm.on) return;
+    try {
+      window.RhythmCatalog.matchStatus().then(function (st) {
+        if (!_qm.on) return;
+        if (st && st.status === 'matched' && st.matched_room) qmMatched(st);
+      }).catch(qmFail);
+    } catch (e) { qmFail(e); }
+  }
+  function qmMatched(st) {
+    // v405 review fix: a match landing while the player is ALREADY in a room/bracket must never act on it — the host
+    // path would stomp the live `room` object (orphaning a seated friend with no room-gone), and the guest path would
+    // plant a stale _pendingRoomJoin landmine. Entering any room now cancels the search (see openRoomWithId/joinRoom),
+    // so this only catches the poll-vs-join race; the abandoned partner hits their own 30s give-up + retry banner.
+    if (room.id || tour.id || matchLive) { qmStop(false); banner('mpx-lobby-msg', 'A match was found, but you\'re already in a room — finish up and search again.'); return; }
+    qmStop(false);   // matched: the server consumed the queue row — no {on:false} POST (see qmStop)
+    paintQmPill('matched');
+    var rid = String(st.matched_room);
+    if (st.role === 'host') {
+      // older player hosts: open the paired room under the server-minted rid, PRIVATE (not browsable), then the
+      // normal advertise/room-ping machinery lets the guest's auto-join find it.
+      openRoomWithId(rid, { priv: true, name: (ME.name + "'s Match").slice(0, 28) });
+      banner('mpx-setup-msg', 'Matched! Pick the song.');
+    } else {
+      // guest: ride the build60 ?mproom auto-join machinery — set the pending rid, ping hosts to re-advertise;
+      // onRoomMeta auto-joins (even private rooms) the moment the host's meta lands. The host may be up to one
+      // poll cycle behind us, so keep pinging briefly instead of one-shotting into silence.
+      _pendingRoomSpec = false;   // v405 review fix: a leftover ?spectate=1 boot flag must never make a matched guest join their own match as a SPECTATOR (host would wait forever)
+      _pendingRoomJoin = rid;
+      banner('mpx-lobby-msg', 'Matched! The host picks the song — READY up.');
+      if (lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} }
+      var tries = 0;
+      var t = setInterval(function () {
+        // v405 review fix: bailing because a DIFFERENT room got joined must also clear the stale pending rid —
+        // otherwise a later re-advertise of the dead qm room auto-joins the player into it without consent.
+        if (!_pendingRoomJoin || room.id) { clearInterval(t); if (room.id && _pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
+        if (++tries > 12) { clearInterval(t); _pendingRoomJoin = null; paintQmPill('off'); banner('mpx-lobby-msg', 'Couldn\'t reach your match — tap FIND ME A MATCH to retry.'); return; }
+        try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+      }, 2500);
+    }
+  }
+  function queueMatch(on) {
+    on = (on == null) ? !_qm.on : !!on;
+    if (!on) { qmStop(true); banner('mpx-lobby-msg', ''); return false; }
+    if (_qm.on) return true;   // already searching
+    if (room.id || tour.id || matchLive) { banner('mpx-lobby-msg', 'Leave your current room first, then search for a match.'); return false; }   // v405 review fix: searching from inside a room ends in the qmMatched stomp/landmine
+    if (!(window.RhythmCatalog && window.RhythmCatalog.matchQueue)) { banner('mpx-lobby-msg', 'Matchmaking isn\'t available right now.'); return false; }
+    open();   // raise the MP screen if needed (activation joins the lobby)
+    _qm.on = true;
+    paintQmPill('searching');
+    banner('mpx-lobby-msg', '🎯 Looking for an opponent…');
+    qmPost();
+    qmStartTimers();
+    return true;
+  }
+  // ?mpqm=resume one-shot pickup (fired from the lobby SUBSCRIBED handler): route a 'matched' pair by role,
+  // resume 'waiting' as a live SEARCHING state, or land on the lobby with a nudge.
+  function qmResume() {
+    try {
+      if (!(window.RhythmCatalog && window.RhythmCatalog.matchStatus)) return;
+      // v405 review fix: 4000ms auth-hydration grace (same as /review/resolve) — ?mpqm=resume fires seconds into
+      // boot, and a not-yet-restored supabase session would 401 and tell a SIGNED-IN player (who just clicked the
+      // site's MATCH FOUND CTA) to "sign in", dropping the pairing.
+      window.RhythmCatalog.matchStatus(4000).then(function (st) {
+        if (st && st.status === 'matched' && st.matched_room) { qmMatched(st); return; }
+        if (st && st.status === 'waiting') {
+          _qm.on = true;
+          paintQmPill('searching');
+          banner('mpx-lobby-msg', '🎯 Looking for an opponent…');
+          qmStartTimers();
+          return;
+        }
+        banner('mpx-lobby-msg', '🎯 Not searching right now — tap FIND ME A MATCH to start.');
+      }).catch(function (e) {
+        var msg = String((e && e.message) || '');
+        if (/\b401\b/.test(msg)) banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.');
+        else if (/\b404\b/.test(msg)) banner('mpx-lobby-msg', 'Matchmaking isn\'t live yet — check back soon.');   // build102x: deployed backend predates /match/* (see qmFail)
+        else banner('mpx-lobby-msg', 'Couldn\'t reach matchmaking — tap FIND ME A MATCH to retry.');
+      });
+    } catch (e) {}
+  }
+
   // ===================== BUILD8: ROOMS =====================
   function newRoomId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
   function gotoRooms(mode) {   // mode: 'browse' | 'create' | 'tour-create' (build9)
@@ -1566,12 +1703,21 @@
   }
 
   // ---- host: open / advertise / close ----
+  // build102x: openRoom's core now takes a FORCED rid + opts (matchmaking pairs land in a normal room whose rid is
+  // the server-minted matched_room — channels are unregistered strings, so any rid works). Normal openRoom behavior
+  // is byte-identical: it reads the create-form exactly as before and calls the same core with a generated id.
   function openRoom() {
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     var nm = ($('mpx-room-name') && $('mpx-room-name').value || '').trim().slice(0, 28) || (ME.name + "'s Room");
     var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
     var rcb = screen.querySelector('#mpx-room-combat button.active'); var combat = !!(rcb && rcb.getAttribute('data-combat') === 'on');   // build69: the host's per-room combat choice (the source of truth for every match in this room)
-    room = { id: newRoomId(), name: nm, priv: priv, combat: combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
+    openRoomWithId(newRoomId(), { name: nm, priv: priv, combat: combat });
+  }
+  function openRoomWithId(rid, opts) {
+    opts = opts || {};
+    if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
+    if (_qm.on) qmStop(true);   // v405 review fix: hosting a room cancels a live matchmaking search (a match landing mid-room stomps it). No-op on the qmMatched host path (_qm.on already false, so the MATCHED pill survives).
+    room = { id: rid, name: (opts.name || (ME.name + "'s Room")).slice(0, 28), priv: !!opts.priv, combat: !!opts.combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
     try { delete sel.audioUrl; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio
     joinRoomChannel(room.id, 'p1');
     reannounce();
@@ -1587,8 +1733,13 @@
   }
   function closeRoom(silent) {
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
+    try { paintQmPill(_qm.on ? 'searching' : 'off'); } catch (e) {}   // v405 review fix: leaving a matched qm room un-sticks the '🎯 MATCHED!' pill (pure pill-element UI — inert for normal rooms, where it's already 'off')
     if (room.id && room.show) {   // build102s: a closing SHOW room says goodbye — final live:false snap (spectator recovery, judge mandate) + heartbeat/persist teardown
       if (room.isHost) { matchId = null; matchLive = false; try { sendShowSnap(); } catch (e) {} }
+      // build102x: SITE CHIP — clear the Navbar live-match chip with the same finality as the live:false snap.
+      // backToLobby's show reroute funnels through closeRoom(), so this single hook covers both exits; /livematch/end
+      // is idempotent + accepts expired tokens, and catalog fire-and-forgets it (the close must never block).
+      try { if (room.isHost && window.RhythmCatalog && window.RhythmCatalog.livematchEnd) window.RhythmCatalog.livematchEnd(room.id); } catch (e) {}
       stopShowHeartbeat(); clearShowRoom();
       try { delete sel.audioUrl; } catch (e) {}   // review fix 1: the review audio dies with the show — it must never leak into a later normal match
       var _wy = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wy) _wy.textContent = 'YOU';   // undo the spectator-verdict relabel
@@ -1618,6 +1769,10 @@
           if (_showOpenT) { clearTimeout(_showOpenT); _showOpenT = 0; }
           try { broadcastSong(); } catch (e) {}
           sendShowSnap();
+          // build102x: SITE CHIP — the show room is now reachable by viewers → announce it on the site Navbar.
+          // This SUBSCRIBED branch is hit by BOTH openShowRoom (via _consumeShowRoom) and maybeReconnectShowRoom,
+          // so a host refresh re-announces too. Fire-and-forget inside catalog (token stays module-local there).
+          try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id); } catch (e) {}
         }
       }
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -1681,6 +1836,7 @@
   function joinRoom(rid, asSpec) {
     if (!supa || !lobbyCh) return;
     var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
+    if (_qm.on) qmStop(true);   // v405 review fix: joining a room cancels a live matchmaking search (mirror of openRoomWithId)
     if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
     room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
       show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
@@ -1761,6 +1917,7 @@
     // build60: an invite deep-link (?mproom=) auto-joins its target the moment the host's meta arrives — even private rooms.
     if (_pendingRoomJoin && p.rid === _pendingRoomJoin && !room.id) {
       var _asSpec = _pendingRoomSpec;   // build102: spectate deep-links must never take a player seat
+      _pendingRoomSpec = false;         // v405 review fix: one-shot BOOT flag — consumed here, never survives its first use (a stale true made a later matchmaking guest auto-join their own match as a spectator)
       _pendingRoomJoin = null; roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
       banner('mpx-lobby-msg', ''); joinRoom(p.rid, _asSpec); return;
     }
@@ -2127,9 +2284,13 @@
   function startShowHeartbeat() {
     stopShowHeartbeat();
     if (!room.show || !room.isHost) return;
+    var _lmTick = 0;
     _showHbT = setInterval(function () {
       if (!room.id || !room.isHost || !room.show) { stopShowHeartbeat(); return; }
       sendShowSnap(); persistShowRoom();
+      // v405: SITE-CHIP KEEPALIVE — the backend now expires an unrefreshed live_match after ~5min (ghost-chip TTL),
+      // so the host re-announces every 30th snap tick (= 120s). Idempotent server-side; fire-and-forget in catalog.
+      if (++_lmTick >= 30) { _lmTick = 0; try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id); } catch (e) {} }
       try { paintShowRoom(); } catch (e) {}   // keeps the 60s NUDGE re-arm honest without extra timers
     }, 4000);
     sendShowSnap();
@@ -4168,6 +4329,7 @@
 
   // build8: lobby action bar
   wire('mpx-act-quick', 'click', toggleQuickMatch);
+  wire('mpx-qm-pill', 'click', function () { queueMatch(!_qm.on); });   // build102x: server matchmaking toggle (OFF ↔ SEARCHING)
   wire('mpx-combat-toggle', 'click', toggleCombat);   // v254: P-vs-P / P-vs-E combat toggle (now lives in the "More" drawer)
   wire('mpx-act-open', 'click', function () { gotoRooms('create'); });   // legacy id (harmless no-op if absent)
   // build99h: TIER-2 "Play a friend" → same open-a-room flow as the old #mpx-act-open
@@ -4458,7 +4620,11 @@
   function syncActive() {
     var nowActive = screen.classList.contains('active');
     if (nowActive && !activeNow) { activeNow = true; onActivated(); }
-    else if (!nowActive && activeNow) { activeNow = false; if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; } }
+    else if (!nowActive && activeNow) {
+      activeNow = false;
+      try { qmStop(true); } catch (e) {}   // build102x: NEVER keep the matchmaking poll running behind a hidden MP screen; also clears my queue row ({on:false}). No-op unless searching (matched pairs already stopped it).
+      if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; }
+    }
   }
   try {
     var mo = new MutationObserver(syncActive);
@@ -4471,6 +4637,9 @@
   // the lobby's SUBSCRIBED handler, so without this a "JOIN THE MATCH" invite dead-ends on the main menu until the
   // player manually finds MULTIPLAYER. Mirrors the ?mpjoin= line above.
   else if (_pendingRoomJoin) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
+  // build102x: ?mpqm=resume (site MATCH FOUND CTA / Navbar toggle) — same boot auto-open; the lobby SUBSCRIBED
+  // handler then runs the one-shot qmResume() status pickup.
+  else if (_pendingQmResume) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
   // build42: reconnect to a bracket I was in if the tab reloaded (persisted < 90s ago) — surface MP, rejoin the channel, pull the snapshot
   else { try {
     if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500);
@@ -4484,6 +4653,7 @@
     getCombat: function () { return combatOn; },
     setCombat: function (on) { combatOn = !!on; try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {} paintCombatToggle(); return combatOn; },
     openShowRoom: openShowRoom,                                        // build102s: GO LIVE entry from the review launch card
+    queueMatch: queueMatch,                                            // build102x: server matchmaking toggle (site Navbar + lobby pill both land here)
     isShowOpen: function () { return !!(room && room.show && room.id); } };   // build102s: catalog.js return-pill guard reads this
   // build102s DEV HOOK (strip before launch with __rrDebug/__mpDev/__rrReview — it's on the CLAUDE.md strip list):
   // headless driver for the live-show flow — the real path otherwise needs an HMAC token + three browsers.
