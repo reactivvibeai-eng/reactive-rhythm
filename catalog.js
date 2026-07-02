@@ -516,9 +516,16 @@
   }
 
   // ---------- API client ----------
-  async function api(path, { method = 'GET', body = null, auth = false } = {}) {
+  async function api(path, { method = 'GET', body = null, auth = false, authWaitMs = 0 } = {}) {
     const headers = { 'content-type': 'application/json' };
-    if (auth) { const tk = await getToken(); if (tk) headers.authorization = 'Bearer ' + tk; }
+    if (auth) {
+      let tk = await getToken();
+      // build101: optional wait for the SHARED site session to hydrate — early-boot callers (review deep-launch)
+      // can run before supabase-js finishes restoring the localStorage session; don't 401 a signed-in host.
+      // (The site previously patched this in via patch-game-handoff.mjs — now native.)
+      if (!tk && authWaitMs > 0) { const t0 = Date.now(); while (!tk && Date.now() - t0 < authWaitMs) { await new Promise(r => setTimeout(r, 250)); tk = await getToken(); } }
+      if (tk) headers.authorization = 'Bearer ' + tk;
+    }
     const res = await fetch(API_BASE + path, {
       method, headers, body: body ? JSON.stringify(body) : undefined,
     });
@@ -1773,50 +1780,152 @@
   // ===========================================================================
   // BOOT
   // ===========================================================================
-  // build100h+ — "Play in Reactive Rhythm" HOST REVIEW handoff. A host clicks a button on the site that opens
-  // reactivvibeai.com/game?review=<signed token>. The token is OPAQUE to the game; we forward it to the catalog to
-  // resolve (keeps the audio URL + approval off the wire, lets the backend revoke). The resolved track plays in
-  // PREVIEW mode (scoring:'preview_only') — chart + audio + local HUD, but NO play_token / NO /plays / NO bonus mint.
+  // build101 — "Play in Reactive Rhythm" HOST REVIEW deep-launch. The host's button on the site opens
+  // /game/index.html?review=<signed token>[&return=/admin]. The token is OPAQUE to the game; we forward it to
+  // /review/resolve (keeps audio URLs off the wire, lets the backend revoke). Landing with a token SKIPS the
+  // start menu/jukebox entirely (the index.html start-intro IIFE early-exits on ?review/?skipIntro) and shows
+  // the dedicated LAUNCH CARD (#review-launch: art + title + difficulty + PLAY — the host picks, then plays).
+  // OWNER DECREE 2026-07-01: review runs are ALWAYS SCORED + leaderboard-eligible — the synthetic track no
+  // longer carries _preview, so recordLocal's gate (~1480) lets the run flow through career/best/bonus +
+  // POST /score + the results leaderboard. After results, an auto-return pill sends the host back to the show.
+  var _reviewMode = false;
+  var _reviewReturnPath = '/admin';                    // host panel — Live Control is /admin's default tab
+  function _reviewReturnUrl() {
+    var base = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SITE_BASE) || 'https://reactivvibeai.com';
+    return base + _reviewReturnPath;
+  }
+  function _rvEl(id) { return document.getElementById(id); }
+  function _rvState(msg) {   // error/notice state on the card: message replaces the interactive zone
+    var st = _rvEl('rvl-state'); if (st) { st.textContent = msg; st.style.display = 'block'; }
+    var p = _rvEl('rvl-play'); if (p) p.style.display = 'none';
+    var d = _rvEl('rvl-diff'); if (d) d.style.display = 'none';
+    var n = _rvEl('rvl-note'); if (n) n.style.display = 'none';
+    var ti = _rvEl('rvl-title'); if (ti && ti.textContent === 'Resolving track…') { ti.textContent = 'Review'; var ar = _rvEl('rvl-artist'); if (ar) ar.textContent = ''; }
+  }
+  function _openReviewLoading() {   // paint the card INSTANTLY (loading state) while /review/resolve runs
+    var ov = _rvEl('review-launch'); if (!ov) return;
+    ov.classList.add('on');
+    var b = _rvEl('rvl-back');
+    if (b && !b._wired) { b._wired = true; b.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; location.href = _reviewReturnUrl(); }); }
+  }
+  function _openReviewLaunch(track) {
+    var ov = _rvEl('review-launch'); if (!ov) { try { launchTrack(track); } catch (e) {} return; }
+    ov.classList.add('on');
+    var art = _rvEl('rvl-art'); if (art && track.artwork_url) art.src = track.artwork_url;
+    var ti = _rvEl('rvl-title'); if (ti) ti.textContent = track.title || 'Untitled';
+    var ar = _rvEl('rvl-artist'); if (ar) ar.textContent = track.artist_name || '';
+    // difficulty: drive the ENGINE directly — setDifficulty validates, persists rr_diff and syncs #diff-grid,
+    // and buildNotes reads the global at chart time, so setting it on click is all a launch needs.
+    var diff = _rvEl('rvl-diff');
+    if (diff) {
+      var cur = 'medium'; try { cur = (window.RhythmGame.getDifficulty && window.RhythmGame.getDifficulty()) || 'medium'; } catch (e) {}
+      diff.querySelectorAll('button').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-d') === cur);
+        if (!b._wired) {
+          b._wired = true;
+          b.addEventListener('click', function () {
+            try { window.RhythmGame.setDifficulty(b.getAttribute('data-d')); } catch (e) {}
+            diff.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+          });
+        }
+      });
+    }
+    var play = _rvEl('rvl-play');
+    if (play) {
+      play.disabled = false;
+      if (!play._wired) {
+        play._wired = true;
+        play.addEventListener('click', function (ev) {
+          if (ev && ev.isTrusted === false) return;   // the site's old splash patch fires SYNTHETIC pointerdowns — never auto-start off one
+          ov.classList.remove('on');
+          try { launchTrack(track); }
+          catch (e) { try { window.RhythmGame.playUrl(trackAudioUrl(track), { id: track.id, title: track.title, artist: track.artist_name, artwork: track.artwork_url, genre: track.genre }); } catch (e2) {} }
+        });
+      }
+    }
+  }
+  // ---- results auto-return ("Returning to the show in Ns") — armed only while the review track is current ----
+  var _rvTimer = 0, _rvPill = null;
+  function _cancelReturnCountdown() { if (_rvTimer) { clearInterval(_rvTimer); _rvTimer = 0; } if (_rvPill) { try { _rvPill.remove(); } catch (e) {} _rvPill = null; } }
+  function _startReturnCountdown() {
+    _cancelReturnCountdown();
+    var n = 10;
+    var pill = document.createElement('div'); pill.id = 'rvl-return';
+    pill.innerHTML = 'Returning to the show in <b id="rvl-return-n">' + n + '</b>s';
+    var stay = document.createElement('button'); stay.type = 'button'; stay.textContent = 'STAY';
+    var go = document.createElement('button'); go.type = 'button'; go.textContent = 'GO NOW'; go.className = 'go';
+    pill.appendChild(stay); pill.appendChild(go);
+    document.body.appendChild(pill); _rvPill = pill;
+    stay.addEventListener('click', function (ev) { ev.stopPropagation(); _cancelReturnCountdown(); });
+    go.addEventListener('click', function (ev) { ev.stopPropagation(); if (ev && ev.isTrusted === false) return; _cancelReturnCountdown(); location.href = _reviewReturnUrl(); });
+    _rvTimer = setInterval(function () {
+      n--;
+      var el = document.getElementById('rvl-return-n'); if (el) el.textContent = n;
+      if (n <= 0) { _cancelReturnCountdown(); location.href = _reviewReturnUrl(); }
+    }, 1000);
+  }
+  function _setupReviewReturn() {
+    var res = document.getElementById('results'); if (!res || res._rvObs) return; res._rvObs = true;
+    new MutationObserver(function () {
+      var on = res.classList.contains('active') && currentTrack && currentTrack._review;
+      if (on) _startReturnCountdown(); else if (!res.classList.contains('active')) _cancelReturnCountdown();
+    }).observe(res, { attributes: true, attributeFilter: ['class'] });
+    // any interaction WITH the results screen = "I'm not done here" → cancel (PLAY AGAIN / leaderboard reading)
+    res.addEventListener('pointerdown', function () { _cancelReturnCountdown(); }, true);
+    window.addEventListener('keydown', function () { if (_rvTimer) _cancelReturnCountdown(); }, true);
+  }
   async function _resolveReview(token) {
-    if (!token || !API_BASE) return;
+    if (!token || !API_BASE) { _rvState('Missing review link — head back to the show and press Play in Reactive Rhythm again.'); return; }
     try {
-      var r = await api('/review/resolve?token=' + encodeURIComponent(token), { auth: true });
-      if (!r || !r.track_id) return;
+      var r = await api('/review/resolve?token=' + encodeURIComponent(token), { auth: true, authWaitMs: 4000 });
+      if (!r || !r.track_id) { _rvState('Couldn’t open this review track.'); return; }
       var aurl = r.analysis_url || '';                       // the decodable .m4a (chartable) — NOT the .m3u8 stream
       if (!aurl || /\.m3u8(\?|$)/i.test(aurl)) {             // no decodable audio → can only WATCH the stream
-        if (r.stream_url) { try { openWatch(Object.assign({ id: r.track_id }, r), r.stream_url); } catch (e) {} }
-        else { try { window.RhythmGame.showToast && window.RhythmGame.showToast('This review track isn’t playable yet', 'neutral'); } catch (e) {} }
+        if (r.stream_url) { var ovx = _rvEl('review-launch'); if (ovx) ovx.classList.remove('on'); try { openWatch(Object.assign({ id: r.track_id }, r), r.stream_url); } catch (e) {} }
+        else _rvState('This track isn’t playable yet — the audio is still processing. Try again in a minute.');
         return;
       }
-      // build100q (#review): OPEN THE SONG SHEET (difficulty grid + environment/level picker) instead of playing
-      // immediately — the host asked to SEE the song, pick how hard + which level, THEN play. A synthetic track carries
-      // the decodable audio in analysis_url (→ trackReady + trackAudioUrl) + chart_status:'pending' (in-browser chart)
-      // + _preview:true so the sheet's Play path charts it but recordLocal/onSubmitResult skip ALL persistence
-      // (career/best/bonus + /plays + /score) via the currentTrack._preview gate (~1474). The run is NOT scored.
       var _revTrack = {
         id: r.track_id, title: r.title, artist_name: r.artist_name, artist_credit_name: r.artist_name,
         artwork_url: r.artwork_url, genre: r.genre, duration_seconds: r.duration_seconds || 0,
         audio_url: aurl, analysis_url: aurl, chart_status: 'pending',
-        _preview: true, _review: true
+        _review: true                                        // SCORED (owner decree) — no _preview flag, recordLocal runs in full
       };
-      try { openSheet(_revTrack); } catch (e2) { window.RhythmGame.playUrl(aurl, { id: r.track_id, title: r.title, artist: r.artist_name, artwork: r.artwork_url, genre: r.genre, preview: true }); }
-      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review track — pick difficulty + level, then Play (not scored)', 'neutral'); } catch (e) {}
-      // optional, fire-and-forget: log a preview use (auth optional, endpoint already live).
+      _setupReviewReturn();
+      _openReviewLaunch(_revTrack);
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review track — pick a difficulty and PLAY. This run is scored.', 'neutral'); } catch (e) {}
+      // fire-and-forget use log (event_type stays 'preview' — the only game_track_uses values the backend knows; review rides the meta)
       try { if (r.track_id) logUse(r.track_id, 'preview', { review: true }); } catch (e) {}
     } catch (e) {
       var msg = String((e && e.message) || '');
-      var t = /\b401\b|expired/i.test(msg) ? 'This review link expired — ask for a fresh one'
-            : (/\b403\b/.test(msg) ? 'This account isn’t a review host' : 'Couldn’t open the review track');
+      var t = /\b401\b|expired/i.test(msg) ? 'This review link expired — head back to the show and press Play in Reactive Rhythm again.'
+            : (/\b403\b/.test(msg) ? 'This review link belongs to the host who created it — sign in on ReactivVibe as that host, then retry.'
+            : 'Couldn’t open the review track. Check you’re signed in on ReactivVibe, then retry from the show panel.');
+      _rvState(t);
       try { window.RhythmGame.showToast && window.RhythmGame.showToast(t, 'error'); } catch (e2) {}
     }
   }
+  // dev hook (strip at launch with __rrDebug & co) — lets a headless preview drive the card without a real token
+  try { window.__rrReview = { open: _openReviewLaunch, loading: _openReviewLoading, state: _rvState, arm: _startReturnCountdown, cancel: _cancelReturnCountdown, setup: _setupReviewReturn }; } catch (e) {}
+
   async function boot() {
     if (!window.RhythmGame) { console.error('engine not loaded'); return; }
+    // build101: the review deep-launch boots FIRST and IN PARALLEL with the catalog fetch — the card needs no
+    // library, and the old serial order painted the review seconds late behind the full paged /tracks crawl.
+    var _q = new URLSearchParams(location.search);
+    var _rev = _q.get('review'), _revP = null;
+    if (_rev) {
+      _reviewMode = true;
+      var _ret = _q.get('return');                           // optional same-origin return path (default /admin)
+      if (_ret && /^\/[A-Za-z0-9._~\-\/]*$/.test(_ret) && _ret.indexOf('//') !== 0) _reviewReturnPath = _ret;
+      _openReviewLoading();
+      _revP = _resolveReview(_rev);
+    }
     await loadCatalog();
     renderHome();
 
     // deep link: /play?trackId=<uuid> → open that song's sheet directly
-    const trackId = new URLSearchParams(location.search).get('trackId');
+    const trackId = _q.get('trackId');
     if (trackId && API_BASE) {
       try {
         const t = await api('/track/' + trackId, { auth: true });
@@ -1827,8 +1936,7 @@
       } catch (e) { console.warn('deep-link track load failed', e); }
     }
 
-    // deep link: /game?review=<signed token> → host review preview (resolve + play, not scored)
-    try { var _rev = new URLSearchParams(location.search).get('review'); if (_rev) await _resolveReview(_rev); } catch (e) {}
+    if (_revP) { try { await _revP; } catch (e) {} }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

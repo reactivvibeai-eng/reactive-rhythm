@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=397" />
+<link rel="stylesheet" href="jukebox.css?v=398" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2975,6 +2975,33 @@
   /* ============================================================
      SONG SHEET
      ============================================================ */
+  /* build101 REVIEW DEEP-LAUNCH — full-screen launch card for /game?review=<token> ("Play in Reactive Rhythm").
+     Sits above every screen (start stays suppressed); art + difficulty + PLAY; catalog.js drives it. */
+  #review-launch { position: fixed; inset: 0; z-index: 200; display: none; }
+  #review-launch.on { display: block; }
+  #review-launch .rvl-veil { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 0%, rgba(40,16,14,0.55), rgba(10,7,6,0.94) 62%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  #review-launch .rvl-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(92vw, 440px); max-height: 92vh; overflow-y: auto; background: linear-gradient(180deg,#170b0c,#100a0c); border: 1px solid rgba(224,169,63,0.35); border-radius: 22px; padding: 26px 28px 22px; box-shadow: 0 40px 120px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,31,46,0.07); text-align: center; }
+  #review-launch .rvl-badge { display: inline-flex; align-items: center; gap: 7px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.22em; color: var(--gold, #e0a93f); border: 1px solid rgba(224,169,63,0.5); background: rgba(224,169,63,0.08); border-radius: 999px; padding: 6px 14px; margin-bottom: 16px; }
+  #review-launch .rvl-art { width: 132px; height: 132px; border-radius: 16px; object-fit: cover; margin: 0 auto 14px; display: block; border: 1px solid rgba(222,216,212,0.14); box-shadow: 0 14px 40px rgba(0,0,0,0.6); background: #1a100e; }
+  #review-launch .rvl-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 22px; color: #f3ece8; line-height: 1.2; margin-bottom: 4px; overflow-wrap: anywhere; }
+  #review-launch .rvl-artist { font-family: 'Chakra Petch', monospace; font-size: 13px; color: rgba(238,230,226,0.62); margin-bottom: 18px; }
+  #review-launch .rvl-diff { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
+  #review-launch .rvl-diff button { flex: 1; max-width: 118px; padding: 11px 0; border-radius: 12px; border: 1px solid rgba(222,216,212,0.16); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.6); font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.14em; cursor: pointer; transition: border-color .12s ease, color .12s ease, transform .12s ease; }
+  #review-launch .rvl-diff button:hover { transform: translateY(-1px); border-color: rgba(224,218,214,0.4); color: #eee6e2; }
+  #review-launch .rvl-diff button.active { border-color: var(--crimson, #ff2a30); color: #fff; background: rgba(255,42,48,0.14); box-shadow: 0 0 18px -6px rgba(255,42,48,0.55); }
+  #review-launch .rvl-play { width: 100%; padding: 16px 0; border-radius: 14px; border: 1px solid rgba(255,42,48,0.65); background: linear-gradient(180deg, #ff2a30, #b3121c); color: #fff; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.16em; cursor: pointer; box-shadow: 0 12px 34px -10px rgba(255,31,46,0.65); transition: transform .12s ease, box-shadow .12s ease; }
+  #review-launch .rvl-play:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 18px 44px -10px rgba(255,31,46,0.8); }
+  #review-launch .rvl-play:disabled { opacity: 0.45; cursor: default; }
+  #review-launch .rvl-note { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); margin-top: 12px; letter-spacing: 0.05em; }
+  #review-launch .rvl-state { display: none; font-family: 'Chakra Petch', monospace; font-size: 13px; line-height: 1.6; color: rgba(238,230,226,0.78); padding: 8px 4px 0; }
+  #review-launch .rvl-back { margin-top: 14px; background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.08em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
+  #review-launch .rvl-back:hover { color: #eee6e2; }
+  /* review results: auto-return pill ("Returning to the show in Ns") */
+  #rvl-return { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 210; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(180deg,#1b0d0e,#120a0c); border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 16px 44px rgba(0,0,0,0.65); font-family: 'Chakra Petch', monospace; font-size: 13px; color: #eee6e2; white-space: nowrap; }
+  #rvl-return b { font-family: 'Oxanium', sans-serif; color: var(--gold, #e0a93f); }
+  #rvl-return button { border-radius: 999px; border: 1px solid rgba(222,216,212,0.25); background: rgba(255,255,255,0.04); color: #eee6e2; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 7px 13px; cursor: pointer; }
+  #rvl-return button.go { border-color: rgba(255,42,48,0.6); background: rgba(255,42,48,0.15); }
+
   .song-sheet {
     position: fixed; inset: 0;
     z-index: 150;
@@ -5165,6 +5192,30 @@
   </div>
 
   <!-- ============================================================
+       REVIEW DEEP-LAUNCH CARD (build101) — /game?review=<token>
+       The host's "Play in Reactive Rhythm" lands HERE: no start
+       menu, no jukebox. catalog.js fills + drives it.
+       ============================================================ -->
+  <div id="review-launch" role="dialog" aria-modal="true" aria-labelledby="rvl-title">
+    <div class="rvl-veil"></div>
+    <div class="rvl-card">
+      <div class="rvl-badge">⚡ LIVE REVIEW</div>
+      <img class="rvl-art" id="rvl-art" alt="" src="assets/atom.png" />
+      <div class="rvl-title" id="rvl-title">Resolving track…</div>
+      <div class="rvl-artist" id="rvl-artist">hold tight</div>
+      <div class="rvl-diff" id="rvl-diff" role="radiogroup" aria-label="Difficulty">
+        <button type="button" data-d="easy">EASY</button>
+        <button type="button" data-d="medium" class="active">MEDIUM</button>
+        <button type="button" data-d="hard">HARD</button>
+      </div>
+      <button type="button" class="rvl-play" id="rvl-play" disabled>▶&nbsp;&nbsp;PLAY</button>
+      <div class="rvl-note" id="rvl-note">Scored run — counts on the leaderboard.</div>
+      <div class="rvl-state" id="rvl-state"></div>
+      <button type="button" class="rvl-back" id="rvl-back">← Back to the show</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
        CALIBRATION OVERLAY
        ============================================================ -->
   <div class="screen calib-screen" id="calib-screen" style="background: rgba(10,7,6,0.92); backdrop-filter: blur(20px);">
@@ -6157,7 +6208,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=397"></script>
+<script src="telemetry.js?v=398"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6327,14 +6378,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=397"></script>
-<script src="game.js?v=397"></script>
-<script src="procbg.js?v=397"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=397"></script>
-<script src="catalog.js?v=397"></script>
-<script src="multiplayer.js?v=397"></script>
-<script src="share.js?v=397"></script>
-<script src="couch.js?v=397"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=398"></script>
+<script src="game.js?v=398"></script>
+<script src="procbg.js?v=398"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=398"></script>
+<script src="catalog.js?v=398"></script>
+<script src="multiplayer.js?v=398"></script>
+<script src="share.js?v=398"></script>
+<script src="couch.js?v=398"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -9432,6 +9483,22 @@
   var menu = document.getElementById('menu');
   var tap = document.getElementById('start-tap');
   if (!start) return;
+
+  // build101 REVIEW DEEP-LAUNCH: a site handoff (?review= / ?skipIntro=1) skips the tap-to-begin title NATIVELY
+  // (replaces the site's synthetic-pointerdown patch, which could stray-click the new launch card). review= → the
+  // launch card owns the screen (no hub); bare skipIntro=1 (e.g. /play?trackId=…) still lands on the hub. Early
+  // return = the embers/flames/tap/key listeners below are never attached at all.
+  try {
+    var _q0 = new URLSearchParams(location.search);
+    if (_q0.get('review') || _q0.get('skipIntro') === '1') {
+      start.classList.remove('active');
+      if (!_q0.get('review')) {
+        var _goHub = function () { if (window.RhythmHub && window.RhythmHub.show) { try { window.RhythmHub.show(); } catch (e) {} } else { setTimeout(_goHub, 60); } };
+        _goHub();
+      }
+      return;
+    }
+  } catch (e) {}
 
   // generate rising ember particles
   var host = document.getElementById('start-embers');

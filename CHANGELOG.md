@@ -15,6 +15,31 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build101 — REVIEW DEEP-LAUNCH: "Play in Reactive Rhythm" → launch card → SCORED run → return to show  ✅ verified (?v=398)
+Phase 1 of the site↔game integration (owner-locked spec + 4-agent Phase-0 recon of the Lovable site code, the
+production DB and the game). The host's button used to dump the reviewer on the title screen with the song sheet
+floating over it (3 clicks to play, run un-scored, no way back). Now `/game/index.html?review=<token>` is a real
+deep-launch:
+- **Native intro skip** (index.html start-intro IIFE early-exit on `?review`/`?skipIntro=1`) — replaces the site's
+  synthetic-pointerdown patch (`patch-game-handoff.mjs`), which could stray-click UI. Bare `skipIntro=1` still lands
+  on the hub (the `/play?trackId=` path).
+- **Launch card** `#review-launch` (full-screen, brand black/crimson/gold): artwork + title/artist + LIVE REVIEW badge
+  + EASY/MEDIUM/HARD (drives `RhythmGame.setDifficulty` — host picks) + one PLAY → `launchTrack`. Paints INSTANTLY
+  (review resolve now runs in PARALLEL with the catalog crawl — was serialized behind the full paged /tracks fetch).
+  Graceful states: loading, expired link, wrong-host (403), audio-still-processing, HLS→watch fallback.
+  PLAY/back ignore untrusted (synthetic) clicks so the old site patch can never auto-start a run.
+- **ALWAYS SCORED** (owner decree): the synthetic review track no longer carries `_preview`, so `recordLocal` runs in
+  full — career/best/Bonus + POST /score + the results leaderboard. No backend change needed (in-browser-charted
+  tracks use the sign-in-only /score path).
+- **Auto-return to the show**: results in review mode grow a "Returning to the show in 10s — STAY / GO NOW" pill
+  (armed via a #results observer only while `currentTrack._review`; any interaction cancels; replay re-arms).
+  Destination = `&return=<same-origin path>` (validated) else `/admin` (the host panel).
+- `api()` gained native `authWaitMs` (early-boot resolve waits ≤4s for the shared site session to hydrate — was a
+  site-side patch). Dev hook `window.__rrReview` (strip at launch with the others).
+Verified live (?v=398): boot with a bad token → card + error state + start screen suppressed, no console errors;
+happy path via hook → card fills, difficulty syncs the engine, synthetic PLAY blocked, countdown pill + STAY cancel.
+Site side (Lovable): re-run sync-game.mjs, drop the splash-bypass patch, optionally append `&return=`.
+
 ### build100r — strum STILL not firing on a guitar controller (POV-hat strum the old detector missed)  ✅ logic-verified (?v=396)
 Playtest follow-up: on v395, "Press to hit" works but **strum still does nothing** with the guitar controller. Deeper
 root cause: this controller's strum bar is a **POV-hat/axis whose UNPRESSED value is a driver-specific NON-zero** (e.g.
