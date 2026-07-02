@@ -2468,6 +2468,8 @@
 
   async function endGame() {
     stopGame();
+    // build102y step6: the BEAT THAT ghost target lives for exactly one run — clear it (and its pill) at song end
+    try { if (_ghostTarget) { _ghostTarget = null; const _ge2 = $('ghost-target'); if (_ge2) _ge2.remove(); } } catch (e) {}
     // build35 (audit P0): EXCLUDE bombs from the scored-note total. Bombs are dodged (hit='avoided'),
     // never counted in perfect/great/good — counting them in `total` deflated accuracy/grade (a clean
     // Medium/Hard dodge-all run read ~96%, suppressing S / 100% / full-combo) AND over-reported
@@ -4140,10 +4142,32 @@
       el.classList.add(big ? 'pop-big' : 'pop');
     } catch (e) {}
   }
+  // build102y step6: BEAT THAT ghost target — DISPLAY-ONLY (a gold HUD pill + one BEAT IT! flash). Zero scoring
+  // interaction: nothing but updateHUD ever reads it. catalog.launchTrack sets it on ghost-duel launches and
+  // NULLS it on every plain launch (so a stale target can never leak into an unrelated run); endGame clears it
+  // too — the target lives for exactly one run.
+  let _ghostTarget = null, _ghostBeat = false;
+  window.RhythmGame.setGhostTarget = function (t) {
+    _ghostTarget = (t && +t.score > 0) ? { score: Math.floor(+t.score), name: String(t.name || 'RIVAL').slice(0, 14) } : null;
+    _ghostBeat = false;
+    if (!_ghostTarget) { try { const _ge = $('ghost-target'); if (_ge) _ge.remove(); } catch (e) {} }
+  };
   function updateHUD() {
     // build70 (launch-audit P3): null-guard the early HUD dereferences (its second half already does) so a
     // missing id after the /play markup move can't throw inside the rAF loop and kill the frame.
     const _hs = $('hud-score'); if (_hs) _hs.textContent = Math.floor(scoreDisplay).toLocaleString();   // animated value (loop rolls it up)
+    // build102y step6: the ghost-duel target line (lazy DOM — only ghost runs pay for it)
+    if (_ghostTarget) {
+      let _gt = $('ghost-target');
+      if (!_gt) {
+        _gt = document.createElement('div'); _gt.id = 'ghost-target';
+        _gt.style.cssText = "position:absolute;top:64px;left:50%;transform:translateX(-50%);z-index:60;font-family:'Chakra Petch',monospace;font-size:12px;letter-spacing:0.08em;color:#e0a93f;background:rgba(20,12,6,0.55);border:1px solid rgba(224,169,63,0.5);border-radius:999px;padding:4px 12px;pointer-events:none;white-space:nowrap;";
+        const _gh = $('game'); if (_gh) _gh.appendChild(_gt); else document.body.appendChild(_gt);
+      }
+      if (!_ghostBeat && score >= _ghostTarget.score) { _ghostBeat = true; flashJudgment('BEAT IT! 🏆', '#ffd98a'); }
+      _gt.textContent = _ghostBeat ? ('✓ BEAT ' + _ghostTarget.name + ' — ' + _ghostTarget.score.toLocaleString())
+                                   : ('🎯 BEAT ' + _ghostTarget.name + ' — ' + Math.floor(score).toLocaleString() + ' / ' + _ghostTarget.score.toLocaleString());
+    }
     // build85 (Phase 3.1): the instant the live run passes the stored best, flip the chip to "★ BEAT BEST"
     const _be2 = $('hud-best');
     if (_be2 && !_be2.hidden && _be2._best && score > _be2._best && !_be2.classList.contains('beaten')) { _be2.classList.add('beaten'); _be2.textContent = '★ BEAT BEST'; }

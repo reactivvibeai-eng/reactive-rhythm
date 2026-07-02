@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=410" />
+<link rel="stylesheet" href="jukebox.css?v=411" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5026,6 +5026,8 @@
         </div>
         <!-- build60: explicit, updating waiting status + a never-stuck path (invite a friend / add a CPU) -->
         <div class="mpx-waitstatus" id="mpx-waitstatus" hidden>Waiting for an opponent…</div>
+        <!-- build102y step6: BEAT THAT on the waiting card — painted in endSpectate (post-run spectator funnel) -->
+        <button class="ghost-btn" id="mpx-beat-room" style="margin:8px auto 0;display:block;" hidden>🎯 BEAT THAT</button>
         <div class="mpx-invitebar" id="mpx-invitebar" hidden>
           <div class="mpx-invite-code-row" id="mpx-invite-code-row" hidden>
             <span class="mpx-invite-lbl">ROOM CODE</span>
@@ -5096,6 +5098,8 @@
           <!-- build102y step2: share + battle link — labels/visibility painted in showWinner (loser gets RUN IT BACK) -->
           <button class="ghost-btn" id="mpx-share-w" hidden>📸 SHARE THE W</button>
           <button class="ghost-btn" id="mpx-copy-battle" hidden>🔗 COPY BATTLE LINK</button>
+          <!-- build102y step6: BEAT THAT — SPECTATOR verdict only (painted in _renderSpecVerdict, hidden by showWinner) -->
+          <button class="ghost-btn" id="mpx-beat-that" hidden>🎯 BEAT THAT</button>
           <button class="ghost-btn" id="mpx-backlobby">BACK TO LOBBY</button>
           <button class="ghost-btn" id="mpx-leave-win">LEAVE</button>
         </div>
@@ -6288,6 +6292,8 @@
         <button class="ghost-btn quiet" id="results-career">CAREER</button>
         <button class="ghost-btn quiet" id="results-store" title="Spend your Sparks on guitars & levels"><span class="rs-store-glyph" aria-hidden="true">◆</span> STORE</button>
         <button class="ghost-btn quiet" id="results-menu">RETURN TO MENU</button>
+        <!-- build102y step6: back to the live show after a BEAT THAT ghost run — painted by multiplayer.js (room still joined) -->
+        <button class="ghost-btn quiet" id="res-return-show" hidden>⟵ RETURN TO THE SHOW</button>
       </div>
       <div class="results-keys" style="margin-top:14px;">
         <kbd>ENTER</kbd> Play again · <kbd>ESC</kbd> Menu
@@ -6355,7 +6361,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=410"></script>
+<script src="telemetry.js?v=411"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6525,14 +6531,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=410"></script>
-<script src="game.js?v=410"></script>
-<script src="procbg.js?v=410"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=410"></script>
-<script src="catalog.js?v=410"></script>
-<script src="multiplayer.js?v=410"></script>
-<script src="share.js?v=410"></script>
-<script src="couch.js?v=410"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=411"></script>
+<script src="game.js?v=411"></script>
+<script src="procbg.js?v=411"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=411"></script>
+<script src="catalog.js?v=411"></script>
+<script src="multiplayer.js?v=411"></script>
+<script src="share.js?v=411"></script>
+<script src="couch.js?v=411"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

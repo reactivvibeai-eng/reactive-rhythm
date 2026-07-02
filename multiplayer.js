@@ -1483,6 +1483,7 @@
     if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); _sw.textContent = draw ? '📸 SHARE THE DRAW' : (win ? '📸 SHARE THE W' : '📸 RUN IT BACK'); }
     var _cb = $('mpx-copy-battle');
     if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; _cb.textContent = '🔗 COPY BATTLE LINK'; _cb.classList.remove('copied'); }
+    { var _btw = $('mpx-beat-that'); if (_btw) _btw.hidden = true; }   // build102y step6: BEAT THAT is the SPECTATOR verdict's button — a player's own verdict never shows it
     // build102y step3: lifetime head-to-head under the scorecard — read AFTER the record above so this game
     // is already in the book (the "flip"). Trailing = a REVENGE? nudge. esc() on the stored name (peer-supplied).
     var _h2 = $('mpx-h2h');
@@ -1937,6 +1938,7 @@
     // build102s: in a SHOW room the generic opponent bar is hidden — the challenger seat is host-granted (seat
     // policy) and VS-CPU would closeRoom() and kill every watcher. The show seat card replaces it.
     if (bar) bar.hidden = !!room.show;
+    { var _bbr = $('mpx-beat-room'); if (_bbr) _bbr.hidden = true; }   // build102y step6: default-hidden — only endSpectate's paint (right after this) may show it
     if (room.isHost && room.id) {
       if (codeRow) codeRow.hidden = false;
       if (codeEl) codeEl.textContent = roomCode(room.id);
@@ -2240,6 +2242,7 @@
     watchCh.on('broadcast', { event: 'final' }, function (m) {
       var _fp = m.payload || {};
       if (_specShowSolo) {   // build102s: a SOLO show run has no verdict for watchers — back to the waiting room (the host returns there for the next run)
+        _lastShowFinal = { name: String(_fp.name || 'The host').slice(0, 14), score: +(_fp.score || 0) };   // build102y step6: BEAT THAT reads this at the waiting card
         endSpectate('✓ ' + ((_fp.name || 'The host') + ' finished — ' + Number(_fp.score || 0).toLocaleString() + '. Waiting for the next run…'));
         return;
       }
@@ -2459,12 +2462,42 @@
     set('mpx-sc-opp-who', b ? String(b.name || 'P2').slice(0, 14) : '…');
     set('mpx-sc-opp', b ? Number(sb).toLocaleString() : '…');
     set('mpx-sc-opp-meta', b ? (((b.acc != null) ? b.acc + '% · ' : '') + (b.combo || 0) + 'x' + (b.grade ? ' · ' + b.grade : '')) : 'no result received');
+    // build102y step6: BEAT THAT — the spectator can challenge the WINNING score on the same track. Gated on
+    // sel.audioUrl (the decks only mount on a decoded chart, so a visible button = proven playable track).
+    _lastShowFinal = { name: String((w && w.name) || 'RIVAL').slice(0, 14), score: +((w && w.score) || 0) };
+    var _bt = $('mpx-beat-that');
+    if (_bt) {
+      var _showBt = !!(sel && sel.audioUrl && _lastShowFinal.score > 0);
+      _bt.hidden = !_showBt;
+      if (_showBt) _bt.textContent = '🎯 BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+    }
     step('winner');
     screen.classList.add('active'); activeNow = true;
     if (_specStage) {   // build102t (judge): don't yank the dual-deck view mid-verdict — banner it on the stage ~4s, then reveal the winner card beneath
       var mv = $('mss-verdict'); if (mv) { mv.hidden = false; mv.textContent = (v && v.textContent) || 'MATCH OVER'; }
       var _vg = _specGen;   // build102u (review fix 3): if the host rematches inside the 4s, this timer must not kill the NEW run's stage
       setTimeout(function () { if (_vg !== _specGen) return; try { _unmountSpecStage(); } catch (e) {} }, 4000);
+    }
+  }
+  // build102y step6: BEAT THAT — ghost-duel launch off a show run. Prefer the catalog track (launchTrack routes
+  // providers and carries the display-only ghost opts into game.js); fall back to the proven buffered URL with
+  // the hook set directly. The ROOM channel stays joined throughout (endSpectate never leaves it), so RETURN TO
+  // THE SHOW on the results screen can drop the player straight back into the waiting room.
+  var _lastShowFinal = null;
+  function _beatThatLaunch(target) {
+    if (!target || !(target.score > 0) || !sel || !sel.audioUrl) return;
+    var launched = false;
+    try {
+      var RC = window.RhythmCatalog;
+      if (RC && RC.launchTrack && sel.trackId) {
+        var tr = null; try { tr = (RC.allTracks() || []).filter(function (t) { return t && t.id === sel.trackId; })[0] || null; } catch (e) {}
+        if (tr) launched = !!RC.launchTrack(tr, { targetScore: target.score, targetName: target.name });
+      }
+    } catch (e) {}
+    if (!launched) {
+      try { if (window.RhythmGame.setGhostTarget) window.RhythmGame.setGhostTarget({ score: target.score, name: target.name }); } catch (e) {}
+      try { window.RhythmGame.playUrl(sel.audioUrl, { id: sel.trackId || null, title: sel.title, artist: sel.artist, artwork: sel.art }); launched = true; }
+      catch (e2) { try { window.RhythmGame.setGhostTarget && window.RhythmGame.setGhostTarget(null); } catch (e3) {} banner('mpx-setup-msg', 'Couldn\'t start the track — try again.'); }
     }
   }
   // unwind a spectator's watch channel back to the room-waiting screen (room channel stays joined)
@@ -2482,6 +2515,14 @@
       step('setup'); enterRoomWaiting();
       screen.classList.add('active'); activeNow = true;
       if (msg) banner('mpx-setup-msg', msg);
+      // build102y step6: BEAT THAT on the waiting card — the watcher can play the track vs the run they just
+      // saw (painted AFTER enterRoomWaiting, which hides it by default so a fresh room never shows a stale one).
+      var _bb = $('mpx-beat-room');
+      if (_bb) {
+        var _showBb = !!(room.show && _lastShowFinal && _lastShowFinal.score > 0 && sel && sel.audioUrl);
+        _bb.hidden = !_showBb;
+        if (_showBb) _bb.textContent = '🎯 BEAT THAT — play it vs ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+      }
     } else { step('lobby'); }
   }
 
@@ -4577,6 +4618,30 @@
   // build102y step5: open-the-room controls (elements only ever visible while room.show)
   wire('mpx-show-swap', 'click', function (ev) { if (ev && ev.isTrusted === false) return; swapInArtist(); });
   wire('mpx-show-take', 'click', function (ev) { if (ev && ev.isTrusted === false) return; toggleTakeStage(); });
+  // build102y step6: BEAT THAT — spectator verdict (tear the watch channel first; the ROOM stays joined) + the
+  // waiting-card variant. isTrusted-guarded like every auto-fire-able show control.
+  wire('mpx-beat-that', 'click', function (ev) {
+    if (ev && ev.isTrusted === false) return;
+    var t = _lastShowFinal; if (!t) return;
+    try { endSpectate(); } catch (e) {}
+    _beatThatLaunch(t);
+  });
+  wire('mpx-beat-room', 'click', function (ev) { if (ev && ev.isTrusted === false) return; if (_lastShowFinal) _beatThatLaunch(_lastShowFinal); });
+  // build102y step6: RETURN TO THE SHOW — the ghost run ends on the engine's results screen while the room
+  // channel is still joined; this drops the watcher straight back into the waiting room. The observer paints
+  // the button only when a show room is actually still alive (never a dead-room dead-end).
+  wire('res-return-show', 'click', function () {
+    var _res = document.getElementById('results'); if (_res) _res.classList.remove('active');
+    if (room.id && room.ch && room.show) { step('setup'); enterRoomWaiting(); screen.classList.add('active'); activeNow = true; }
+    else open();
+  });
+  try {
+    var _resEl = document.getElementById('results');
+    if (_resEl) new MutationObserver(function () {
+      var b = $('res-return-show'); if (!b) return;
+      b.hidden = !(_resEl.classList.contains('active') && room.id && room.ch && room.show && !room.isHost);
+    }).observe(_resEl, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
   wire('mpx-ready', 'click', toggleReady);
   wire('mpx-diff', 'click', function (e) {

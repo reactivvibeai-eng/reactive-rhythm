@@ -1422,6 +1422,9 @@
     if (!(opts && opts.keepEnvironment)) {
       try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
     }
+    // build102y step6: BEAT THAT ghost target — display-only HUD hook (gold pill + BEAT IT! flash in game.js).
+    // Set on ghost-duel launches, NULLED on every plain launch so a stale target can't leak into the next run.
+    try { if (window.RhythmGame.setGhostTarget) window.RhythmGame.setGhostTarget((opts && opts.targetScore) ? { score: opts.targetScore, name: opts.targetName } : null); } catch (e) {}
     const liveTrack = catalogLive && track.id && track.id !== 'demo';
     if (liveTrack && hasServerChart(track)) {
       window.RhythmGame.play(liveProvider(track.id));
