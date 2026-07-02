@@ -118,12 +118,27 @@
   var _roundStartFired = false;   // guard: HOST opens each round's server round exactly once
   // ---- build8: rooms + quick-match state ----
   var room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null,
-               members: {}, p1: null, p2: null };   // current room (host or joined/spectating). build69: combat = the host's per-room modifier (set at openRoom, advertised, adopted by joiners)
+               members: {}, p1: null, p2: null,
+               show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // current room (host or joined/spectating). build69: combat = the host's per-room modifier (set at openRoom, advertised, adopted by joiners). build102s: LIVE-SHOW fields — normal MP never sets `show`, so every Phase-2 gate below is dead code outside a show room. revToken NEVER rides any broadcast/persist.
   var roomsDir = {};              // rid -> {rid,name,priv,hostId,hostName,count,max,at} (browser directory)
   var QM = { looking: false, t: 0 };   // quick-match: am I in the queue?
   var spectating = false;         // joined a match purely as a watcher
   var _specFocus = null;          // build96 (playtest): in a tournament SPECTATOR view, the player id whose LIVE deck you're watching — defaults to the leader; cycle with WATCH NEXT
   var _fromRoom = null;           // build8: one-shot carry across room→match handoff
+  // ---- build102s: LIVE SHOW (Phase-2 C1) — a host review track played as a live match. Every behavior
+  // keyed on room.show / sel.audioUrl so normal MP (rooms, quick match, tournaments, couch) stays byte-identical.
+  var _pendingShowRoom = null;    // openShowRoom() spec awaiting the lobby (consumed on SUBSCRIBED or the 600ms fast-path)
+  var _lastShowSpec = null;       // last GO LIVE spec — the solo-always-works fallback re-opens the review card from it
+  var _showOpenT = 0;             // ~8s watchdog: lobby/room channel never SUBSCRIBED → banner + re-show the review card (owner: solo PLAY must always stay reachable)
+  var _showHbT = 0;               // 4s 'show-snap' heartbeat handle (host only; mirrors the t-snapshot pattern)
+  var _showAtMs = 0;              // the live run's shared start timestamp (rides show-snap so late arrivals can align)
+  var _soloRun = false;           // SNAPSHOT taken at beginMatch: was this a SOLO show run? (security judge BLOCKER: the
+                                  // settle/rank gates key on this snapshot, never live room.p2 — a mid-run seat can't flip a
+                                  // solo run into a ranked forfeit-W or a phantom YOU-WIN)
+  var _specShowSolo = false;      // spectating a SOLO show run → no verdict card; back to the waiting room on 'final'
+  var _specShow = false;          // snapshot at spectateMatch entry: is this a SHOW-room spectate? (normal spectate keeps the pre-diff card byte-identical)
+  var _specFinals = {}, _specVerdictT = 0;   // show spectate: BOTH finals collected (keyed id||name) before the neutral verdict names the higher score
+  var _inviteBusy = false, _inviteAt = 0, _inviteRenotified = false;   // CALL IN THE ARTIST button state (60s NUDGE re-arm)
   // ---- build9: tournament state (5–10 player single-elim bracket on ONE channel) ----
   var TOUR_MAX = 10, TOUR_MIN = 3;          // copy advertises 5–10; 3 makes a real bracket testable
   // build42: the BEFORE-PUBLIC gate. Keep FALSE until server-authoritative scoring (re-judge) is live — see
@@ -402,6 +417,7 @@
       try { console.warn('[mp] lobby channel status:', status); } catch (e) {}   // build100n: live diagnostic — SUBSCRIBED = Realtime OK; CHANNEL_ERROR/TIMED_OUT = anon can't reach Realtime (Lovable: confirm anon broadcast authorization)
       if (status === 'SUBSCRIBED') {
         lobbySP.start();
+        if (_pendingShowRoom) _consumeShowRoom();   // build102s: GO LIVE was waiting on the lobby — open the show room now
         // build11: invite deep-link — ask hosts to re-advertise, then join the target bracket
         if (_pendingTourJoin) {
           try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
@@ -554,6 +570,17 @@
   function enterSetup() {
     step('setup');
     var _rcx = $('mpx-roomctx'); if (_rcx) _rcx.hidden = true;   // build8: hide room strip by default; enterRoomWaiting re-shows it
+    // build102s: scrub stale SHOW chrome when entering a NON-show setup — quick-match/challenge setups never run
+    // paintRoomWaiting, so a prior show's banner/seat/START-label/back-label would otherwise linger. This is the
+    // ONE authoritative restore point for the show-relabeled shared elements. DELIBERATE minor deviation from
+    // strict byte-identity: setReadyBtn() repaints from live meReady, which also fixes a stale 'READY ✓' that
+    // pre-diff could linger from a prior session — an owner-visible copy improvement, accepted in review.
+    if (!room.show) {
+      var _sbn = $('mpx-show-banner'); if (_sbn) _sbn.hidden = true;
+      var _sst = $('mpx-show-seat'); if (_sst) _sst.hidden = true;
+      var _lsx = $('mpx-leave-setup'); if (_lsx) _lsx.textContent = 'BACK TO LOBBY';
+      setReadyBtn();
+    }
     // build60: invite bar is room-only — hide it by default (enterRoomWaiting re-shows it); seed a duel waiting line.
     var ib = $('mpx-invitebar'); if (ib) ib.hidden = true;
     var ws = $('mpx-waitstatus');
@@ -575,6 +602,17 @@
       var fr = _fromRoom; _fromRoom = null;
       setTimeout(function () {
         try {
+          // build102s SOLO SHOW START: the host begins with an EMPTY challenger seat — broadcast the real 'start'
+          // and beginMatch with NO guest ready-handshake. devVsNpc proves beginMatch runs fine host-only; here the
+          // channel is REAL so already-subscribed watchers receive 'start'/'tick'. Combat is locked OFF for shows.
+          if (fr.solo && matchRole === 'host' && sel.trackId && matchCh) {
+            broadcastSong();
+            matchCombat = false;
+            var soloAt = Date.now() + VS_LEADIN_MS; _showAtMs = soloAt;
+            matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: soloAt, sel: sel, combat: false } });
+            beginMatch(soloAt, sel);
+            return;
+          }
           if (matchRole === 'host' && sel.trackId) broadcastSong();
           if (sel.trackId && oppPresent) { meReady = true; setReadyBtn();
             if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } });
@@ -664,17 +702,28 @@
 
   // ---- ready check ----
   function refreshReadyEnabled() {
-    var ok = oppPresent && !!sel.trackId;
+    // build102s: a SHOW-room host can always start (solo run with an empty challenger seat — owner's non-negotiable);
+    // normal duels keep the exact oppPresent gate.
+    var ok = (oppPresent || (room.show && room.isHost)) && !!sel.trackId;
     var rb = $('mpx-ready'); if (rb) rb.disabled = !ok;
     var rs = $('mpx-readystate'); if (!rs) return;
+    if (room.show) {   // build102s: show-room copy (song is locked to the review, host is never blocked)
+      rs.textContent = room.isHost ? (room.p2 ? 'Challenger seated — START runs the head-to-head.' : 'START plays it solo — the artist can join between runs.')
+                                   : 'The host runs the show — you’re pulled in when the match starts.';
+      return;
+    }
     if (!sel.trackId) rs.textContent = amPicker() ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
     else if (!oppPresent) rs.textContent = 'Waiting for your opponent…';
   }
-  function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady); b.textContent = meReady ? 'READY ✓' : 'READY'; }
+  function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady);
+    if (room.show && room.isHost) { b.textContent = meReady ? 'STARTING…' : (room.p2 ? '⚔ START VERSUS' : '▶ START (SOLO)'); return; }   // build102s: the show host's button IS the start switch
+    b.textContent = meReady ? 'READY ✓' : 'READY'; }
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
-    matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id } });
+    // build102s: a show-room host readies with NO match channel yet (the room-start path) — guard the send.
+    // Normal duels always have matchCh here (the button only enables via onMatchPeers), so this is byte-identical.
+    if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id } });
     // build60: reflect my own ready alongside the opponent's so both sides stay legible.
     var oppName = (oppMeta && oppMeta.name) || 'Opponent';
     if (meReady && oppReady) paintWaitStatus('Both ready — starting…', true);
@@ -697,9 +746,13 @@
     // channel via room-start; both seated players then open the same rr-match-<mid>. Once that
     // match channel exists (matchCh set) — including quick-match, challenge, and the room handoff —
     // we take the original synchronized-start path below.
-    if (room.id && room.isHost && !matchCh && meReady && oppReady && sel.trackId) { startRoomMatch(); return; }
+    // build102s: in a SHOW room the host's meReady ALONE fires the room-start — solo (no p2) or versus (seated
+    // challenger; the ready handshake then runs on the real match channel via the _fromRoom handoff). Room-stage
+    // oppReady never syncs pre-matchCh, so gating a show on it would deadlock; normal rooms keep the exact old gate.
+    if (room.id && room.isHost && !matchCh && meReady && (oppReady || room.show) && sel.trackId) { startRoomMatch(); return; }
     if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
+      if (room.show) _showAtMs = atMs;               // build102s: show-snap carries the shared start for late arrivals
       matchCombat = (room.id && room.isHost) ? !!room.combat : !!combatOn;   // build69: a ROOM match uses the room's FIXED modifier (every match in the room is consistent); quick-match/challenge uses the host's default
       matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel, combat: matchCombat } });
       beginMatch(atMs, sel);
@@ -1076,6 +1129,9 @@
 
   function beginMatch(atMs, s) {
     sel = s || sel;
+    // build102s (security judge BLOCKER): snapshot the solo-show flag NOW — the settle path keys on this,
+    // never on live room.p2, so a challenger seating mid-run can't flip the run into a ranked versus.
+    _soloRun = !!(room.show && room.isHost && !room.p2);
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
     _lastShockCombo = 0; _lastOdActive = false; _rankRecorded = false;   // v254/build100r: fresh combat-shock (combo + OD) + ranked-record state per match
@@ -1093,6 +1149,7 @@
     _mountT = setTimeout(function () {
       _mountT = 0; stopCountdown();
       if (!matchLive) return;                    // teardown fired during the lead-in → DON'T resurrect the split (would leak a tick rAF + _vsFit into the next solo session)
+      if (_soloRun) { startTick(); return; }     // build102s: SOLO show run = single full deck (no empty rival split/panel); tick keeps streaming so watchers see the live score
       if (!vsIsMobile()) {                       // DESKTOP/PC → true split-screen versus
         var g = $('game'); if (g) g.classList.add('vs-mode');
         _vsActive = true; _vsMode = true;
@@ -1110,6 +1167,16 @@
   // RhythmGame.startAt(provider,{...}). Branch logic mirrors RhythmCatalog.launchTrack:
   //   server chart → liveProvider(id); else audio_url → __buffered/playUrl; else demo.
   function resolveAndStart(s, atMs) {
+    // build102s (stability judge BLOCKER): a show/review sel carries sel.audioUrl (the decodable analysis_url —
+    // it is NOT in the catalog). Route DIRECTLY to the buffered decoder; if that's impossible, ABORT LOUD — the
+    // silent demo fallback below must never play Lunar Waves on-air. Non-show sels (no audioUrl) are byte-identical.
+    // chartMode note: all seats chart the same audioUrl + difficulty through the normal path, so no chartMode
+    // forcing is needed here — if it ever is, use a per-run TRANSIENT override, NEVER RhythmGame.applySettings
+    // (that persists to rr_settings and would silently overwrite the player's saved Musical/Classic A-B choice).
+    // Belt-and-braces (review fix 1): the show route only exists INSIDE a show room — a leaked/forged audioUrl
+    // must never hijack a normal match with stale review audio; strip it and resolve by trackId as always.
+    if (s && s.audioUrl && room.show) { resolveShowStart(s, atMs); return; }
+    if (s && s.audioUrl) { try { delete s.audioUrl; } catch (e) {} }
     var RC = window.RhythmCatalog;
     var t = (RC && RC.allTracks) ? RC.allTracks().filter(function (x) { return x.id === s.trackId; })[0] : null;
     if (t && RC && RC.isVideo && RC.isVideo(t)) t = null;   // defense-in-depth: never start a video in MP → falls to demo
@@ -1273,6 +1340,11 @@
     } : (window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : { score: 0, combo: 0, acc: 0, grade: 'D' });
     myFinal = s;
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'final', payload: Object.assign({ name: ME.name }, s) });
+    // build102s (security judge BLOCKER): a SOLO show run has nothing to pair — never the normal settle (no 8s
+    // safety wait, no hollow YOU-WIN, no recordMpResult forfeit-W, no mpSettle round row). The run itself was already
+    // recorded as a scored single by the engine (recordLocal + /score — the Phase-1 path). Keyed on the beginMatch
+    // SNAPSHOT so a challenger who seated mid-run can't flip this into a versus settle; they play the NEXT run.
+    if (_soloRun) { settleSoloShow(); return; }
     // build100i: report THIS player's result to the server MP ledger (anti-cheat + global ladder). FIRE-AND-FORGET —
     // the on-screen verdict below stays peer-broadcast + client-trusted, so a missing/slow endpoint never blocks the
     // duel. Human matches only: CPU warm-ups (oppMeta.bot) + spectators never record. Both peers POST the same
@@ -1376,10 +1448,15 @@
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
+    _showAtMs = 0; _specShowSolo = false; _soloRun = false;   // build102s: show-run flags die with the match (review fix 8: a torn-down show start must never leave _soloRun armed for a later unrelated song end)
     setLobbyInMatch(false);
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
   function backToLobby() {
+    _cancelShowOpen();   // review fix 7: backing out kills a pending GO LIVE watchdog too (inert for normal MP)
+    // build102s (judge-mandated reroute): backing out of a SHOW must fully close the room — the verified
+    // backToLobby zombie leaves room.id/roomSP advertising a dead LIVE room to the site-notified artist.
+    if (room.id && room.show) { teardownMatch(); QM.looking = false; paintQuickBtn(); closeRoom(); return; }
     teardownMatch();
     QM.looking = false; paintQuickBtn();   // build8
     step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync();
@@ -1472,6 +1549,7 @@
     var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
     var rcb = screen.querySelector('#mpx-room-combat button.active'); var combat = !!(rcb && rcb.getAttribute('data-combat') === 'on');   // build69: the host's per-room combat choice (the source of truth for every match in this room)
     room = { id: newRoomId(), name: nm, priv: priv, combat: combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
+    try { delete sel.audioUrl; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio
     joinRoomChannel(room.id, 'p1');
     reannounce();
     enterRoomWaiting();
@@ -1481,12 +1559,21 @@
     if (!lobbyCh || !room.id || !room.isHost) return;
     var count = 1 + (room.p2 ? 1 : 0);
     lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
-      rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now() } });
+      rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now(),
+      show: room.show ? 1 : 0, live: matchLive ? 1 : 0 } });   // build102s: additive show/live flags (old clients ignore unknown fields; joiners adopt `show` for the seat policy)
   }
   function closeRoom(silent) {
+    _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
+    if (room.id && room.show) {   // build102s: a closing SHOW room says goodbye — final live:false snap (spectator recovery, judge mandate) + heartbeat/persist teardown
+      if (room.isHost) { matchId = null; matchLive = false; try { sendShowSnap(); } catch (e) {} }
+      stopShowHeartbeat(); clearShowRoom();
+      try { delete sel.audioUrl; } catch (e) {}   // review fix 1: the review audio dies with the show — it must never leak into a later normal match
+      var _wy = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wy) _wy.textContent = 'YOU';   // undo the spectator-verdict relabel
+    }
     if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
     leaveRoomChannel();
-    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
+    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
+      show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
     spectating = false; reannounce();
     if (!silent) { step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
   }
@@ -1500,9 +1587,20 @@
     roomSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }; }, onRoomPeers);
     ch.on('broadcast', { event: 'room-start' }, function (m) { onRoomStart(m.payload); });
     ch.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });   // build64: the room host's live track/stage/difficulty picks reach the joiner in the waiting room
+    ch.on('broadcast', { event: 'show-snap' }, function (m) { onShowSnap(m.payload); });   // build102s: live-show heartbeat (inert for normal rooms — only a show host ever emits it)
     ch.subscribe(function (status) {
-      if (status === 'SUBSCRIBED') { roomSP.start(); }
-      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { banner('mpx-rooms-msg', 'Could not reach that room. Back out and retry.'); }
+      if (status === 'SUBSCRIBED') {
+        roomSP.start();
+        if (room.show && room.isHost) {   // build102s: show room is live — cancel the solo-fallback watchdog, seed the locked song + the first snap
+          if (_showOpenT) { clearTimeout(_showOpenT); _showOpenT = 0; }
+          try { broadcastSong(); } catch (e) {}
+          sendShowSnap();
+        }
+      }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        banner('mpx-rooms-msg', 'Could not reach that room. Back out and retry.');
+        if (room.show && room.isHost) _showRoomFail();   // build102s (judge mandate): solo-always-works — bail back to the review card
+      }
     });
   }
   function leaveRoomChannel() { try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; }
@@ -1510,7 +1608,21 @@
     if (!room.ch) return;
     room.members = all;
     // seat assignment is host-authoritative: host = p1; first non-spec joiner = p2.
-    if (room.isHost) {
+    if (room.isHost && room.show) {
+      // build102s SEAT POLICY (both judges' blocker): in a SHOW room NOBODY is auto-seated — ids are spoofable and
+      // the rid is public, so the challenger seat is HOST-GRANTED. A non-spec joiner becomes a PENDING challenger
+      // (ACCEPT/DECLINE card); the submitter jumps the pending queue but STILL needs the host's accept.
+      room.declined = room.declined || {};
+      if (room.p2 && room.members[room.p2]) room._graceUntil = 0;   // review fix 4b: challenger's presence re-synced → drop the reconnect grace
+      if (room.p2 && !room.members[room.p2] && !(room._graceUntil && Date.now() < room._graceUntil)) { room.p2 = null; advertiseRoom(); sendShowSnap(); }   // seated challenger left → seat reopens (grace shields the just-restored seat until presence warms up)
+      var pend = null;
+      if (!room.p2) {
+        var joiners = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec' && !room.declined[id]; });
+        for (var ji = 0; ji < joiners.length; ji++) { if (joiners[ji] === room.submitterId) { pend = joiners[ji]; break; } }   // the artist first
+        if (!pend) pend = joiners[0] || null;
+      }
+      if (pend !== room.pendingChal) { room.pendingChal = pend; sendShowSnap(); }
+    } else if (room.isHost) {
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
       if (p2 !== room.p2) { room.p2 = p2; advertiseRoom(); }
@@ -1519,18 +1631,23 @@
   }
   // host launches: tells both seats to spin up the SAME match channel; spectators get the mid too.
   function startRoomMatch() {
-    if (!room.isHost || !room.p2) return;
+    if (!room.isHost || (!room.p2 && !room.show)) return;   // build102s: a SHOW host may start with an EMPTY challenger seat (solo run); normal rooms keep the p2 guard
     var mid = 'm' + room.id.slice(1) + Date.now().toString(36).slice(-3);
-    room.ch.send({ type: 'broadcast', event: 'room-start', payload: { mid: mid, p1Id: room.p1, p2Id: room.p2 } });
-    onRoomStart({ mid: mid, p1Id: room.p1, p2Id: room.p2 });
+    room.ch.send({ type: 'broadcast', event: 'room-start', payload: { mid: mid, p1Id: room.p1, p2Id: room.p2 || null } });
+    onRoomStart({ mid: mid, p1Id: room.p1, p2Id: room.p2 || null });
   }
   function onRoomStart(p) {
     if (!p || !p.mid) return;
     var oppId = (ME.id === p.p1Id) ? p.p2Id : p.p1Id;
     var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
-    if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) { spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); return; }
+    if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) {
+      _specShowSolo = !!(room.show && !p.p2Id);   // build102s: watching a SOLO show run → no verdict card at song end
+      spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); return;
+    }
     var role = (ME.id === p.p1Id) ? 'host' : 'guest';
-    _fromRoom = { sel: (sel.trackId ? Object.assign({}, sel) : null) };   // carry host's locked track
+    if (room.show) spectating = false;   // build102s: a seated show player may have WATCHED the prior run (spectateMatch flips the flag) — they're a player now, so the rank/settle gates must see them as one
+    // build102s: fr.solo → the host starts the match channel with no guest handshake (empty seat)
+    _fromRoom = { sel: (sel.trackId ? Object.assign({}, sel) : null), solo: !!(room.show && !p.p2Id && ME.id === p.p1Id) };   // carry host's locked track
     startMatchChannel(p.mid, role, oppMetaLocal);
   }
 
@@ -1539,7 +1656,8 @@
     if (!supa || !lobbyCh) return;
     var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
     if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
-    room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id };   // build69: adopt the host's advertised room combat
+    room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
+      show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
     spectating = !!asSpec;
     joinRoomChannel(rid, room.seat);
     reannounce();
@@ -1566,7 +1684,9 @@
     if (closeBtn) closeBtn.textContent = room.isHost ? 'CLOSE ROOM' : 'LEAVE ROOM';
     // build60: surface the invite bar + room code so a host can pull a friend in; the host also gets "Add a CPU".
     var bar = $('mpx-invitebar'), codeRow = $('mpx-invite-code-row'), codeEl = $('mpx-invite-code'), addCpu = $('mpx-add-cpu');
-    if (bar) bar.hidden = false;
+    // build102s: in a SHOW room the generic opponent bar is hidden — the challenger seat is host-granted (seat
+    // policy) and VS-CPU would closeRoom() and kill every watcher. The show seat card replaces it.
+    if (bar) bar.hidden = !!room.show;
     if (room.isHost && room.id) {
       if (codeRow) codeRow.hidden = false;
       if (codeEl) codeEl.textContent = roomCode(room.id);
@@ -1596,7 +1716,15 @@
       else { ws.textContent = 'Waiting for the host to start…'; }
       // build100f (relatability): remind both players combat is on while they wait, so the mid-song freeze is expected.
       if (room.combat) ws.textContent += ' ⚡ Combat ON — a combo streak shocks the rival ~2s.';
+      if (room.show) {   // build102s: show-room copy replaces the stock strings (song locked, host never blocked)
+        var seatedId = room.isHost ? room.p2 : (room._snapP2 || null);
+        if (room.isHost) ws.textContent = room.p2 ? '⚔ Challenger seated — START runs the head-to-head.' : 'LIVE SHOW — START plays it solo; the artist can join between runs.';
+        else if (spectating) ws.textContent = room._snapLive ? 'LIVE — watching the run…' : 'LIVE SHOW — you\'re watching. The run starts when the host begins.';
+        else if (seatedId === ME.id) ws.textContent = room._snapLive ? 'Match in progress — you\'re seated for the NEXT run.' : 'You\'re seated — the host starts the match.';
+        else ws.textContent = room._snapLive ? 'Match in progress — you\'re in line for the NEXT run.' : 'LIVE SHOW — hang tight, the host will wave you in.';
+      }
     }
+    try { paintShowRoom(); } catch (e) {}   // build102s: show chrome (banner/seat/invite) — self-hides for normal rooms
   }
 
   // ---- room directory (browser) ----
@@ -1784,12 +1912,29 @@
   // ===================== BUILD8: SPECTATE =====================
   function spectateMatch(mid, p1meta, p2meta) {
     spectating = true; matchLive = true; finishedLocal = true;   // finishedLocal=true → never wait on "my" result
+    // build102s: snapshot show-spectate mode at ENTRY — only a show room gets the neutral dual-final verdict;
+    // a normal-room spectate renders the exact pre-diff card (owner's byte-identity decree).
+    _specShow = !!room.show; _specFinals = {};
+    if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
     oppMeta = p1meta || p2meta || null;
     step('go'); var gn = $('mpx-go-num'); if (gn) gn.textContent = 'SPECTATING';
     var watchCh = supa.channel('rr-match-' + mid, { config: { broadcast: { self: false } } });
     matchCh = watchCh;
     watchCh.on('broadcast', { event: 'tick' }, function (m) { lastOppTick = m.payload; });
-    watchCh.on('broadcast', { event: 'final' }, function (m) { oppFinal = m.payload; myFinal = myFinal || { score: 0 }; showWinner(); });
+    watchCh.on('broadcast', { event: 'final' }, function (m) {
+      var _fp = m.payload || {};
+      if (_specShowSolo) {   // build102s: a SOLO show run has no verdict for watchers — back to the waiting room (the host returns there for the next run)
+        endSpectate('✓ ' + ((_fp.name || 'The host') + ' finished — ' + Number(_fp.score || 0).toLocaleString() + '. Waiting for the next run…'));
+        return;
+      }
+      if (_specShow) {   // show versus: collect BOTH finals (each player broadcasts one) — verdict names the HIGHER score
+        _specFinals[String(_fp.id || _fp.name || ('p' + Object.keys(_specFinals).length))] = _fp;
+        if (Object.keys(_specFinals).length >= 2) _renderSpecVerdict();
+        else if (!_specVerdictT) _specVerdictT = setTimeout(function () { _specVerdictT = 0; _renderSpecVerdict(); }, 8000);   // one final never arrived → render what we have
+        return;
+      }
+      oppFinal = m.payload; myFinal = myFinal || { score: 0 }; showWinner();   // pre-diff normal-spectate card, untouched
+    });
     watchCh.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         // mount a read-only panel over whatever screen is up; spectators don't run the engine.
@@ -1805,6 +1950,374 @@
     stopTick();
     function frame() { oppRaf = requestAnimationFrame(frame); if (oppPanel && oppPanel.parentNode) renderOpp(null); }
     oppRaf = requestAnimationFrame(frame);
+  }
+
+  // ===================== BUILD102s: LIVE SHOW (Phase-2 C1) =====================
+  // The host review flow (/game?review=<token> → #review-launch) gains GO LIVE: a public room flagged
+  // room.show=true with the review song pre-locked (sel.audioUrl = the decodable analysis_url — the SAME
+  // visibility class as catalog audio_url, so it may ride Realtime; the review TOKEN never does). The host
+  // plays even if nobody joins (solo run), the artist is invited via POST /show/invite, everyone else watches.
+  // Every function here is dead code unless room.show — normal MP stays byte-identical (owner decree).
+  function openShowRoom(opts) {
+    opts = opts || {};
+    if (!supa) {
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Live rooms need a connection — solo PLAY still works.', 'error'); } catch (e) {}
+      _reshowReviewCard(opts);
+      return false;
+    }
+    _pendingShowRoom = opts; _lastShowSpec = opts;
+    open();   // raise the MP screen → onActivated() → joinLobby(); the lobby SUBSCRIBED handler consumes the spec
+    // SOLO-ALWAYS-WORKS (security judge mandate): if the lobby never comes up in ~8s, banner and put the review
+    // card back so the Phase-1 solo PLAY stays one click away (owner's non-negotiable). GUARDED: only fires while
+    // the GO LIVE attempt is still pending — a host who backed out (teardown cleared the pending spec) is left alone.
+    if (_showOpenT) clearTimeout(_showOpenT);
+    _showOpenT = setTimeout(function () { _showOpenT = 0; if (!_pendingShowRoom) return; _pendingShowRoom = null; _showRoomFail(); }, 8000);
+    // fast-path poll: the lobby may already be up (SUBSCRIBED won't re-fire) or the MP screen may take a
+    // moment to activate — consume the spec as soon as the lobby channel exists (the 8s fallback still rules).
+    var _sopIv = setInterval(function () {
+      if (!_pendingShowRoom) { clearInterval(_sopIv); return; }
+      if (lobbyCh) { clearInterval(_sopIv); _consumeShowRoom(); }
+    }, 500);
+    return true;
+  }
+  function _consumeShowRoom() {
+    var spec = _pendingShowRoom; if (!spec) return;
+    _pendingShowRoom = null;
+    try { closeTour(true); } catch (e) {}
+    try { if (room.id) closeRoom(true); } catch (e) {}
+    teardownMatch();   // never inherit stale match state into the show
+    room = { id: newRoomId(), name: ((spec.title || 'Review') + ' — LIVE').slice(0, 28), priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null,
+      show: true, submitterId: spec.submitterId || null, submitterName: spec.submitterName || '', revToken: spec.revToken || null, invited: false, pendingChal: null, declined: {} };
+    // the review song is PRE-LOCKED; audioUrl is the NEW sel field resolveShowStart routes on (never the demo)
+    sel = { trackId: spec.trackId || null, title: spec.title || null, artist: spec.artist || null, art: spec.art || null,
+      difficulty: spec.difficulty || 'medium', demo: false, env: null, audioUrl: spec.audioUrl || null };
+    _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteAt = 0; _inviteRenotified = false;
+    // fresh watchdog for the ROOM-channel subscribe stage (the internal closeRoom above cancels any prior one);
+    // guarded so it can only ever fail THIS show room — never one the host opened later.
+    if (_showOpenT) clearTimeout(_showOpenT);
+    var _wdRid = room.id;
+    _showOpenT = setTimeout(function () { _showOpenT = 0; if (room.id === _wdRid && room.show && room.isHost) _showRoomFail(); }, 8000);
+    joinRoomChannel(room.id, 'p1');   // SUBSCRIBED → cancels _showOpenT + broadcasts song + first snap
+    reannounce();
+    enterRoomWaiting();
+    advertiseRoom();
+    startShowHeartbeat();
+    persistShowRoom();
+    banner('mpx-setup-msg', '🔴 LIVE SHOW room open — START plays it solo; call in the artist any time.');
+  }
+  // re-surface the Phase-1 review launch card (solo fallback). __rrReview is the catalog's card driver; if it's
+  // been stripped, just un-hide the element — the card still holds its last wired state.
+  function _reshowReviewCard(spec) {
+    try {
+      if (window.__rrReview && window.__rrReview.open && spec && spec.trackId) {
+        window.__rrReview.open({ id: spec.trackId, title: spec.title, artist_name: spec.artist, artist_credit_name: spec.artist,
+          artwork_url: spec.art, audio_url: spec.audioUrl, analysis_url: spec.audioUrl, chart_status: 'pending', _review: true,
+          _role: 'host', _submitterId: spec.submitterId || null, _submitterName: spec.submitterName || '' });
+        return;
+      }
+    } catch (e) {}
+    try { var ov = document.getElementById('review-launch'); if (ov) ov.classList.add('on'); } catch (e) {}
+  }
+  function _showRoomFail() {
+    if (_showOpenT) { clearTimeout(_showOpenT); _showOpenT = 0; }
+    stopShowHeartbeat(); clearShowRoom();
+    var spec = _lastShowSpec;
+    try { if (room.id && room.show) closeRoom(true); } catch (e) {}   // only ever closes a SHOW room — never a normal room the host opened since
+    step('lobby');
+    banner('mpx-lobby-msg', '⚠ Couldn\'t open the live room — you can still play the review solo.');
+    // the review card must be SEEN and CLICKABLE: drop the MP screen (it sits above the card) before re-showing
+    try { screen.classList.remove('active'); activeNow = false; } catch (e) {}
+    _reshowReviewCard(spec);
+  }
+  // ---- the 4s show heartbeat (host → room channel). Small cousin of the t-snapshot: late arrivals learn
+  // sel/mid/atMs, a mis-seated client self-demotes, watchers recover when a run dies. sel carries audioUrl
+  // (accepted visibility class) — NEVER any token.
+  function sendShowSnap() {
+    if (!room.ch || !room.id || !room.isHost || !room.show) return;
+    var specN = 0;
+    try { specN = Object.keys(room.members).filter(function (id) { return room.members[id].seat === 'spec'; }).length; } catch (e) {}
+    try {
+      room.ch.send({ type: 'broadcast', event: 'show-snap', payload: {
+        rid: room.id, mid: matchId || null, live: !!matchLive, sel: sel, atMs: _showAtMs || 0,
+        p2Id: room.p2 || null, pend: room.pendingChal || null, specN: specN, invited: !!room.invited, at: Date.now() } });
+    } catch (e) {}
+  }
+  function startShowHeartbeat() {
+    stopShowHeartbeat();
+    if (!room.show || !room.isHost) return;
+    _showHbT = setInterval(function () {
+      if (!room.id || !room.isHost || !room.show) { stopShowHeartbeat(); return; }
+      sendShowSnap(); persistShowRoom();
+      try { paintShowRoom(); } catch (e) {}   // keeps the 60s NUDGE re-arm honest without extra timers
+    }, 4000);
+    sendShowSnap();
+  }
+  function stopShowHeartbeat() { if (_showHbT) { clearInterval(_showHbT); _showHbT = 0; } }
+  function onShowSnap(p) {
+    // SECURITY (review fix 6): a snap only means anything inside a room ALREADY known to be a show room
+    // (room.show is adopted from the host's room-meta at join time). Without the room.show gate a forged
+    // snap on a normal room could flip show mode, swap sel to an attacker audioUrl, or unseat a real p2.
+    if (!p || !p.rid || !room.id || p.rid !== room.id || !room.show || room.isHost) return;
+    room.invited = !!p.invited;
+    room._snapP2 = p.p2Id || null; room._snapLive = !!p.live;
+    if (p.sel && !matchLive && !matchCh) { sel = p.sel; paintSelection(); }   // adopt the host's locked song (incl. audioUrl)
+    // SEAT-RACE SELF-HEAL (judge mandate): demote ONLY when the seat is OCCUPIED BY SOMEONE ELSE — an empty
+    // p2Id (e.g. the first snap after a host refresh, before presence re-syncs) must never demote a legit
+    // challenger (review fix 4). A host ACCEPT later re-promotes (p2Id === me).
+    if (room.seat === 'p2' && p.p2Id && p.p2Id !== ME.id && p.pend !== ME.id) {
+      room.seat = 'spec'; room.p2 = null; spectating = true; room._demoted = true;
+      try { if (roomSP) roomSP.refresh(); } catch (e) {}
+      banner('mpx-setup-msg', 'The challenger seat is taken — you\'re watching. The host can wave you in next run.');
+    } else if (room._demoted && p.p2Id === ME.id) {
+      room.seat = 'p2'; room.p2 = ME.id; spectating = false; room._demoted = false;
+      try { if (roomSP) roomSP.refresh(); } catch (e) {}
+      banner('mpx-setup-msg', 'You\'re seated — the host starts the match.');
+    }
+    if (p.live && p.mid && room.seat === 'spec' && !matchCh && !matchLive) {
+      // late arrival while a run is live → drop into the existing spectate view (mid was the only missing key)
+      _specShowSolo = !p.p2Id;
+      spectateMatch(p.mid, room.members[room.p1] || null, (p.p2Id && room.members[p.p2Id]) || null);
+    } else if (!p.live && !p.mid && matchCh && spectating) {
+      // the run died without a 'final' (host abort/refresh/close) → recover to the waiting room
+      endSpectate('Run over — hang tight, the host may run it again.');
+    }
+    paintRoomWaiting();
+  }
+  // review fix 7: kill a pending GO LIVE attempt + its 8s watchdog (called from every room/screen teardown —
+  // pure var writes, inert for normal MP; _consumeShowRoom re-arms its own room-stage watchdog after this).
+  function _cancelShowOpen() {
+    _pendingShowRoom = null;
+    if (_showOpenT) { clearTimeout(_showOpenT); _showOpenT = 0; }
+  }
+  // show-spectate NEUTRAL verdict (review fix 2): render only once BOTH finals are in (or one + 8s), name the
+  // HIGHER score — never YOU WIN/LOSE for a watcher, never the last-arrival-wins bug. Show rooms only.
+  function _renderSpecVerdict() {
+    if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
+    var ks = Object.keys(_specFinals); if (!ks.length) return;
+    var a = _specFinals[ks[0]], b = ks[1] ? _specFinals[ks[1]] : null;
+    var sa = +((a && a.score) || 0), sb = +((b && b.score) || 0);
+    var w = (b && sb > sa) ? b : a, draw = !!(b && sb === sa);
+    matchLive = false;
+    var v = $('mpx-verdict');
+    if (v) { v.className = 'mpx-verdict draw'; v.textContent = draw ? 'DRAW' : 'MATCH OVER — ' + String((w && w.name) || 'winner').slice(0, 14) + ' takes it'; }
+    // scorecard shows BOTH players (no YOU framing); the relabel is restored by endSpectate/closeRoom
+    var wy = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (wy) wy.textContent = String((a && a.name) || 'P1').slice(0, 14);
+    set('mpx-sc-you', Number(sa).toLocaleString());
+    set('mpx-sc-you-meta', ((a && a.acc != null) ? a.acc + '% · ' : '') + ((a && a.combo) || 0) + 'x' + ((a && a.grade) ? ' · ' + a.grade : ''));
+    set('mpx-sc-opp-who', b ? String(b.name || 'P2').slice(0, 14) : '…');
+    set('mpx-sc-opp', b ? Number(sb).toLocaleString() : '…');
+    set('mpx-sc-opp-meta', b ? (((b.acc != null) ? b.acc + '% · ' : '') + (b.combo || 0) + 'x' + (b.grade ? ' · ' + b.grade : '')) : 'no result received');
+    step('winner');
+    screen.classList.add('active'); activeNow = true;
+  }
+  // unwind a spectator's watch channel back to the room-waiting screen (room channel stays joined)
+  function endSpectate(msg) {
+    stopTick();
+    try { if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
+    matchCh = null; matchLive = false; finishedLocal = false; myFinal = null; oppFinal = null; lastOppTick = null;
+    _specShowSolo = false; _specShow = false; _specFinals = {};
+    if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
+    var _wyr = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wyr) _wyr.textContent = 'YOU';   // undo the spec-verdict relabel
+    unmountOppPanel();
+    spectating = (room.seat === 'spec');   // a pending challenger who watched goes back to non-spec
+    if (room.id && room.ch) {
+      step('setup'); enterRoomWaiting();
+      screen.classList.add('active'); activeNow = true;
+      if (msg) banner('mpx-setup-msg', msg);
+    } else { step('lobby'); }
+  }
+  // ---- show-room chrome: locked-song banner, artist seat card (pending ACCEPT/DECLINE), CALL IN THE ARTIST ----
+  function paintShowRoom() {
+    var bn = $('mpx-show-banner'), seatEl = $('mpx-show-seat'), ls = $('mpx-leave-setup');
+    var isShow = !!(room.id && room.show);
+    if (bn) bn.hidden = !isShow;
+    if (seatEl) seatEl.hidden = !isShow;
+    if (!isShow) { return; }
+    if (ls) ls.textContent = room.isHost ? '⏹ END THE SHOW' : 'LEAVE THE SHOW';   // restored by closeRoom
+    var art = $('msb-art'); if (art && sel.art) art.src = safeUrl(sel.art);
+    var ti = $('msb-title'); if (ti) ti.textContent = sel.title || 'Review track';
+    var ar = $('msb-artist'); if (ar) ar.textContent = sel.artist || '';
+    var df = $('msb-diff'); if (df) df.textContent = ({ easy: 'DRIFT', medium: 'PULSE', hard: 'FRACTURE' })[sel.difficulty] || 'PULSE';
+    // the song is locked to the review — visibly present, never re-pickable
+    var pick = $('mpx-pick'); if (pick) pick.disabled = true;
+    var chev = $('mpx-pick-chev'); if (chev) chev.style.visibility = 'hidden';
+    // artist seat states: open / pending (host-only ACCEPT/DECLINE) / seated
+    var emp = $('mpx-show-seat-empty'), pend = $('mpx-show-pend'), pendTxt = $('mpx-show-pend-txt');
+    var seatedId = room.isHost ? room.p2 : (room._snapP2 || null);
+    var p2m = seatedId && room.members[seatedId];
+    if (emp) {
+      if (seatedId) emp.innerHTML = '🎸 <b>' + esc((p2m && p2m.name) || room._p2Name || 'Challenger') + '</b> is seated' + (seatedId === room.submitterId ? ' — the artist is in!' : '');
+      else if (room.isHost && room.submitterName) emp.innerHTML = '🎸 ARTIST SEAT — <b>waiting for ' + esc(room.submitterName) + '…</b>';
+      else emp.innerHTML = '🎸 ARTIST SEAT — <b>open</b>';
+      emp.hidden = false;
+    }
+    if (pend) {
+      var showPend = !!(room.isHost && room.pendingChal && !room.p2);
+      pend.hidden = !showPend;
+      if (showPend && pendTxt) {
+        var pm = room.members[room.pendingChal], nm = esc((pm && pm.name) || 'Someone');
+        var isArtist = room.pendingChal === room.submitterId;   // prefill only — ids are spoofable, host accept is the gate
+        pendTxt.innerHTML = isArtist ? '🎤 <b>' + nm + '</b> (the artist) wants in!' : '<b>' + nm + '</b> wants the challenger seat';
+        pendTxt.classList.toggle('artist', isArtist);
+      }
+    }
+    // CALL IN THE ARTIST (host-only; needs a known submitter from /review/resolve)
+    var invRow = $('mpx-show-invite-row'), invBtn = $('mpx-show-invite'), nudge = $('mpx-show-nudge');
+    var canInvite = !!(room.isHost && room.submitterId);
+    if (invRow) invRow.hidden = !canInvite;
+    if (canInvite) {
+      if (invBtn) {
+        invBtn.hidden = !!room.invited;
+        invBtn.disabled = !!_inviteBusy;
+        invBtn.textContent = _inviteBusy ? '📣 CALLING…' : ('📣 CALL IN THE ARTIST' + (room.submitterName ? ' — ' + String(room.submitterName).slice(0, 14) : ''));
+      }
+      if (nudge) nudge.hidden = !(room.invited && _inviteAt && (Date.now() - _inviteAt > 60000) && !room.p2 && !_inviteRenotified);
+    }
+    setReadyBtn();   // START (SOLO) / START VERSUS relabel
+  }
+  function acceptChallenger() {
+    if (!room.isHost || !room.show || !room.pendingChal || room.p2) return;
+    room.p2 = room.pendingChal; room.pendingChal = null;
+    advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
+    banner('mpx-setup-msg', ((room.members[room.p2] || {}).name || 'Challenger') + ' is seated — START runs the versus.');
+  }
+  function declineChallenger() {
+    if (!room.isHost || !room.show || !room.pendingChal) return;
+    room.declined = room.declined || {};
+    room.declined[room.pendingChal] = 1; room.pendingChal = null;   // the snap's p2Id/pend mismatch self-demotes them to spectator
+    sendShowSnap(); paintRoomWaiting();
+  }
+  // ---- CALL IN THE ARTIST → RhythmCatalog.showInvite → POST /show/invite (token stays in catalog.js; never on the wire here)
+  function callInArtist(renotify) {
+    if (!room.id || !room.show || !room.isHost || _inviteBusy) return;
+    var RC = window.RhythmCatalog, st = $('mpx-show-invite-state');
+    function say(txt) { if (st) { st.hidden = false; st.textContent = txt; } }
+    if (!RC || !RC.showInvite) { say('invites unavailable — relaunch from a fresh review link'); return; }
+    _inviteBusy = true; try { paintShowRoom(); } catch (e) {}
+    RC.showInvite(room.id, !!renotify).then(function (r) {
+      _inviteBusy = false;
+      var oc = (r && r.outcome) || ((r && r.invited) ? 'sent' : 'error');
+      if (oc === 'sent') { _markInvited(); say(renotify ? '✓ nudged — they\'ve been notified again' : '✓ invited — they\'ve been notified'); if (renotify) _inviteRenotified = true; }
+      else if (oc === 'skipped_duplicate') { _markInvited(); say('already invited — they\'ve been notified'); }
+      else if (oc === 'renotify_already_used') { _inviteRenotified = true; say('nudge already sent'); }
+      else say('couldn\'t send the invite');
+      try { paintShowRoom(); } catch (e) {}
+    }).catch(function (e) {
+      _inviteBusy = false;
+      var msg = String((e && e.message) || '');
+      say(/\b429\b/.test(msg) ? 'slow down — try again later' : 'couldn\'t send the invite');
+      try { paintShowRoom(); } catch (e2) {}
+    });
+  }
+  function _markInvited() {
+    if (!room.invited) { room.invited = true; _inviteAt = Date.now(); persistShowRoom(); sendShowSnap(); }
+    else if (!_inviteAt) _inviteAt = Date.now();
+  }
+  // ---- solo-run settle: back to the waiting room, never the versus machinery ----
+  function settleSoloShow() {
+    // (security judge BLOCKER) cancels BOTH timers the normal settle leans on, skips showWinner's !op→YOU-WIN +
+    // recordMpResult forfeit-W (a farmable ranked win), and returns the host to the open room for a rematch or
+    // the artist joining. NOTE: engine RESTART affordances fire no song-end — a restarted run just streams on.
+    // review fix 8: mirror settleIfReady's guard — a stale queued song-end callback (e.g. a failed show start
+    // followed by an unrelated solo song) must never hijack that run's results with the show-room UI.
+    if (!matchLive || !finishedLocal) return;
+    matchLive = false;
+    if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }
+    if (_startWatchdog) { clearTimeout(_startWatchdog); _startWatchdog = 0; }
+    var sc = (myFinal && myFinal.score) || 0;
+    var pendId = room.pendingChal, pendM = pendId && room.members[pendId];
+    teardownMatch();                       // closes rr-match-<mid>; the ROOM channel + heartbeat survive
+    sendShowSnap();                        // instant live:false / mid:null — watchers snap back to the waiting room
+    step('setup'); enterRoomWaiting();
+    screen.classList.add('active'); activeNow = true;   // re-raise over the engine's results screen (showScreen stripped us)
+    // the engine's post-song routing (results/menu) runs AFTER our callbacks and strips .active again —
+    // re-raise once more a beat later so the host actually lands back in the show room (mirrors showWinner's re-add).
+    setTimeout(function () { if (room.id && room.show && !matchLive) { screen.classList.add('active'); activeNow = true; } }, 450);
+    advertiseRoom(); persistShowRoom();
+    banner('mpx-setup-msg', '✓ Run complete — ' + Number(sc).toLocaleString() + ' banked.' +
+      (room.p2 ? ' Your challenger is seated — START runs the versus.'
+        : (pendId ? ' ' + (((pendM && pendM.name) || 'A challenger') + ' is waiting — ACCEPT them for the next run.')
+          : ' The room stays open — run it again or call in the artist.')));
+  }
+  // ---- host-refresh persistence: rr_showroom (<90s). LIGHT port of the rr_tour pattern — persist + rejoin +
+  // heartbeat only; no host migration (a show without its host is meaningless). revToken is NEVER persisted;
+  // catalog.js re-resolves ?review= on reload, so the invite call still works after a refresh.
+  function persistShowRoom() {
+    try {
+      if (!room.id || !room.show || !room.isHost) return;
+      sessionStorage.setItem('rr_showroom', JSON.stringify({ rid: room.id, name: room.name, sel: sel,
+        submitterId: room.submitterId || null, submitterName: room.submitterName || '', invited: !!room.invited,
+        // review fix 4b: the SEAT survives a host refresh — the reconnect snap must carry the true p2Id or the
+        // accepted challenger would read an empty seat (and a mis-demote). Name kept for the paint fallback.
+        p2: room.p2 || null, p2Name: (room.p2 && room.members[room.p2] && room.members[room.p2].name) || '',
+        pend: room.pendingChal || null, at: Date.now() }));
+    } catch (e) {}
+  }
+  function clearShowRoom() { try { sessionStorage.removeItem('rr_showroom'); } catch (e) {} }
+  function maybeReconnectShowRoom() {
+    try {
+      if (room.id || !supa) return;
+      var raw = sessionStorage.getItem('rr_showroom'); if (!raw) return;
+      var P = JSON.parse(raw); if (!P || !P.rid) return;
+      if (Date.now() - (P.at || 0) > 90000) { clearShowRoom(); return; }
+      teardownMatch();   // clear stale match state — the orphaned pre-refresh run is gone
+      room = { id: P.rid, name: P.name || 'LIVE SHOW', priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id,
+        p2: P.p2 || null,   // review fix 4b: restore the accepted challenger's seat across the refresh
+        show: true, submitterId: P.submitterId || null, submitterName: P.submitterName || '', revToken: null, invited: !!P.invited,
+        pendingChal: P.pend || null, declined: {} };
+      room._p2Name = P.p2Name || '';                       // paint fallback until their presence re-syncs
+      room._graceUntil = Date.now() + 15000;               // presence warm-up: don't clear the restored seat before their heartbeat lands
+      if (P.sel) sel = P.sel;
+      _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteRenotified = false;
+      if (P.invited) _inviteAt = P.at || Date.now();   // approximate — re-arms the NUDGE ~60s after the persist
+      joinRoomChannel(P.rid, 'p1');   // channels are unregistered strings — rejoining + re-advertising revives the room; the SUBSCRIBED snap (mid:null) also recovers stranded watchers
+      reannounce(); enterRoomWaiting(); advertiseRoom(); startShowHeartbeat(); persistShowRoom();
+      banner('mpx-setup-msg', 'Reconnected — your show room is back.');
+    } catch (e) {}
+  }
+  // ---- sel.audioUrl launcher: the buffered decoder or a LOUD abort — NEVER the demo (stability judge blocker)
+  function resolveShowStart(s, atMs) {
+    var url = String(s.audioUrl || '');
+    if (!url || /\.m3u8(\?|$)/i.test(url) || !window.RhythmGame.__buffered || !window.RhythmGame.startAt) {
+      console.error('[mp] show/review track unresolvable (HLS-only or no buffered seam) — refusing the demo fallback');
+      _showStartFail(); return;
+    }
+    try {
+      window.RhythmGame.startAt(function () {
+        return window.RhythmGame.__buffered(url, { title: s.title, artist: s.artist, artwork: s.art });
+      }, { atMs: atMs, difficulty: sel.difficulty });
+    } catch (e) { console.error('[mp] show buffered start failed', e); _showStartFail(); return; }
+    // same start-watchdog contract as the normal path: #loading/#game count as progressing; a dead start aborts loud
+    if (_startWatchdog) clearTimeout(_startWatchdog);
+    var _wdT0 = Date.now();
+    function _wdCheck() {
+      _startWatchdog = 0;
+      if (!matchLive && !tour.id) return;
+      var g = document.getElementById('game'), ld = document.getElementById('loading');
+      if (g && g.classList.contains('active')) return;
+      if (ld && ld.classList.contains('active')) {
+        if (Date.now() - _wdT0 < 30000) _startWatchdog = setTimeout(_wdCheck, 3000);
+        return;
+      }
+      console.error('[mp] show round did not start (no loading/game screen past the synced start) — aborting loud');
+      _showStartFail();
+    }
+    _startWatchdog = setTimeout(_wdCheck, Math.max(0, atMs - Date.now()) + 4000);
+  }
+  function _showStartFail() {
+    var g = $('game'), ld = $('loading');
+    if ((g && g.classList.contains('active')) || (ld && ld.classList.contains('active'))) return;   // playing/decoding — never yank a live run
+    if (_startWatchdog) { clearTimeout(_startWatchdog); _startWatchdog = 0; }
+    stopCountdown();
+    teardownMatch();   // clears the dead matchCh so the host's next START mints a fresh mid
+    screen.classList.add('active'); activeNow = true;
+    if (room.id && room.show) {
+      step('setup'); enterRoomWaiting(); sendShowSnap();   // final live:false — watchers recover
+      banner('mpx-setup-msg', '⚠ Couldn\'t load the review track — the room is still open. Hit START to try again.');
+    } else {
+      step('setup');
+      banner('mpx-setup-msg', '⚠ Couldn\'t load the track — back out and retry.');
+    }
   }
 
   // ===================== BUILD9: TOURNAMENT (5–10 player single-elim bracket) =====================
@@ -3281,6 +3794,7 @@
       el.addEventListener('click', function () {
         var t = rows[+el.getAttribute('data-i')]; if (!t) return;
         sel.trackId = t.id; sel.title = t.title; sel.artist = t.artist_credit_name || t.artist_name; sel.art = t.artwork_url; sel.demo = (t.id === 'demo');
+        try { delete sel.audioUrl; } catch (e) {}   // review fix 1: picking a NEW track invalidates any show/review audio riding the old sel (it would play the wrong song)
         var pk = $('mpx-picker'); if (pk) pk.hidden = true;
         paintSelection(); broadcastSong();
         meReady = false; oppReady = false; setReadyBtn(); refreshReadyEnabled();
@@ -3346,7 +3860,7 @@
   wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
   wire('mpx-room-combat', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build69: segmented combat select for the room (read at openRoom into room.combat)
   // build8: room context (inside setup) — host closes / guest leaves
-  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; reannounce(); backToLobby(); } });
+  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { var _wasShow = !!room.show; leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; if (_wasShow) { try { delete sel.audioUrl; } catch (e) {} } reannounce(); backToLobby(); } });   // review fix 1/5: a guest leaving a SHOW drops the review audio; the stale back-label restores at the next enterSetup
   // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
   wire('mpx-invite-friend', 'click', function () {
     if (!room.id) return;
@@ -3367,6 +3881,11 @@
   });
   wire('mpx-leave-win', 'click', leaveAll);
   wire('mpx-backlobby', 'click', backToLobby);
+  // build102s: live-show room controls (elements only ever visible while room.show)
+  wire('mpx-show-invite', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(false); });
+  wire('mpx-show-nudge', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(true); });
+  wire('mpx-show-accept', 'click', acceptChallenger);
+  wire('mpx-show-decline', 'click', declineChallenger);
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
   wire('mpx-ready', 'click', toggleReady);
   wire('mpx-diff', 'click', function (e) {
@@ -3597,7 +4116,7 @@
   // The hub's #mp-back / Esc already route to RhythmHub.show(). During a LIVE match the
   // active screen is #game (engine), so they can't fire mid-song. We additionally guard
   // #mp-back so leaving from a WINNER/SETUP step tears the match channel down cleanly.
-  wire('mp-back', 'click', function () { try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; });
+  wire('mp-back', 'click', function () { try { _cancelShowOpen(); if (room.id && room.show) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist)
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
@@ -3625,13 +4144,26 @@
   // player manually finds MULTIPLAYER. Mirrors the ?mpjoin= line above.
   else if (_pendingRoomJoin) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
   // build42: reconnect to a bracket I was in if the tab reloaded (persisted < 90s ago) — surface MP, rejoin the channel, pull the snapshot
-  else { try { if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500); } catch (e) {} }
+  else { try {
+    if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500);
+    // build102s: host refresh ≤90s revives the SHOW room (rr_showroom mirrors the rr_tour pattern — no other pending deep-link wins)
+    else if (sessionStorage.getItem('rr_showroom')) setTimeout(function () { try { open(); setTimeout(maybeReconnectShowRoom, 800); } catch (e) {} }, 1500);
+  } catch (e) {} }
 
   // public hook
   window.RhythmMP = { open: open, close: leaveAll, isLive: function () { return matchLive || tour.state === 'live'; },
     getRank: getRank,                                                  // v254: the leaderboard MULTIPLAYER tab reads this
     getCombat: function () { return combatOn; },
-    setCombat: function (on) { combatOn = !!on; try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {} paintCombatToggle(); return combatOn; } };
+    setCombat: function (on) { combatOn = !!on; try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {} paintCombatToggle(); return combatOn; },
+    openShowRoom: openShowRoom,                                        // build102s: GO LIVE entry from the review launch card
+    isShowOpen: function () { return !!(room && room.show && room.id); } };   // build102s: catalog.js return-pill guard reads this
+  // build102s DEV HOOK (strip before launch with __rrDebug/__mpDev/__rrReview — it's on the CLAUDE.md strip list):
+  // headless driver for the live-show flow — the real path otherwise needs an HMAC token + three browsers.
+  window.__rrShow = {
+    open: function (fakeSel) { return openShowRoom(fakeSel || {}); },
+    state: function () { return { show: !!(room && room.show), rid: room && room.id, p2: (room && room.p2) || null,
+      pending: (room && room.pendingChal) || null, invited: !!(room && room.invited), solo: _soloRun }; }
+  };
   // dev NPC harness (console) — LOCALHOST-ONLY (build66 launch-audit P1: __tour.send can forge live-bracket events /
   // self-credit the pot with no sender auth; MP_DEV gates it out of production while keeping it for the localhost builder).
   if (MP_DEV) {

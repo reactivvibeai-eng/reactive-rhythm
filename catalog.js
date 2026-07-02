@@ -1775,6 +1775,7 @@
     totalCount: () => catalogTracks.length, rawCount,
     // revenue attribution
     getPackId, logUse,
+    showInvite,   // build102s (Phase-2 C1): live-show artist call-in — POST /show/invite (token stays module-local here)
   };
 
   // ===========================================================================
@@ -1790,6 +1791,9 @@
   // POST /score + the results leaderboard. After results, an auto-return pill sends the host back to the show.
   var _reviewMode = false;
   var _reviewReturnPath = '/admin';                    // host panel — Live Control is /admin's default tab
+  // build102s (Phase-2 C1): the RAW review token, kept module-local for POST /show/invite (the live-match
+  // artist call-in). It never rides Realtime, sessionStorage, or any log line — only the auth'd invite POST.
+  var _revRawToken = null;
   function _reviewReturnUrl() {
     var base = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SITE_BASE) || 'https://reactivvibeai.com';
     return base + _reviewReturnPath;
@@ -1843,11 +1847,52 @@
         });
       }
     }
+    // build102s (Phase-2 C1) GO LIVE — HOST-ONLY (role from the extended resolver; a missing role field means the
+    // deployed resolver still only accepts host-locked tokens → 'host'). Hidden unless RhythmMP.openShowRoom exists:
+    // never a dead button, and solo PLAY above stays the untouched primary (owner's non-negotiable).
+    var gl = _rvEl('rvl-golive'), glh = _rvEl('rvl-golive-hint');
+    var _canLive = ((track._role || 'host') === 'host') && !!(window.RhythmMP && window.RhythmMP.openShowRoom);
+    if (gl) {
+      gl.hidden = !_canLive; if (glh) glh.hidden = !_canLive;
+      if (_canLive && !gl._wired) {
+        gl._wired = true;
+        gl.addEventListener('click', function (ev) {
+          if (ev && ev.isTrusted === false) return;   // same synthetic-event guard as rvl-play
+          ov.classList.remove('on');
+          var ok = false;
+          try {
+            if (window.RhythmMP && window.RhythmMP.openShowRoom) {
+              window.RhythmMP.openShowRoom({
+                trackId: track.id, title: track.title, artist: track.artist_name, art: track.artwork_url,
+                audioUrl: track.analysis_url || track.audio_url,   // the decodable .m4a — same visibility class as catalog audio_url
+                difficulty: (window.RhythmGame.getDifficulty && window.RhythmGame.getDifficulty()) || 'medium',
+                submitterId: track._submitterId || null, submitterName: track._submitterName || '',
+                revToken: _revRawToken
+              });
+              ok = true;
+            }
+          } catch (e) { console.error('[review] GO LIVE failed', e); }
+          if (!ok) {   // solo must always remain reachable — put the card straight back
+            ov.classList.add('on');
+            try { window.RhythmGame.showToast && window.RhythmGame.showToast('Live rooms aren\'t available right now — solo PLAY still works.', 'error'); } catch (e2) {}
+          }
+        });
+      }
+    }
+  }
+  // build102s: CALL IN THE ARTIST — multiplayer.js passes only the room id; the token stays module-local here.
+  // Backend contract: POST /show/invite { token, room, renotify } → { invited, outcome } | 401/403 | 429.
+  async function showInvite(roomId, renotify) {
+    if (!_revRawToken) throw new Error('no review token in this session');
+    return api('/show/invite', { method: 'POST', auth: true, body: { token: _revRawToken, room: String(roomId || ''), renotify: !!renotify } });
   }
   // ---- results auto-return ("Returning to the show in Ns") — armed only while the review track is current ----
   var _rvTimer = 0, _rvPill = null;
   function _cancelReturnCountdown() { if (_rvTimer) { clearInterval(_rvTimer); _rvTimer = 0; } if (_rvPill) { try { _rvPill.remove(); } catch (e) {} _rvPill = null; } }
   function _startReturnCountdown() {
+    // build102s RETURN-PILL GUARD (Phase-2 C1): never arm the auto-return while a live show is open or a match is
+    // live — the pill would drag the host to /admin mid-show (probed at FIRE time, so load order can't break it).
+    if (window.RhythmMP && ((window.RhythmMP.isShowOpen && window.RhythmMP.isShowOpen()) || (window.RhythmMP.isLive && window.RhythmMP.isLive()))) return;
     _cancelReturnCountdown();
     var n = 10;
     var pill = document.createElement('div'); pill.id = 'rvl-return';
@@ -1867,6 +1912,7 @@
   function _setupReviewReturn() {
     var res = document.getElementById('results'); if (!res || res._rvObs) return; res._rvObs = true;
     new MutationObserver(function () {
+      if (window.RhythmMP && window.RhythmMP.isShowOpen && window.RhythmMP.isShowOpen()) return;   // build102s: a show is open — never arm the return pill between runs
       var on = res.classList.contains('active') && currentTrack && currentTrack._review;
       if (on) _startReturnCountdown(); else if (!res.classList.contains('active')) _cancelReturnCountdown();
     }).observe(res, { attributes: true, attributeFilter: ['class'] });
@@ -1876,6 +1922,7 @@
   }
   async function _resolveReview(token) {
     if (!token || !API_BASE) { _rvState('Missing review link — head back to the show and press Play in Reactive Rhythm again.'); return; }
+    _revRawToken = token;   // build102s: kept for POST /show/invite (GO LIVE artist call-in)
     try {
       var r = await api('/review/resolve?token=' + encodeURIComponent(token), { auth: true, authWaitMs: 4000 });
       if (!r || !r.track_id) { _rvState('Couldn’t open this review track.'); return; }
@@ -1889,7 +1936,10 @@
         id: r.track_id, title: r.title, artist_name: r.artist_name, artist_credit_name: r.artist_name,
         artwork_url: r.artwork_url, genre: r.genre, duration_seconds: r.duration_seconds || 0,
         audio_url: aurl, analysis_url: aurl, chart_status: 'pending',
-        _review: true                                        // SCORED (owner decree) — no _preview flag, recordLocal runs in full
+        _review: true,                                       // SCORED (owner decree) — no _preview flag, recordLocal runs in full
+        // build102s: role/submitter from the extended resolver. A MISSING role = the currently-deployed
+        // resolver (host tokens only, host-locked) → treat as 'host' for back-compat; GO LIVE keys on this.
+        _role: r.role || 'host', _submitterId: r.submitter_id || null, _submitterName: r.submitter_name || ''
       };
       _setupReviewReturn();
       _openReviewLaunch(_revTrack);

@@ -15,6 +15,33 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build102s — LIVE-SHOW MULTIPLAYER core (Phase-2 C1): GO LIVE → solo show room → artist call-in  ✅ verified (?v=400)
+The review flow becomes a live show. Built from `PHASE2_LIVESHOW_DESIGN.md` by a dedicated implementation pass, then
+hardened through a second adversarial diff review (9 findings — 4 major — all fixed and re-verified):
+- **GO LIVE** on the review launch card (host-role only, untrusted-click-guarded) → `RhythmMP.openShowRoom`: a public,
+  combat-off show room with the review song PRE-LOCKED (`sel.audioUrl` — every seat charts the real review audio; the
+  demo fallback is dead for show sels, failures abort loudly). 8s Realtime watchdog → re-raises the launch card
+  (solo PLAY always reachable; card raised to z-index 300 above the MP screen).
+- **SOLO START** (owner decree): the host plays alone instantly — ready/`startRoomMatch` gates relaxed only for
+  `room.show`; `_soloRun` snapshotted at beginMatch so a mid-run seat change can never mint a ranked forfeit-win;
+  solo settle skips all ladder writes and lands back in the open room.
+- **ARTIST CALL-IN**: "📣 CALL IN THE ARTIST" → `RhythmCatalog.showInvite` → live `/show/invite` backend (dedupe +
+  rate limits) → site notification with a JOIN THE MATCH button. Joining artist = pending challenger; **host ACCEPT
+  is the only path to the seat** (submitter id pre-fills, never auto-seats). NUDGE AGAIN after 60s.
+- **`show-snap` heartbeat** (4s, room channel, tokens never on the wire): late arrivals catch up (sel/mid), seat
+  races self-heal (demote only when the seat is truly held by someone else), spectators recover from dead runs
+  (final `live:false` snap on every teardown); `rr_showroom` persists seat state across a <90s host refresh.
+- **Show-room UI**: banner (art + LIVE SHOW chip), artist seat states, watching count, START (SOLO)/START VERSUS;
+  spectators of a SHOW get a neutral both-finals verdict ("MATCH OVER — <name> takes it"); END THE SHOW fully closes
+  the room (zombie-room leak fixed in passing for show mode).
+- **Byte-identity hardening from the diff review**: stale `sel.audioUrl` scrubbed at 5 kill-points (a past show can
+  never hijack a normal match's audio); `showWinner` restored byte-identical for normal spectate; forged `show-snap`
+  inert on normal rooms; `_showOpenT` watchdog can't outlive its context; stale solo hooks gated on `matchLive`.
+  One deliberate deviation (documented in-code): enterSetup now repaints a stale 'READY ✓' correctly.
+Verified: node-clean ×2, live solo loop end-to-end headless (show room → real review audio chart → clean solo settle →
+no ranked record → full close), z-index/persist/label fixes probed live, zero console errors. **Needs the owner's
+2-browser test** for head-to-head + spectate. `PHASE2_LIVESHOW_DESIGN.md` = spec; spectator dual note-highway = C2.
+
 ### build102 — Phase-2 groundwork: invite/spectate deep-links + token hygiene (judge-mandated)  ✅ verified (?v=399)
 Phase 2 (live-show multiplayer) was designed by a 6-agent workflow (seam-verify → 3 designers → 2 adversarial judges;
 full validated spec in `PHASE2_LIVESHOW_DESIGN.md` — the implementation contract). This ships the judges' independent

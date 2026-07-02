@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=399" />
+<link rel="stylesheet" href="jukebox.css?v=400" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2977,7 +2977,7 @@
      ============================================================ */
   /* build101 REVIEW DEEP-LAUNCH — full-screen launch card for /game?review=<token> ("Play in Reactive Rhythm").
      Sits above every screen (start stays suppressed); art + difficulty + PLAY; catalog.js drives it. */
-  #review-launch { position: fixed; inset: 0; z-index: 200; display: none; }
+  #review-launch { position: fixed; inset: 0; z-index: 300; display: none; }   /* build102s (review fix 3): a modal overlay must sit ABOVE every screen — at z-200 the MP screen (z-240) buried the solo-fallback card */
   #review-launch.on { display: block; }
   #review-launch .rvl-veil { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 0%, rgba(40,16,14,0.55), rgba(10,7,6,0.94) 62%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
   #review-launch .rvl-card { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(92vw, 440px); max-height: 92vh; overflow-y: auto; background: linear-gradient(180deg,#170b0c,#100a0c); border: 1px solid rgba(224,169,63,0.35); border-radius: 22px; padding: 26px 28px 22px; box-shadow: 0 40px 120px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,31,46,0.07); text-align: center; }
@@ -2996,6 +2996,36 @@
   #review-launch .rvl-state { display: none; font-family: 'Chakra Petch', monospace; font-size: 13px; line-height: 1.6; color: rgba(238,230,226,0.78); padding: 8px 4px 0; }
   #review-launch .rvl-back { margin-top: 14px; background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.08em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
   #review-launch .rvl-back:hover { color: #eee6e2; }
+  /* build102s (Phase-2 C1) — GO LIVE: gold-outline secondary CTA under the crimson PLAY (brand: black/crimson/gold, no purple/blue) */
+  #review-launch .rvl-golive { width: 100%; margin-top: 10px; padding: 13px 0; border-radius: 14px; border: 1px solid rgba(224,169,63,0.55); background: rgba(224,169,63,0.08); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.14em; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }
+  #review-launch .rvl-golive:hover { transform: translateY(-1px); background: rgba(224,169,63,0.14); box-shadow: 0 10px 30px -12px rgba(224,169,63,0.55); }
+  #review-launch .rvl-live-dot { color: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; display: inline-block; }
+  @keyframes rvlPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+  #review-launch .rvl-golive-hint { font-family: 'Chakra Petch', monospace; font-size: 10.5px; color: rgba(238,230,226,0.55); margin-top: 7px; letter-spacing: 0.05em; }
+  /* build102s — LIVE SHOW room chrome (mpx-step-setup; hidden unless room.show). Warm darks only (R>=G>=B). */
+  .mpx-show-banner { display: flex; align-items: center; gap: 12px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(26,16,12,0.55)); border: 1px solid rgba(224,169,63,0.4); }
+  .mpx-show-banner .msb-art { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(222,216,212,0.16); background: #1a100e; flex: none; }
+  .mpx-show-banner .msb-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+  .mpx-show-banner .msb-badge { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9.5px; letter-spacing: 0.22em; color: var(--gold, #e0a93f); }
+  .mpx-show-banner .msb-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; color: #f3ece8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mpx-show-banner .msb-artist { font-family: 'Chakra Petch', monospace; font-size: 11px; color: rgba(238,230,226,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mpx-show-banner .msb-diff { margin-left: auto; flex: none; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.16em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 4px 10px; }
+  .mpx-show-seat { display: flex; flex-direction: column; gap: 8px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,0.025); border: 1px dashed rgba(224,169,63,0.35); font-family: 'Chakra Petch', monospace; font-size: 12px; color: #cdbfae; text-align: left; }
+  .mpx-show-seat b { color: var(--gold, #e0a93f); }
+  .mpx-show-pend { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(224,169,63,0.09); border: 1px solid rgba(224,169,63,0.5); }
+  .mpx-show-pend .msp-txt.artist b { color: #fff2cd; }
+  .mpx-show-pend .msp-btns { display: flex; gap: 6px; flex: none; }
+  .mpx-show-pend button { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.1em; padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+  #mpx-show-accept { border: 1px solid rgba(224,169,63,0.7); background: linear-gradient(180deg, rgba(224,169,63,0.35), rgba(148,102,26,0.25)); color: #ffe9b8; }
+  #mpx-show-accept:hover { background: linear-gradient(180deg, rgba(224,169,63,0.5), rgba(148,102,26,0.35)); }
+  #mpx-show-decline { border: 1px solid rgba(222,216,212,0.25); background: rgba(255,255,255,0.04); color: #cdbfae; }
+  .mpx-show-invite-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mpx-show-invite-btn { flex: 1; min-width: 200px; padding: 11px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12.5px; letter-spacing: 0.12em; cursor: pointer; }
+  .mpx-show-invite-btn:hover:not(:disabled) { background: rgba(224,169,63,0.18); }
+  .mpx-show-invite-btn:disabled { opacity: 0.55; cursor: default; }
+  .mpx-show-invite-state { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); }
+  .mpx-show-nudge { background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
+  .mpx-show-nudge:hover { color: #eee6e2; }
   /* review results: auto-return pill ("Returning to the show in Ns") */
   #rvl-return { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 210; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(180deg,#1b0d0e,#120a0c); border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 16px 44px rgba(0,0,0,0.65); font-family: 'Chakra Petch', monospace; font-size: 13px; color: #eee6e2; white-space: nowrap; }
   #rvl-return b { font-family: 'Oxanium', sans-serif; color: var(--gold, #e0a93f); }
@@ -4888,6 +4918,31 @@
           <span id="mpx-roomctx-spec" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#c9a25a;"></span>
           <button class="rh-refresh" id="mpx-room-close" type="button" style="margin-left:auto;">CLOSE ROOM</button>
         </div>
+        <!-- build102s (Phase-2 C1): LIVE SHOW room chrome — hidden unless room.show (multiplayer.js paintShowRoom drives it) -->
+        <div class="mpx-show-banner" id="mpx-show-banner" hidden>
+          <img class="msb-art" id="msb-art" alt="" src="assets/atom.png" />
+          <div class="msb-txt">
+            <span class="msb-badge">● LIVE SHOW</span>
+            <span class="msb-title" id="msb-title">—</span>
+            <span class="msb-artist" id="msb-artist">—</span>
+          </div>
+          <span class="msb-diff" id="msb-diff">PULSE</span>
+        </div>
+        <div class="mpx-show-seat" id="mpx-show-seat" hidden>
+          <div class="mpx-show-seat-empty" id="mpx-show-seat-empty">🎸 ARTIST SEAT — <b>open</b></div>
+          <div class="mpx-show-pend" id="mpx-show-pend" hidden>
+            <span class="msp-txt" id="mpx-show-pend-txt">Someone wants the challenger seat</span>
+            <span class="msp-btns">
+              <button id="mpx-show-accept" type="button">✓ ACCEPT</button>
+              <button id="mpx-show-decline" type="button">✕ DECLINE</button>
+            </span>
+          </div>
+          <div class="mpx-show-invite-row" id="mpx-show-invite-row" hidden>
+            <button class="mpx-show-invite-btn" id="mpx-show-invite" type="button">📣 CALL IN THE ARTIST</button>
+            <span class="mpx-show-invite-state" id="mpx-show-invite-state" hidden></span>
+            <button class="mpx-show-nudge" id="mpx-show-nudge" type="button" hidden>NUDGE AGAIN</button>
+          </div>
+        </div>
         <div class="mpx-vsbar">
           <span class="mpx-dot you" id="mpx-dot-you">YOU</span>
           <span class="mpx-vs">VS</span>
@@ -5209,6 +5264,9 @@
         <button type="button" data-d="hard">HARD</button>
       </div>
       <button type="button" class="rvl-play" id="rvl-play" disabled>▶&nbsp;&nbsp;PLAY</button>
+      <!-- build102s (Phase-2 C1): host-only GO LIVE — catalog.js unhides it when resolve role==='host' AND RhythmMP.openShowRoom exists -->
+      <button type="button" class="rvl-golive" id="rvl-golive" hidden><span class="rvl-live-dot" aria-hidden="true">●</span>&nbsp;GO LIVE — PLAY IT AS A MATCH</button>
+      <div class="rvl-golive-hint" id="rvl-golive-hint" hidden>Opens a live room — the artist gets invited, everyone else can watch.</div>
       <div class="rvl-note" id="rvl-note">Scored run — counts on the leaderboard.</div>
       <div class="rvl-state" id="rvl-state"></div>
       <button type="button" class="rvl-back" id="rvl-back">← Back to the show</button>
@@ -6208,7 +6266,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=399"></script>
+<script src="telemetry.js?v=400"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6378,14 +6436,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=399"></script>
-<script src="game.js?v=399"></script>
-<script src="procbg.js?v=399"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=399"></script>
-<script src="catalog.js?v=399"></script>
-<script src="multiplayer.js?v=399"></script>
-<script src="share.js?v=399"></script>
-<script src="couch.js?v=399"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=400"></script>
+<script src="game.js?v=400"></script>
+<script src="procbg.js?v=400"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=400"></script>
+<script src="catalog.js?v=400"></script>
+<script src="multiplayer.js?v=400"></script>
+<script src="share.js?v=400"></script>
+<script src="couch.js?v=400"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
