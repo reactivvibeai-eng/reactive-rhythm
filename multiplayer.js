@@ -1442,6 +1442,10 @@
       try { recordMpResult(_res, { op: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival', song: (sel && sel.title) || '', my: (me && me.score) || 0, ops: (op && op.score) || 0, forfeit: (_res === 'win' && _ff) }); } catch (e) {}
       try { paintRankChip(); } catch (e) {}
     }
+    // build102y step1: NEXT RIVAL — instant requeue from the verdict. Hidden in SHOW rooms (backToLobby
+    // intentionally closes those — a show host clicking it would nuke their live room) and for any
+    // spectator that somehow lands here (spectators normally get _renderSpecVerdict, never this step).
+    var _nr = $('mpx-next-rival'); if (_nr) _nr.hidden = !!(room.id && room.show) || spectating;
     step('winner');
     screen.classList.add('active');   // re-raise over the engine's results screen (showScreen stripped us)
     activeNow = true;
@@ -4371,6 +4375,15 @@
   });
   wire('mpx-leave-win', 'click', leaveAll);
   wire('mpx-backlobby', 'click', backToLobby);
+  // build102y step1: NEXT RIVAL — pure composition of two shipped entry points: backToLobby() self-cleans the
+  // finished match (and forces QM.looking=false), then toggleQuickMatch() re-arms the search — onLobbySync
+  // re-runs tryQuickPair on every presence sync and the 9s CPU fallback comes free. No double-fire: the
+  // deterministic proposer + QM.looking gates in tryQuickPair are the same ones PLAY NOW already relies on.
+  wire('mpx-next-rival', 'click', function () {
+    if (room.id && room.show) return;   // belt-and-suspenders — the button is hidden in show rooms
+    backToLobby();
+    if (!QM.looking) toggleQuickMatch();
+  });
   // build102s: live-show room controls (elements only ever visible while room.show)
   wire('mpx-show-invite', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(false); });
   wire('mpx-show-nudge', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(true); });
