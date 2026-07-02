@@ -270,7 +270,12 @@
       tier: t.n, color: t.c, next: nx ? { tier: nx.n, at: nx.min, need: Math.max(0, nx.min - r.points) } : null,
       history: (r.history || []).slice(0, 15) };
   }
-  function recordMpResult(result, info) {   // result: 'win' | 'loss' | 'draw'; info: { op, song, my, ops, forfeit }
+  // build102y step3: RIVALRY LEDGER — per-opponent lifetime W/L/D (rr_mp_rivals), keyed by the rival's presence
+  // id (their localId(), stable per browser). Pure local + display-only: zero protocol change. Accepted v1
+  // limits: asymmetric knowledge (each side keeps its own book), evaporates with cleared storage.
+  function mpRivals() { try { var m = JSON.parse(localStorage.getItem('rr_mp_rivals') || '{}'); return (m && typeof m === 'object') ? m : {}; } catch (e) { return {}; } }
+  function rivalRec(id) { return id ? (mpRivals()[String(id)] || null) : null; }
+  function recordMpResult(result, info) {   // result: 'win' | 'loss' | 'draw'; info: { op, song, my, ops, forfeit, oppId }
     var r = mpRankLoad(); info = info || {}; var _beforeTier = mpRankTier(r.points).n;
     if (result === 'win') { r.wins++; if (!info.forfeit) r.points += 25; r.streak = (r.streak > 0 ? r.streak : 0) + 1; }
     else if (result === 'draw') { r.draws++; r.points += 8; r.streak = 0; }
@@ -282,6 +287,21 @@
     if (r.history.length > 30) r.history.length = 30;
     try { localStorage.setItem('rr_mp_rank', JSON.stringify(r)); } catch (e) {}
     try { window.dispatchEvent(new CustomEvent('rr-mp-rank', { detail: getRank() })); } catch (e) {}
+    // build102y step3: RIVALRY LEDGER write — parallel per-opponent map. Bots never reach here (the showWinner
+    // call site is gated on !oppMeta.bot). LRU-cap 50 by `at` so a busy lobby can't grow it unbounded.
+    try {
+      if (info.oppId) {
+        var RV = mpRivals(), k = String(info.oppId).slice(0, 48);
+        var rec = RV[k] || { w: 0, l: 0, d: 0, name: '' };
+        if (result === 'win') rec.w++; else if (result === 'loss') rec.l++; else rec.d++;
+        rec.name = String(info.op || '').slice(0, 18);
+        rec.at = Date.now();
+        RV[k] = rec;
+        var ks = Object.keys(RV);
+        if (ks.length > 50) { ks.sort(function (a, b) { return (RV[a].at || 0) - (RV[b].at || 0); }); for (var ki = 0; ki < ks.length - 50; ki++) delete RV[ks[ki]]; }
+        localStorage.setItem('rr_mp_rivals', JSON.stringify(RV));
+      }
+    } catch (e) {}
     return r;
   }
   var _lastStunAt = 0;
@@ -503,17 +523,24 @@
         : '<span class="mpx-r-av">' + esc(initial(p.name)) + '</span>';
       var badge = isHost ? ' <span class="mpx-badge host">HOST</span>' : '';
       var inMatch = !!p.inMatch;
+      // build102y step3: rivalry ledger on the roster — your record vs this player on the sub line; trailing
+      // them = crimson REVENGE tag + a pulsing CHALLENGE. All numerics local; the tag markup is static.
+      var rv = rivalRec(id), h2h = '', revenge = false;
+      if (rv && (rv.w + rv.l + rv.d) > 0) {
+        h2h = ' · you ' + rv.w + '–' + rv.l + (rv.d ? '–' + rv.d : '');
+        revenge = rv.l > rv.w;
+      }
       var actions;
       if (incoming[id]) {
         actions = '<button class="mpx-acc" data-acc="' + esc(id) + '">ACCEPT</button><button class="mpx-dec" data-dec="' + esc(id) + '" aria-label="Decline">✕</button>';
       } else if (pendingOut && pendingOut.toId === id) {
         actions = '<button class="mpx-challenge" disabled>WAITING…</button>';
       } else {
-        actions = '<button class="mpx-challenge" data-ch="' + esc(id) + '"' + (inMatch ? ' disabled' : '') + '>' + (inMatch ? 'IN MATCH' : 'CHALLENGE') + '</button>';
+        actions = '<button class="mpx-challenge' + (revenge && !inMatch ? ' revenge' : '') + '" data-ch="' + esc(id) + '"' + (inMatch ? ' disabled' : '') + '>' + (inMatch ? 'IN MATCH' : 'CHALLENGE') + '</button>';
       }
       return '<div class="mpx-row' + (incoming[id] ? ' incoming' : '') + '">' + av +
-        '<span class="mpx-r-meta"><span class="mpx-r-name">' + esc(p.name || 'Player') + badge + '</span>' +
-        '<span class="mpx-r-sub">' + (incoming[id] ? 'wants to duel you' : (inMatch ? 'in a match' : 'online')) + '</span></span>' +
+        '<span class="mpx-r-meta"><span class="mpx-r-name">' + esc(p.name || 'Player') + badge + (revenge ? ' <span class="mpx-revenge">REVENGE</span>' : '') + '</span>' +
+        '<span class="mpx-r-sub">' + (incoming[id] ? 'wants to duel you' : (inMatch ? 'in a match' : 'online')) + h2h + '</span></span>' +
         actions + '</div>';
     }).join('');
     // wire row buttons
@@ -1440,7 +1467,7 @@
     if (!_rankRecorded && !spectating && !(oppMeta && oppMeta.bot)) {   // v258: a SPECTATOR's myFinal defaults to {score:0} → would record a phantom LOSS on their own ladder; gate it out
       _rankRecorded = true;
       var _res = draw ? 'draw' : win ? 'win' : 'loss', _ff = !op || oppLeft;
-      try { recordMpResult(_res, { op: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival', song: (sel && sel.title) || '', my: (me && me.score) || 0, ops: (op && op.score) || 0, forfeit: (_res === 'win' && _ff) }); } catch (e) {}
+      try { recordMpResult(_res, { op: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival', song: (sel && sel.title) || '', my: (me && me.score) || 0, ops: (op && op.score) || 0, forfeit: (_res === 'win' && _ff), oppId: (oppMeta && oppMeta.id) || (op && op.id) || null } ); } catch (e) {}   // build102y step3: oppId feeds the rivalry ledger
       try { paintRankChip(); } catch (e) {}
     }
     // build102y step1: NEXT RIVAL — instant requeue from the verdict. Hidden in SHOW rooms (backToLobby
@@ -1456,6 +1483,17 @@
     if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); _sw.textContent = draw ? '📸 SHARE THE DRAW' : (win ? '📸 SHARE THE W' : '📸 RUN IT BACK'); }
     var _cb = $('mpx-copy-battle');
     if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; _cb.textContent = '🔗 COPY BATTLE LINK'; _cb.classList.remove('copied'); }
+    // build102y step3: lifetime head-to-head under the scorecard — read AFTER the record above so this game
+    // is already in the book (the "flip"). Trailing = a REVENGE? nudge. esc() on the stored name (peer-supplied).
+    var _h2 = $('mpx-h2h');
+    if (_h2) {
+      var _rvId = (oppMeta && oppMeta.id) || (op && op.id) || null;
+      var _rv = (!spectating && !(oppMeta && oppMeta.bot)) ? rivalRec(_rvId) : null;
+      if (_rv && (_rv.w + _rv.l + _rv.d) > 1) {   // >1: a first-ever meeting has no history worth a line
+        _h2.innerHTML = 'Lifetime vs ' + esc(_rv.name || (op && op.name) || 'this rival') + ': <b>' + _rv.w + '–' + _rv.l + (_rv.d ? '–' + _rv.d : '') + '</b>' + (_rv.l > _rv.w ? ' <span class="mpx-revenge">REVENGE?</span>' : '');
+        _h2.hidden = false;
+      } else _h2.hidden = true;
+    }
     step('winner');
     screen.classList.add('active');   // re-raise over the engine's results screen (showScreen stripped us)
     activeNow = true;
