@@ -2280,8 +2280,10 @@
     room = { id: newRoomId(), name: ((spec.title || 'Review') + ' — LIVE').slice(0, 28), priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null,
       show: true, submitterId: spec.submitterId || null, submitterName: spec.submitterName || '', revToken: spec.revToken || null, invited: false, pendingChal: null, declined: {} };
     // the review song is PRE-LOCKED; audioUrl is the NEW sel field resolveShowStart routes on (never the demo)
+    // build102y step4: env rides in from the launch card's stage picker — beginMatch applies sel.env on BOTH
+    // seats and sendShowSnap ships sel wholesale, so the challenger + late joiners inherit the stage for free.
     sel = { trackId: spec.trackId || null, title: spec.title || null, artist: spec.artist || null, art: spec.art || null,
-      difficulty: spec.difficulty || 'medium', demo: false, env: null, audioUrl: spec.audioUrl || null };
+      difficulty: spec.difficulty || 'medium', demo: false, env: spec.env || null, audioUrl: spec.audioUrl || null };
     _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteAt = 0; _inviteRenotified = false;
     // fresh watchdog for the ROOM-channel subscribe stage (the internal closeRoom above cancels any prior one);
     // guarded so it can only ever fail THIS show room — never one the host opened later.

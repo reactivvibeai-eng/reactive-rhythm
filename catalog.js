@@ -1806,6 +1806,10 @@
     var p = _rvEl('rvl-play'); if (p) p.style.display = 'none';
     var d = _rvEl('rvl-diff'); if (d) d.style.display = 'none';
     var n = _rvEl('rvl-note'); if (n) n.style.display = 'none';
+    // build102y step4 (edge case 3): the stage picker hides with the diff row — an HLS-only "watch instead"
+    // card has nothing to launch, so a stage strip there is noise.
+    var sr = _rvEl('rvl-stage-row'); if (sr) sr.hidden = true;
+    var sn = _rvEl('rvl-stage-name'); if (sn) sn.hidden = true;
     var ti = _rvEl('rvl-title'); if (ti && ti.textContent === 'Resolving track…') { ti.textContent = 'Review'; var ar = _rvEl('rvl-artist'); if (ar) ar.textContent = ''; }
   }
   function _openReviewLoading() {   // paint the card INSTANTLY (loading state) while /review/resolve runs
@@ -1814,9 +1818,60 @@
     var b = _rvEl('rvl-back');
     if (b && !b._wired) { b._wired = true; b.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; location.href = _reviewReturnUrl(); }); }
   }
+  // build102y step4 (owner-mandated): STAGE PICKER on the review launch card. _rvEnvSel = the picked env id
+  // (null = ARENA / no chip touched → every flow byte-identical to before). Chip list replicates multiplayer.js
+  // _stageList: ARENA first, then every FINISHED level the host OWNS — ownsItem gets e.entId || e.id (the
+  // underscore entitlement slug gotcha). When GO LIVE is armed, PAID chips HIDE (judge-endorsed: a live guest
+  // may not own the stage — applyEnvironment's ownership backstop would silently split the two players'
+  // cosmetics); solo-only cards keep them.
+  var _rvEnvSel = null;
+  function _rvStageList(hidePaid) {
+    try {
+      var L = window.RhythmLevels; if (!L || !L.environments) return [];
+      var fin = window.RR_FINISHED_LEVELS || {};
+      return L.environments().filter(function (e) {
+        if (e.isRandom) return false;      // no Random on a launch card — the host picks a concrete stage
+        if (e.isDefault) return true;
+        if (!fin[e.id]) return false;
+        if (e.paid) { if (hidePaid) return false; try { return !!(ownsItem && ownsItem('level', e.entId || e.id)); } catch (x) { return false; } }
+        return true;
+      });
+    } catch (e) { return []; }
+  }
+  function _renderRvStages(canLive) {
+    var row = _rvEl('rvl-stage-row'), nameEl = _rvEl('rvl-stage-name');
+    if (!row) return;
+    var list = _rvStageList(!!canLive);
+    if (list.length <= 1) { row.hidden = true; if (nameEl) nameEl.hidden = true; _rvEnvSel = null; return; }   // only ARENA → nothing to pick
+    var i;
+    var still = false; for (i = 0; i < list.length; i++) if (list[i].id === _rvEnvSel) still = true;
+    if (_rvEnvSel && !still) _rvEnvSel = null;   // the picked chip got filtered away (e.g. GO LIVE hid paid) → back to ARENA
+    row.hidden = false;
+    row.innerHTML = '';
+    list.forEach(function (e) {
+      var b = document.createElement('button'); b.type = 'button';
+      var seld = e.isDefault ? !_rvEnvSel : (_rvEnvSel === e.id);
+      b.className = 'rvl-stage-chip' + (seld ? ' sel' : '');
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', seld ? 'true' : 'false');
+      if (e.accent) b.style.setProperty('--ec', e.accent);
+      b.textContent = e.isDefault ? 'ARENA' : (e.name || 'Stage');   // authored-level names are LOCAL strings (not peer-supplied)
+      if (e.paid) { var t = document.createElement('span'); t.className = 'paid-tick'; t.textContent = '✦'; b.appendChild(t); }
+      b.addEventListener('click', function () { _rvEnvSel = e.isDefault ? null : e.id; _renderRvStages(canLive); });
+      row.appendChild(b);
+    });
+    if (nameEl) {
+      var pick = null; for (i = 0; i < list.length; i++) if (list[i].id === _rvEnvSel) pick = list[i];
+      nameEl.hidden = !pick;
+      nameEl.textContent = pick ? ('on ' + String(pick.name || '').toUpperCase()) : '';
+    }
+  }
   function _openReviewLaunch(track) {
     var ov = _rvEl('review-launch'); if (!ov) { try { launchTrack(track); } catch (e) {} return; }
     ov.classList.add('on');
+    // build102y step4 (edge case 2): fresh card = fresh stage — no chip carries over run-to-run, and any env a
+    // prior run applied is dropped NOW (mirror of the review-fix-1 "never inherit" pattern).
+    _rvEnvSel = null;
+    try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
     var art = _rvEl('rvl-art'); if (art && track.artwork_url) art.src = track.artwork_url;
     var ti = _rvEl('rvl-title'); if (ti) ti.textContent = track.title || 'Untitled';
     var ar = _rvEl('rvl-artist'); if (ar) ar.textContent = track.artist_name || '';
@@ -1844,7 +1899,15 @@
         play.addEventListener('click', function (ev) {
           if (ev && ev.isTrusted === false) return;   // the site's old splash patch fires SYNTHETIC pointerdowns — never auto-start off one
           ov.classList.remove('on');
-          try { launchTrack(track); }
+          // build102y step4: solo PLAY on the picked stage — applyEnvironment backstops unfinished/unowned-paid
+          // to Arena; keepEnvironment stops launchTrack's clearEnvironment (the launchLevel/couch.js contract).
+          // No chip (_rvEnvSel null) = the exact pre-102y launch line.
+          try {
+            if (_rvEnvSel && window.RhythmLevels && window.RhythmLevels.applyEnvironment) {
+              window.RhythmLevels.applyEnvironment(_rvEnvSel);
+              launchTrack(track, { keepEnvironment: true });
+            } else launchTrack(track);
+          }
           catch (e) { try { window.RhythmGame.playUrl(trackAudioUrl(track), { id: track.id, title: track.title, artist: track.artist_name, artwork: track.artwork_url, genre: track.genre }); } catch (e2) {} }
         });
       }
@@ -1869,6 +1932,7 @@
                 audioUrl: track.analysis_url || track.audio_url,   // the decodable .m4a — same visibility class as catalog audio_url
                 difficulty: (window.RhythmGame.getDifficulty && window.RhythmGame.getDifficulty()) || 'medium',
                 submitterId: track._submitterId || null, submitterName: track._submitterName || '',
+                env: _rvEnvSel || null,   // build102y step4: the picked stage rides sel.env — beginMatch applies it on BOTH seats, the show snap carries it to late joiners
                 revToken: _revRawToken
               });
               ok = true;
@@ -1881,6 +1945,8 @@
         });
       }
     }
+    // build102y step4: render the stage chips LAST — _canLive decides whether paid chips hide (edge case 1).
+    try { _renderRvStages(_canLive); } catch (e) {}
   }
   // build102s: CALL IN THE ARTIST — multiplayer.js passes only the room id; the token stays module-local here.
   // Backend contract: POST /show/invite { token, room, renotify } → { invited, outcome } | 401/403 | 429.
