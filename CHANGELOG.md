@@ -15,6 +15,24 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build102 — Phase-2 groundwork: invite/spectate deep-links + token hygiene (judge-mandated)  ✅ verified (?v=399)
+Phase 2 (live-show multiplayer) was designed by a 6-agent workflow (seam-verify → 3 designers → 2 adversarial judges;
+full validated spec in `PHASE2_LIVESHOW_DESIGN.md` — the implementation contract). This ships the judges' independent
+BLOCKER fixes that also harden what's already live:
+- **?mproom= links now auto-open Multiplayer at boot** (multiplayer.js ~3617) — previously only ?mpjoin= did, so a
+  "JOIN THE MATCH" invite would dead-end on the main menu until the player manually found MP.
+- **`&spectate=1`** on a ?mproom= link joins as a WATCHER (multiplayer.js deep-link parse + onRoomMeta auto-join) —
+  without this a public spectate link would seat the first fan as the CHALLENGER and steal the artist's seat.
+- **?mproom= + ?review= collision** (catalog.js boot): invite links carry both — the MP join now owns that boot; the
+  Phase-1 launch card stands down and the share token is stashed (`__rrShareTok`) for the live-show module.
+- **Telemetry token redaction** (telemetry.js `_redactUrl`): the ?review= HMAC token no longer leaks into error rows
+  via location.href (a live Phase-1 privacy gap the security judge caught; also covers Phase-2 share tokens).
+Backend Phase-2 increment dispatched to the Lovable agent in parallel: shared-audience /review/resolve (host +
+submitter ONLY), POST /show/invite with (user_id,submission_id) dedupe + per-host rate limits, and the site
+NotificationCenter "JOIN THE MATCH" CTA with a strict /game/ same-origin URL guard.
+Verified live (?v=399): ?mproom&review&spectate boot → no launch card, token stashed, MP screen auto-opens, no
+console errors; redaction regex proven on a token-bearing URL.
+
 ### build101 — REVIEW DEEP-LAUNCH: "Play in Reactive Rhythm" → launch card → SCORED run → return to show  ✅ verified (?v=398)
 Phase 1 of the site↔game integration (owner-locked spec + 4-agent Phase-0 recon of the Lovable site code, the
 production DB and the game). The host's button used to dump the reviewer on the title screen with the song sheet

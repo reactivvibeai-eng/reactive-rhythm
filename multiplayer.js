@@ -151,6 +151,10 @@
   try { var _mj = location.search.match(/[?&]mpjoin=(t[a-z0-9]+)/); if (_mj) _pendingTourJoin = _mj[1]; } catch (e) {}
   var _pendingRoomJoin = null;   // build60: ?mproom=<rid> deep link — join the friend's room once the lobby is up
   try { var _mr = location.search.match(/[?&]mproom=([a-z0-9]+)/i); if (_mr) _pendingRoomJoin = _mr[1]; } catch (e) {}
+  // build102 (Phase-2 judge blocker): &spectate=1 riding ?mproom= = join as a WATCHER — without this, a public
+  // spectate link would take the CHALLENGER seat (first fan to click steals the artist's spot in a live-show room).
+  var _pendingRoomSpec = false;
+  try { _pendingRoomSpec = /[?&]spectate=1\b/.test(location.search); } catch (e) {}
 
   // ===================== SOFT PRESENCE (build9 foundation fix) =====================
   // VERIFIED against the live project: Realtime BROADCAST round-trips fine, but native
@@ -1601,8 +1605,9 @@
     if (p.hostId === ME.id) return;
     // build60: an invite deep-link (?mproom=) auto-joins its target the moment the host's meta arrives — even private rooms.
     if (_pendingRoomJoin && p.rid === _pendingRoomJoin && !room.id) {
+      var _asSpec = _pendingRoomSpec;   // build102: spectate deep-links must never take a player seat
       _pendingRoomJoin = null; roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
-      banner('mpx-lobby-msg', ''); joinRoom(p.rid, false); return;
+      banner('mpx-lobby-msg', ''); joinRoom(p.rid, _asSpec); return;
     }
     if (p.priv) return;   // private rooms are not listed in the browser (invite/qm only)
     roomsDir[p.rid] = p; roomsDir[p.rid].at = Date.now();
@@ -3615,6 +3620,10 @@
   if (screen.classList.contains('active')) { activeNow = true; onActivated(); }
   // build11: invite deep-link — surface the multiplayer screen shortly after boot so the join flows
   if (_pendingTourJoin) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
+  // build102 (Phase-2 judge blocker): ?mproom= links must ALSO auto-open MP at boot — the room join only fires inside
+  // the lobby's SUBSCRIBED handler, so without this a "JOIN THE MATCH" invite dead-ends on the main menu until the
+  // player manually finds MULTIPLAYER. Mirrors the ?mpjoin= line above.
+  else if (_pendingRoomJoin) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
   // build42: reconnect to a bracket I was in if the tab reloaded (persisted < 90s ago) — surface MP, rejoin the channel, pull the snapshot
   else { try { if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500); } catch (e) {} }
 

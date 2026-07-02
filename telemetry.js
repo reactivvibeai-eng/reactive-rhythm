@@ -229,6 +229,10 @@
   // ---- public: error(errObj) ----------------------------------------------
   // errObj may be an Error, or a plain { message, stack, url } bag from the global
   // error handler. We're lenient — store what's present.
+  // build102 (security, Phase-2 judge mandate): NEVER ship auth-bearing query params in telemetry rows — the
+  // ?review= HMAC token (and the Phase-2 share token) would otherwise leak into the error table via location.href
+  // on every captured client error, letting anyone who can read telemetry replay a live review link.
+  function _redactUrl(u) { try { return String(u || '').replace(/([?&](?:review|token|share)=)[^&#]+/gi, '$1[redacted]'); } catch (e) { return ''; } }
   function error(errObj) {
     try {
       var msg = '', stack = '', url = '';
@@ -244,7 +248,7 @@
         client_ts: new Date().toISOString(),
         session_id: SESSION_ID,
         ua: (function () { try { return navigator.userAgent; } catch (e) { return ''; } })(),
-        url: url || (function () { try { return location.href; } catch (e) { return ''; } })(),
+        url: _redactUrl(url || (function () { try { return location.href; } catch (e) { return ''; } })()),
         message: String(msg == null ? '' : msg).slice(0, 4000),     // cap so a log bomb can't bloat the table
         stack: String(stack || '').slice(0, 8000),
         app_version: APP_VERSION

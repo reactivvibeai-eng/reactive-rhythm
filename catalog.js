@@ -1914,7 +1914,12 @@
     // library, and the old serial order painted the review seconds late behind the full paged /tracks crawl.
     var _q = new URLSearchParams(location.search);
     var _rev = _q.get('review'), _revP = null;
-    if (_rev) {
+    if (_rev && _q.get('mproom')) {
+      // build102 (Phase-2 judge blocker): an INVITE/SPECTATE link carries BOTH ?mproom= and ?review= (share token).
+      // The MP room join owns that boot — never raise the Phase-1 launch card on top of it (a submitter would see
+      // host-only controls). Stash the token for the live-show module (audio resolve at match time) and stand down.
+      try { window.__rrShareTok = _rev; } catch (e) {}
+    } else if (_rev) {
       _reviewMode = true;
       var _ret = _q.get('return');                           // optional same-origin return path (default /admin)
       if (_ret && /^\/[A-Za-z0-9._~\-\/]*$/.test(_ret) && _ret.indexOf('//') !== 0) _reviewReturnPath = _ret;
