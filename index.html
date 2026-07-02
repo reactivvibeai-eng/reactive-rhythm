@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=400" />
+<link rel="stylesheet" href="jukebox.css?v=402" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3026,6 +3026,29 @@
   .mpx-show-invite-state { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); }
   .mpx-show-nudge { background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
   .mpx-show-nudge:hover { color: #eee6e2; }
+  /* build102t (Phase-2 C2) — SPECTATOR DUAL-DECK STAGE (JS-created by multiplayer.js; absent unless watching a show).
+     z-252: above the MP screen (240), below the how-to (260) + the review card (300). Warm darks only. */
+  #mpx-spec-stage { position: fixed; inset: 0; z-index: 252; display: flex; flex-direction: column; background: radial-gradient(120% 90% at 50% 0%, rgba(34,15,13,0.96), rgba(10,7,6,0.985) 64%); }
+  #mpx-spec-stage .mss-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px 8px; }
+  #mpx-spec-stage .mss-plate { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(222,216,212,0.14); }
+  #mpx-spec-stage .mss-plate.p2 { flex-direction: row-reverse; text-align: right; }
+  #mpx-spec-stage.solo .mss-plate.p2 { display: none; }
+  #mpx-spec-stage .mss-av { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,31,46,0.18) center/cover no-repeat; border: 1px solid rgba(255,31,46,0.4); display: inline-flex; align-items: center; justify-content: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; color: #ffd9db; flex: none; }
+  #mpx-spec-stage .mss-name { font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.1em; color: #cdbfae; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mpx-spec-stage .mss-sc { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; color: #f3ece8; }
+  #mpx-spec-stage .mss-cb { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 11px; color: var(--gold, #e0a93f); }
+  #mpx-spec-stage .mss-live { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.22em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 5px 12px; flex: none; animation: rvlPulse 1.4s ease-in-out infinite; }
+  #mpx-spec-stage .mss-decks { flex: 1; display: flex; gap: 10px; padding: 4px 14px 6px; min-height: 0; opacity: 0; transition: opacity .45s ease; }
+  #mpx-spec-stage.ready .mss-decks { opacity: 1; }
+  #mpx-spec-stage .mss-decks canvas { flex: 1; width: 100%; height: 100%; min-width: 0; border-radius: 14px; background: linear-gradient(180deg, rgba(24,12,11,0.6), rgba(12,8,7,0.85)); border: 1px solid rgba(222,216,212,0.10); }
+  #mpx-spec-stage.solo #mss-deck2 { display: none; }
+  #mpx-spec-stage.solo #mss-deck1 { max-width: 62vw; margin: 0 auto; }
+  #mpx-spec-stage .mss-sync { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); font-family: 'Chakra Petch', monospace; font-size: 13px; letter-spacing: 0.12em; color: var(--gold, #e0a93f); background: rgba(20,11,10,0.85); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 12px 22px; animation: mssShimmer 1.6s ease-in-out infinite; }
+  #mpx-spec-stage .mss-sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; }
+  @keyframes mssShimmer { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
+  #mpx-spec-stage .mss-verdict { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(22px, 4.4vw, 40px); letter-spacing: 0.04em; color: var(--chrome, #dad7d2); text-shadow: 0 0 34px rgba(224,169,63,0.4); background: rgba(16,9,9,0.82); border: 1px solid rgba(224,169,63,0.45); border-radius: 18px; padding: 18px 30px; white-space: nowrap; }
+  #mpx-spec-stage .mss-foot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 16px 14px; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.08em; color: #b9b2ac; }
+  #mpx-spec-stage .mss-foot #mss-watchn { color: var(--gold, #e0a93f); }
   /* review results: auto-return pill ("Returning to the show in Ns") */
   #rvl-return { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 210; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(180deg,#1b0d0e,#120a0c); border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 16px 44px rgba(0,0,0,0.65); font-family: 'Chakra Petch', monospace; font-size: 13px; color: #eee6e2; white-space: nowrap; }
   #rvl-return b { font-family: 'Oxanium', sans-serif; color: var(--gold, #e0a93f); }
@@ -5744,13 +5767,8 @@
           <button data-thint="off">Off</button>
         </div>
       </div>
-      <div class="set-row">
-        <span class="set-l">Lane Mode</span>
-        <div class="set-seg" id="set-lanemode">
-          <button data-lanemode="standard">6-Lane · Keys</button>
-          <button data-lanemode="gh" class="active">5-String · Guitar</button>
-        </div>
-      </div>
+      <!-- build102u: Lane Mode toggle REMOVED (owner decree: "we don't do six strings") — the game is 5-lane
+           only; bootLaneProfile force-migrates any stored legacy 'standard' choice to gh. -->
       <div class="set-row">
         <span class="set-l">Guitar on Levels</span>
         <div class="set-seg" id="set-levelguitar">
@@ -6266,7 +6284,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=400"></script>
+<script src="telemetry.js?v=402"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6436,14 +6454,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=400"></script>
-<script src="game.js?v=400"></script>
-<script src="procbg.js?v=400"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=400"></script>
-<script src="catalog.js?v=400"></script>
-<script src="multiplayer.js?v=400"></script>
-<script src="share.js?v=400"></script>
-<script src="couch.js?v=400"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=402"></script>
+<script src="game.js?v=402"></script>
+<script src="procbg.js?v=402"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=402"></script>
+<script src="catalog.js?v=402"></script>
+<script src="multiplayer.js?v=402"></script>
+<script src="share.js?v=402"></script>
+<script src="couch.js?v=402"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

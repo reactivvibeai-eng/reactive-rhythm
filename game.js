@@ -1081,7 +1081,7 @@
       this.onended = null;
     }
     async prepare() {}
-    play() {
+    play(offset) {
       this.ctx = getAC(); // shared, already unlocked by a user gesture
       this.src = this.ctx.createBufferSource();
       this.src.buffer = this.buffer;
@@ -1091,8 +1091,12 @@
       // audio-reactive tap — additive, does NOT change the audio reaching the speakers
       try { musicAnalyser = this.ctx.createAnalyser(); musicAnalyser.fftSize = 256; musicAnalyser.smoothingTimeConstant = 0.78; this.src.connect(musicAnalyser); musicFreq = new Uint8Array(musicAnalyser.frequencyBinCount); } catch (e) { musicAnalyser = null; musicFreq = null; }
       const when = this.ctx.currentTime + 0.12;
-      this.src.start(when);
-      this._start = when;
+      // build102t (additive; default 0 = byte-identical): optional mid-buffer start offset so a live-show
+      // SPECTATOR joining mid-run can lock onto the shared clock. getTime() stays absolute song time because
+      // _start is back-dated by the offset.
+      const off = (typeof offset === 'number' && offset > 0) ? Math.min(offset, Math.max(0, this.duration - 0.05)) : 0;
+      this.src.start(when, off);
+      this._start = when - off;
       this.src.onended = () => { if (this.onended) this.onended(); };
     }
     getTime() {
@@ -1808,6 +1812,45 @@
     };
   }
 
+  // build102t (Phase-2 C2): chart an audio URL WITHOUT starting a run — the live-show SPECTATOR seam.
+  // Reuses the exact player pipeline (fetchAudio → decode → analyzeChart → buildNotes) so the watcher's
+  // ghost chart matches the players' build from the same URL + difficulty (cross-device/chartMode drift is
+  // tolerated at the render site: decks paint hit/miss ONLY from the streamed events, never local inference).
+  // SNAPSHOT-AND-SWAP: buildNotes' free variables (beats / notes / difficulty / level ctx+mods) are saved,
+  // swapped for this one build, and ALWAYS restored in the finally — the difficulty override is TRANSIENT
+  // (never touches rr_diff / the Settings UI), and the busy-state guard means a live run can't be corrupted.
+  async function chartUrlForSpectate(url, diff) {
+    // build102u (review fix 5): 'loading' was a PHANTOM state (engine states are menu/playing/paused only) — the
+    // real staging window is covered by `player != null` (set the moment a run's clock schedules, incl. the
+    // countdown). Note: an ABANDONED in-flight decode may still drive the shared loading DOM briefly — accepted,
+    // the chart swap below is fully synchronous so run data can never corrupt.
+    if (player != null || state === 'playing' || state === 'paused') throw new Error('engine busy — cannot chart for spectate mid-run');
+    let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;   // same decode cache the real launch uses (a later real start is instant)
+    if (!buf) {
+      const arr = await fetchAudio(url, { mode: 'cors' });
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // always release the throwaway decode context (Chromium ~6-context cap)
+      lastDecoded = { url: url, buf: buf };
+    }
+    const analyzed = await analyzeChart(buf);
+    if (player != null || state === 'playing' || state === 'paused') throw new Error('engine became busy during the spectate decode');
+    const snap = { beats: beats, notes: notes, difficulty: difficulty, ctx: _levelCtx, mods: _levelMods, stats: window.__rrChartStats, peak: window.__rrPeakNps };
+    let out = [];
+    try {
+      beats = analyzed || [];
+      if (DIFF_STEP[diff]) difficulty = diff;          // TRANSIENT override — restored below, never persisted
+      _levelCtx = null; _levelMods = null;             // spectator charts are plain (show matches launch env-less)
+      buildNotes();
+      out = notes.map(n => ({ time: n.time, lane: n.lane, type: n.type, hold: n.hold || 0,
+        chord: !!n.chord, chordLanes: n.chordLanes ? n.chordLanes.slice() : null, open: !!n.open, emph: n._emph || 0 }));
+    } finally {
+      beats = snap.beats; notes = snap.notes; difficulty = snap.difficulty;
+      _levelCtx = snap.ctx; _levelMods = snap.mods;
+      try { window.__rrChartStats = snap.stats; window.__rrPeakNps = snap.peak; } catch (e) {}   // review fix 6: buildNotes also writes __rrPeakNps — restore it too
+    }
+    return { notes: out, duration: buf.duration, buffer: buf };   // notes are plain copies, already time-sorted by buildNotes
+  }
+
   // build66 (launch-audit, predicted-bug): OfflineAudioContext webkit fallback. Older iOS Safari (<14.1) + some in-app WebViews
   // expose ONLY webkitOfflineAudioContext — without this alias BOTH in-browser charters threw on the bare global, so EVERY live
   // track failed with "Could not start this track". (analyzeMusical's catch already falls back to a synthetic grid on total absence.)
@@ -2217,21 +2260,12 @@
   // Boot the lane profile: ?gh=1 forces 5-string Guitar-Hero mode; otherwise restore the saved choice.
   // Standard (6-lane keyboard) users hit NO new code path — applyLaneProfile only runs for gh.
   (function bootLaneProfile() {
-    // THE GAME IS 5-LANE (user decree 2026-06-09): `gh` is the DEFAULT profile. The legacy 6-string
-    // `standard` stays available as a dormant toggle (?gh=0 / Settings) — byte-identical when chosen.
-    let mode = 'gh';
-    try {
-      const m = location.search.match(/[?&]gh=([01])/);
-      if (m) mode = (m[1] === '1') ? 'gh' : 'standard';      // ?gh=1 → 5-string; ?gh=0 → legacy 6-string
-      else if (localStorage.getItem('rr_lanemode') === 'standard') {
-        // ONE-TIME MIGRATION (build10c — the user's playtest): a stored 'standard' that PREDATES the
-        // 5-lane decree is exactly the "huge flat 6-string default" they reported. Migrate it to gh
-        // once; choosing standard in Settings AFTER this sticks (the marker records the migration).
-        if (localStorage.getItem('rr_lane_migrated5') === '1') mode = 'standard';   // deliberate post-decree choice
-        else { try { localStorage.setItem('rr_lane_migrated5', '1'); localStorage.setItem('rr_lanemode', 'gh'); } catch (e2) {} }
-      }
-    } catch (e) {}
-    applyLaneProfile(mode);
+    // THE GAME IS 5-LANE, PERIOD (owner decree 2026-06-09, hardened 2026-07-02): the legacy 6-string 'standard'
+    // profile is fully RETIRED from the UI — the Settings "Lane Mode" toggle is gone (owner: "we don't do six
+    // strings") and every stored/URL escape hatch is force-migrated to gh. LANE_PROFILES.standard stays as inert
+    // engine plumbing only (dev hook __rrLaneMode can still reach it for archaeology).
+    try { if (localStorage.getItem('rr_lanemode') === 'standard') localStorage.setItem('rr_lanemode', 'gh'); } catch (e) {}
+    applyLaneProfile('gh');
     try { const pm = location.search.match(/[?&]persp=([0-9.]+)/); if (pm) perspOverride = parseFloat(pm[1]) || 0; } catch (e) {}
     try { const wm = location.search.match(/[?&]warp=([0-9.]+)/); if (wm) warpOverride = parseFloat(wm[1]); } catch (e) {}
     try { if (/[?&]align=1/.test(location.search)) window.__rrAlign = true; } catch (e) {}   // dev: draw lane guides (strip at freeze)
@@ -3005,12 +3039,17 @@
     const k = e.key.toLowerCase();
     if (k in keyMap) onLaneRelease(keyMap[k]);
   });
+  // build102u (Phase-2 review MAJOR): a LIVE SHOW performer alt-tabbing must NOT freeze the show — every watcher's
+  // clock is wall-time-locked to the shared atMs, so an auto-pause permanently desyncs their decks/audio. The MP
+  // layer flips this ON around a show run only (beginMatch/teardownMatch); solo + normal MP keep auto-pause as-is.
+  let _autoPauseSuppressed = false;
+  window.RhythmGame.setAutoPauseSuppressed = function (on) { _autoPauseSuppressed = !!on; };
   // safety: if the window loses focus mid-hold, a keyup may never arrive — release all
-  window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing') { try { pauseGame(); } catch (e) {} } });
+  window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing' && !_autoPauseSuppressed) { try { pauseGame(); } catch (e) {} } });
   // build35 (audit): some embedded / WebView Chromium builds don't emit window 'blur' on tab-switch or
   // minimize — mirror the release+auto-pause on document visibilitychange so a backgrounded song never
   // keeps playing. (Same older-engine reality that the :has → :not fix addressed.)
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing') { try { pauseGame(); } catch (e) {} } } });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing' && !_autoPauseSuppressed) { try { pauseGame(); } catch (e) {} } } });
 
   // ---------- MIDI + GAMEPAD INPUT (desktop instruments & controllers) ----------
   // One responsive codebase: phones use touch tap-zones; desktop adds keyboard,
@@ -3049,7 +3088,16 @@
   // detected by the driver (POV-hat quirks), require-strum leaves them holding frets that never fire → every note misses.
   // The Settings "Hit mode" toggle flips this to PRESS-to-hit so a GH controller is always playable. Persisted.
   let _strumRequired = true; try { _strumRequired = localStorage.getItem('rr_strum_off') !== '1'; } catch (e) {}
-  function requireStrum() { return _strumRequired && laneProfile === 'gh' && guitarShapedPad(); }
+  // build102u (owner playtest): DROP the guitarShapedPad() gate from requireStrum — many real GH controllers
+  // (wireless receivers/clones) enumerate as a plain "Xbox 360 Controller (XInput)" with 4 standard axes, so the
+  // shape check silently disabled strum mode even with HIT MODE=Strum set: a fret press alone scored, which is
+  // exactly what the owner reported. The player declares a guitar TWICE (applies the GH preset → laneProfile 'gh',
+  // AND leaves HIT MODE on Strum) — trust that over the pad's self-reported identity. anyPadConnected() keeps the
+  // keyboard decree intact (keyboard = fret-press, always). Note: pollGuitarAxes now also runs for standard-shaped
+  // pads in this mode — its axis-9 hat fallback stays internally guarded on ax.length>=10, and whammy/tilt defaults
+  // reading a right-stick are acceptable (the player opted into the guitar profile; Press-to-hit is one tap away).
+  function anyPadConnected() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) if (gp) return true; } catch (e) {} return false; }
+  function requireStrum() { return _strumRequired && laneProfile === 'gh' && anyPadConnected(); }
   window.RhythmGame.getStrumRequired = function () { return _strumRequired; };
   window.RhythmGame.setStrumRequired = function (on) { _strumRequired = !!on; try { localStorage.setItem('rr_strum_off', on ? '0' : '1'); } catch (e) {} try { _frets.clear(); } catch (e2) {} return _strumRequired; };
   function tryStrum(now) {
@@ -6526,6 +6574,8 @@
     resetKeys: () => resetKeys(),
     getInputStatus: () => ({ midi: midiInputs.slice(), gamepads: gamepadList(), midiSupported: !!navigator.requestMIDIAccess }),
     __buffered: (url, meta) => bufferedProvider(url, meta),   // MP tight-sync seam (deferred provider)
+    chartUrl: (url, diff) => chartUrlForSpectate(url, diff),  // build102t: live-show spectator chart seam (no run started; transient difficulty)
+    getLaneColors: () => LANE_COLORS.map(c => c.rgb),         // build102t: per-lane note colors for engine-less deck renderers (spectator decks)
   });
 
   // ===========================================================================

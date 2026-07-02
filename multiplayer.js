@@ -139,6 +139,20 @@
   var _specShow = false;          // snapshot at spectateMatch entry: is this a SHOW-room spectate? (normal spectate keeps the pre-diff card byte-identical)
   var _specFinals = {}, _specVerdictT = 0;   // show spectate: BOTH finals collected (keyed id||name) before the neutral verdict names the higher score
   var _inviteBusy = false, _inviteAt = 0, _inviteRenotified = false;   // CALL IN THE ARTIST button state (60s NUDGE re-arm)
+  // ---- build102t (Phase-2 C2): SPECTATOR DUAL-DECK state — all dead unless a SHOW spectate mounts ----
+  var _specStage = null;          // stage overlay root (JS-created DOM; absent from the page unless watching a show)
+  var _specGen = 0;               // build102u (review fix 3): mount GENERATION — stale chartUrl resolves/rejects + the 4s verdict timer check it so a leftover async callback can never poison/kill a NEWER stage
+  var _specFedReal = false;       // build102u (review fix 2b): flips true on the first REAL tick/state — after that the show-snap live:true vouch stops feeding liveness (a frozen host must trip the 12s recovery)
+  var _specChart = null;          // { notes, duration, buffer } from RhythmGame.chartUrl — the players' chart rebuilt locally
+  var _specDp = null;             // spectator audio (engine DemoPlayer, offset-started; obeys global mute + music volume)
+  var _specAtMs = 0;              // the live run's shared start (from the match 'start' broadcast or the show-snap)
+  var _specRaf = 0, _specGainT = 0, _specIdx = 0;
+  var _specStates = {}, _specTicks = {};   // player-id → latest id-tagged 'state' / 'tick' payload
+  var _specIds = { p1: null, p2: null };   // deck seat assignment (host left, challenger right)
+  var _specSolo = false;          // solo run → one centered deck
+  var _specLastFeedAt = 0;        // liveness (judge): ~12s with no tick/state while decks are mounted ⇒ the run died silently
+  var _specDecks = null;          // per-deck render state (ctx + flash/sparkle pools — two independent pools, couch.js pattern)
+  var _specNCache = 0;            // show-room watcher count (drives the host's state-interval degrade rule + the 10+ chip)
   // ---- build9: tournament state (5–10 player single-elim bracket on ONE channel) ----
   var TOUR_MAX = 10, TOUR_MIN = 3;          // copy advertises 5–10; 3 makes a real bracket testable
   // build42: the BEFORE-PUBLIC gate. Keep FALSE until server-authoritative scoring (re-judge) is live — see
@@ -1132,6 +1146,9 @@
     // build102s (security judge BLOCKER): snapshot the solo-show flag NOW — the settle path keys on this,
     // never on live room.p2, so a challenger seating mid-run can't flip the run into a ranked versus.
     _soloRun = !!(room.show && room.isHost && !room.p2);
+    // build102u (review MAJOR 2a): a live-show PERFORMER alt-tabbing must not freeze the show — watcher clocks are
+    // wall-locked to atMs, so an auto-pause desyncs every deck permanently. Show runs only; teardown restores.
+    try { if (room.show && window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(true); } catch (e) {}
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
     _lastShockCombo = 0; _lastOdActive = false; _rankRecorded = false;   // v254/build100r: fresh combat-shock (combo + OD) + ranked-record state per match
@@ -1283,7 +1300,8 @@
       var stt = window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : null;
       if (stt && matchCh && now - _lastSend > 160) {     // ~6/s
         _lastSend = now;
-        matchCh.send({ type: 'broadcast', event: 'tick', payload: { score: stt.score, combo: stt.combo, acc: stt.acc, prog: stt.progress, name: ME.name } });
+        // build102t: id-tagged (additive — old receivers read only known fields; mirrors the t-tick convention)
+        matchCh.send({ type: 'broadcast', event: 'tick', payload: { score: stt.score, combo: stt.combo, acc: stt.acc, prog: stt.progress, name: ME.name, id: ME.id } });
       }
       // build100r: P-vs-P combat — SHOCK the rival on (a) each new combo milestone (every SHOCK_COMBO_STEP, re-arms on a
       // combo break) AND (b) the moment you activate Overdrive ("boost"). The old code only fired at combo≥30 and never on
@@ -1305,10 +1323,13 @@
       }
       // versus split-screen: additive high-rate render stream for the opponent ghost deck (~13/s).
       // getRenderFrame() DRAINS the hits buffer → call it ONCE here, cache as _myRf, reuse for YOUR HUD.
-      if (_vsActive && matchCh && now - _lastStateSend > 72) {
+      // build102t: SHOW runs always stream (solo + mobile included) so watchers can render the dual decks.
+      // Gate is room.show ONLY (judge mandate: a normal room with spec seats must NOT start streaming state).
+      // DEGRADE RULE (judge): >8 watchers → stretch the interval 72ms → ~180ms; tick above stays 160ms.
+      if ((_vsActive || (room.show && matchLive)) && matchCh && now - _lastStateSend > ((room.show && _specNCache > 8) ? 180 : 72)) {
         _lastStateSend = now;
         var rf = window.RhythmGame.getRenderFrame ? window.RhythmGame.getRenderFrame() : null;
-        if (rf) { _myRf = rf; try { matchCh.send({ type: 'broadcast', event: 'state', payload: rf }); } catch (e) {} }
+        if (rf) { _myRf = rf; try { matchCh.send({ type: 'broadcast', event: 'state', payload: Object.assign({ id: ME.id }, rf) }); } catch (e) {} }   // build102t: id-tagged copy (shallow — additive field, old receivers unaffected)
       }
       if (_vsMode) { renderVsHud(stt, _myRf); renderGhost(); }
       else if (oppPanel && oppPanel.parentNode) renderOpp(stt);
@@ -1449,6 +1470,8 @@
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
     _showAtMs = 0; _specShowSolo = false; _soloRun = false;   // build102s: show-run flags die with the match (review fix 8: a torn-down show start must never leave _soloRun armed for a later unrelated song end)
+    try { if (window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(false); } catch (e) {}   // build102u: auto-pause back to normal for everything after a show run (no-op if never suppressed)
+    try { _unmountSpecStage(); } catch (e) {}                 // build102t: leak-proof — the leaveAll/mp-back paths tear the stage + spectator audio down too (no-op when never mounted)
     setLobbyInMatch(false);
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
@@ -1607,6 +1630,8 @@
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
+    // build102t: cache the watcher count for the state-interval degrade rule (host + streaming challenger read it)
+    if (room.show) { try { _specNCache = Object.keys(all).filter(function (id) { return all[id].seat === 'spec'; }).length; } catch (e) {} }
     // seat assignment is host-authoritative: host = p1; first non-spec joiner = p2.
     if (room.isHost && room.show) {
       // build102s SEAT POLICY (both judges' blocker): in a SHOW room NOBODY is auto-seated — ids are spoofable and
@@ -1642,6 +1667,7 @@
     var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
     if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) {
       _specShowSolo = !!(room.show && !p.p2Id);   // build102s: watching a SOLO show run → no verdict card at song end
+      if (room.show) { _specIds = { p1: p.p1Id, p2: p.p2Id || null }; }   // build102t: deck seat assignment for the dual-deck stage
       spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); return;
     }
     var role = (ME.id === p.p1Id) ? 'host' : 'guest';
@@ -1699,7 +1725,8 @@
   }
   function paintRoomWaiting() {
     var specCount = Object.keys(room.members).filter(function (id) { return room.members[id].seat === 'spec'; }).length;
-    var sc = $('mpx-roomctx-spec'); if (sc) sc.textContent = specCount ? (specCount + ' watching') : '';
+    // build102t: past the softPresence ≤10-peer design the roster is no longer authoritative — a show paints '10+'
+    var sc = $('mpx-roomctx-spec'); if (sc) sc.textContent = specCount ? (((room.show && specCount > 10) ? '10+' : specCount) + ' watching') : '';
     var opp = room.isHost ? (room.p2 && room.members[room.p2]) : (room.members[room.p1]);
     var dot = $('mpx-dot-opp');
     if (dot) {
@@ -1802,6 +1829,13 @@
     }).join('');
     var roomHtml = rids.map(function (rid) {
       var r = roomsDir[rid], cnt = r.count || 1, max = r.max || 2;
+      if (r.show) {   // build102t: LIVE NOW mirrors the browser — show rooms are WATCH-first (seat is host-granted)
+        return '<div class="mpx-roomcard">' +
+          '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
+          '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Live Show') + '</span>' +
+          '<span class="mpx-rc-sub"><span class="mpx-rc-tag live">🔴 LIVE SHOW</span> host ' + esc(r.hostName || 'host') + '</span></span>' +
+          '<span class="mpx-rc-act"><button class="mpx-rc-join" data-ln-watch="' + esc(rid) + '">WATCH</button></span></div>';
+      }
       return '<div class="mpx-roomcard">' +
         '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
@@ -1812,6 +1846,7 @@
     list.innerHTML = tourHtml + roomHtml;
     [].forEach.call(list.querySelectorAll('[data-ln-jt]'), function (b) { b.addEventListener('click', function () { joinTour(b.getAttribute('data-ln-jt')); }); });
     [].forEach.call(list.querySelectorAll('[data-ln-join]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-join'), false); }); });
+    [].forEach.call(list.querySelectorAll('[data-ln-watch]'), function (b) { b.addEventListener('click', function () { joinRoom(b.getAttribute('data-ln-watch'), true); }); });   // build102t: show rooms join as WATCHER
   }
 
   // visual-overhaul: pick the single most prominent active tournament and paint the gold hero card at the top of
@@ -1890,6 +1925,15 @@
     }).join('');
     host.innerHTML = tourCards + ids.map(function (rid) {
       var r = roomsDir[rid], full = (r.count || 1) >= (r.max || 2);
+      if (r.show) {
+        // build102t (deferred C1 judge item): a LIVE SHOW room is a WATCH destination — the challenger seat is
+        // host-granted (C1 seat policy), so never paint a JOIN that invites randoms to a seat they can't take.
+        return '<div class="mpx-roomcard">' +
+          '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
+          '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Live Show') + '</span>' +
+          '<span class="mpx-rc-sub"><span class="mpx-rc-tag live">🔴 LIVE SHOW</span> host ' + esc(r.hostName || 'host') + (r.live ? ' · <span class="mpx-rc-count">on air</span>' : '') + '</span></span>' +
+          '<span class="mpx-rc-act"><button class="mpx-rc-spec" data-spec="' + esc(rid) + '">WATCH</button></span></div>';
+      }
       return '<div class="mpx-roomcard' + (full ? ' full' : '') + '">' +
         '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
         '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
@@ -1915,12 +1959,48 @@
     // build102s: snapshot show-spectate mode at ENTRY — only a show room gets the neutral dual-final verdict;
     // a normal-room spectate renders the exact pre-diff card (owner's byte-identity decree).
     _specShow = !!room.show; _specFinals = {};
+    // build102u (review BLOCKER 1): every watch starts with a CLEAN run clock + feeds — a stale _specAtMs from the
+    // previous run made _syncSpecAudio clamp to buffer-end and the ghost advance eat the whole chart on run #2
+    // (empty decks, no audio, unrecoverable). onShowSnap's late-join sets its atMs AFTER this call by design.
+    if (_specShow) { _specAtMs = 0; _specTicks = {}; _specStates = {}; _specFedReal = false; }
     if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
     oppMeta = p1meta || p2meta || null;
     step('go'); var gn = $('mpx-go-num'); if (gn) gn.textContent = 'SPECTATING';
     var watchCh = supa.channel('rr-match-' + mid, { config: { broadcast: { self: false } } });
     matchCh = watchCh;
-    watchCh.on('broadcast', { event: 'tick' }, function (m) { lastOppTick = m.payload; });
+    watchCh.on('broadcast', { event: 'tick' }, function (m) {
+      lastOppTick = m.payload;
+      if (_specShow && m.payload) {
+        _specTicks[String(m.payload.id || m.payload.name || 'p1')] = m.payload; _specLastFeedAt = Date.now(); _specFedReal = true;   // build102t: keyed per player for the dual decks + liveness
+        // build102u (review MAJOR 2c): DRIFT CORRECTION — the players' clock can shift off wall-time (host pause,
+        // engine hiccup). The HOST's streamed progress is the authority: >2.5s apart → re-seat our clock + audio +
+        // ghost index (the advance loop tolerates _specIdx rewinding to 0; it re-seeks forward in one pass).
+        try {
+          var _tp = m.payload;
+          if (_specDp && _specChart && _specChart.duration && _tp.prog != null && (_specShowSolo || String(_tp.id || '') === String(_specIds.p1 || ''))) {
+            var _want = _tp.prog * _specChart.duration, _cur = _specTime();
+            if (_want > 0.5 && Math.abs(_want - _cur) > 2.5) {
+              _specAtMs = Date.now() - _want * 1000;
+              try { _specDp.stop(); } catch (e0) {} _specDp = null;
+              _specIdx = 0;
+              _syncSpecAudio();
+            }
+          }
+        } catch (e1) {}
+      }
+    });
+    if (_specShow) {   // build102t: show watchers also consume the id-tagged state stream + the one-shot 'start' (sel/atMs)
+      watchCh.on('broadcast', { event: 'state' }, function (m) {
+        var p = m.payload; if (!p) return;
+        _specStates[String(p.id || 'p1')] = p; _specLastFeedAt = Date.now(); _specFedReal = true;
+      });
+      watchCh.on('broadcast', { event: 'start' }, function (m) {
+        var p = m.payload; if (!p || !p.atMs) return;
+        _specAtMs = p.atMs; if (p.sel) { sel = p.sel; }
+        _specLastFeedAt = Math.max(_specLastFeedAt || 0, p.atMs);   // liveness counts from the ACTUAL run start, not the mount (the 10s lead-in is silent by design)
+        _syncSpecAudio();   // a pre-start watcher locks audio to the shared clock the moment the run schedules
+      });
+    }
     watchCh.on('broadcast', { event: 'final' }, function (m) {
       var _fp = m.payload || {};
       if (_specShowSolo) {   // build102s: a SOLO show run has no verdict for watchers — back to the waiting room (the host returns there for the next run)
@@ -1943,6 +2023,8 @@
         var panel = $('mp-opp'); if (panel) panel.classList.add('spectate');
         var sp = panel && panel.querySelector('.mo-spec'); if (!sp && panel) { var s = document.createElement('div'); s.className = 'mo-spec'; s.textContent = 'SPECTATING'; panel.insertBefore(s, panel.firstChild); }
         startSpectatorTick();
+        // build102t: SHOW spectate gets the real dual-deck stage (compact panel stays beneath as the fallback)
+        if (_specShow && sel && sel.audioUrl) { try { _mountSpecStage(); } catch (e) { console.error('[mp] spec stage mount failed', e); } }
       }
     });
   }
@@ -2073,10 +2155,15 @@
       try { if (roomSP) roomSP.refresh(); } catch (e) {}
       banner('mpx-setup-msg', 'You\'re seated — the host starts the match.');
     }
+    room._snapSpecN = (typeof p.specN === 'number') ? p.specN : null;   // build102t: watching-count for the stage chip (10+ rule)
+    if (p.atMs && !_specAtMs) { _specAtMs = p.atMs; try { _syncSpecAudio(); } catch (e) {} }   // build102t: late catch-up — the snap carries the shared start the one-shot 'start' already spent
+    if (p.live && _specStage && !_specFedReal) _specLastFeedAt = Date.now();   // build102t/102u: the heartbeat vouches ONLY until the first real tick/state — after that a frozen host (paused tab, wedged engine) must trip the 12s recovery, not be kept alive by its own 4s snap (review fix 2b)
     if (p.live && p.mid && room.seat === 'spec' && !matchCh && !matchLive) {
       // late arrival while a run is live → drop into the existing spectate view (mid was the only missing key)
       _specShowSolo = !p.p2Id;
+      _specIds = { p1: room.p1, p2: p.p2Id || null };   // build102t: deck seat assignment
       spectateMatch(p.mid, room.members[room.p1] || null, (p.p2Id && room.members[p.p2Id]) || null);
+      if (p.atMs) { _specAtMs = p.atMs; try { _syncSpecAudio(); } catch (e) {} }   // build102u (review fix 1): AFTER spectateMatch — its entry reset would wipe a pre-set atMs
     } else if (!p.live && !p.mid && matchCh && spectating) {
       // the run died without a 'final' (host abort/refresh/close) → recover to the waiting room
       endSpectate('Run over — hang tight, the host may run it again.');
@@ -2109,10 +2196,16 @@
     set('mpx-sc-opp-meta', b ? (((b.acc != null) ? b.acc + '% · ' : '') + (b.combo || 0) + 'x' + (b.grade ? ' · ' + b.grade : '')) : 'no result received');
     step('winner');
     screen.classList.add('active'); activeNow = true;
+    if (_specStage) {   // build102t (judge): don't yank the dual-deck view mid-verdict — banner it on the stage ~4s, then reveal the winner card beneath
+      var mv = $('mss-verdict'); if (mv) { mv.hidden = false; mv.textContent = (v && v.textContent) || 'MATCH OVER'; }
+      var _vg = _specGen;   // build102u (review fix 3): if the host rematches inside the 4s, this timer must not kill the NEW run's stage
+      setTimeout(function () { if (_vg !== _specGen) return; try { _unmountSpecStage(); } catch (e) {} }, 4000);
+    }
   }
   // unwind a spectator's watch channel back to the room-waiting screen (room channel stays joined)
   function endSpectate(msg) {
     stopTick();
+    try { _unmountSpecStage(); } catch (e) {}   // build102t: decks + audio die with the watch channel
     try { if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchLive = false; finishedLocal = false; myFinal = null; oppFinal = null; lastOppTick = null;
     _specShowSolo = false; _specShow = false; _specFinals = {};
@@ -2125,6 +2218,241 @@
       screen.classList.add('active'); activeNow = true;
       if (msg) banner('mpx-setup-msg', msg);
     } else { step('lobby'); }
+  }
+
+  // ===================== BUILD102t: SPECTATOR DUAL-DECK STAGE =====================
+  // The real in-game show view: the watcher rebuilds the players' chart locally (RhythmGame.chartUrl on the
+  // SAME sel.audioUrl + difficulty), plays the decoded audio locked to the shared atMs, and renders one deck
+  // per player driven by their id-tagged tick/state streams. Nothing in this block runs unless a SHOW
+  // spectate mounts it — normal MP and normal-room spectating never reach it.
+  var _SPEC_APPROACH = 1.6;   // visual fall window (seconds) — display-only, independent of the players' scroll setting
+  function _mountSpecStage() {
+    if (_specStage) return;
+    _specSolo = !!_specShowSolo;
+    var st = document.createElement('div');
+    st.id = 'mpx-spec-stage';
+    if (_specSolo) st.className = 'solo';
+    st.innerHTML =
+      '<div class="mss-head">' +
+        '<span class="mss-plate p1"><span class="mss-av" id="mss-av1">?</span><span class="mss-name" id="mss-name1">HOST</span><b class="mss-sc" id="mss-sc1">0</b><span class="mss-cb" id="mss-cb1">0x</span></span>' +
+        '<span class="mss-live">● LIVE SHOW</span>' +
+        '<span class="mss-plate p2" id="mss-plate2"><span class="mss-av" id="mss-av2">?</span><span class="mss-name" id="mss-name2">CHALLENGER</span><b class="mss-sc" id="mss-sc2">0</b><span class="mss-cb" id="mss-cb2">0x</span></span>' +
+      '</div>' +
+      '<div class="mss-decks"><canvas id="mss-deck1"></canvas><canvas id="mss-deck2"></canvas></div>' +
+      '<div class="mss-sync" id="mss-sync"><span class="mss-sync-dot"></span>&nbsp;SYNCING — locking to the live run…</div>' +
+      '<div class="mss-verdict" id="mss-verdict" hidden></div>' +
+      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
+    document.body.appendChild(st);
+    _specStage = st;
+    _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, 'HOST');
+    _specPlate('2', (_specIds.p2 && room.members[_specIds.p2]) || null, 'CHALLENGER');
+    var lv = $('mss-leave'); if (lv) lv.addEventListener('click', function () { endSpectate('You left the live view — still in the room.'); });
+    // per-deck render pools — INDEPENDENT per deck (a shared pool bleeds one player's FX onto the other's board)
+    function pool() { var spk = []; for (var i = 0; i < 40; i++) spk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); return { ctx: null, flash: [0, 0, 0, 0, 0, 0], flashCr: [false, false, false, false, false, false], spk: spk }; }
+    _specDecks = { d1: pool(), d2: pool() };
+    _specChart = null; _specIdx = 0; _specStates = {}; _specTicks = {};
+    _specLastFeedAt = Date.now();
+    // resolve the players' chart — same url + difficulty. Decode failure → the C1 compact panel, never a dead screen.
+    // build102u (review fix 3): BOTH callbacks are generation-guarded — a stale resolve from an abandoned mount must
+    // never poison a newer stage's chart/audio, and a stale network failure must never unmount a healthy one.
+    var _gen = ++_specGen;
+    try {
+      window.RhythmGame.chartUrl(sel.audioUrl, (sel && sel.difficulty) || 'medium').then(function (res) {
+        if (!_specStage || _gen !== _specGen) return;   // unmounted / remounted while decoding
+        _specChart = res; _specIdx = 0;
+        var sy = $('mss-sync'); if (sy) sy.hidden = true;
+        st.classList.add('ready');                  // decks fade in
+        _syncSpecAudio();
+      }, function (err) {
+        if (!_specStage || _gen !== _specGen) return;
+        console.error('[mp] spectator chart failed — falling back to the score panel', err);
+        _specDeckFallback();
+      });
+    } catch (e) { _specDeckFallback(); }
+    if (_specGainT) clearInterval(_specGainT);
+    _specGainT = setInterval(_specApplyGain, 1200);  // keep obeying global mute / music volume mid-watch
+    if (_specRaf) cancelAnimationFrame(_specRaf);
+    _specRaf = requestAnimationFrame(_specLoop);
+  }
+  function _specPlate(n, meta, fallback) {
+    var av = $('mss-av' + n), nm = $('mss-name' + n);
+    if (nm) nm.textContent = String((meta && meta.name) || fallback).slice(0, 12);
+    if (av) {
+      if (meta && meta.avatar) { av.style.backgroundImage = 'url("' + safeUrl(meta.avatar) + '")'; av.textContent = ''; }
+      else { av.style.backgroundImage = ''; av.textContent = initial((meta && meta.name) || fallback); }
+    }
+  }
+  function _specDeckFallback() {
+    // dead URL / HLS-only / decode fail → the C1 compact score panel is already mounted beneath the stage
+    _unmountSpecStage();
+    try { window.RhythmGame.showToast && window.RhythmGame.showToast('Live decks unavailable — score view only.', 'neutral'); } catch (e) {}
+  }
+  function _unmountSpecStage() {
+    _specGen++;   // build102u (review fix 3): orphan every in-flight async callback tied to the old mount
+    if (_specRaf) { cancelAnimationFrame(_specRaf); _specRaf = 0; }
+    if (_specGainT) { clearInterval(_specGainT); _specGainT = 0; }
+    try { if (_specDp) _specDp.stop(); } catch (e) {}
+    _specDp = null;
+    if (_specStage && _specStage.parentNode) { try { _specStage.parentNode.removeChild(_specStage); } catch (e) {} }
+    _specStage = null; _specChart = null; _specDecks = null; _specIdx = 0; _specLastFeedAt = 0;
+    _specAtMs = 0; _specFedReal = false;   // build102u (review BLOCKER 1): the run clock dies with the stage — run #2 must sync fresh, never off run #1's atMs
+  }
+  // spectator audio: the SAME decoded buffer, offset-started onto the shared clock (DemoPlayer build102t seam);
+  // volume follows the global mute + music setting so a streamer can silence it like any other music.
+  function _syncSpecAudio() {
+    try {
+      if (!_specStage || !_specChart || !_specChart.buffer || _specDp || !_specAtMs) return;
+      var DP = window.RhythmGame.DemoPlayer; if (!DP) return;
+      var lead = _specAtMs - Date.now();
+      if (lead > 250) { setTimeout(_syncSpecAudio, Math.min(lead, 4000)); return; }   // joined during the lead-in → start at 0 on the shared clock
+      _specDp = new DP(_specChart.buffer);
+      _specDp.play(Math.max(0, (Date.now() - _specAtMs) / 1000));
+      _specApplyGain();
+    } catch (e) {}
+  }
+  function _specApplyGain() {
+    try {
+      if (!_specDp) return;
+      var st = (window.RhythmGame.getSettings && window.RhythmGame.getSettings()) || {};
+      var v = (typeof st.music === 'number') ? st.music : 1;
+      _specDp.setGain((window.RhythmGame.isMuted && window.RhythmGame.isMuted()) ? 0 : v);
+    } catch (e) {}
+  }
+  function _specTime() {
+    if (_specDp) { var t = _specDp.getTime(); if (t > -2) return t; }
+    return _specAtMs ? (Date.now() - _specAtMs) / 1000 : 0;
+  }
+  function _specFeedFor(pid) {
+    if (pid && _specTicks[pid]) return _specTicks[pid];
+    if (pid && _specStates[pid]) return _specStates[pid];
+    var ks = Object.keys(_specTicks);   // old-build fallback: an untagged stream keys by name — surface SOMETHING
+    return ks.length === 1 ? _specTicks[ks[0]] : null;
+  }
+  function _specStrip(n, pid) {
+    var feed = _specFeedFor(pid);
+    var sc = $('mss-sc' + n), cb = $('mss-cb' + n);
+    if (sc && feed) sc.textContent = Number(feed.score != null ? feed.score : (feed.sc || 0)).toLocaleString();
+    if (cb && feed) cb.textContent = (feed.combo != null ? feed.combo : (feed.cb || 0)) + 'x';
+  }
+  function _specLoop() {
+    _specRaf = requestAnimationFrame(_specLoop);
+    if (!_specStage) return;
+    // LIVENESS (judge): ~12s of total silence while decks are mounted ⇒ the run died without a signal — recover
+    if (_specLastFeedAt && Date.now() - _specLastFeedAt > 12000) { endSpectate('The feed went quiet — back to the room.'); return; }
+    _specStrip('1', _specIds.p1);
+    if (!_specSolo) _specStrip('2', _specIds.p2);
+    var wn = $('mss-watchn');
+    if (wn) { var n = (room._snapSpecN != null) ? room._snapSpecN : _specNCache; wn.textContent = (n > 10 ? '10+' : (n || 1)) + ' watching'; }   // never authoritative past the ≤10-peer design
+    if (!_specChart || !_specChart.notes || !_specChart.notes.length) return;   // still syncing (shimmer up)
+    var t = _specTime();
+    var ns = _specChart.notes;
+    while (_specIdx < ns.length && ns[_specIdx].time < t - 0.35) _specIdx++;   // both decks scroll the SAME chart (both players play the same notes)
+    _renderSpecDeck(_specDecks.d1, 'mss-deck1', _specIds.p1, ns, t);
+    if (!_specSolo) _renderSpecDeck(_specDecks.d2, 'mss-deck2', _specIds.p2, ns, t);
+  }
+  // ---- one spectator deck: a synthetic 5-lane trapezoid fan. The spectator's engine is NOT running, so
+  // getLaneFrame (live canvas geometry) is unavailable — this fan mirrors the board's 1/z projection instead.
+  function _renderSpecDeck(D, cvId, pid, ns, t) {
+    var cv = document.getElementById(cvId); if (!cv || !D) return;
+    var cwc = cv.clientWidth, chc = cv.clientHeight; if (!cwc || !chc) return;
+    if (cv.width !== cwc || cv.height !== chc) { cv.width = cwc; cv.height = chc; D.ctx = null; }
+    if (!D.ctx) { D.ctx = cv.getContext('2d'); if (!D.ctx) return; }
+    var g = D.ctx, w = cv.width, h = cv.height;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
+    var N = 5, nearY = h * 0.87, farY = h * 0.08, nearSpan = w * 0.74, farSpan = w * 0.28, cx = w / 2;
+    var lw = nearSpan / N, zf = 3.2, i;
+    var cols = (window.RhythmGame.getLaneColors && window.RhythmGame.getLaneColors()) || null;
+    // dim guitar-art ambiance — decorative only (gems ride the synthetic fan, not the painted strings)
+    var art = window.RhythmGame.getGuitarArt && window.RhythmGame.getGuitarArt();
+    if (art && art.img && art.img.width) {
+      try { g.save(); g.globalAlpha = 0.18; var ar = art.img.width / art.img.height, dh = h, dw = dh * ar; g.drawImage(art.img, cx - dw / 2, h - dh, dw, dh); g.restore(); } catch (e) {}
+    }
+    function laneX(l, u) { var nx = cx - nearSpan / 2 + (l + 0.5) * (nearSpan / N), fx = cx - farSpan / 2 + (l + 0.5) * (farSpan / N); return nx + (fx - nx) * u; }
+    function proj(d) { var dd = d < 0 ? 0 : d; var z = 1 + dd * (zf - 1); return (1 - 1 / z) / (1 - 1 / zf); }
+    // strings (far → near)
+    g.lineWidth = Math.max(1, lw * 0.05);
+    g.strokeStyle = 'rgba(220,217,212,0.4)';
+    g.beginPath();
+    for (i = 0; i < N; i++) { g.moveTo(laneX(i, 1), farY); g.lineTo(laneX(i, 0), nearY); }
+    g.stroke();
+    // GHOST GEMS — the locally rebuilt chart scrolling on the shared clock.
+    // CHART-TOLERANCE MANDATE (judge): hit/miss paint comes ONLY from the streamed ev events below.
+    // Cross-device decode drift means a player may never judge a note we drew (or judge one we didn't) —
+    // NEVER infer or paint a miss for a note their stream never judged; unjudged local ghosts just scroll by.
+    for (var k = _specIdx; k < ns.length; k++) {
+      var nn = ns[k], d = (nn.time - t) / _SPEC_APPROACH;
+      if (d > 1.02) break;                        // notes are time-sorted — safe early exit
+      if (d < -0.12 || nn.open) continue;
+      var u = proj(d), gy = nearY + (farY - nearY) * u, gx = laneX(nn.lane, u);
+      var ds = 1 / (1 + (d < -0.2 ? -0.2 : d) * (zf - 1));
+      var rad = Math.max(1, lw * 0.2 * ds);
+      if (nn.type === 'bomb') {                   // bomb → hollow dim ring (never reads as a hit)
+        g.strokeStyle = 'rgba(180,178,174,' + (0.35 * (1 - u * 0.5)).toFixed(3) + ')';
+        g.lineWidth = Math.max(1, rad * 0.4);
+        g.beginPath(); g.arc(gx, gy, rad, 0, 6.283); g.stroke();
+        continue;
+      }
+      var lcol = (cols && cols[nn.lane]) ? cols[nn.lane] : '255,60,60';
+      var aGem = 0.6 + 0.4 * (1 - u);
+      if (nn.type === 'hold' && nn.hold > 0) {    // hold → lane-colored beam toward the nut
+        var d2 = (nn.time + nn.hold - t) / _SPEC_APPROACH; if (d2 > 1.02) d2 = 1.02;
+        var u2 = proj(d2);
+        g.strokeStyle = 'rgba(' + lcol + ',' + (aGem * 0.5).toFixed(3) + ')';
+        g.lineWidth = Math.max(1.5, rad * 0.8);
+        g.beginPath(); g.moveTo(gx, gy); g.lineTo(laneX(nn.lane, u2), nearY + (farY - nearY) * u2); g.stroke();
+      }
+      g.fillStyle = 'rgba(' + lcol + ',' + aGem.toFixed(3) + ')';
+      g.beginPath(); g.arc(gx, gy, rad, 0, 6.283); g.fill();
+      g.fillStyle = 'rgba(255,255,255,' + (aGem * 0.55).toFixed(3) + ')';
+      g.beginPath(); g.arc(gx - rad * 0.3, gy - rad * 0.3, rad * 0.34, 0, 6.283); g.fill();
+      if (nn.chord) {                             // chord → white double-rim
+        g.strokeStyle = 'rgba(255,255,255,' + (aGem * 0.7).toFixed(3) + ')';
+        g.lineWidth = Math.max(1, rad * 0.3);
+        g.beginPath(); g.arc(gx, gy, rad * 1.3, 0, 6.283); g.stroke();
+      }
+    }
+    // THIS player's hit/miss events → authoritative lane flashes + sparkles (drained once per packet)
+    var stFeed = (pid && _specStates[pid]) || null;
+    if (!stFeed) { var sk = Object.keys(_specStates); if (sk.length === 1 && cvId === 'mss-deck1') stFeed = _specStates[sk[0]]; }   // untagged old-build stream → left deck only
+    var ev = stFeed && stFeed.ev;
+    if (ev && ev.length) {
+      for (var e2 = 0; e2 < ev.length; e2++) {
+        var L = ev[e2].l | 0; if (L < 0 || L >= N) continue;
+        var crimson = (ev[e2].j === 'm');
+        D.flash[L] = 1; D.flashCr[L] = crimson;
+        var cxp = laneX(L, 0), cyp = nearY;
+        for (var sp = 0; sp < D.spk.length; sp++) {
+          var Pk = D.spk[sp]; if (Pk.on) continue;
+          Pk.on = true; Pk.x = cxp; Pk.y = cyp; Pk.cr = crimson;
+          Pk.vx = (Math.random() - 0.5) * 1.6; Pk.vy = -(0.8 + Math.random() * 1.4);
+          Pk.life = 0; Pk.max = crimson ? 0.30 : 0.42; break;
+        }
+      }
+      stFeed.ev = null;   // consume — the next state packet replaces the object wholesale
+    }
+    // per-lane catcher buttons — press down + light white-hot (crimson on a miss) when the player strikes
+    for (i = 0; i < N; i++) {
+      var fl = D.flash[i];
+      var bcol = (cols && cols[i]) ? cols[i] : '255,60,60';
+      var press = fl * lw * 0.10, bx = laneX(i, 0), by = nearY + press, brad = lw * 0.26;
+      g.save();
+      g.lineWidth = Math.max(1.4, lw * 0.055);
+      g.strokeStyle = 'rgba(' + bcol + ',' + (0.5 + fl * 0.5).toFixed(3) + ')';
+      if (fl > 0.02) { g.shadowColor = D.flashCr[i] ? '#ff2834' : 'rgba(255,250,235,1)'; g.shadowBlur = 16 * fl; }
+      g.beginPath(); g.arc(bx, by, brad, 0, 6.283); g.stroke();
+      if (fl > 0.04) { g.globalAlpha = fl; g.fillStyle = D.flashCr[i] ? 'rgba(255,40,52,0.85)' : 'rgba(255,250,238,0.95)'; g.beginPath(); g.arc(bx, by, brad * (0.5 + fl * 0.35), 0, 6.283); g.fill(); }
+      g.restore();
+      D.flash[i] *= 0.84; if (D.flash[i] <= 0.02) D.flash[i] = 0;
+    }
+    // sparkles
+    for (var q = 0; q < D.spk.length; q++) {
+      var Q = D.spk[q]; if (!Q.on) continue;
+      Q.life += 0.016; if (Q.life >= Q.max) { Q.on = false; continue; }
+      Q.x += Q.vx; Q.y += Q.vy; Q.vy += 0.06;
+      var qa = 1 - Q.life / Q.max;
+      g.fillStyle = Q.cr ? 'rgba(255,60,70,' + qa.toFixed(3) + ')' : 'rgba(255,240,210,' + qa.toFixed(3) + ')';
+      g.beginPath(); g.arc(Q.x, Q.y, 2.2 * qa + 0.6, 0, 6.283); g.fill();
+    }
   }
   // ---- show-room chrome: locked-song banner, artist seat card (pending ACCEPT/DECLINE), CALL IN THE ARTIST ----
   function paintShowRoom() {
@@ -4162,7 +4490,11 @@
   window.__rrShow = {
     open: function (fakeSel) { return openShowRoom(fakeSel || {}); },
     state: function () { return { show: !!(room && room.show), rid: room && room.id, p2: (room && room.p2) || null,
-      pending: (room && room.pendingChal) || null, invited: !!(room && room.invited), solo: _soloRun }; }
+      pending: (room && room.pendingChal) || null, invited: !!(room && room.invited), solo: _soloRun }; },
+    // build102t: headless probe for the spectator stage (decks/chart/streams) — strip with the rest
+    spec: function () { return { mounted: !!_specStage, decks: _specStage ? (_specSolo ? 1 : 2) : 0,
+      lastTickIds: Object.keys(_specTicks), chartNotes: (_specChart && _specChart.notes && _specChart.notes.length) || 0,
+      audio: !!_specDp, atMs: _specAtMs, specN: _specNCache }; }
   };
   // dev NPC harness (console) — LOCALHOST-ONLY (build66 launch-audit P1: __tour.send can forge live-bracket events /
   // self-credit the pot with no sender auth; MP_DEV gates it out of production while keeping it for the localhost builder).

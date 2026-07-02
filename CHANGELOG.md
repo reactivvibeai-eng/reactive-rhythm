@@ -15,6 +15,33 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build102t/u — SPECTATOR DUAL-DECK STAGE (Phase-2 C2) + owner-playtest fixes  ✅ verified (?v=402)
+Three workstreams in one push (v401 was never published; v402 supersedes):
+**C2 — the spectator experience** (built to PHASE2_LIVESHOW_DESIGN.md, then hardened by an adversarial diff review):
+show-room watchers get a real dual note-highway stage (#mpx-spec-stage): the watcher rebuilds the players' chart
+locally (`RhythmGame.chartUrl` — decode→analyze→buildNotes with a transient difficulty + full free-var snapshot/restore,
+no run started), plays the same audio locked to the shared clock (`DemoPlayer.play(offset)` seam; late joiners drop in
+mid-song), and renders one synthetic 5-lane deck per player — ghost gems from the local chart, hit/miss flashes ONLY
+from each player's id-tagged tick/state streams (chart-drift tolerant by mandate). SYNC shimmer → fade-in; decode fail →
+C1 compact panel; 12s liveness recovery; verdict held 4s. Lobby paints show rooms as "🔴 LIVE SHOW / WATCH-only" cards.
+State streams gain `id` (additive) + a 72→180ms degrade past 8 watchers; '10+' watching cap. Review fixes applied:
+stale `_specAtMs` reset (BLOCKER: run #2 for a watcher had dead decks/no audio), show performers suppress the blur
+auto-pause (`RhythmGame.setAutoPauseSuppressed`, show runs only) + snap-vouch weakened + host-progress drift correction
+(>2.5s → re-seat clock/audio/ghosts), generation-guarded async (stale chart resolves/rejects + the 4s verdict timer
+can't touch a newer stage), chartUrl busy-guard fixed (phantom 'loading' state → `player != null`), `__rrPeakNps`
+restored in the snapshot, isTrusted guard on the "Watch it instead" button.
+**Owner playtest fix 1 — GH strum ignored ("just hitting the button accepts the note")**: `requireStrum()` dropped the
+`guitarShapedPad()` gate — his GH controller enumerates as a plain "Xbox 360 Controller (XInput)" (4 axes) and silently
+failed the shape check, so HIT MODE=Strum never engaged. The player declares a guitar twice (GH preset + Strum toggle);
+that now WINS over the pad's self-reported identity. Keyboard stays fret-press (any-pad-connected guard).
+**Owner playtest fix 2 — six-string options removed**: the Settings "Lane Mode" toggle (6-Lane · Keys) is gone; the
+game is 5-lane only — bootLaneProfile force-migrates any stored legacy 'standard' choice to gh (URL escape hatch
+removed too). LANE_PROFILES.standard remains inert engine plumbing.
+Also in this push: the v401 audio-resolve hotfix (review launch card now reads analysis_url||audio_url||stream_url —
+ALL 24 queued direct-upload submissions previously fell into a bare watch player) + card-framed watch fallback.
+Verified: node-clean ×3, boot v402 no console errors, Lane Mode gone + profile locked gh, auto-pause API live,
+chartUrl transient-override re-proven. Strum + spectator loops need the owner's hardware/2-browser pass.
+
 ### build102s — LIVE-SHOW MULTIPLAYER core (Phase-2 C1): GO LIVE → solo show room → artist call-in  ✅ verified (?v=400)
 The review flow becomes a live show. Built from `PHASE2_LIVESHOW_DESIGN.md` by a dedicated implementation pass, then
 hardened through a second adversarial diff review (9 findings — 4 major — all fixed and re-verified):

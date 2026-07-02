@@ -1926,9 +1926,27 @@
     try {
       var r = await api('/review/resolve?token=' + encodeURIComponent(token), { auth: true, authWaitMs: 4000 });
       if (!r || !r.track_id) { _rvState('Couldn’t open this review track.'); return; }
-      var aurl = r.analysis_url || '';                       // the decodable .m4a (chartable) — NOT the .m3u8 stream
-      if (!aurl || /\.m3u8(\?|$)/i.test(aurl)) {             // no decodable audio → can only WATCH the stream
-        if (r.stream_url) { var ovx = _rvEl('review-launch'); if (ovx) ovx.classList.remove('on'); try { openWatch(Object.assign({ id: r.track_id }, r), r.stream_url); } catch (e) {} }
+      // build102t (LIVE playtest fix): pick the FIRST decodable audio the resolver offers. analysis_url is only
+      // populated for Mux-backed sources — a DIRECT-upload submission (e.g. "Backroom Bop", a plain mp3) carries its
+      // decodable audio in audio_url/stream_url instead, and reading analysis_url alone dumped the host into the bare
+      // watch player instead of the launch card. Any non-HLS URL decodes (WebAudio handles mp3/m4a/wav/mp4-aac).
+      var _dec = function (u) { return (u && !/\.m3u8(\?|$)/i.test(String(u))) ? u : null; };
+      var aurl = _dec(r.analysis_url) || _dec(r.audio_url) || _dec(r.stream_url) || '';
+      if (!aurl) {                                           // truly nothing decodable (HLS-only) → offer WATCH on the CARD, never a naked player
+        if (r.stream_url) {
+          var ti0 = _rvEl('rvl-title'); if (ti0) ti0.textContent = r.title || 'Review';
+          var ar0 = _rvEl('rvl-artist'); if (ar0) ar0.textContent = r.artist_name || '';
+          var art0 = _rvEl('rvl-art'); if (art0 && r.artwork_url) art0.src = r.artwork_url;
+          _rvState('This song’s game audio isn’t ready yet — watch the submission now, or retry in a few minutes.');
+          var st0 = _rvEl('rvl-state');
+          if (st0 && !st0._watchBtn) {
+            st0._watchBtn = true;
+            var wb = document.createElement('button'); wb.type = 'button'; wb.className = 'rvl-back'; wb.style.display = 'block'; wb.style.margin = '10px auto 0';
+            wb.textContent = '▶ Watch it instead';
+            wb.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; var ovx = _rvEl('review-launch'); if (ovx) ovx.classList.remove('on'); try { openWatch(Object.assign({ id: r.track_id }, r), r.stream_url); } catch (e) {} });   // review fix 4: same synthetic-click guard as every sibling card button
+            st0.parentNode.insertBefore(wb, st0.nextSibling);
+          }
+        }
         else _rvState('This track isn’t playable yet — the audio is still processing. Try again in a minute.');
         return;
       }
