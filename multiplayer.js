@@ -1416,6 +1416,7 @@
     setLobbyInMatch(false);
     showWinner();
   }
+  var _lastVerdict = null;   // build102y step2: stashed verdict for the SHARE/COPY click handlers (read synchronously inside the user gesture)
   function showWinner() {
     var me = myFinal || { score: 0, acc: 0, combo: 0 };
     var op = oppFinal;
@@ -1446,6 +1447,15 @@
     // intentionally closes those — a show host clicking it would nuke their live room) and for any
     // spectator that somehow lands here (spectators normally get _renderSpecVerdict, never this step).
     var _nr = $('mpx-next-rival'); if (_nr) _nr.hidden = !!(room.id && room.show) || spectating;
+    // build102y step2: SHARE THE W / RUN IT BACK + COPY BATTLE LINK. The verdict is stashed for the click
+    // handlers (navigator.share needs the transient activation of the click itself). Loser framing flips the
+    // label — the revenge-summon is the half that converts. Battle link ONLY on rooms a stranger may enter:
+    // never priv (qm matched rooms are priv:true), never show, and only while the room is still open.
+    _lastVerdict = { win: win, draw: draw, me: me, op: op, oppName: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival' };
+    var _sw = $('mpx-share-w');
+    if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); _sw.textContent = draw ? '📸 SHARE THE DRAW' : (win ? '📸 SHARE THE W' : '📸 RUN IT BACK'); }
+    var _cb = $('mpx-copy-battle');
+    if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; _cb.textContent = '🔗 COPY BATTLE LINK'; _cb.classList.remove('copied'); }
     step('winner');
     screen.classList.add('active');   // re-raise over the engine's results screen (showScreen stripped us)
     activeNow = true;
@@ -4383,6 +4393,30 @@
     if (room.id && room.show) return;   // belt-and-suspenders — the button is hidden in show rooms
     backToLobby();
     if (!QM.looking) toggleQuickMatch();
+  });
+  // build102y step2: SHARE — the branded score card via RhythmShare.shareScore with the vs fields (share.js
+  // buildCaption's versus branch tells the battle story). The call fires INSIDE the click; shareScore keeps
+  // its promise chain tight specifically so navigator.share's transient activation survives.
+  wire('mpx-share-w', 'click', function () {
+    if (!_lastVerdict || !(window.RhythmShare && window.RhythmShare.shareScore)) return;
+    var L = _lastVerdict, m = L.me || {};
+    try {
+      window.RhythmShare.shareScore({
+        score: m.score || 0, accuracy: m.acc || 0, maxCombo: m.combo || 0, grade: m.grade || '',
+        song: (sel && sel.title) || 'a track', artist: (sel && sel.artist) || '',
+        rivalName: L.oppName, rivalScore: (L.op && L.op.score) || 0,
+        verdict: L.draw ? 'draw' : (L.win ? 'win' : 'loss')
+      });
+    } catch (e) {}
+  });
+  // build102y step2: COPY BATTLE LINK — the ?mproom= invite deep link + the shipped copy-flash pattern.
+  wire('mpx-copy-battle', 'click', function () {
+    if (!room.id || room.priv || room.show) return;
+    var btn = $('mpx-copy-battle');
+    var share = 'Think you can take me? Battle me in Reactive Rhythm: ' + roomInviteLink(room.id);
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — CALL THEM OUT' : '🔗 COPY BATTLE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '🔗 COPY BATTLE LINK'; }, 2600); }
+    try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a rival:', share); }); }
+    catch (e) { window.prompt('Copy this — send it to a rival:', share); }
   });
   // build102s: live-show room controls (elements only ever visible while room.show)
   wire('mpx-show-invite', 'click', function (ev) { if (ev && ev.isTrusted === false) return; callInArtist(false); });

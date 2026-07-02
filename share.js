@@ -888,6 +888,18 @@
     var combo = Math.round(+d.maxCombo || 0);
     var fc = d.full_combo ? ' FULL COMBO 🔥' : '';
     var byline = artist ? (song + ' by ' + artist) : song;
+    // build102y step2: VERSUS branch — a duel verdict shares as a battle story, not a solo score line.
+    // Optional vs fields from the MP winner screen: rivalName, rivalScore, verdict ('win'|'loss'|'draw').
+    // The loser's caption is the RUN IT BACK revenge-summon. Solo captions (no rivalName) byte-identical.
+    if (d.rivalName) {
+      var rival = clean(d.rivalName) || 'a rival';
+      var rs = fmt(d.rivalScore || 0);
+      var vd = String(d.verdict || '').toLowerCase();
+      var head = vd === 'win' ? ('Just beat ' + rival + ' ' + score + '–' + rs)
+        : vd === 'loss' ? (rival + ' took the W ' + rs + '–' + score + ' — running it back')
+        : ('Dead heat with ' + rival + ' at ' + score);
+      return head + ' on ' + byline + ' in Reactive Rhythm 🎸 battle me free → ' + PLAY_URL + ' #ReactiveRhythm #ReactivVibe';
+    }
     return 'I scored ' + score + ' (Grade ' + grade + ', ' + acc.toFixed(1) + '%, ' + combo + 'x combo' + fc + ') on ' +
       byline + ' in Reactive Rhythm 🎸 play free → ' + PLAY_URL + ' #ReactiveRhythm #ReactivVibe';
   }
