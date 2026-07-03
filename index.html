@@ -683,6 +683,33 @@
     transition: width .7s cubic-bezier(.2,.9,.26,1); }
   html.rr-reduce-motion .pn-rankfill { transition: none; }
   .pn-rankcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-dim); }
+  /* build110 Phase 5: XP LEVEL chip — SEPARATE, faster-moving number that sits ALONGSIDE the existing
+     prestige rank (never re-keys rankTitle()/RANK_FLOORS). Gold/crimson, mirrors .rbadge language. */
+  .pn-rankrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pn-lvlchip {
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.06em;
+    color: #fff; padding: 3px 10px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(224,169,63,0.9), rgba(176,124,30,0.9));
+    box-shadow: 0 0 12px rgba(224,169,63,0.5); border: 1px solid rgba(240,200,110,0.6);
+  }
+  .pn-lvlchip[hidden] { display: none; }
+  /* XP progress bar — its own bar, directly below the rank bar (spec §2.2: "gets its OWN new bar") */
+  .pn-xpprog { margin-top: 6px; max-width: 320px; }
+  .pn-xpprog[hidden] { display: none; }
+  .pn-xpbar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; border: 1px solid rgba(255,31,46,0.2); }
+  .pn-xpfill { display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, #b3121f, #ff2a38); box-shadow: 0 0 10px rgba(255,31,46,0.45);
+    transition: width .7s cubic-bezier(.2,.9,.26,1); }
+  html.rr-reduce-motion .pn-xpfill { transition: none; }
+  .pn-xpcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-dim); }
+  /* RECENT XP feed — transparency feature (spec §2.2): "exactly what earned every point" */
+  .profile-xpfeed-wrap { width: 100%; margin-top: 16px; }
+  .profile-xpfeed-wrap[hidden] { display: none; }
+  .profile-xpfeed { display: flex; flex-direction: column; gap: 6px; }
+  .pxf-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); }
+  .pxf-label { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--ink); }
+  .pxf-amt { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; color: #e0a93f; white-space: nowrap; }
   .profile-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; display: none; }
   .profile-screen.is-empty .profile-empty { display: block; }
   .profile-screen.is-empty .profile-stats, .profile-screen.is-empty .profile-grades-wrap { opacity: 0.5; }
@@ -726,6 +753,25 @@
   .pl-tile.locked .pl-name { color: var(--ash, #b8b2ad); }
   .pl-on.pl-lock { color: #1b1206; background: linear-gradient(180deg, #f3c969, #d99a2c); }
   #profile-reset { color: var(--ink-dim); }
+  /* build110 Phase 5 (spec §2.3): milestone/cosmetic track — STACKED block (this profile has no tab
+     system), same vertical-list pattern as profile-badges-wrap/profile-loadout-wrap. Cosmetic tiles
+     reuse .pl-tile/.pl-thumb/.pl-name/.pl-on/.pl-lock verbatim — same equip-click-locked language. */
+  .profile-goals-wrap { margin-top: 16px; }
+  .profile-goals-wrap[hidden] { display: none; }
+  .pgw-weekly { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pgw-weekly-cap { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
+  .pgw-weekly-track { flex: 1 1 auto; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(224,169,63,0.2); overflow: hidden; min-width: 100px; }
+  .pgw-weekly-fill { display: block; height: 100%; width: 0%; border-radius: 999px;
+    background: linear-gradient(90deg, #c98a2c, #f4cf6a); box-shadow: 0 0 10px rgba(224,169,63,0.5);
+    transition: width .7s cubic-bezier(.2,.9,.26,1); }
+  html.rr-reduce-motion .pgw-weekly-fill { transition: none; }
+  .profile-goals-track { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 8px; margin-top: 10px; }
+  /* cosmetic-tile-specific bits not covered by the cloned .pl-tile family: a colored swatch stand-in
+     for tiles with no thumbnail image (name-color / note-color / flair are procedural, not art assets). */
+  .pcg-swatch { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; }
   @media (max-width: 560px) { .profile-stats { grid-template-columns: repeat(2, 1fr); } .profile-title { font-size: 36px; } }
 
   /* ============ LEVELS (tiered Level Select) ============ */
@@ -6106,14 +6152,28 @@
         <div class="pn-id">
           <div class="pn-eyebrow" id="profile-title">// CONTROLLER PROFILE</div>
           <div class="pn-name" id="profile-name">Local Player</div>
-          <div class="profile-rank" id="profile-rank">SIGNAL INITIATE</div>
+          <div class="pn-rankrow">
+            <div class="profile-rank" id="profile-rank">SIGNAL INITIATE</div>
+            <!-- build110: XP LEVEL chip — a SEPARATE, faster-moving number from the prestige rank above.
+                 Do NOT re-key rankTitle()/RANK_FLOORS; this reads window.RhythmGoals independently. -->
+            <span class="pn-lvlchip" id="profile-lvlchip" hidden>LV 1</span>
+          </div>
           <!-- build99L: rank progress on the runs ladder -->
           <div class="pn-rankprog" aria-hidden="true">
             <div class="pn-rankbar"><span class="pn-rankfill" id="profile-rank-fill"></span></div>
             <div class="pn-rankcap" id="profile-rank-cap"></div>
           </div>
+          <!-- build110: XP progress bar — OWN bar, directly below the rank bar; never repurposes pn-rankbar. -->
+          <div class="pn-xpprog" id="profile-xpprog" hidden aria-hidden="true">
+            <div class="pn-xpbar"><span class="pn-xpfill" id="profile-xp-fill"></span></div>
+            <div class="pn-xpcap" id="profile-xp-cap"></div>
+          </div>
           <div class="pn-hint" id="profile-id-hint">Sign in on ReactivVibe to save your profile photo</div>
         </div>
+      </div>
+      <div class="profile-xpfeed-wrap" id="profile-xpfeed-wrap" hidden>
+        <div class="pg-head">RECENT XP</div>
+        <div class="profile-xpfeed" id="profile-xpfeed"></div>
       </div>
       <div class="profile-badges-wrap">
         <div class="pg-head">CAMPAIGN BADGES <span class="pb-count" id="profile-badge-count"></span></div>
@@ -6127,6 +6187,18 @@
       <div class="profile-loadout-wrap">
         <div class="pg-head">GUITAR LOADOUT <span class="pl-note">tap to equip · applies in Quickplay &amp; Multiplayer · “Default” = use each level’s own guitar · Campaign always uses the level’s guitar</span></div>
         <div class="profile-loadout" id="profile-loadout"></div>
+      </div>
+      <!-- build110 Phase 5 (spec §2.3): milestone/cosmetic track — a STACKED block, same vertical-list
+           pattern as profile-badges-wrap/profile-loadout-wrap (this profile screen has no tab system).
+           Weekly goal summary strip + all name-color/note-color/flair unlocks from rr_bonus_owns. -->
+      <div class="profile-goals-wrap" id="profile-goals-wrap" hidden>
+        <div class="pg-head">WEEKLY GOAL</div>
+        <div class="pgw-weekly" id="pgw-weekly">
+          <span class="pgw-weekly-cap" id="pgw-weekly-cap">0 / 15 levels · 0 / 10 MP</span>
+          <span class="pgw-weekly-track"><span class="pgw-weekly-fill" id="pgw-weekly-fill"></span></span>
+        </div>
+        <div class="pg-head" style="margin-top:16px;">COSMETIC UNLOCKS <span class="pl-note">earned free by playing — never for sale</span></div>
+        <div class="profile-goals-track" id="profile-goals-track"></div>
       </div>
       <p class="profile-empty" id="profile-empty">No runs logged yet — finish a track and your career starts filling in here.</p>
       <div class="pause-actions" style="margin-top:18px;">
@@ -7241,6 +7313,14 @@
       ['Accuracy', acc, '%', false, false],
       ['Full Combos', c.fullCombos, '', true, false]
     ];
+    // build110 Phase 5 (spec §2.2): "Total XP" additional cell — grid re-flows to whatever column
+    // count fits (confirmed 3-column, not 6). Only added once RhythmGoals has any XP to show.
+    try {
+      if (window.RhythmGoals) {
+        var _xp = window.RhythmGoals.xpState();
+        if (_xp && _xp.xp > 0) cells.push(['Total XP', _xp.xp, '', true, false]);
+      }
+    } catch (e) {}
     var st = $('profile-stats');
     if (st) st.innerHTML = cells.map(function (p) {
       var disp = p[3] ? fmt(p[1]) + p[2] : (Number(p[1]).toFixed(1) + p[2]);
@@ -7264,6 +7344,98 @@
     animateStats();   // count-up + grade-bar grow (reduce-motion → instant finals)
     renderLoadout();
     renderBadges();
+    renderXpSection();   // build110 Phase 5: level chip + XP bar + Recent XP feed
+    renderGoalsTrack();  // build110 Phase 5: weekly goal strip + cosmetic milestone track
+  }
+  // build110 Phase 5 (spec §2.2): level chip + XP bar (own bar, doesn't touch pn-rankbar/RANK_FLOORS)
+  // + the "Recent XP" transparency feed (last 5 entries from rr_xp.log).
+  function renderXpSection() {
+    var RG = window.RhythmGoals;
+    var chip = $('profile-lvlchip'), prog = $('profile-xpprog'), fill = $('profile-xp-fill'), cap = $('profile-xp-cap');
+    var feedWrap = $('profile-xpfeed-wrap'), feed = $('profile-xpfeed');
+    if (!RG) { if (chip) chip.hidden = true; if (prog) prog.hidden = true; if (feedWrap) feedWrap.hidden = true; return; }
+    var p = RG.xpProgress();
+    if (chip) { chip.hidden = false; chip.textContent = 'LV ' + p.level; }
+    if (prog) prog.hidden = false;
+    if (cap) cap.textContent = p.into + ' / ' + p.span + ' XP to LEVEL ' + (p.level + 1);
+    if (fill) {
+      var pct = Math.max(0, Math.min(100, Math.round(p.into / p.span * 100)));
+      var reduce = false; try { reduce = document.documentElement.classList.contains('rr-reduce-motion'); } catch (e) {}
+      if (reduce) { fill.style.transition = 'none'; fill.style.width = pct + '%'; }
+      else { fill.style.width = '0%'; setTimeout(function () { fill.style.width = pct + '%'; }, 40); }
+    }
+    var log = (RG.xpState().log || []);
+    if (feedWrap) feedWrap.hidden = !log.length;
+    if (feed) feed.innerHTML = log.map(function (e) {
+      return '<div class="pxf-row"><span class="pxf-label">' + String(e.label || '').replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }) + '</span><span class="pxf-amt">+' + fmt(e.amt) + ' XP</span></div>';
+    }).join('');
+  }
+  // build110 Phase 5 (spec §2.3): weekly goal summary strip + the full milestone/cosmetic track.
+  // Clones the EXACT renderLoadout()/skinUnlocked() pattern (index.html ~7284-7315 / ~7258) into flat
+  // NAME_COLORS/NOTE_COLORS/FLAIRS arrays gated on RhythmCatalog.ownsItem — same click-locked → toast,
+  // no Store redirect (these are never for sale — spec §5), "keep playing to unlock" pattern.
+  var NAME_COLORS = [
+    { id: 'bronze',      title: 'Bronze Name',    swatch: '#c98a52', unlockHint: 'Reach XP Level 3' },
+    { id: 'ember',       title: 'Ember Name',     swatch: '#ff7a4a', unlockHint: '7-day streak' },
+    { id: 'rare_violet', title: 'Rare Violet',    swatch: '#b98ae0', unlockHint: 'Reach XP Level 12' },
+    { id: 'whitehot',    title: 'White Hot',      swatch: '#fdf6e3', unlockHint: '60-day streak' }
+  ];
+  var NOTE_COLORS = [
+    { id: 'embertrail',      title: 'Embertrail Notes', swatch: '#ff9a4a', unlockHint: 'Reach XP Level 5' },
+    { id: 'embertrail_perm', title: 'Embertrail Perm',  swatch: '#ffb066', unlockHint: '14-day streak' }
+  ];
+  var FLAIRS = [
+    { id: 'badgeframe_anim', title: 'Animated Frame', swatch: '#e0a93f', unlockHint: 'Reach XP Level 8' },
+    { id: 'accent_decal',    title: 'Accent Decal',   swatch: '#ff2a38', unlockHint: '30-day streak' },
+    { id: 'animated_badge',  title: 'Animated Badge', swatch: '#e0a93f', unlockHint: 'Reach XP Level 20' },
+    { id: 'undying_ring',    title: 'Undying Ring',   swatch: '#fdf6e3', unlockHint: '100-day streak' }
+  ];
+  var NOTE_SKINS = [
+    { id: 'embertrail',   title: 'Embertrail Skin',  swatch: '#ff9a4a', unlockHint: 'Reach XP Level 5' },
+    { id: 'exclusive_15', title: 'Exclusive Skin',   swatch: '#f0c870', unlockHint: 'Reach XP Level 15' }
+  ];
+  function cosmeticUnlocked(itemType, id) {
+    try { var C = window.RhythmCatalog; if (C && C.ownsItem && C.ownsItem(itemType, id)) return true; } catch (e) {}
+    return false;
+  }
+  function equippedCosmetic(itemType) { try { return localStorage.getItem('rr_equip_' + itemType) || ''; } catch (e) { return ''; } }
+  function renderCosmeticGroup(itemType, list) {
+    return list.map(function (s) {
+      var on = equippedCosmetic(itemType) === s.id;
+      var locked = !cosmeticUnlocked(itemType, s.id);
+      return '<button class="pl-tile' + (on ? ' on' : '') + (locked ? ' locked' : '') + '" data-type="' + itemType + '" data-id="' + s.id + '" title="' + s.title + (locked ? ' — locked · ' + s.unlockHint : '') + '">' +
+        '<span class="pl-thumb"><span class="pcg-swatch" style="background:' + s.swatch + (locked ? ';filter:grayscale(0.6) brightness(0.6)' : '') + '"></span></span>' +
+        '<span class="pl-name">' + s.title + '</span>' +
+        (on ? '<span class="pl-on">EQUIPPED</span>' : (locked ? '<span class="pl-on pl-lock">' + s.unlockHint.toUpperCase() + '</span>' : '')) +
+      '</button>';
+    }).join('');
+  }
+  function renderGoalsTrack() {
+    var wrap = $('profile-goals-wrap'); if (!wrap) return;
+    var RG = window.RhythmGoals;
+    if (!RG) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    var g = RG.goalsState();
+    var wCap = $('pgw-weekly-cap'), wFill = $('pgw-weekly-fill');
+    if (wCap) wCap.textContent = (g.claimedWeekly ? 'CLAIMED · ' : '') + Math.min(g.weekLevels || 0, RG.WEEKLY_LEVELS) + ' / ' + RG.WEEKLY_LEVELS + ' levels · ' + Math.min(g.weekMp || 0, RG.WEEKLY_MP) + ' / ' + RG.WEEKLY_MP + ' MP';
+    if (wFill) {
+      var pct = Math.max(0, Math.min(100, Math.round((((g.weekLevels || 0) / RG.WEEKLY_LEVELS) + ((g.weekMp || 0) / RG.WEEKLY_MP)) / 2 * 100)));
+      wFill.style.width = pct + '%';
+    }
+    var track = $('profile-goals-track'); if (!track) return;
+    track.innerHTML = renderCosmeticGroup('namecolor', NAME_COLORS) + renderCosmeticGroup('notecolor', NOTE_COLORS) + renderCosmeticGroup('noteskin', NOTE_SKINS) + renderCosmeticGroup('flair', FLAIRS);
+    var btns = track.querySelectorAll('.pl-tile');
+    for (var i = 0; i < btns.length; i++) (function (btn) {
+      btn.addEventListener('click', function () {
+        var itemType = btn.getAttribute('data-type'), id = btn.getAttribute('data-id');
+        if (!cosmeticUnlocked(itemType, id)) {
+          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Keep playing to unlock this cosmetic'); } catch (e) {}
+          return;
+        }
+        try { localStorage.setItem('rr_equip_' + itemType, id); } catch (e) {}
+        renderGoalsTrack();
+      });
+    })(btns[i]);
   }
   // build99L: rank progress bar — fill = (runs - currentFloor)/(nextFloor - currentFloor) on the runs
   // ladder (0/5/15/30/60/120). S>=25 caps it full. Caption: "RIFT TAPPER · 11/15 to ECHO RUNNER".
