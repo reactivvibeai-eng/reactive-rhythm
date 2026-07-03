@@ -371,6 +371,11 @@
     // pt4 PERF: _densCap halves the per-FRAME FAR/MID draw ceiling under the _soft watchdog — relief now fires the instant a machine slows, independent of the reseed timing.
     var _densCap = _soft ? 0.5 : 1;
     var farActive = S.far.length * (0.62 + 0.38 * bassN) * _densCap, midActive = S.mid.length * (0.62 + 0.38 * bassN) * _densCap;
+    // build121 PERF: dt is invariant across the whole L/k double-loop below (it's the drawEmber(dt,st)
+    // parameter, never reassigned) — hoist the burst-velocity decay factor out of the per-particle loop
+    // instead of recomputing the identical Math.pow(0.18, dt) for every one of the ~760 live embers/frame.
+    // Mathematically identical (same base, same exponent, every iteration).
+    var _decay = Math.pow(0.18, dt);
     for (var L = 0; L < 3; L++) {
       var arr = L === 0 ? S.far : L === 1 ? S.mid : S.near;
       var activeCap = L === 0 ? farActive : L === 1 ? midActive : arr.length;
@@ -382,7 +387,7 @@
           var fk = flow * dt;
           e.x += (e.x - VPX) * fk + e.vx * dt + missK * w * 0.25 * dt * e.z;         // miss = lateral wind (3.1)
           e.y += (e.y - VPY) * fk + e.vy * dt + (reduce ? -14 * dt : 0);             // reduce-motion: embers drift up in place
-          e.vx *= Math.pow(0.18, dt); e.vy *= Math.pow(0.18, dt);                    // burst velocity decays
+          e.vx *= _decay; e.vy *= _decay;                                            // burst velocity decays
           e.life += dt;
           if (e.life > e.maxlife || e.x < -w * 0.05 || e.x > w * 1.05 || e.y < -h * 0.05 || e.y > h * 1.05) {
             _fsSpawn(e, L, fx); continue;

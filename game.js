@@ -336,6 +336,7 @@
   const canvas = $('hwy');
   const ctx = canvas.getContext('2d');
   let cw = 0, ch = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  let _vigGrad = null, _vigCw = -1, _vigCh = -1;   // build121 PERF: cached static vignette radial gradient (see resize()/render())
   // ---------- FLIPBOOK FX (additive sprite-sheet particle layer; assets/fx via fx-player.js) ----------
   // Fully optional: every call site guards on `fx`, so a missing player / manifest / sheet means no
   // flipbook FX and BYTE-IDENTICAL gameplay. Loaded once here; composited over the scene in render().
@@ -414,6 +415,7 @@
     canvas.width = Math.floor(cw * dpr); canvas.height = Math.floor(ch * dpr);
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    _vigGrad = null;   // build121 PERF: cw/ch changed — force the cached vignette gradient to rebuild
   }
   window.addEventListener('resize', resize);
 
@@ -544,7 +546,17 @@
     }
     return { gx: gx, gy: gy, gw: gw, gh: gh };
   }
+  // build121 PERF: fretGeom() is pure (a function of cw/ch/ART/activeGuitarImg/_vsFit/_skinArtOn)
+  // but is called several times within the SAME synchronous rAF tick (loop() then render()), each
+  // call reallocating a rect + nearX[]/farX[] arrays for byte-identical output. _fgFrameCache holds
+  // that one tick's result; it is nulled at the very top of loop() (so a fresh geometry is computed
+  // the first time it's needed each tick) and nulled again at the end of render() (so any call site
+  // OUTSIDE the loop/render pass — dev hooks, click handlers, hit-FX helpers — is completely
+  // unaffected and always computes fresh, exactly as before). Nothing can mutate cw/ch/ART/skin
+  // between these calls (no await/yield in loop()/render()), so reuse is provably identical.
+  let _fgFrameCache = null;
   function fretGeom() {
+    if (_fgFrameCache) return _fgFrameCache;
     const r = guitarRect();
     const nearY = r.gy + ART.bridgeFY * r.gh;   // catcher / bridge row
     const farY = r.gy + ART.nutFY * r.gh;       // far (nut) where notes spawn
@@ -578,7 +590,8 @@
     // lane width = median-ish bridge string spacing (sizes notes/catchers, kept uniform) — ONE formula
     // for every level (default + skin), so note/catcher size is identical to the working Crimson highway.
     const lw = Math.abs(nearX[3] - nearX[2]) || Math.abs(nearX[1] - nearX[0]) || (r.gw * 0.072);
-    return { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
+    _fgFrameCache = { gx: r.gx, gy: r.gy, gw: r.gw, gh: r.gh, nearX: nearX, farX: farX, nearY: nearY, farY: farY, lw: lw };
+    return _fgFrameCache;
   }
 
   // ---- LANE PROFILES — 'standard' (6-string keyboard game) + 'gh' (5-string Guitar-Hero controller).
@@ -5041,6 +5054,7 @@
   }
   let lastFrame = performance.now();
   function loop() {
+    _fgFrameCache = null;   // build121 PERF: fresh fretGeom() memo window starts this tick
     rafId = requestAnimationFrame(loop);
     const now = performance.now();
     const _rawMs = now - lastFrame;
@@ -5114,15 +5128,34 @@
     if (t > songDuration + 0.6) { for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i); endGame(); return; }   // build58: bank any sustain still correctly held when the clock crosses the end
     }   // end !_endingLock (build108)
 
-    if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);   // build64 PERF: cap runaway particle growth (oldest first)
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i]; p.age += dt;
-      if (p.age >= p.life) { particles.splice(i, 1); continue; }
-      if (!p.ring && !p.column && !p.flash) {
-        p.vy += 480 * (p.grav != null ? p.grav : 1) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-        if (p.kit) { p.vx *= (1 - 0.85 * dt); if (p.vz) p.z = (p.z || 0) + p.vz * dt; }   // build65: ease + advance toward-camera depth
+    // build64 PERF (build121 revision): oldest-first cap-trim via copyWithin — same resulting elements
+    // in the same relative order as splice(0, dropCount), no internal array-shift allocation.
+    if (particles.length > MAX_PARTICLES) {
+      const _drop = particles.length - MAX_PARTICLES;
+      particles.copyWithin(0, _drop);
+      particles.length = MAX_PARTICLES;
+    }
+    // build121 PERF: was a backward loop calling particles.splice(i,1) per dead particle (O(n) shift
+    // EACH time, on top of the update work). Each particle's update only reads/writes its OWN fields
+    // (age/vy/x/y/vx/z/rot) from dt — a loop-invariant — so update order across particles is irrelevant
+    // and switching backward→forward changes nothing about the math. Two-pointer forward compaction:
+    // update in place, and only survivors get written to the write cursor `w`, in the SAME relative
+    // order they already had (we visit 0..N-1 in order and append survivors in that order — draw-order
+    // preserving, unlike a swap-and-pop). Then truncate. Zero splice calls, one O(n) pass.
+    {
+      let w = 0;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i]; p.age += dt;
+        if (p.age >= p.life) continue;   // dead — drop (don't advance write cursor)
+        if (!p.ring && !p.column && !p.flash) {
+          p.vy += 480 * (p.grav != null ? p.grav : 1) * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+          if (p.kit) { p.vx *= (1 - 0.85 * dt); if (p.vz) p.z = (p.z || 0) + p.vz * dt; }   // build65: ease + advance toward-camera depth
+        }
+        if (p.frag || (p.kit && p.vrot)) p.rot += p.vrot * dt;
+        if (w !== i) particles[w] = p;
+        w++;
       }
-      if (p.frag || (p.kit && p.vrot)) p.rot += p.vrot * dt;
+      particles.length = w;
     }
     for (let i = 0; i < LANE_COUNT; i++) {
       lanePulse[i] = Math.max(0, lanePulse[i] - dt * 4);
@@ -5213,7 +5246,12 @@
     }
     // build65 PERF: re-cap AFTER this frame's spawn loops (streak flames + OD stream + the per-hit burst all push above)
     // so the render pass can't iterate an oversized array at peak load (Hard + high combo + OD). Oldest-first trim.
-    if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);
+    // build121 PERF: copyWithin instead of splice(0,drop) — identical resulting order, no shift-array alloc.
+    if (particles.length > MAX_PARTICLES) {
+      const _drop2 = particles.length - MAX_PARTICLES;
+      particles.copyWithin(0, _drop2);
+      particles.length = MAX_PARTICLES;
+    }
     // animated score count-up — the displayed number rolls toward the real score (game juice)
     if (scoreDisplay !== score) {
       if (Math.abs(score - scoreDisplay) < 0.6) scoreDisplay = score;
@@ -5265,8 +5303,14 @@
     }
     const t = songTime();
     const approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul());   // build36: per-level SPEED mod
-    const sx = (Math.random() - 0.5) * cameraShake, sy = (Math.random() - 0.5) * cameraShake;
-    ctx.save(); ctx.translate(sx, sy);
+    // build121 PERF: skip the Math.random()-based translate when shake has decayed to ~0 — at that
+    // point sx/sy are ~0 anyway (cameraShake decays to exactly 0 between hits), so translate(0,0) was
+    // a no-op transform every idle frame. save()/restore() stay unconditional (transform stack balance
+    // untouched); only the translate call itself is skipped.
+    const sx = cameraShake > 0.01 ? (Math.random() - 0.5) * cameraShake : 0;
+    const sy = cameraShake > 0.01 ? (Math.random() - 0.5) * cameraShake : 0;
+    ctx.save();
+    if (sx !== 0 || sy !== 0) ctx.translate(sx, sy);
     ctx.clearRect(0, 0, cw, ch);
     drawCathedralBg(t);
 
@@ -5405,9 +5449,14 @@
       const sAlpha0 = (0.24 + live * 0.6) * (1 - 0.55 * dz) * (1 - 0.5 * cold);
       const sAlpha = _skinArtOn ? Math.max(0.50, sAlpha0) : sAlpha0;
       const sWidth = (1.6 + live * 2.6 + hI * 1.6) + (_skinArtOn ? 0.8 : 0);
-      const pth = new Path2D();
+      // build121 PERF: was `new Path2D()` per lane per frame (5 heap allocs/frame just for this loop).
+      // The path is stroked up to twice (dark seat, then the neon line) but nothing between those two
+      // strokes touches the current path (only fillStyle/compositeOp/shadow change), so building it
+      // directly on ctx and calling ctx.stroke() twice reproduces the exact same two strokes with zero
+      // Path2D allocation. Same points, same order, same winding — byte-identical geometry.
       const undu = Math.max(pl, heat * 0.5);                  // hot strings shimmer even un-plucked
-      if (undu < 0.05 && warp <= 0) { pth.moveTo(nearX[i], nearY); pth.lineTo(farX[i], farY); }
+      ctx.beginPath();
+      if (undu < 0.05 && warp <= 0) { ctx.moveTo(nearX[i], nearY); ctx.lineTo(farX[i], farY); }
       else {
         const segs = 16, amp = undu * 11;
         for (let s = 0; s <= segs; s++) {
@@ -5415,7 +5464,7 @@
           const bx = nearX[i] + (farX[i] - nearX[i]) * u, by = nearY + (farY - nearY) * u;
           const wob = Math.sin(u * Math.PI) * Math.sin(ph0 + u * 13 + i) * amp;
           const wx = warpX(bx, u) + wob;                       // follow the neck warp so strings ride the art
-          s === 0 ? pth.moveTo(wx, by) : pth.lineTo(wx, by);
+          s === 0 ? ctx.moveTo(wx, by) : ctx.lineTo(wx, by);
         }
       }
       if (_skinArtOn) {   // dark SEAT under the neon line — contrast against busy skin art
@@ -5423,14 +5472,14 @@
         ctx.shadowBlur = 0;
         ctx.strokeStyle = 'rgba(12,7,6,' + (0.40 + live * 0.18).toFixed(3) + ')';
         ctx.lineWidth = sWidth + 2.6;
-        ctx.stroke(pth);
+        ctx.stroke();
         ctx.globalCompositeOperation = 'lighter';
       }
       ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + sAlpha.toFixed(3) + ')';
       ctx.lineWidth = sWidth;
       ctx.shadowColor = _tintRGB ? ('rgb(' + _tintRGB + ')') : (dz > 0.3 ? '#6b6360' : (hI > 0.5 ? '#ff7a2a' : '#ff2a30'));
       ctx.shadowBlur = (fxLite || reduceMotion) ? 0 : (7 + live * 18 + hI * 14) * (1 - 0.4 * cold);   // build66 (launch-audit P2): gate the per-lane string glow blur for perf/a11y users — it was the one ungated FX in this loop (5 shadowBlur strokes/frame)
-      ctx.stroke(pth); ctx.restore();
+      ctx.stroke(); ctx.restore();
     }
     // COMBO-REACTIVE neck energy — the board visibly "charges up" as the multiplier tier climbs.
     drawComboEnergy(t, fg);
@@ -5811,10 +5860,16 @@
       ctx.restore();
     }
 
-    // soft vignette to seat the playfield (image already has its own)
-    const vg = ctx.createRadialGradient(cw / 2, ch * 0.56, ch * 0.3, cw / 2, ch * 0.56, ch * 0.82);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.32)');
-    ctx.fillStyle = vg; ctx.fillRect(0, 0, cw, ch);
+    // soft vignette to seat the playfield (image already has its own). build121 PERF: this radial
+    // gradient depends only on cw/ch (both fixed for the run except on resize()), so cache the
+    // gradient OBJECT and only rebuild when cw/ch actually change (resize() also nulls it directly).
+    // Same fillRect every frame — identical pixels, one fewer gradient allocation/frame.
+    if (!_vigGrad || _vigCw !== cw || _vigCh !== ch) {
+      _vigGrad = ctx.createRadialGradient(cw / 2, ch * 0.56, ch * 0.3, cw / 2, ch * 0.56, ch * 0.82);
+      _vigGrad.addColorStop(0, 'rgba(0,0,0,0)'); _vigGrad.addColorStop(1, 'rgba(0,0,0,0.32)');
+      _vigCw = cw; _vigCh = ch;
+    }
+    ctx.fillStyle = _vigGrad; ctx.fillRect(0, 0, cw, ch);
 
     // COMBO HEAT — the screen edges glow hotter (crimson) as your multiplier climbs (x1→x4).
     // Additive + crimson so it reads as brand energy, never purple; reduce-motion dials it back.
@@ -5969,6 +6024,7 @@
     if (fx) { try { fx.draw(ctx, performance.now()); } catch (e) {} }
     ctx.restore();
     if (isPaused) { ctx.fillStyle = 'rgba(7,6,10,0.6)'; ctx.fillRect(0, 0, cw, ch); }
+    _fgFrameCache = null;   // build121 PERF: end of this tick's memo window — every other call site (dev hooks, click/hit handlers) keeps computing fresh
   }
 
   // Per-lane vibrating "guitar string" running from the top down to the receptor.
