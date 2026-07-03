@@ -1835,6 +1835,7 @@
     try { _unmountSpecStage(); } catch (e) {}                 // build102t: leak-proof — the leaveAll/mp-back paths tear the stage + spectator audio down too (no-op when never mounted)
     try { if (sel && sel.flixVideo && window.RhythmCatalog && window.RhythmCatalog.flixBackdropStop) window.RhythmCatalog.flixBackdropStop(); } catch (e) {}   // build102z p1.5: a VIDEO-review backdrop dies with the match (gated — normal matches never call it; the stop itself no-ops unless a flix backdrop is live)
     setLobbyInMatch(false);
+    try { if (window.RhythmChat && window.RhythmChat.showLobbyChat) window.RhythmChat.showLobbyChat(); } catch (e) {}   // build111 review: match over → restore the lobby chat drawer that onRoomStart hid (buffer + channel intact)
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
   function backToLobby() {
@@ -2439,6 +2440,7 @@
   function onRoomStart(p) {
     if (!p || !p.mid) return;
     try { if (window.RhythmChat && window.RhythmChat.hideRoomChat) window.RhythmChat.hideRoomChat(); } catch (e) {}   // build111 s2: match/live view has no chat — hide (not teardown) the panel the instant a real room-start fires
+    try { if (window.RhythmChat && window.RhythmChat.hideLobbyChat) window.RhythmChat.hideLobbyChat(); } catch (e) {}   // build111 review: also hide the FIXED lobby drawer (z-520) so its "CHAT ▲" pill doesn't float over the note highway / overlap the battle-call ring ACCEPT for the whole song
     // build102y review fix C: a live BEAT THAT ghost run parks ALL room-start handling — spectateMatch would
     // mount the dual-deck stage + second audio over the live run, and a hand-raised ghost-runner accepted
     // mid-solo-run must not be match-started either. The onShowSnap heartbeat re-offers the run (mid rides

@@ -47,7 +47,11 @@
     if (_rx) return _rx;
     var words = BADWORDS.slice().sort(function (a, b) { return b.length - a.length; });
     var esc = words.map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
-    _rx = new RegExp('(' + esc.join('|') + ')', 'gi');
+    // build111 review: \b word boundaries on pass 1. Without them the substring match masked ordinary words
+    // that merely CONTAIN a listed fragment — "cockatoo"→"***atoo", "grapefruit"→"g***fruit", "shitake"→"***ake",
+    // "scunthorpe"→"s***horpe". \b makes pass 1 only mask a badword as a standalone word ("you shit!" still masks;
+    // "class action" / "cockatoo" no longer do). Leet/spaced variants remain the job of pass 2/3 on normalized text.
+    _rx = new RegExp('(\\b(?:' + esc.join('|') + ')\\b)', 'gi');
     return _rx;
   }
 
@@ -75,12 +79,30 @@
         if (!tok || /^\s+$/.test(tok)) return tok;
         var norm = normalize(tok);
         if (!norm) return tok;
+        // build111 review: pass 2 is the LEET catcher only. Substring-scan a token ONLY when normalization
+        // actually FOLDED leet (digits/@/$ → letters). A plain word whose normalization is just its lowercase
+        // (no leet) must be left to pass 1's \b matcher — otherwise ordinary words containing a listed fragment
+        // ("cockatoo"⊃"cock", "shitake"⊃"shit", "grapefruit"⊃"rape", "scunthorpe"⊃"cunt") get falsely masked.
+        var light = String(tok).toLowerCase().replace(/[\s_\-.]/g, '');
+        if (norm === light) return tok;   // no leet folding → plain text, already covered by pass 1's \b
         for (var i = 0; i < BADWORDS.length; i++) {
           if (norm.indexOf(BADWORDS[i]) >= 0) { hit = true; return '***'; }
         }
         return tok;
       });
       if (hit) return masked.join('');
+    }
+    // build111 review — pass 3: spaced-letter evasion ("s h i t you"). Pass 1's substring can't see it (spaces
+    // break the literal) and pass 2's per-token loop sees only single letters. Collapse a RUN of >=3 single
+    // alnum chars glued by separators, leet-normalize the run, and mask it only if the collapsed run itself
+    // CONTAINS a badword — so "a b c d" / "R U ok" (collapse to non-words) stay untouched (no cross-word
+    // Scunthorpe risk: this only ever joins single-char tokens, never real multi-letter words).
+    if (out === raw) {
+      out = raw.replace(/[A-Za-z0-9](?:[^A-Za-z0-9]+[A-Za-z0-9]){2,}/g, function (run) {
+        var collapsed = normalize(run);
+        for (var i = 0; i < BADWORDS.length; i++) { if (collapsed.indexOf(BADWORDS[i]) >= 0) return '***'; }
+        return run;
+      });
     }
     return out;
   }
@@ -168,7 +190,7 @@
   function injectCss() {
     if (_cssInjected) return; _cssInjected = true;
     var css = '' +
-      '.rrc-drawer{position:fixed;right:16px;bottom:16px;z-index:520;display:flex;flex-direction:column;align-items:flex-end;font-family:"Chakra Petch",sans-serif;}' +
+      '.rrc-drawer{position:fixed;left:16px;bottom:16px;z-index:520;display:flex;flex-direction:column;align-items:flex-start;font-family:"Chakra Petch",sans-serif;}' +   /* build111 review: bottom-LEFT (was bottom-right) — the bottom-right corner holds the battle-call ring (accept/decline) + friends panel; a z-520 chat pill there overlapped the ACCEPT button and floated over the note highway. Left corner is clear + conventional for chat. */
       '.rrc-drawer[hidden]{display:none;}' +
       '.rrc-toggle{display:flex;align-items:center;gap:8px;background:linear-gradient(180deg, rgba(40,20,22,0.82), rgba(16,9,10,0.90));border:1px solid rgba(218,210,206,0.22);color:#f4eef0;border-radius:999px;padding:9px 16px;cursor:pointer;font-family:"Oxanium",sans-serif;font-weight:700;font-size:12px;letter-spacing:.06em;box-shadow:0 10px 24px -12px rgba(0,0,0,0.6);}' +
       '.rrc-toggle:hover{border-color:rgba(255,31,46,0.5);}' +
@@ -325,7 +347,7 @@
     try {
       ch.on('broadcast', { event: 'chat-msg' }, function (m) {
         var p = m && m.payload; if (!p || !p.id || !p.text) return;
-        pushLobbyRow({ id: p.id, name: p.name, text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });
+        pushLobbyRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });   // build111 review: a modified client can broadcast a slur as its display NAME — filter it, not just escape it
       });
     } catch (e) {}
   }
@@ -336,6 +358,12 @@
     lobby.ch = null; lobby.buf = []; lobby.unread = 0;
     if (lobby.els) { lobby.els.wrap.hidden = true; lobby.els._setOpen(false); lobby.els.list.innerHTML = ''; }
   }
+  // build111 review: temporarily hide the fixed lobby drawer while a match is live (it's z-520, fixed
+  // bottom-right — otherwise the "CHAT ▲" pill floats over the note highway all song, and it also overlaps
+  // the battle-call ring's ACCEPT button). Distinct from teardown: keeps the channel + ring buffer intact so
+  // returning to the lobby restores the conversation. Collapses the panel so it can't reopen while hidden.
+  function hideLobbyChat() { if (lobby.els) { lobby.els._setOpen(false); lobby.els.wrap.hidden = true; } }
+  function showLobbyChat() { if (lobby.els && lobby.ch) lobby.els.wrap.hidden = false; }
 
   // =========================================================================
   // ROOM CHAT — fixed ~240px panel, mounted INTO a host element (the caller
@@ -408,7 +436,7 @@
     try {
       ch.on('broadcast', { event: 'chat-msg' }, function (m) {
         var p = m && m.payload; if (!p || !p.id || !p.text) return;
-        pushRoomRow({ id: p.id, name: p.name, text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });
+        pushRoomRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });   // build111 review: filter the broadcast display NAME, not just escape it
       });
     } catch (e) {}
   }
@@ -468,6 +496,12 @@
       wrapEl.className = 'rrc-kebab-wrap';
       anchorEl.parentNode.insertBefore(wrapEl, anchorEl.nextSibling);
     }
+    // build111 review: paintModKebab runs on EVERY softPresence heartbeat repaint; the innerHTML rebuild below
+    // would delete an OPEN kebab dropdown out from under the host's click (they open ⋮, a heartbeat lands, the
+    // menu vanishes, "Kick" clicks nothing). If our menu is open, skip this repaint's rebuild — the opp-left
+    // teardown (above, when !opts.oppId) still runs, and the open menu already froze its opts at open time.
+    var _openMenu = document.getElementById('rrc-kmenu-live');
+    if (_openMenu && wrapEl.contains(_openMenu)) { _kebabState = { anchorEl: anchorEl, opts: opts }; return; }
     var wantFlag = opts.oppId !== opts.meId;   // never let a player flag themselves (defensive — oppId is never meId in practice)
     var wantKebab = !!opts.isHost;
     wrapEl.innerHTML =
@@ -608,6 +642,8 @@
     BADWORDS: BADWORDS,   // read-only convenience export (array reference — don't mutate)
     mountLobbyChat: mountLobbyChat,
     teardownLobbyChat: teardownLobbyChat,
+    hideLobbyChat: hideLobbyChat,     // build111 review: temporarily hide the fixed lobby drawer during a live match (keeps buffer)
+    showLobbyChat: showLobbyChat,
     lobbySystemLine: lobbySystemLine,
     mountRoomChat: mountRoomChat,
     teardownRoomChat: teardownRoomChat,
