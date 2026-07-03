@@ -1075,6 +1075,14 @@
   .mpx-combat-toggle:hover { color: var(--ink); border-color: rgba(255,31,46,0.4); }
   .mpx-combat-toggle.on { color: #fff; background: linear-gradient(180deg, rgba(255,42,48,0.28), rgba(179,18,31,0.18)); border-color: rgba(255,31,46,0.6); box-shadow: 0 0 18px -4px rgba(255,31,46,0.6); }
   .mpx-combat-toggle.on .ct-ico { opacity: 1; color: #ffe08a; }
+  /* build116 p1: hero-area combat toggle — full-width pill under PLAY NOW (was the .mpx-friends-panel pattern, reused) */
+  .mpx-combat-toggle--hero { margin: 8px 0 0; width: 100%; justify-content: center; }
+  /* build116 p1: small badge on the PLAY NOW hero itself, top-left (RANKED tag owns top-right) — readable at a glance
+     before queueing. Painted by paintCombatToggle(). */
+  .mpx-hero-combat-badge { position: absolute; top: 8px; left: 14px; z-index: 1; font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 999px; color: var(--ink-dim);
+    background: rgba(8,5,6,0.4); border: 1px solid rgba(218,215,210,0.22); }
+  .mpx-hero-combat-badge.on { color: #fff; background: linear-gradient(180deg, rgba(255,42,48,0.5), rgba(179,18,31,0.35)); border-color: rgba(255,31,46,0.7); box-shadow: 0 0 10px -2px rgba(255,31,46,0.7); }
   #mp-stun { position: absolute; inset: 0; z-index: 70; display: none; pointer-events: none; align-items: center; justify-content: center;
     background: radial-gradient(ellipse at 50% 45%, rgba(255,42,48,0.16), rgba(8,5,6,0.55) 70%); }
   #mp-stun.show { display: flex; animation: stunIn 0.16s ease both; }
@@ -5190,10 +5198,20 @@
             <span class="mpx-hero-title">PLAY NOW</span>
             <span class="mpx-hero-sub">Race a rival head-to-head — top score wins</span>
             <span class="mpx-ranked-tag" title="Quick Match affects your ranked ladder (RP)">RANKED</span>
+            <!-- build116 p1: combat-mode readout so the player sees PvP-damage-on vs pure score race BEFORE queueing,
+                 not just via the toggle pill below (which they might miss). Painted by paintCombatToggle(). -->
+            <span class="mpx-hero-combat-badge" id="mpx-hero-combat-badge" aria-hidden="true">COMBAT OFF</span>
           </button>
           <!-- build102x: server matchmaking (PHASE3) — site-wide queue; wired to RhythmMP.queueMatch in multiplayer.js -->
           <button class="mpx-qm-pill" id="mpx-qm-pill" type="button" aria-pressed="false">FIND ME A MATCH</button>
         </div>
+
+        <!-- build116 p1: un-hidden + relocated from the drawer (was orphaned/dead behind `hidden style="display:none"`).
+             This is the Quick Match / friend-challenge default — room-create and tournament-create keep their OWN
+             per-room/per-tournament combat selectors (#mpx-room-combat, #mpx-tour-combat) and are unaffected. -->
+        <button class="mpx-combat-toggle mpx-combat-toggle--hero" id="mpx-combat-toggle" type="button" aria-pressed="false" title="Sets the default combat mode for Quick Match and friend challenges (rooms and tournaments choose their own).">
+          <span class="ct-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg></span><span class="ct-state">Combat (when I host): Off</span>
+        </button>
 
         <!-- TIER 2 — two equal secondary tiles + a small tertiary CPU entry -->
         <div class="mpx-tier2">
@@ -5281,12 +5299,9 @@
               <span class="mpx-act-txt"><span class="a-t">Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span></span>
             </button>
           </div>
-          <!-- build100q (#172): combat is now a per-ROOM + per-TOURNAMENT setting (in those create dialogs), where the
-               playtester expected it — NOT a confusing main-lobby toggle. Hidden here (kept in DOM so combatOn/quick-match
-               wiring stays intact; quick-match defaults to its saved combatOn, off by default). -->
-          <button class="mpx-combat-toggle" id="mpx-combat-toggle" type="button" aria-pressed="false" hidden style="display:none" title="Combat is set per room and per tournament in their create dialogs.">
-            <span class="ct-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg></span><span class="ct-state">Combat (when I host): Off</span>
-          </button>
+          <!-- build116 p1: the combat toggle moved OUT of this drawer into the hero/PLAY NOW card area (it now drives
+               the Quick Match / friend-challenge default visibly, instead of sitting orphaned+hidden here). Room-create
+               and tournament-create keep their own independent per-room/per-tournament combat selectors below. -->
           <!-- playtest-3: the OLD lobby-presence roster (build8: shows only who's on the MP lobby, and its CHALLENGE
                fired a peer-to-peer lobby broadcast that timed out with "No response" when the target wasn't listening)
                is RETIRED — the single "PLAYERS ONLINE" list is the site-presence roster above (#mpx-online), whose

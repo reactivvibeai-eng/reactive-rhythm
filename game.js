@@ -248,6 +248,7 @@
   let _pendFullChord = [];
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
+  let lightningHitT = 0;  // build116 p1: seconds remaining on an INCOMING MP-combat shock lightning strike (crimson tint, distinct from the gold combo-milestone bolt above)
   let comboMidT = 0;      // 3B-i: seconds remaining on the MID-STREAK pulse (a smaller flash at combo%25===15, fills the 11-24 / post-milestone dead zone — cosmetic only)
   // ── COMBO TIER LADDER ───────────────────────────────────────────────────────
   // Named streak "modes" that escalate PAST the golden glow (the #1 ask). Purely
@@ -4852,11 +4853,19 @@
   // ---------- v254: MP COMBAT — a rival's combo shock stuns your inputs ~2s (P-vs-P mode) ----------
   // multiplayer.js calls mpStun() on an incoming 'shock' and mpShockSent() when YOUR combo fires one. Stun gates
   // onLaneInput (notes pass → you bleed combo/score = the "damage"). reduceMotion still stuns (it's gameplay, not chrome).
+  // build116 p1: canvas payoff for TAKING a combat shock — the same jagged-bolt strike the combo-milestone uses
+  // (lightningT), but its own timer (lightningHitT) + a crimson tint so it reads as "incoming damage," not "your
+  // streak." Gated by reduce-motion same as the sender-side _spawnZapBolt in multiplayer.js.
+  window.RhythmGame.mpZapHit = () => {
+    if (reduceMotion) return;
+    lightningHitT = 0.55;
+  };
   window.RhythmGame.mpStun = (sec, fromName) => {
     if (state !== 'playing') return;
     const ms = Math.max(800, Math.min(3500, (sec || 2.2) * 1000));
     _mpStunUntil = performance.now() + ms;
     cameraShake = Math.max(cameraShake, 16);
+    try { window.RhythmGame.mpZapHit(); } catch (e) {}   // build116 p1: the victim sees the jagged-bolt canvas strike too, not just the input freeze
     try { playZapSfx(true); } catch (e) {}   // v257: an electric ZAP when a rival shocks you
     try { if (navigator.vibrate) navigator.vibrate([30, 50, 30, 50, 80]); } catch (e) {}
     try {
@@ -5143,6 +5152,7 @@
     cameraShake = Math.max(0, cameraShake - dt * 30);
     scanT = Math.max(0, scanT - dt);
     lightningT = Math.max(0, lightningT - dt);
+    lightningHitT = Math.max(0, lightningHitT - dt);   // build116 p1: decay the incoming-shock bolt
     comboMidT = Math.max(0, comboMidT - dt);   // 3B-i: decay the mid-streak pulse
     // VISUAL-ONLY miss/fail FX decays
     missFlash = Math.max(0, missFlash - dt * 2.2);
@@ -5774,6 +5784,23 @@
         let x = cw * 0.5 + (b ? -1 : 1) * cw * 0.13;
         ctx.beginPath(); ctx.moveTo(x, 0);
         for (let y = 36; y <= ch; y += 38) { x += (Math.random() - 0.5) * 46; ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // build116 p1: INCOMING MP-COMBAT SHOCK — same jagged-bolt renderer as the combo-milestone strike above, but
+    // tinted crimson (not gold) + a touch wider so it reads as "you got hit" rather than "you earned this."
+    if (lightningHitT > 0) {
+      const lb = lightningHitT / 0.55;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,42,48,' + (lb * 0.16) + ')'; ctx.fillRect(0, 0, cw, ch);
+      ctx.strokeStyle = 'rgba(255,120,110,' + (lb * 0.95) + ')'; ctx.lineWidth = 3 + lb * 3.2;
+      ctx.shadowColor = '#ff1f2e'; ctx.shadowBlur = 26 * lb; ctx.lineCap = 'round';
+      for (let b = 0; b < 3; b++) {
+        let x = cw * (0.22 + b * 0.28) + (Math.random() - 0.5) * 30;
+        ctx.beginPath(); ctx.moveTo(x, 0);
+        for (let y = 30; y <= ch; y += 34) { x += (Math.random() - 0.5) * 52; ctx.lineTo(x, y); }
         ctx.stroke();
       }
       ctx.restore();

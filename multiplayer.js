@@ -388,6 +388,8 @@
     t.setAttribute('aria-pressed', combatOn ? 'true' : 'false');
     t.classList.toggle('on', combatOn);
     var lab = t.querySelector('.ct-state'); if (lab) lab.textContent = combatOn ? 'Combat (when I host): On' : 'Combat (when I host): Off';
+    // build116 p1: mirror onto the small PLAY NOW hero badge so the mode is visible before queueing
+    var b = $('mpx-hero-combat-badge'); if (b) { b.classList.toggle('on', combatOn); b.textContent = combatOn ? 'COMBAT ON' : 'COMBAT OFF'; }
   }
   function toggleCombat() {
     combatOn = !combatOn;
