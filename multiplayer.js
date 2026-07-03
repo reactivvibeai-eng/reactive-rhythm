@@ -90,8 +90,11 @@
   var lastOppState = null;        // versus P2: latest opponent render frame (ghost deck source)
   var _lastStateSend = 0, _vsActive = false;   // _vsActive: gate the high-rate 'state' stream (P4 turns it on)
   var _vsMode = false;            // versus P3: split-screen HUD is mounted/active for this match
-  var VS_LEADIN_MS = 10000;       // build100t (owner): ~10s 1v1 lead-in (was 3.6s — too short to get set). Wall-clock synced via atMs; the longer window also buffers slower machines.
-  var TOUR_LEADIN_MS = 10000;     // build100t: ~10s tournament lead-in (host-adjustable via the lead-in control)
+  var VS_LEADIN_MS = 4500;        // build108 s1 (owner playtest-3: "counts down from 10, too long"): trimmed from the
+  // build100t 10s back down — still comfortably longer than the old 3.6s so slower machines/loads have room, but no
+  // longer a 10-count. Wall-clock synced via the shared atMs (both peers derive their local countdown off the SAME
+  // broadcast atMs, so shortening this value changes nothing about sync — just how far in the future atMs lands).
+  var TOUR_LEADIN_MS = 4500;      // build108 s1: matches VS_LEADIN_MS — see note above (host-adjustable via the lead-in control)
   var _countdownRaf = 0;          // the 1v1 lead-in 3·2·1·GO! loop (off shared atMs)
   var _tourCdRaf = 0, _verdictT = 0;   // the tournament cinematic-countdown loop (own rAF so it can't cancel the 1v1 one) + verdict auto-hide timer
   var _mountT = 0;                // deferred split-screen mount timer (beginMatch/onTourRound) — cleared on teardown so a mid-lead-in abort can't resurrect vs-mode

@@ -2760,8 +2760,12 @@
     // countdown + play shifts BOTH together with zero drift (no offset math). Single-player only — skipped in MP so the
     // cross-peer round start isn't thrown off. The gen-guard after it is mandatory (a level exit/relaunch during the 2s
     // buffer would otherwise orphan a second loop / double audio).
+    // build108 s1 (owner playtest-3: "guitar not fully animated in, notes come down before you're ready"): the digit
+    // countdown itself is short again (3·2·1, see runCountdown), so THIS wait is now what guarantees the guitar/neck
+    // GUITAR-IN phase (_skinBuildT 0→1 over 2.0s, driven in render()) actually finishes before the 3·2·1 starts —
+    // sequence is guitar-in → count → notes, never overlapping. 2100ms covers the 2.0s materialize + margin.
     if (!reduceMotion && !(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) {
-      await new Promise(r => setTimeout(r, 1200));   // build100t: trimmed — the longer ~10s countdown below is now the main "everything in view" settle window
+      await new Promise(r => setTimeout(r, 2100));
       if (myGen !== _playGen || !player) return;
     }
     await runCountdown();
@@ -2835,11 +2839,13 @@
       await new Promise(r => setTimeout(r, 650));
       if (myGen !== _playGen) return;   // superseded — leave the new countdown's node untouched
       el.style.fontSize = '';   // digits revert to the big CSS default size
-      for (let i = 10; i >= 1; i--) {   // build100t (owner): ~10s countdown — 3 was too short to get set before notes arrive. Counts 10→1 then GO.
+      for (let i = 3; i >= 1; i--) {   // build108 s1 (owner playtest-3: "counts down from 10, too long"): 3·2·1·GO — the guitar-in
+        // phase (below, before runCountdown is called) now owns getting the player oriented, so the digit count itself
+        // can be short and punchy again. ~2.5-3s total pre-song (GET READY 650ms + 3·2·1 @ 700ms + GO 320ms).
         el.textContent = i;
-        el.style.fontSize = (i >= 10) ? 'clamp(80px, 22vw, 200px)' : '';   // "10" is 2 chars — nudge it down a touch so it fits the slot; single digits use the big default
+        el.style.fontSize = '';
         el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 700));
         if (myGen !== _playGen) return;
       }
       el.textContent = 'GO!';
