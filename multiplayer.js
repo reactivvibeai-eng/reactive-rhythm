@@ -1388,6 +1388,12 @@
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
     _lastShockCombo = 0; _lastOdActive = false; _rankRecorded = false;   // v254/build100r: fresh combat-shock (combo + OD) + ranked-record state per match
+    // build109 s4: re-broadcast room-meta the instant the match goes live so LIVE NOW's new full-room-live
+    // bucket (renderLiveNow) sees this room the moment it fills+starts, not just while it had an open seat.
+    // advertiseRoom() already sends `live: matchLive?1:0` (pre-existing field) — it just never fired again
+    // after matchLive flips true, because nothing called it at this transition. No-ops for the guest peer
+    // (advertiseRoom self-guards on room.isHost) and for SHOW rooms (already always-listed via r.show).
+    try { advertiseRoom(); } catch (e) {}
     try { console.warn('[mp] match starting — combat (damage) =', matchCombat ? 'ON' : 'OFF'); } catch (e) {}   // build100r: confirm whether shocks will fire this match (combat is the HOST's setting)
     step('go'); startCountdown(atMs);   // synced 3·2·1·GO! in the centered card, off the shared atMs
     // register one-shot song-end handler BEFORE launch
@@ -1648,6 +1654,7 @@
     if (!matchLive || !finishedLocal) return;
     if (!oppFinal && !force && !oppLeft) return;
     matchLive = false;
+    try { advertiseRoom(); } catch (e) {}   // build109 s4: the match settled — re-broadcast so LIVE NOW's live-bucket drops this room the moment it's back at the verdict screen (mirrors the beginMatch re-broadcast on the way in)
     if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: settling now — cancel the stale 8s safety fire so it can't re-render an already-settled match
     unmountOppPanel();
     setLobbyInMatch(false);
@@ -2263,6 +2270,13 @@
     lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
       rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now(),
       show: room.show ? 1 : 0, live: matchLive ? 1 : 0,   // build102s: additive show/live flags (old clients ignore unknown fields; joiners adopt `show` for the seat policy)
+      // build109 s4: the live match id, so a spectator who discovers this room from LIVE NOW AFTER room-start
+      // already fired (the normal case — broadcast events aren't replayed to late joiners) can catch up straight
+      // into spectateMatch() instead of silently waiting at the room screen for a room-start that already happened.
+      // Mirrors what show rooms' show-snap heartbeat already does for late joiners, minus the periodic re-send —
+      // this one-shot re-advertise at beginMatch/settleIfReady is enough since LIVE NOW only surfaces the room
+      // to a NEW spectator at the moment they open the lobby (they always fetch fresh roomsDir on join).
+      mid: matchLive ? (matchId || null) : null,
       open: (room.show && room.openSeat && room.openSeat !== 'artist') ? 1 : 0,
       title: room.show ? String(((sel && sel.title) || '') + ((sel && sel.artist) ? ' — ' + sel.artist : '')).slice(0, 40) : '',
       art: room.show ? ((sel && sel.art) || '') : '',
@@ -2407,6 +2421,23 @@
     spectating = !!asSpec;
     joinRoomChannel(rid, room.seat);
     reannounce();
+    // build109 s4: LATE-JOIN CATCH-UP for an ordinary (non-show) room that's ALREADY mid-match. room-start is a
+    // one-shot broadcast — a spectator who discovers this room from LIVE NOW after it fired would otherwise sit
+    // in enterRoomWaiting() forever (no show-snap heartbeat exists for normal rooms to re-offer it). advertiseRoom
+    // now carries the live match's `mid` for exactly this case — jump straight into the SAME spectateMatch() path
+    // onRoomStart's spectator branch already uses (identical p1/p2-meta resolution shape: room.members, freshly
+    // joined so likely still empty at this exact tick, with a lobby-roster fallback — the SAME staleness profile
+    // the shipped room-start spectate path already has, not a new risk). oppMeta/the opp panel self-heal once the
+    // match's own tick/state stream + room presence sync land, same as any other spectate entry.
+    if (asSpec && meta.live && meta.mid && !meta.show) {
+      var _p1m = room.members[meta.hostId] || lobby[meta.hostId] || { id: meta.hostId, name: meta.hostName || 'Host' };
+      // seat==='p2' specifically (room.members also carries other spectators who joined earlier — must not
+      // grab one of THEM as the "opponent").
+      var _p2id = null; for (var _k in room.members) { if (_k !== meta.hostId && room.members[_k].seat === 'p2') { _p2id = _k; break; } }
+      var _p2m = _p2id ? room.members[_p2id] : null;
+      spectateMatch(meta.mid, _p1m, _p2m);
+      return;
+    }
     enterRoomWaiting();
   }
 
@@ -2525,7 +2556,12 @@
     var list = $('mpx-livenow-list'), empty = $('mpx-livenow-empty'), nEl = $('mpx-livenow-n');
     // OPEN tournaments lead (joinable only while still filling), then OPEN public rooms with a seat free.
     var tids = Object.keys(toursDir).filter(function (tid) { var r = toursDir[tid]; return r && r.state !== 'live' && r.state !== 'done'; });
-    var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && ((r.count || 1) < (r.max || 2) || r.show); });   // build102y step5: show rooms stay listed even with a full seat — they're always WATCHable
+    // build109 s4: a full ORDINARY 1v1 room used to vanish from LIVE NOW the instant it filled + went live —
+    // spectateMatch()/joinRoom(rid,true) could technically watch it, but nobody could ever discover it to try.
+    // r.live (broadcast by advertiseRoom, now re-sent at beginMatch/settleIfReady — see those call sites) is
+    // the signal: a full room with live:1 is an ONGOING match, still watchable. Show rooms keep their own
+    // always-listed rule (r.show) unchanged.
+    var rids = Object.keys(roomsDir).filter(function (rid) { var r = roomsDir[rid]; return r && ((r.count || 1) < (r.max || 2) || r.show || (r.live && (r.count || 1) >= (r.max || 2))); });
     wrap.hidden = false;
     // visual-overhaul (owner ask): a LIVE / hostable tournament gets promoted to a FRONT-AND-CENTER hero card.
     var heroShown = renderTourHero(tids);
@@ -2569,6 +2605,17 @@
           '<span class="mpx-rc-act">' +
           (openSeat ? '<button class="mpx-rc-join seat" data-ln-seat="' + esc(rid) + '">TAKE THE SEAT</button>' : '') +
           '<button class="mpx-rc-join" data-ln-watch="' + esc(rid) + '">WATCH</button></span></div>';
+      }
+      // build109 s4: a FULL ordinary 1v1 room mid-match (r.live, not a show — those are handled above) — the
+      // fix this step exists for. Same billboard markup/CSS as the show branch (.mpx-roomcard.show, the
+      // existing 🔴 LIVE tag treatment) and the SAME data-ln-watch → joinRoom(rid,true) handler wired below;
+      // zero new join-path code. No OPEN SEAT / TAKE THE SEAT chrome — ordinary rooms have no host-granted-
+      // seat concept, they're strictly watch-only once full. esc() on hostName/name (peer-supplied strings).
+      if (r.live && cnt >= max) {
+        return '<div class="mpx-roomcard show"><span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
+          '<span class="mpx-rc-meta"><span class="mpx-rc-name">' + esc(r.name || 'Room') + '</span>' +
+          '<span class="mpx-rc-sub"><span class="mpx-rc-tag live">🔴 LIVE</span> host ' + esc(r.hostName || 'host') + ' · match in progress</span></span>' +
+          '<span class="mpx-rc-act"><button class="mpx-rc-join" data-ln-watch="' + esc(rid) + '">WATCH</button></span></div>';
       }
       return '<div class="mpx-roomcard">' +
         '<span class="mpx-rc-spark">' + SVG_PICK + '</span>' +
