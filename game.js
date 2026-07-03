@@ -2450,6 +2450,12 @@
     // also zeroes _mpStunUntil before the next play; this is the exit-mid-stun belt-and-suspenders).
     clearTimeout(_stunHideT); _stunHideT = 0; _mpStunUntil = 0;
     try { const _se = document.getElementById('mp-stun'); if (_se) { _se.classList.remove('show'); _se.setAttribute('aria-hidden', 'true'); } } catch (e) {}
+    // build102y review fix D: the BEAT THAT ghost target dies with the RUN, whatever ended it. It was cleared only
+    // in endGame(), but the pause-menu EXIT path calls stopGame() directly — the stale target (+ #ghost-target pill)
+    // then leaked into any later run that bypasses launchTrack (MP startAt, playDemo, show runs) with a spurious
+    // BEAT IT! flash mid-versus. endGame calls stopGame first, so this ONE clear covers song-end, fail-out, and
+    // every quit/abort path. (A mid-run RESTART also lands here — restart = a fresh run, one-run contract holds.)
+    try { if (_ghostTarget) { _ghostTarget = null; _ghostBeat = false; const _ge = $('ghost-target'); if (_ge) _ge.remove(); } } catch (e) {}
   }
 
   function restartGame() { stopGame(); beginPlay(); }
@@ -2467,9 +2473,7 @@
   }
 
   async function endGame() {
-    stopGame();
-    // build102y step6: the BEAT THAT ghost target lives for exactly one run — clear it (and its pill) at song end
-    try { if (_ghostTarget) { _ghostTarget = null; const _ge2 = $('ghost-target'); if (_ge2) _ge2.remove(); } } catch (e) {}
+    stopGame();   // build102y review fix D: the ghost-target clear moved INTO stopGame (covers the EXIT path too)
     // build35 (audit P0): EXCLUDE bombs from the scored-note total. Bombs are dodged (hit='avoided'),
     // never counted in perfect/great/good — counting them in `total` deflated accuracy/grade (a clean
     // Medium/Hard dodge-all run read ~96%, suppressing S / 100% / full-combo) AND over-reported
@@ -4148,7 +4152,11 @@
   // too — the target lives for exactly one run.
   let _ghostTarget = null, _ghostBeat = false;
   window.RhythmGame.setGhostTarget = function (t) {
-    _ghostTarget = (t && +t.score > 0) ? { score: Math.floor(+t.score), name: String(t.name || 'RIVAL').slice(0, 14) } : null;
+    // build102y review fix H: the score originates from PEER final broadcasts — require a FINITE positive integer
+    // and clamp (a hostile {score:1e999} → Infinity passed the old >0 guard → '∞' on the pill and an unwinnable
+    // ghost whose BEAT IT! could never fire). Display-only either way; junk collapses to null (no target).
+    var _gs = t ? Math.floor(+t.score) : 0;
+    _ghostTarget = (Number.isFinite(_gs) && _gs > 0) ? { score: Math.min(_gs, 99999999), name: String((t && t.name) || 'RIVAL').slice(0, 14) } : null;
     _ghostBeat = false;
     if (!_ghostTarget) { try { const _ge = $('ghost-target'); if (_ge) _ge.remove(); } catch (e) {} }
   };

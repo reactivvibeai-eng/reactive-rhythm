@@ -401,6 +401,7 @@
     screen.classList.add('active');   // fallback if the hub router is absent
   }
   function onActivated() {
+    _ghostRunActive = false;   // build102y review fix C: the MP screen coming up = the ghost run is over/abandoned — un-park auto-spectate
     paintYou();
     if (!matchLive && !matchCh && !tour.id) step('lobby');   // don't reset a returning winner overlay or a live bracket (build9)
     banner('mpx-lobby-msg', '');
@@ -1795,6 +1796,7 @@
   }
   function closeRoom(silent) {
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
+    _ghostRunActive = false;   // build102y review fix C: no room, nothing to park (inert var write for normal MP)
     try { paintQmPill(_qm.on ? 'searching' : 'off'); } catch (e) {}   // v405 review fix: leaving a matched qm room un-sticks the '🎯 MATCHED!' pill (pure pill-element UI — inert for normal rooms, where it's already 'off')
     if (room.id && room.show) {   // build102s: a closing SHOW room says goodbye — final live:false snap (spectator recovery, judge mandate) + heartbeat/persist teardown
       if (room.isHost) { matchId = null; matchLive = false; try { sendShowSnap(); } catch (e) {} }
@@ -1858,6 +1860,16 @@
       room.declined = room.declined || {};
       if (room.p2 && room.members[room.p2]) room._graceUntil = 0;   // review fix 4b: challenger's presence re-synced → drop the reconnect grace
       if (room.p2 && !room.members[room.p2] && !(room._graceUntil && Date.now() < room._graceUntil)) { room.p2 = null; advertiseRoom(); sendShowSnap(); }   // seated challenger left → seat reopens (grace shields the just-restored seat until presence warms up)
+      // build102y review fix B: WITHDRAW-vs-ACCEPT wedge heal — a player who WITHDRAWs inside the presence-
+      // heartbeat window around a host ACCEPT (either ordering) ends up seated (room.p2) while their OWN
+      // presence seat says 'spec', and NO existing branch can heal it: the client promote needs _demoted, the
+      // vacate above needs them GONE, their re-take early-returns on _snapP2===me, and decline needs pendingChal.
+      // Presence is the truth → vacate when the seated challenger reads spectator, with a 10s freshness grace
+      // (room._p2At stamped at every seat assignment) so a just-accepted seat whose presence heartbeat hasn't
+      // propagated yet is never undone — and never mid-run.
+      if (room.p2 && room.members[room.p2] && room.members[room.p2].seat === 'spec' && !matchLive && Date.now() - (room._p2At || 0) > 10000) {
+        room.p2 = null; advertiseRoom(); sendShowSnap(); try { paintRoomWaiting(); } catch (e) {}
+      }
       var pend = null;
       if (!room.p2) {
         var joiners = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec' && !room.declined[id]; });
@@ -1887,6 +1899,11 @@
   }
   function onRoomStart(p) {
     if (!p || !p.mid) return;
+    // build102y review fix C: a live BEAT THAT ghost run parks ALL room-start handling — spectateMatch would
+    // mount the dual-deck stage + second audio over the live run, and a hand-raised ghost-runner accepted
+    // mid-solo-run must not be match-started either. The onShowSnap heartbeat re-offers the run (mid rides
+    // every 4s snap) once the ghost run resolves and clears the flag.
+    if (_ghostRunActive) return;
     var oppId = (ME.id === p.p1Id) ? p.p2Id : p.p1Id;
     var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
     if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) {
@@ -2242,7 +2259,7 @@
     watchCh.on('broadcast', { event: 'final' }, function (m) {
       var _fp = m.payload || {};
       if (_specShowSolo) {   // build102s: a SOLO show run has no verdict for watchers — back to the waiting room (the host returns there for the next run)
-        _lastShowFinal = { name: String(_fp.name || 'The host').slice(0, 14), score: +(_fp.score || 0) };   // build102y step6: BEAT THAT reads this at the waiting card
+        _lastShowFinal = { name: String(_fp.name || 'The host').slice(0, 14), score: _finScore(_fp.score) };   // build102y step6: BEAT THAT reads this at the waiting card (fix H: peer score → finite clamp)
         endSpectate('✓ ' + ((_fp.name || 'The host') + ' finished — ' + Number(_fp.score || 0).toLocaleString() + '. Waiting for the next run…'));
         return;
       }
@@ -2409,7 +2426,11 @@
     // SEAT-RACE SELF-HEAL (judge mandate): demote ONLY when the seat is OCCUPIED BY SOMEONE ELSE — an empty
     // p2Id (e.g. the first snap after a host refresh, before presence re-syncs) must never demote a legit
     // challenger (review fix 4). A host ACCEPT later re-promotes (p2Id === me).
-    if (room.seat === 'p2' && p.p2Id && p.p2Id !== ME.id && p.pend !== ME.id) {
+    // build102y review fix A: NEVER demote an ACTIVELY-PLAYING challenger — a host SWAP IN THE ARTIST mid-run
+    // (reachable via host mid-run refresh → restored waiting card → SWAP pill) would flip spectating=true over
+    // their live run and silently drop their mpSettle + local ladder record at song end. Skip while I'm a live
+    // match PARTICIPANT; the demote lands on the next 4s snap AFTER my run settles ("next room-start" semantics).
+    if (room.seat === 'p2' && p.p2Id && p.p2Id !== ME.id && p.pend !== ME.id && !(matchCh && matchLive && !spectating)) {
       room.seat = 'spec'; room.p2 = null; spectating = true; room._demoted = true;
       try { if (roomSP) roomSP.refresh(); } catch (e) {}
       banner('mpx-setup-msg', 'The challenger seat is taken — you\'re watching. The host can wave you in next run.');
@@ -2426,7 +2447,7 @@
     try { _paintSpecTake(); } catch (e) {}
     if (p.atMs && !_specAtMs) { _specAtMs = p.atMs; try { _syncSpecAudio(); } catch (e) {} }   // build102t: late catch-up — the snap carries the shared start the one-shot 'start' already spent
     if (p.live && _specStage && !_specFedReal) _specLastFeedAt = Date.now();   // build102t/102u: the heartbeat vouches ONLY until the first real tick/state — after that a frozen host (paused tab, wedged engine) must trip the 12s recovery, not be kept alive by its own 4s snap (review fix 2b)
-    if (p.live && p.mid && room.seat === 'spec' && !matchCh && !matchLive) {
+    if (p.live && p.mid && room.seat === 'spec' && !matchCh && !matchLive && !_ghostRunActive) {   // build102y review fix C: never slam the spec stage over a live BEAT THAT ghost run — the re-entry simply waits for the next snap after it ends
       // late arrival while a run is live → drop into the existing spectate view (mid was the only missing key)
       _specShowSolo = !p.p2Id;
       _specIds = { p1: room.p1, p2: p.p2Id || null };   // build102t: deck seat assignment
@@ -2464,13 +2485,17 @@
     set('mpx-sc-opp-meta', b ? (((b.acc != null) ? b.acc + '% · ' : '') + (b.combo || 0) + 'x' + (b.grade ? ' · ' + b.grade : '')) : 'no result received');
     // build102y step6: BEAT THAT — the spectator can challenge the WINNING score on the same track. Gated on
     // sel.audioUrl (the decks only mount on a decoded chart, so a visible button = proven playable track).
-    _lastShowFinal = { name: String((w && w.name) || 'RIVAL').slice(0, 14), score: +((w && w.score) || 0) };
+    _lastShowFinal = { name: String((w && w.name) || 'RIVAL').slice(0, 14), score: _finScore(w && w.score) };   // fix H: peer score → finite clamp
     var _bt = $('mpx-beat-that');
     if (_bt) {
       var _showBt = !!(sel && sel.audioUrl && _lastShowFinal.score > 0);
       _bt.hidden = !_showBt;
       if (_showBt) _bt.textContent = '🎯 BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
     }
+    // build102y review fix E: a WATCHER's neutral verdict must never carry the PLAYER verdict controls left
+    // visible by a previous duel's showWinner — SHARE THE W would share the stale _lastVerdict (wrong song,
+    // wrong rival, wrong score), and NEXT RIVAL / battle link / head-to-head are player-only surfaces.
+    ['mpx-next-rival', 'mpx-share-w', 'mpx-copy-battle', 'mpx-h2h'].forEach(function (id) { var el = $(id); if (el) el.hidden = true; });
     step('winner');
     screen.classList.add('active'); activeNow = true;
     if (_specStage) {   // build102t (judge): don't yank the dual-deck view mid-verdict — banner it on the stage ~4s, then reveal the winner card beneath
@@ -2484,6 +2509,16 @@
   // the hook set directly. The ROOM channel stays joined throughout (endSpectate never leaves it), so RETURN TO
   // THE SHOW on the results screen can drop the player straight back into the waiting room.
   var _lastShowFinal = null;
+  // build102y review fix H: final-broadcast scores are PEER data — collapse junk (Infinity via {score:'1e999'},
+  // 1e21, NaN) to 0 so no surface ever advertises an impossible target (0 hides the BEAT THAT buttons; game.js
+  // setGhostTarget clamps again on its side).
+  function _finScore(s) { s = Math.floor(+s || 0); return (Number.isFinite(s) && s > 0) ? Math.min(s, 99999999) : 0; }
+  // build102y review fix C: a live ghost run must PARK the room's auto-spectate machinery — the ghost-runner
+  // keeps the room channel joined (seat 'spec', matchCh null, matchLive false), which is EXACTLY the state the
+  // onShowSnap late-join branch and onRoomStart key on, so the host starting the next show run would mount the
+  // full-screen spec stage + a SECOND DemoPlayer over the live ghost run. Cleared when the results screen paints
+  // (the #results observer below), on RETURN TO THE SHOW, on open(), and in closeRoom/leaveAll.
+  var _ghostRunActive = false;
   function _beatThatLaunch(target) {
     if (!target || !(target.score > 0) || !sel || !sel.audioUrl) return;
     var launched = false;
@@ -2499,6 +2534,7 @@
       try { window.RhythmGame.playUrl(sel.audioUrl, { id: sel.trackId || null, title: sel.title, artist: sel.artist, artwork: sel.art }); launched = true; }
       catch (e2) { try { window.RhythmGame.setGhostTarget && window.RhythmGame.setGhostTarget(null); } catch (e3) {} banner('mpx-setup-msg', 'Couldn\'t start the track — try again.'); }
     }
+    if (launched) _ghostRunActive = true;   // build102y review fix C: park auto-spectate until this run resolves
   }
   // unwind a spectator's watch channel back to the room-waiting screen (room channel stays joined)
   function endSpectate(msg) {
@@ -2837,6 +2873,7 @@
   function acceptChallenger() {
     if (!room.isHost || !room.show || !room.pendingChal || room.p2) return;
     room.p2 = room.pendingChal; room.pendingChal = null;
+    room._p2At = Date.now();   // build102y review fix B: freshness stamp — the spec-seat wedge heal never undoes a just-granted seat
     advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
     banner('mpx-setup-msg', ((room.members[room.p2] || {}).name || 'Challenger') + ' is seated — START runs the versus.');
   }
@@ -2852,6 +2889,7 @@
   function swapInArtist() {
     if (!room.isHost || !room.show || !room.submitterId || !room.members[room.submitterId] || room.p2 === room.submitterId) return;
     room.p2 = room.submitterId; room.pendingChal = null;
+    room._p2At = Date.now();   // build102y review fix B: freshness stamp (see the onRoomPeers wedge heal)
     advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
     banner('mpx-setup-msg', '👑 ' + ((room.submitterName || 'The artist')) + ' takes the seat' + (matchLive ? ' — lands for the NEXT run.' : ' — START runs the versus.'));
   }
@@ -2962,6 +3000,7 @@
         openSeat: (P.openSeat === 'confirm' || P.openSeat === 'auto') ? P.openSeat : 'artist' };   // build102y step5: restore the seat policy (same whitelist)
       room._p2Name = P.p2Name || '';                       // paint fallback until their presence re-syncs
       room._graceUntil = Date.now() + 15000;               // presence warm-up: don't clear the restored seat before their heartbeat lands
+      if (room.p2) room._p2At = Date.now();                // build102y review fix B: a restored seat gets a fresh stamp too (heal grace starts at the reconnect)
       if (P.sel) sel = P.sel;
       _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteRenotified = false;
       if (P.invited) _inviteAt = P.at || Date.now();   // approximate — re-arms the NUDGE ~60s after the persist
@@ -4583,6 +4622,19 @@
   // deterministic proposer + QM.looking gates in tryQuickPair are the same ones PLAY NOW already relies on.
   wire('mpx-next-rival', 'click', function () {
     if (room.id && room.show) return;   // belt-and-suspenders — the button is hidden in show rooms
+    // build102y review fix F: fully EXIT the finished room BEFORE requeueing — backToLobby leaves non-show rooms
+    // joined, and a joined room rides the lobby presence (`room: room.id`), which every other player's
+    // tryQuickPair filters out (!p.room). Two humans both clicking NEXT RIVAL would never pair (both → CPU),
+    // and a host's zombie room stayed advertised. Host close also room-gones the dead card for everyone.
+    if (room.id) {
+      if (room.isHost) closeRoom(true);
+      else {
+        leaveRoomChannel();
+        room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
+          show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
+        spectating = false; reannounce();
+      }
+    }
     backToLobby();
     if (!QM.looking) toggleQuickMatch();
   });
@@ -4596,6 +4648,7 @@
       window.RhythmShare.shareScore({
         score: m.score || 0, accuracy: m.acc || 0, maxCombo: m.combo || 0, grade: m.grade || '',
         song: (sel && sel.title) || 'a track', artist: (sel && sel.artist) || '',
+        cover: (sel && sel.art) || null, diff: (sel && sel.difficulty) || '',   // build102y review fix G: real album art + real difficulty on the battle card (was placeholder cover + hardcoded PULSE)
         rivalName: L.oppName, rivalScore: (L.op && L.op.score) || 0,
         verdict: L.draw ? 'draw' : (L.win ? 'win' : 'loss')
       });
@@ -4631,6 +4684,7 @@
   // channel is still joined; this drops the watcher straight back into the waiting room. The observer paints
   // the button only when a show room is actually still alive (never a dead-room dead-end).
   wire('res-return-show', 'click', function () {
+    _ghostRunActive = false;   // build102y review fix C: back to the show — auto-spectate un-parks
     var _res = document.getElementById('results'); if (_res) _res.classList.remove('active');
     if (room.id && room.ch && room.show) { step('setup'); enterRoomWaiting(); screen.classList.add('active'); activeNow = true; }
     else open();
@@ -4638,6 +4692,9 @@
   try {
     var _resEl = document.getElementById('results');
     if (_resEl) new MutationObserver(function () {
+      // build102y review fix C: the ghost run resolved onto the results screen → un-park auto-spectate (the
+      // next 4s show-snap can re-offer a live run; RETURN TO THE SHOW / open() / closeRoom also clear).
+      if (_resEl.classList.contains('active')) _ghostRunActive = false;
       var b = $('res-return-show'); if (!b) return;
       b.hidden = !(_resEl.classList.contains('active') && room.id && room.ch && room.show && !room.isHost);
     }).observe(_resEl, { attributes: true, attributeFilter: ['class'] });
