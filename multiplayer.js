@@ -1706,7 +1706,7 @@
     var _vsub = $('mpx-verdict-sub'); var _nearMiss = false;
     if (_vsub) {
       _vsub.hidden = true; _vsub.textContent = '';
-      if (!draw && !win && op && !oppLeft) {
+      if (!spectating && !draw && !win && op && !oppLeft) {   // build109 s4 review: a spectator's myFinal defaults to {score:0} so they always compute a "loss" — keep the NEW near-miss/encore hooks OFF their card (owner's byte-identity decree: normal-room spectate renders the exact pre-diff card)
         var _margin = Math.max(0, (op.score || 0) - (me.score || 0));
         var _marginPct = op.score ? (_margin / op.score) : 1;
         if (_marginPct < 0.03) {
@@ -1717,13 +1717,13 @@
       }
     }
     var _rematchBtn = $('mpx-rematch');
-    if (_rematchBtn) _rematchBtn.classList.toggle('encore-armed', _nearMiss && !_reduceMo());
+    if (_rematchBtn) _rematchBtn.classList.toggle('encore-armed', !spectating && _nearMiss && !_reduceMo());
     // build109 s1: WINNER DOPAMINE — reuse the existing solo results celebration (confetti/firework via
     // fxUi + a screen punch), never rebuilt. Losses/draws keep the flat treatment on purpose (asymmetry
     // is the design — a visibly bigger win reads correctly against loss aversion). fireCelebrationOn is
     // itself reduce-motion/fxLite-gated inside game.js, so no duplicate gating needed here for the FX call.
     try {
-      if (win && !draw && window.RhythmGame) {
+      if (!spectating && win && !draw && window.RhythmGame) {   // build109 s4 review: never fire the winner celebration/SFX/shake for a spectator (their {score:0} can't win anyway, but guard explicitly so the watcher's pre-diff card stays byte-identical)
         var _rvIdEarly = (oppMeta && oppMeta.id) || (op && op.id) || null;
         var _rvEarly = (!spectating && !(oppMeta && oppMeta.bot)) ? rivalRec(_rvIdEarly) : null;
         var _bigWin = !!(_rvEarly && _rvEarly.l > _rvEarly.w);   // revenge win — a rival you trail against
@@ -2742,6 +2742,7 @@
     // build102s: snapshot show-spectate mode at ENTRY — only a show room gets the neutral dual-final verdict;
     // a normal-room spectate renders the exact pre-diff card (owner's byte-identity decree).
     _specShow = !!room.show; _specFinals = {};
+    _specLastFeedAt = Date.now();   // build109 s4 review: arm the liveness clock at ENTRY so a non-show watcher that joined a DEAD match (via a stale cached room.mid — match already ended, channel torn down) self-heals via startSpectatorTick's watchdog instead of hanging forever on a blank SPECTATING screen
     // build102u (review BLOCKER 1): every watch starts with a CLEAN run clock + feeds — a stale _specAtMs from the
     // previous run made _syncSpecAudio clamp to buffer-end and the ghost advance eat the whole chart on run #2
     // (empty decks, no audio, unrecoverable). onShowSnap's late-join sets its atMs AFTER this call by design.
@@ -2753,6 +2754,7 @@
     matchCh = watchCh;
     watchCh.on('broadcast', { event: 'tick' }, function (m) {
       lastOppTick = m.payload;
+      _specLastFeedAt = Date.now();   // build109 s4 review: any tick = a live feed → keeps the non-show watchdog from bailing (the show branch below also sets it, harmlessly redundant)
       if (_specShow && m.payload) {
         _specTicks[String(m.payload.id || m.payload.name || 'p1')] = m.payload; _specLastFeedAt = Date.now(); _specFedReal = true;   // build102t: keyed per player for the dual decks + liveness
         // build102u (review MAJOR 2c): DRIFT CORRECTION — the players' clock can shift off wall-time (host pause,
@@ -2814,7 +2816,15 @@
   }
   function startSpectatorTick() {
     stopTick();
-    function frame() { oppRaf = requestAnimationFrame(frame); if (oppPanel && oppPanel.parentNode) renderOpp(null); }
+    function frame() {
+      // build109 s4 review: the NON-show spectate path has no dead-feed watchdog (the SHOW path's _specLoop owns
+      // that). A watcher that joined via a STALE cached room mid — the match already ended and its channel was torn
+      // down — would otherwise sit on a blank SPECTATING screen forever. Self-heal: no tick within ~14s (comfortably
+      // longer than the silent lead-in, so a live match that just started is never falsely bounced) ⇒ bail to the room.
+      if (!_specShow && _specLastFeedAt && (Date.now() - _specLastFeedAt) > 14000) { endSpectate('That match already ended.'); return; }
+      oppRaf = requestAnimationFrame(frame);
+      if (oppPanel && oppPanel.parentNode) renderOpp(null);
+    }
     oppRaf = requestAnimationFrame(frame);
   }
 

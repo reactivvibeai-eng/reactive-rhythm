@@ -4518,41 +4518,53 @@
       if (reduceMotion) return;
       _bootFxUi();
       const scr = targetEl; if (!scr) return;
-      const host = (scr.style && (scr.style.position === 'relative' || scr.style.position === 'absolute')) ? scr : scr;
-      if (!_cel2Canvas || _cel2Canvas.parentNode !== host) {
-        if (_cel2Canvas && _cel2Canvas.parentNode) { try { _cel2Canvas.parentNode.removeChild(_cel2Canvas); } catch (e) {} }
-        _cel2Canvas = document.createElement('canvas');
-        _cel2Canvas.id = 'mp-cel-fx';
-        _cel2Canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:9;';
-        const cs = window.getComputedStyle(host);
-        if (cs && cs.position === 'static') host.style.position = 'relative';
-        host.appendChild(_cel2Canvas);
-      }
-      const dpr2 = Math.min(2, window.devicePixelRatio || 1);
-      const W = scr.clientWidth || window.innerWidth, H = scr.clientHeight || window.innerHeight;
-      _cel2Canvas.width = Math.max(1, Math.floor(W * dpr2)); _cel2Canvas.height = Math.max(1, Math.floor(H * dpr2));
-      const cx2 = _cel2Canvas.getContext('2d'); cx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
-      const gen = ++_cel2Gen;
-      const k = Math.min(W, H) / 560;
-      const n = fxLite ? 3 : Math.max(1, (opts && opts.count) || 5);
-      const stagger = (opts && opts.stagger) || [150, 260];
-      let lastT = 0;
-      for (let i = 0; i < n; i++) {
-        const p = { t: stagger[0] + i * stagger[1], name: (i % 2) ? 'firework-gold' : 'confetti-pop',
-          x: W * (0.2 + Math.random() * 0.6), y: H * (0.14 + Math.random() * 0.3), s: (1.2 + Math.random() * 0.6) * k };
-        lastT = p.t;
-        setTimeout(function () { if (gen === _cel2Gen && fxUi) { try { fxUi.play(p.name, p.x, p.y, { scale: p.s }); } catch (e) {} } }, p.t);
-      }
-      const t0 = performance.now();
-      if (_cel2Raf) cancelAnimationFrame(_cel2Raf);
-      (function frame(now) {
-        if (gen !== _cel2Gen) return;
-        const el = now - t0;
-        cx2.clearRect(0, 0, W, H);
-        const live = fxUi ? fxUi.draw(cx2, now) : 0;
-        if ((live > 0 || el < lastT + 1400) && el < 9000) { _cel2Raf = requestAnimationFrame(frame); }
-        else { cx2.clearRect(0, 0, W, H); _cel2Raf = 0; }
-      })(t0);
+      const host = scr;
+      const gen = ++_cel2Gen;   // claim the generation up front so a stopCelebration / newer burst supersedes us even during the deferral below
+      const _go = function () {
+        if (gen !== _cel2Gen) return;   // superseded before we ran
+        if (!_cel2Canvas || _cel2Canvas.parentNode !== host) {
+          if (_cel2Canvas && _cel2Canvas.parentNode) { try { _cel2Canvas.parentNode.removeChild(_cel2Canvas); } catch (e) {} }
+          _cel2Canvas = document.createElement('canvas');
+          _cel2Canvas.id = 'mp-cel-fx';
+          _cel2Canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:9;';
+          const cs = window.getComputedStyle(host);
+          if (cs && cs.position === 'static') host.style.position = 'relative';
+          host.appendChild(_cel2Canvas);
+        }
+        const dpr2 = Math.min(2, window.devicePixelRatio || 1);
+        const _r = scr.getBoundingClientRect();
+        const W = Math.round(_r.width) || scr.clientWidth || window.innerWidth, H = Math.round(_r.height) || scr.clientHeight || window.innerHeight;
+        _cel2Canvas.width = Math.max(1, Math.floor(W * dpr2)); _cel2Canvas.height = Math.max(1, Math.floor(H * dpr2));
+        const cx2 = _cel2Canvas.getContext('2d'); cx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+        const k = Math.min(W, H) / 560;
+        const n = fxLite ? 3 : Math.max(1, (opts && opts.count) || 5);
+        const stagger = (opts && opts.stagger) || [150, 260];
+        let lastT = 0;
+        for (let i = 0; i < n; i++) {
+          const p = { t: stagger[0] + i * stagger[1], name: (i % 2) ? 'firework-gold' : 'confetti-pop',
+            x: W * (0.2 + Math.random() * 0.6), y: H * (0.14 + Math.random() * 0.3), s: (1.2 + Math.random() * 0.6) * k };
+          lastT = p.t;
+          setTimeout(function () { if (gen === _cel2Gen && fxUi) { try { fxUi.play(p.name, p.x, p.y, { scale: p.s }); } catch (e) {} } }, p.t);
+        }
+        const t0 = performance.now();
+        if (_cel2Raf) cancelAnimationFrame(_cel2Raf);
+        (function frame(now) {
+          if (gen !== _cel2Gen) return;
+          const el = now - t0;
+          cx2.clearRect(0, 0, W, H);
+          const live = fxUi ? fxUi.draw(cx2, now) : 0;
+          if ((live > 0 || el < lastT + 1400) && el < 9000) { _cel2Raf = requestAnimationFrame(frame); }
+          else { cx2.clearRect(0, 0, W, H); _cel2Raf = 0; }
+        })(t0);
+      };
+      // build109 s4 review: the MP winner card is unhidden a few lines AFTER this call in the SAME synchronous
+      // showWinner() pass, so at call time it's still display:none → clientWidth/Height are 0 → the old code fell
+      // back to window.innerWidth/Height and sized the burst to the FULL WINDOW, which then rendered squeezed and
+      // off-center inside the small ~200px card. Measure via getBoundingClientRect; if the target isn't laid out
+      // yet, defer one frame (by then step('winner') has run and the card has a real box). Immediate when visible.
+      const _r0 = scr.getBoundingClientRect();
+      if ((_r0.width | 0) > 0 && (_r0.height | 0) > 0) _go();
+      else requestAnimationFrame(_go);
     } catch (e) {}
   }
   function stopCelebrationOn() {
@@ -5588,7 +5600,7 @@
         const _t = p.age / p.life;
         const _e = 1 - Math.pow(1 - _t, 3);
         const r = _e * p.max;
-        const _ringA = Math.sin(Math.PI * Math.min(1, _t * 1.4)) * 0.8;
+        const _ringA = Math.sin(Math.PI * Math.pow(_t, 0.7)) * 0.8;   // build109 s4 review: was Math.min(1,_t*1.4) which clamped the sine arg at PI from _t≈0.71 on, pinning alpha to 0 for the last ~29% of life (invisible wasted strokes + an abrupt snap-out). pow(_t,0.7) peaks early (~38% of life) and reaches 0 EXACTLY at end-of-life — same "arc up then fade" intent, no dead tail.
         ctx.strokeStyle = 'rgba(' + p.color + ',' + _ringA.toFixed(3) + ')'; ctx.lineWidth = 2.5 * a + 0.5;
         ctx.shadowColor = 'rgb(' + p.color + ')'; ctx.shadowBlur = 14 * a;
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
@@ -6231,7 +6243,7 @@
         ctx.scale(_amtInv, _amt);
         ctx.rotate(-(_travelAng || 0));
       }
-      ctx.rotate((performance.now() / 1000) * 1.6 + note.lane);
+      if (!reduceMotion) ctx.rotate((performance.now() / 1000) * 1.6 + note.lane);   // build109 s4 review: gate the continuous specular spin behind reduce-motion — it was applied unconditionally, so every falling note spun even with the a11y setting on (the exact ambient motion the setting exists to suppress)
       ctx.drawImage(gem.c, -Sd / 2, -Sd / 2, Sd, Sd);
       // build109 s2 Step C: per-type baked overlay composite (accent/hold/chord distinct + premium) —
       // skipped under fxLite (weak-device perf gate per the polish plan; the base marble + rotation stay
