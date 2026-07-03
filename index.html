@@ -4233,6 +4233,9 @@
   .mpx-statusstrip .mpx-rank-chip { padding: 5px 11px; }
   .mpx-statusstrip .mpx-rank-chip[hidden] { display: none; }
   .mpx-statusstrip .mpx-rank-chip .rk-tier { font-size: 12px; }
+  /* build112 p2: VIEW LAST RESULT — compact chip-style re-open affordance, same row as the rank chip */
+  .mpx-view-last { padding: 5px 11px; font-size: 10px; letter-spacing: 0.08em; white-space: nowrap; }
+  .mpx-view-last[hidden] { display: none; }
 
   /* TIER 1 — the one dominant hero CTA */
   /* raised crimson GLASS hero — glossy top highlight + frosted depth, lifts off the panel */
@@ -5166,6 +5169,8 @@
           </span>
           <span class="mpx-ss-online"><b id="mpx-roster-count">0 online</b><span class="mpx-live-dot">● LIVE</span></span>
           <div class="mpx-rank-chip" id="mpx-rank-chip" hidden></div>
+          <!-- build112 p2: re-open the last match's scorecard from the lobby — painted visible only when _lastVerdict is non-null -->
+          <button class="ghost-btn mpx-view-last" id="mpx-view-last" type="button" hidden title="Re-open your last match's scorecard">VIEW LAST RESULT</button>
         </div>
         <!-- build60: gentle, up-front sign-in line (shown only when signed-out actions would fail; wired in multiplayer.js) -->
         <div class="mpx-signin-note" id="mpx-signin-note" hidden>

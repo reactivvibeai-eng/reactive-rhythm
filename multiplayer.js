@@ -99,6 +99,7 @@
   var _tourCdRaf = 0, _verdictT = 0;   // the tournament cinematic-countdown loop (own rAF so it can't cancel the 1v1 one) + verdict auto-hide timer
   var _mountT = 0;                // deferred split-screen mount timer (beginMatch/onTourRound) — cleared on teardown so a mid-lead-in abort can't resurrect vs-mode
   var _settleSafetyT = 0;         // v258: the 8s "opponent never reported" settle safety-timer (stored so settle/teardown/rematch can cancel a stale fire)
+  var _settleGen = 0, _settlePaceT = 0;   // build112 p2: settle GENERATION + pending pacing-hold timer — a rematch/teardown/late safety-fire during the hold must not double-schedule or resurrect a stale showWinner()
   var _startWatchdog = 0;         // "did the round actually start?" watchdog — fail loud + recover instead of hanging silently
   var _botRampT = 0;              // dev: drives bot scores UP over the round so a spectator can watch the race (not instant)
   var oppPanel = null, oppRaf = 0, _lastSend = 0;
@@ -399,7 +400,7 @@
     ['lobby', 'rooms', 'tour', 'setup', 'go', 'winner'].forEach(function (s) {
       var el = screen.querySelector('.mpx-step-' + s); if (el) el.hidden = (s !== name);
     });
-    if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows
+    if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); paintLastVerdictBtn(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows; build112 p2: + VIEW LAST RESULT
     if (name === 'setup') { try { renderStageRow(); } catch (e) {} }   // v262: render the room STAGE picker when the setup step shows
     try { if (name === 'lobby') _onlineStart(); else _onlineStop(); } catch (e) {}   // build105: ONLINE NOW polls only while the lobby step shows (stop cold otherwise — qm teardown discipline)
   }
@@ -1670,7 +1671,18 @@
     if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: settling now — cancel the stale 8s safety fire so it can't re-render an already-settled match
     unmountOppPanel();
     setLobbyInMatch(false);
-    showWinner();
+    // build112 p2: PACING — the verdict used to render instantly (0 beats between "song ends" and "YOU WIN/LOSE").
+    // Hold ~950ms so the moment reads as a moment. _settleGen guards against a double-schedule: if the 8s safety
+    // timer (line ~1652) or a fresh rematch/teardown fires while this hold is still pending, the stale callback
+    // below no-ops instead of resurrecting/duplicating an already-superseded showWinner() call.
+    var _sg = ++_settleGen;
+    if (_settlePaceT) { clearTimeout(_settlePaceT); _settlePaceT = 0; }
+    if (_reduceMo()) { showWinner(); return; }   // a11y: skip the manufactured hold when reduce-motion is set
+    _settlePaceT = setTimeout(function () {
+      _settlePaceT = 0;
+      if (_sg !== _settleGen) return;   // superseded by a newer settle/rematch/teardown while we waited
+      showWinner();
+    }, 950);
   }
   var _lastVerdict = null;   // build102y step2: stashed verdict for the SHARE/COPY click handlers (read synchronously inside the user gesture)
   // pkg1.1: 600ms ease-out-cubic score count-up for the YOU plate (mirrors the game.js results reveal pattern).
@@ -1790,8 +1802,47 @@
     step('winner');
     screen.classList.add('active');   // re-raise over the engine's results screen (showScreen stripped us)
     activeNow = true;
+    // build112 p2: when settleIfReady's showWinner() runs SYNCHRONOUSLY inside game.js's endGame() (the
+    // "second finisher" whose oppFinal already arrived), game.js's own showScreen('results')/renderResults()
+    // call is still PENDING on the call stack right after _fireSongEnd('end') returns — it strips .active
+    // right back off this screen a tick later. Defer a re-assert past that pending call so the MP screen
+    // always wins the LAST write regardless of which peer settles first (see spec: PT4 winlose-ui #1).
+    requestAnimationFrame(function () {
+      try {
+        screen.classList.add('active');
+        document.querySelectorAll('.screen.active').forEach(function (el) { if (el !== screen) el.classList.remove('active'); });
+      } catch (e) {}
+    });
   }
   function set(id, txt) { var el = $(id); if (el) el.textContent = txt; }
+
+  // build112 p2: RE-OPEN — read-only replay of the last verdict's scorecard from _lastVerdict (already stashed
+  // by every showWinner() call for the SHARE/COPY handlers). Deliberately NOT a re-call of showWinner(): that
+  // function also re-records the ranked result, fires the win celebration/SFX/screen-shake, and re-derives
+  // NEXT RIVAL / battle-link visibility off LIVE room/match state — all wrong once the match has torn down and
+  // the player is back in the lobby. This paints the scorecard fields only, hides the live-match-only actions,
+  // and leaves a single "BACK TO LOBBY" exit.
+  function paintLastVerdictBtn() {
+    var btn = $('mpx-view-last'); if (btn) btn.hidden = !_lastVerdict;
+  }
+  function reopenLastVerdict() {
+    if (!_lastVerdict) return;
+    var L = _lastVerdict, me = L.me || {}, op = L.op;
+    var v = $('mpx-verdict');
+    if (v) { v.className = 'mpx-verdict ' + (L.draw ? 'draw' : L.win ? 'win' : 'lose'); v.textContent = L.draw ? 'DRAW' : L.win ? 'YOU WIN' : 'YOU LOSE'; }
+    var vs = $('mpx-verdict-sub'); if (vs) { vs.hidden = true; vs.textContent = ''; }
+    set('mpx-sc-you', Number((me && me.score) || 0).toLocaleString());
+    set('mpx-sc-you-meta', (me.acc != null ? me.acc + '% · ' : '') + (me.combo || 0) + 'x' + (me.grade ? ' · ' + me.grade : ''));
+    set('mpx-sc-opp-who', L.oppName || 'OPPONENT');
+    set('mpx-sc-opp', op ? Number(op.score || 0).toLocaleString() : '—');
+    set('mpx-sc-opp-meta', op ? ((op.acc != null ? op.acc + '% · ' : '') + (op.combo || 0) + 'x' + (op.grade ? ' · ' + op.grade : '')) : '');
+    // this is a read-only replay, not a live match — hide every action that assumes a match is still settling
+    // or a rematch queue is available (NEXT RIVAL / SHARE / battle link / BEAT THAT / head-to-head).
+    ['mpx-next-rival', 'mpx-share-w', 'mpx-copy-battle', 'mpx-beat-that', 'mpx-h2h'].forEach(function (id) { var el = $(id); if (el) el.hidden = true; });
+    var rb = $('mpx-rematch'); if (rb) rb.hidden = true;   // no live room to rematch into from a cold re-open
+    step('winner');
+    screen.classList.add('active'); activeNow = true;
+  }
 
   function resetForRematch() {
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
@@ -1803,6 +1854,7 @@
     // round 2 lerps score plates from the PRIOR final, carries stale delta-sign + leftover ghost sparkles.
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }
     if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: kill the prior round's settle safety-timer before a rematch
+    _settleGen++; if (_settlePaceT) { clearTimeout(_settlePaceT); _settlePaceT = 0; }   // build112 p2: orphan a pending pacing-hold showWinner() before a rematch
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
     // build109 s1: clear the prior verdict's win-celebration state so a rematch never inherits stray
@@ -1822,6 +1874,7 @@
     try { if (window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // v262: drop the room's stage env so it can't leak into the next match / solo
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }           // kill any pending deferred split-mount (abort mid-lead-in)
     if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: cancel the 8s settle safety-timer on teardown
+    _settleGen++; if (_settlePaceT) { clearTimeout(_settlePaceT); _settlePaceT = 0; }   // build112 p2: orphan a pending pacing-hold showWinner() on teardown
     if (_npcRaf) { cancelAnimationFrame(_npcRaf); _npcRaf = 0; }   // stop the NPC ghost-drive loop
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
@@ -5270,6 +5323,7 @@
   });
   wire('mpx-leave-win', 'click', leaveAll);
   wire('mpx-backlobby', 'click', backToLobby);
+  wire('mpx-view-last', 'click', reopenLastVerdict);   // build112 p2: re-open the last match's scorecard from the lobby
   // build102y step1: NEXT RIVAL — pure composition of two shipped entry points: backToLobby() self-cleans the
   // finished match (and forces QM.looking=false), then toggleQuickMatch() re-arms the search — onLobbySync
   // re-runs tryQuickPair on every presence sync and the 9s CPU fallback comes free. No double-fire: the
