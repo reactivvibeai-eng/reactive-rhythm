@@ -1787,7 +1787,25 @@
     if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); (_sw.querySelector('.lbl') || _sw).textContent = draw ? 'SHARE THE DRAW' : (win ? 'SHARE THE W' : 'RUN IT BACK'); }   // pkg1: label writes target .lbl (the 14px camera SVG survives repaints); emoji retired
     var _cb = $('mpx-copy-battle');
     if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; (_cb.querySelector('.lbl') || _cb).textContent = 'COPY BATTLE LINK'; _cb.classList.remove('copied'); }
-    { var _btw = $('mpx-beat-that'); if (_btw) _btw.hidden = true; }   // build102y step6: BEAT THAT is the SPECTATOR verdict's button — a player's own verdict never shows it
+    // build112 p3: BEAT THAT — was hard-hidden here ("the spectator verdict's button, a player's own verdict
+    // never shows it"), which is most of why testers reported it as dead: the far-more-common case (a player
+    // who just LOST or drew 1v1) never saw it at all. Now: a real loss/draw against a real opponent score, on
+    // a resolvable track, shows a BEAT THAT that solo-replays the SAME track chasing the winner's score —
+    // exactly what testers expect the label to mean. Winners keep NEXT RIVAL / SHARE THE W as their primary
+    // actions (unclaimed real estate there isn't worth cluttering); spectators/shows still get their own copy
+    // via _renderSpecVerdict, which runs after this and would re-gate it anyway.
+    {
+      var _btw = $('mpx-beat-that');
+      if (_btw) {
+        var _showBtw = !spectating && !draw && !win && !!op && !oppLeft && (op.score > 0) && !!sel && !!(sel.audioUrl || sel.trackId);
+        _btw.hidden = !_showBtw;
+        if (_showBtw) {
+          _lastShowFinal = { name: String((op && op.name) || (oppMeta && oppMeta.name) || 'Rival').slice(0, 14), score: _finScore(op.score) };
+          _btw.textContent = 'BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+          _btw.title = 'Play this track solo, chasing ' + _lastShowFinal.name + '\'s score — doesn\'t affect the match.';
+        }
+      }
+    }
     // build102y step3: lifetime head-to-head under the scorecard — read AFTER the record above so this game
     // is already in the book (the "flip"). Trailing = a REVENGE? nudge. esc() on the stored name (peer-supplied).
     var _h2 = $('mpx-h2h');
@@ -3149,14 +3167,16 @@
     set('mpx-sc-opp-who', b ? String(b.name || 'P2').slice(0, 14) : '…');
     set('mpx-sc-opp', b ? Number(sb).toLocaleString() : '…');
     set('mpx-sc-opp-meta', b ? (((b.acc != null) ? b.acc + '% · ' : '') + (b.combo || 0) + 'x' + (b.grade ? ' · ' + b.grade : '')) : 'no result received');
-    // build102y step6: BEAT THAT — the spectator can challenge the WINNING score on the same track. Gated on
-    // sel.audioUrl (the decks only mount on a decoded chart, so a visible button = proven playable track).
+    // build102y step6: BEAT THAT — the spectator can challenge the WINNING score on the same track. build112 p3:
+    // widened from sel.audioUrl-only — sel.trackId alone is enough (_beatThatLaunch already routes a trackId
+    // through RhythmCatalog.launchTrack as its PRIMARY path; audioUrl is only the fallback), so this no longer
+    // requires the decoded-chart proof that scoped it to live-show rooms alone.
     _lastShowFinal = { name: String((w && w.name) || 'RIVAL').slice(0, 14), score: _finScore(w && w.score) };   // fix H: peer score → finite clamp
     var _bt = $('mpx-beat-that');
     if (_bt) {
-      var _showBt = !!(sel && sel.audioUrl && _lastShowFinal.score > 0);
+      var _showBt = !!(sel && (sel.audioUrl || sel.trackId) && _lastShowFinal.score > 0);
       _bt.hidden = !_showBt;
-      if (_showBt) _bt.textContent = 'BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+      if (_showBt) { _bt.textContent = 'BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString(); _bt.title = 'Play this track solo, chasing ' + _lastShowFinal.name + '\'s score — doesn\'t affect the match.'; }
     }
     // build102y review fix E: a WATCHER's neutral verdict must never carry the PLAYER verdict controls left
     // visible by a previous duel's showWinner — SHARE THE W would share the stale _lastVerdict (wrong song,
@@ -3186,7 +3206,7 @@
   // (the #results observer below), on RETURN TO THE SHOW, on open(), and in closeRoom/leaveAll.
   var _ghostRunActive = false;
   function _beatThatLaunch(target) {
-    if (!target || !(target.score > 0) || !sel || !sel.audioUrl) return;
+    if (!target || !(target.score > 0) || !sel || !(sel.audioUrl || sel.trackId)) return;   // build112 p3: trackId alone is enough — launchTrack (below) is the primary path, audioUrl the fallback
     var launched = false;
     try {
       var RC = window.RhythmCatalog;
@@ -3221,9 +3241,9 @@
       // saw (painted AFTER enterRoomWaiting, which hides it by default so a fresh room never shows a stale one).
       var _bb = $('mpx-beat-room');
       if (_bb) {
-        var _showBb = !!(room.show && _lastShowFinal && _lastShowFinal.score > 0 && sel && sel.audioUrl);
+        var _showBb = !!(room.show && _lastShowFinal && _lastShowFinal.score > 0 && sel && (sel.audioUrl || sel.trackId));   // build112 p3: widened — see _showBt
         _bb.hidden = !_showBb;
-        if (_showBb) _bb.textContent = 'BEAT THAT — play it vs ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+        if (_showBb) { _bb.textContent = 'BEAT THAT — play it vs ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString(); _bb.title = 'Play this track solo, chasing ' + _lastShowFinal.name + '\'s score — doesn\'t affect the match.'; }
       }
     } else { step('lobby'); }
   }
@@ -5384,7 +5404,11 @@
   wire('mpx-beat-that', 'click', function (ev) {
     if (ev && ev.isTrusted === false) return;
     var t = _lastShowFinal; if (!t) return;
-    try { endSpectate(); } catch (e) {}
+    // build112 p3: endSpectate() is a WATCHER-only teardown (drops a joined watch-channel back to the room's
+    // waiting screen) — correct for the show-spectator BEAT THAT, but wrong for the new normal-1v1-loss BEAT
+    // THAT (there's no watch channel to tear down; calling it would yank the player into the setup/waiting
+    // step instead of straight into the solo run). Only run it when actually spectating.
+    if (spectating) { try { endSpectate(); } catch (e) {} }
     _beatThatLaunch(t);
   });
   wire('mpx-beat-room', 'click', function (ev) { if (ev && ev.isTrusted === false) return; if (_lastShowFinal) _beatThatLaunch(_lastShowFinal); });
