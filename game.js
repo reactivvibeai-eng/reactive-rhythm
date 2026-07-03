@@ -114,6 +114,10 @@
                               // uses this array verbatim (rehydrated full note objects, not the stripped spectator
                               // shape). ALWAYS consumed + cleared by beginPlay() so it can never leak into the next
                               // run (solo, MP, or otherwise) — see startAt()/beginPlay() below.
+  let _lastInjectedNotes = null; // build114 review: NON-consumed cache of the last-launched injected chart, so a
+                              // RESTART/REPLAY during a live MP match can re-arm the SAME authoritative chart instead
+                              // of bare beginPlay() re-running a fresh local buildNotes() (which re-introduces the
+                              // cross-device drift gap). Reset every launch (to the launch's notes, or null for solo).
   let songDuration = 0;
   let rafId = null;
   let state = 'menu';
@@ -2987,7 +2991,15 @@
     try { if (_ghostTarget) { _ghostTarget = null; _ghostBeat = false; const _ge = $('ghost-target'); if (_ge) _ge.remove(); } } catch (e) {}
   }
 
-  function restartGame() { stopGame(); beginPlay(); }
+  function restartGame() {
+    // build114 review: if THIS run used a host-broadcast authoritative chart (a live 1v1/room MP match), re-arm it
+    // so a RESTART/REPLAY replays the IDENTICAL chart. Without this, the one-shot _injectedNotes is already consumed,
+    // so bare beginPlay() would run a FRESH local buildNotes() that can diverge from the opponent's decoder output —
+    // the exact drift bug the authoritative broadcast fixes. No-op for solo/tournament/guest-local-fallback (the
+    // cache is null there, so the restart re-charts locally exactly as before — no regression).
+    if (_lastInjectedNotes && _lastInjectedNotes.length) { _injectedNotes = _lastInjectedNotes; }
+    stopGame(); beginPlay();
+  }
 
   // Boss Stage drains the meter harder — and harder still once ENRAGED (phase 2).
   function bossDrain(base) { return bossMode ? base * (bossPhase === 2 ? 2.4 : 1.8) : base; }
@@ -6651,6 +6663,7 @@
     for (let i = 0; i < rays; i++) {
       const a = rot + (Math.PI * 2 * i / rays);
       const len = ch * (0.5 + 0.18 * Math.sin(t * 1.3 + i) + energy * 0.3);
+      if (!isFinite(len)) continue;   // build114 review: a non-finite energy/ch (e.g. audio analyser not yet feeding) would make the gradient endpoint non-finite → createLinearGradient throws EVERY frame in the hot render loop. Skip the degenerate ray instead.
       const grd = ctx.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
       grd.addColorStop(0, 'rgba(255,46,46,' + (0.05 + intensity0 * 0.11) + ')');
       grd.addColorStop(1, 'rgba(255,46,46,0)');
@@ -7703,6 +7716,7 @@
     // this array verbatim so host + guest play the IDENTICAL chart (kills cross-device decoder-drift gaps).
     // Absent (every existing caller) → _injectedNotes stays null → byte-identical to the pre-existing path.
     var _notes = (opts.notes && opts.notes.length) ? opts.notes : null;
+    _lastInjectedNotes = _notes;   // build114 review: cache (or clear, for a no-notes solo launch) so a live-MP restart re-arms this exact chart
     setTimeout(function () {
       try { getAC().resume(); } catch (e) {}
       try { _injectedNotes = _notes; play(prov); } catch (e) { _injectedNotes = null; }

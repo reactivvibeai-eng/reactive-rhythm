@@ -89,6 +89,7 @@
   // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
   // consumed by a later one. Cleared the instant it's consumed (one-shot, same discipline as game.js's _injectedNotes).
   var _pendingChart = null;   // { key: 'trackId|difficulty', notes: [...] } | null
+  var _resolveGen = 0;        // build114 review: monotonic round token — a guest's pollForChart loop captures it and bails if it's superseded (teardown / rematch / a new resolveAndStart), so a zombie poll from an ended round can't hijack a later round's broadcast chart.
   function onChart(p) {
     if (!p || !p.key || !p.notes || !p.notes.length) return;
     _pendingChart = { key: p.key, notes: p.notes };
@@ -1565,7 +1566,9 @@
         // arrive in time — slow network, host on an older build, etc. — degrade to the PRE-EXISTING local-chart
         // path so the round can never be blocked from starting; the gap bug simply isn't fixed for that one round.
         var _waitStart = Date.now(), _waitMs = Math.max(500, Math.min(3500, atMs - Date.now() - 300));
+        var _pollGen = ++_resolveGen;   // build114 review: this round's token — bail if a later round / teardown / rematch supersedes us
         (function pollForChart() {
+          if (_pollGen !== _resolveGen) return;   // superseded (match ended / rematched / new round) — a zombie poll must NOT consume a later round's chart or fire a stale startAt
           if (_pendingChart && _pendingChart.key === chartKey) {
             var got = _pendingChart; _pendingChart = null;   // one-shot consume — can't leak into a later round
             window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty, notes: _rehydrateChart(got.notes) });
@@ -1963,6 +1966,7 @@
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
     _pendingChart = null;   // build114: a rematch of the SAME track+difficulty reuses the identical chartKey — drop any stale prior-round broadcast so a race can't let the guest consume last round's chart instead of waiting for the fresh one
+    _resolveGen++;          // build114 review: invalidate any in-flight pollForChart from the prior round
 
     // FULLY tear down the prior split-screen so the rematch's beginMatch→mountVsHud re-seeds clean.
     // Without this, .vs-mode + #vs-seam linger → mountVsHud's idempotent guard skips the re-init and
@@ -1998,6 +2002,7 @@
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
+    _resolveGen++;          // build114 review: invalidate any in-flight pollForChart so a zombie poll can't hijack a later round
     _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
     _showAtMs = 0; _specShowSolo = false; _soloRun = false;   // build102s: show-run flags die with the match (review fix 8: a torn-down show start must never leave _soloRun armed for a later unrelated song end)
     try { if (window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(false); } catch (e) {}   // build102u: auto-pause back to normal for everything after a show run (no-op if never suppressed)
