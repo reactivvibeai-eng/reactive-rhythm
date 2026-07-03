@@ -2707,7 +2707,12 @@
   };
   window.RhythmGame.lastResults = () => _lastResults;
   window.RhythmGame.__demoProvider = () => demoProvider;
-  window.RhythmGame.applySettings = (s) => {
+  // build116 p3: opts.transient — apply the values in-memory (so gameplay reads them immediately) but SKIP the
+  // localStorage write. Used by the MP "matched settings" fairness override so a forced-fair scroll/failMode/
+  // chartMode for one ranked match never overwrites the player's own saved preference. Callers restore the real
+  // settings after the match by calling applySettings() again (no opts) with the pre-match snapshot.
+  window.RhythmGame.applySettings = (s, opts) => {
+    var transient = !!(opts && opts.transient);
     if (s && typeof s.scroll === 'number') userScroll = Math.max(0.5, Math.min(2, s.scroll));
     if (s && typeof s.fxLite === 'boolean') fxLite = s.fxLite;
     if (s && typeof s.reduceMotion === 'boolean') { reduceMotion = s.reduceMotion; applyReduceMotion(); }
@@ -2718,7 +2723,7 @@
     if (s && (s.chartMode === 'classic' || s.chartMode === 'musical')) chartMode = s.chartMode;
     if (s && (s.levelGuitar === 'mine' || s.levelGuitar === 'level')) levelGuitarPref = s.levelGuitar;   // "Guitar on Levels" — takes effect on next level launch
     if (s && FX_PRESETS[s.fxIntensity]) { fxIntensity = s.fxIntensity; Object.assign(JUICE, FX_PRESETS[fxIntensity]); try { localStorage.removeItem('rr_juice'); } catch (e) {} }   // picking a preset = clean reset to it
-    try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, levelGuitar: levelGuitarPref, fxIntensity: fxIntensity })); } catch (e) {}
+    if (!transient) { try { localStorage.setItem('rr_settings', JSON.stringify({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, levelGuitar: levelGuitarPref, fxIntensity: fxIntensity })); } catch (e) {} }
   };
   window.RhythmGame.getSettings = () => ({ scroll: userScroll, fxLite: fxLite, reduceMotion: reduceMotion, bgMode: bgMode, music: musicVol, sfx: SFX_LEVEL, failMode: failMode, chartMode: chartMode, levelGuitar: levelGuitarPref, fxIntensity: fxIntensity });
   function applyReduceMotion() { try { document.documentElement.classList.toggle('rr-reduce-motion', reduceMotion); } catch (e) {} }

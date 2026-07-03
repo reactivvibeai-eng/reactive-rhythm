@@ -120,6 +120,10 @@
   var combatOn = false;           // local toggle: P-vs-P combat (your combos SHOCK the rival ~2.2s) vs P-vs-E (pure score race)
   try { combatOn = localStorage.getItem('rr_mp_combat') === '1'; } catch (e) {}
   var matchCombat = false;        // EFFECTIVE combat mode for the live match (the host decides; broadcast in `start`)
+  // ---- build116 p3: MP SETTINGS FAIRNESS state ----
+  var matchMatched = false;       // EFFECTIVE "force fair settings" for the live match (host's room.matched, broadcast in `start`)
+  var _oppSettings = null;        // the opponent's raw {scroll,failMode,chartMode} from the 'start' handshake — awareness pill reads this
+  var _mySettingsSnapshot = null; // my REAL saved settings, captured right before a matched-settings transient override so teardownMatch can restore them
   var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
   var _lastOdActive = false;      // build100r: OD rising-edge tracker — activating Overdrive ("boost") fires a shock too
   var SHOCK_COMBO_STEP = 15;      // build100r: combo milestones that SHOCK the rival. Was 30 — unreachable in a casual playtest (max combo ~10), so the rival was literally never zapped. 15 + the OD trigger make combat actually land.
@@ -131,7 +135,7 @@
   var _roundSeq = 0;              // client round nonce counter → distinct (room_id, round_id) per rematch
   var _roundStartFired = false;   // guard: HOST opens each round's server round exactly once
   // ---- build8: rooms + quick-match state ----
-  var room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null,
+  var room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null,
                members: {}, p1: null, p2: null,
                show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // current room (host or joined/spectating). build69: combat = the host's per-room modifier (set at openRoom, advertised, adopted by joiners). build102s: LIVE-SHOW fields — normal MP never sets `show`, so every Phase-2 gate below is dead code outside a show room. revToken NEVER rides any broadcast/persist.
   var roomsDir = {};              // rid -> {rid,name,priv,hostId,hostName,count,max,at} (browser directory)
@@ -857,8 +861,14 @@
     // code only sent on matchCh (null here), so a normal room's readiness went NOWHERE and the start handshake could
     // never complete ("both in the room, couldn't start"). Broadcast 'room-ready' on the room channel so the peer sees
     // my green check; once the match channel is up, the original 'ready' path takes over (byte-identical for that stage).
-    if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id } });
-    else if (room.id && room.ch && !room.show) { try { room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id } }); } catch (e) {} }
+    // build116 p3: ride the SAME ready handshake to hand the peer my raw scroll/failMode/chartMode — so whichever
+    // side is the GUEST (the host learns it here; the guest already gets the host's via the 'start' payload below)
+    // can paint an opponent-settings awareness pill. Awareness-only here; matched-settings FORCING happens once,
+    // host-side, in maybeStart's 'start' broadcast — this never mutates anyone's settings.
+    var _myRawSettings = null; try { _myRawSettings = window.RhythmGame.getSettings(); } catch (e) {}
+    var mySettings = _myRawSettings ? { scroll: _myRawSettings.scroll, failMode: _myRawSettings.failMode, chartMode: _myRawSettings.chartMode } : null;
+    if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id, settings: mySettings } });
+    else if (room.id && room.ch && !room.show) { try { room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id, settings: mySettings } }); } catch (e) {} }
     var oppName = (oppMeta && oppMeta.name) || 'the other player';
     var peerReady = matchCh ? oppReady : roomOppReady;   // room stage → roomOppReady
     if (meReady && peerReady) paintWaitStatus('Both ready — starting…', true);
@@ -869,6 +879,7 @@
   }
   function onReady(p) {
     oppReady = !!(p && p.ready);
+    if (p && p.settings) _oppSettings = p.settings;   // build116 p3: awareness — the peer's raw scroll/failMode/chartMode, painted on the vs HUD once the match mounts
     // build60: make the opponent's READY visibly land so the wait never reads as frozen.
     var oppName = (oppMeta && oppMeta.name) || 'Opponent';
     if (oppReady && !meReady) paintWaitStatus(oppName + ' is READY — tap READY to start.', true);
@@ -882,6 +893,7 @@
   function onRoomReady(p) {
     if (matchCh) return;   // match channel is up → its 'ready' is authoritative; ignore stale room-stage echoes
     roomOppReady = !!(p && p.ready);
+    if (p && p.settings) _oppSettings = p.settings;   // build116 p3: awareness (room-stage handshake mirror of onReady)
     var oppName = (room._p2Name) || 'Your opponent';
     if (roomOppReady && !meReady) paintWaitStatus(oppName + ' is READY ✓ — tap READY to start.', true);
     else if (roomOppReady && meReady) paintWaitStatus('Both ready — starting…', true);
@@ -906,8 +918,20 @@
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
       if (room.show) _showAtMs = atMs;               // build102s: show-snap carries the shared start for late arrivals
       matchCombat = (room.id && room.isHost) ? !!room.combat : !!combatOn;   // build69: a ROOM match uses the room's FIXED modifier (every match in the room is consistent); quick-match/challenge uses the host's default
-      matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: sel, combat: matchCombat } });
-      beginMatch(atMs, sel);
+      // build116 p3: MP SETTINGS FAIRNESS — always broadcast the HOST's raw scroll/failMode/chartMode so the guest
+      // can show an "opponent settings" awareness pill (every match, no opt-in needed). When this is a ranked/fair
+      // room (room.matched), ALSO force canonical fair defaults into sel so BOTH sides apply the identical values —
+      // this only affects THIS match's broadcast payload, never the host's own saved rr_settings.
+      matchMatched = (room.id && room.isHost) ? !!room.matched : false;   // matched is a per-ROOM setting only (parallels combat) — quick-match/challenge never force it
+      var _hostRawSettings = null; try { _hostRawSettings = window.RhythmGame.getSettings(); } catch (e) {}
+      var hostSettings = _hostRawSettings ? { scroll: _hostRawSettings.scroll, failMode: _hostRawSettings.failMode, chartMode: _hostRawSettings.chartMode } : null;
+      var startSel = sel;
+      if (matchMatched) {
+        startSel = Object.assign({}, sel, { _matchedScroll: 1, _matchedFail: false, _matchedChart: 'musical' });   // canonical fair defaults — never the host's personal scroll/fail/chart
+        try { _mySettingsSnapshot = window.RhythmGame.getSettings(); window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
+      }
+      matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings } });
+      beginMatch(atMs, startSel);
       // build100i: HOST opens the SERVER round (Lovable /mp/round/start) so both peers can settle against a shared uuid
       // for the trustworthy global MP ladder. Fire-and-forget; broadcast the uuid to the peer. Human matches only;
       // _roundStartFired guards re-entry (maybeStart can fire more than once before the round goes live).
@@ -928,7 +952,23 @@
       } catch (e) {}
     }
   }
-  function onStart(p) { if (p && p.atMs) { matchCombat = !!p.combat; beginMatch(p.atMs, p.sel || sel); } }   // v254: adopt the host's combat mode
+  function onStart(p) {
+    if (!(p && p.atMs)) return;
+    matchCombat = !!p.combat;   // v254: adopt the host's combat mode
+    // build116 p3: MP SETTINGS FAIRNESS (guest side) — hostSettings is the awareness pill's source (always sent).
+    // When the host's room forced matched settings, p.matched is true and p.sel carries the canonical fair
+    // markers; apply them TRANSIENTLY (never touches this player's own saved rr_settings) and snapshot the real
+    // settings first so teardownMatch can restore them.
+    matchMatched = !!p.matched;
+    if (p.hostSettings) _oppSettings = p.hostSettings;
+    if (matchMatched && p.sel && p.sel._matchedScroll != null) {
+      try {
+        _mySettingsSnapshot = window.RhythmGame.getSettings();
+        window.RhythmGame.applySettings({ scroll: p.sel._matchedScroll, failMode: !!p.sel._matchedFail, chartMode: p.sel._matchedChart || 'musical' }, { transient: true });
+      } catch (e) {}
+    }
+    beginMatch(p.atMs, p.sel || sel);
+  }
 
   // ===================== SYNCHRONIZED MATCH =====================
   // 3·2·1·GO! painted in the centered #mpx-go-num card during the lead-in. Every client computes
@@ -1027,12 +1067,20 @@
     var oMult = _vsEl('div', 'vs-opp-mult', 'vs-opp-pill'); oMult.textContent = '1x'; deck.appendChild(oMult);
     var oCombo = _vsEl('div', 'vs-opp-combo', 'vs-opp-pill'); oCombo.textContent = '0x'; deck.appendChild(oCombo);
     var oOd = _vsEl('div', 'vs-od-opp', 'vs-od'); oOd.appendChild(_vsEl('i')); deck.appendChild(oOd);
+    // build116 p3: opponent-settings AWARENESS pill — same _vsEl/'vs-opp-pill' pattern as oMult/oCombo above.
+    // Painted once at mount (paintOppSettingsPill) since it's static for the whole match (settings are locked in
+    // at the 'start' handshake, never re-broadcast mid-song).
+    var oSet = _vsEl('div', 'vs-opp-settings', 'vs-opp-pill'); oSet.hidden = true; deck.appendChild(oSet);
     game.appendChild(deck);
     // center seam
     var seam = _vsEl('div', 'vs-seam');
     seam.appendChild(_vsEl('div', 'vs-prog'));
     var delta = _vsEl('div', 'vs-delta'); delta.textContent = 'EVEN'; seam.appendChild(delta);
     var lead = _vsEl('div', 'vs-lead'); lead.appendChild(_vsEl('i')); lead.appendChild(_vsEl('b')); seam.appendChild(lead);
+    // build116 p3: gold "MATCHED SETTINGS" chip — only shown when this match forced identical fair settings
+    // (room.matched). Overflows the narrow seam column on purpose (several .vs-* chips already do — e.g. vs-lead's
+    // knot); painted by paintMatchedChip() right after the vs HUD mounts.
+    var mChip = _vsEl('div', 'vs-matched-chip'); mChip.textContent = 'MATCHED SETTINGS'; mChip.hidden = true; seam.appendChild(mChip);
     game.appendChild(seam);
     // build100q (#tug-of-war) → pkg2 "THE FRONTIER": center-origin battlefront. The wrapper is UNCLIPPED
     // (diamond knot / pole chips / spark canvas overhang the 18px strip); .vs-tug-track clips the two fills
@@ -1083,6 +1131,22 @@
       var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e);
     });
     var mg = $('mult-gauge'); if (mg) mg.classList.remove('boosted');
+  }
+  // build116 p3: paint the opponent-settings awareness pill (#vs-opp-settings, populated from _oppSettings — sent
+  // by whichever side is NOT the source: the guest gets it via the host's 'start' payload, the host gets it via
+  // the guest's 'ready' handshake) + the MATCHED SETTINGS fairness chip (only when this match forced identical
+  // scroll/failMode/chartMode). Both are informational only — never mutates anyone's engine state.
+  function paintMatchSettingsHud() {
+    try {
+      var pill = $('vs-opp-settings');
+      if (pill) {
+        if (_oppSettings && typeof _oppSettings.scroll === 'number') {
+          pill.hidden = false;
+          pill.textContent = 'SCROLL ' + _oppSettings.scroll.toFixed(1) + '×' + (_oppSettings.failMode ? ' · FAIL-ON' : '');
+        } else pill.hidden = true;
+      }
+      var chip = $('vs-matched-chip'); if (chip) chip.hidden = !matchMatched;
+    } catch (e) {}
   }
   // the pre-match reveal (you-right / opponent-left); cosmetic + non-blocking; reduced-motion early-out
   function runVsIntro() {
@@ -1446,6 +1510,7 @@
         var g = $('game'); if (g) g.classList.add('vs-mode');
         _vsActive = true; _vsMode = true;
         mountVsHud();
+        paintMatchSettingsHud();                // build116 p3: opponent-settings pill + MATCHED SETTINGS chip
         try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas into the half cell
         startTick();
         runVsIntro();                            // cosmetic, non-blocking
@@ -1991,6 +2056,11 @@
   }
 
   function teardownMatch() {
+    // build116 p3: a matched-settings match applied a TRANSIENT scroll/failMode/chartMode override — restore the
+    // player's own real saved settings the instant the match ends (never leaves a fair-room override sticking
+    // around for the next solo/unmatched session). No-op when this match never forced anything.
+    if (_mySettingsSnapshot) { try { window.RhythmGame.applySettings(_mySettingsSnapshot); } catch (e) {} _mySettingsSnapshot = null; }
+    matchMatched = false; _oppSettings = null;
     stopTick(); stopCountdown(); unmountOppPanel();
     try { if (window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // v262: drop the room's stage env so it can't leak into the next match / solo
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }           // kill any pending deferred split-mount (abort mid-lead-in)
@@ -2445,6 +2515,9 @@
       var pv = $('mpx-room-priv'); if (pv) pv.style.display = isTour ? 'none' : '';
       var cc = $('mpx-room-combat'); if (cc) { cc.style.display = isTour ? 'none' : ''; [].forEach.call(cc.children, function (b) { b.classList.toggle('active', (b.getAttribute('data-combat') === 'on') === !!combatOn); }); }   // build69: room-only combat row (tournaments use their own); seed the host's default
       var cch = $('mpx-room-combat-hint'); if (cch) cch.style.display = isTour ? 'none' : '';
+      // build116 p3: room-only MATCHED SETTINGS row (tournaments aren't in scope — always defaults to FREE/off)
+      var mc = $('mpx-room-matched'); if (mc) { mc.style.display = isTour ? 'none' : ''; [].forEach.call(mc.children, function (b) { b.classList.toggle('active', b.getAttribute('data-matched') === 'off'); }); }
+      var mch = $('mpx-room-matched-hint'); if (mch) mch.style.display = isTour ? 'none' : '';
       var nm = $('mpx-room-name'); if (nm) { nm.value = ''; nm.placeholder = isTour ? 'Bracket name (e.g. Friday Showdown)' : 'Room name (e.g. Friday Shred)'; setTimeout(function () { nm.focus(); }, 30); }
     }
     else { try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} renderRooms(); }
@@ -2459,7 +2532,8 @@
     var nm = ($('mpx-room-name') && $('mpx-room-name').value || '').trim().slice(0, 28) || (ME.name + "'s Room");
     var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
     var rcb = screen.querySelector('#mpx-room-combat button.active'); var combat = !!(rcb && rcb.getAttribute('data-combat') === 'on');   // build69: the host's per-room combat choice (the source of truth for every match in this room)
-    openRoomWithId(newRoomId(), { name: nm, priv: priv, combat: combat });
+    var rmb = screen.querySelector('#mpx-room-matched button.active'); var matched = !!(rmb && rmb.getAttribute('data-matched') === 'on');   // build116 p3: force identical fair scroll/failMode/chartMode for every match in this room
+    openRoomWithId(newRoomId(), { name: nm, priv: priv, combat: combat, matched: matched });
   }
   function openRoomWithId(rid, opts) {
     opts = opts || {};
@@ -2467,7 +2541,7 @@
     if (_qm.on) qmStop(true);   // v405 review fix: hosting a room cancels a live matchmaking search (a match landing mid-room stomps it). No-op on the qmMatched host path (_qm.on already false, so the MATCHED pill survives).
     clearShowRoom();   // playtest-3 fix (Bug C): opening a NORMAL/qm/battle room invalidates any stale rr_showroom key, so a boot-time maybeReconnectShowRoom() can never resurrect show-seat chrome ("accept the challenge"/"being called in") on top of it. This room is not a show; startShowHeartbeat re-persists for real show rooms only.
     meReady = false; roomOppReady = false;   // playtest-3 fix (Bug D): a fresh room starts un-ready on both sides (no stale readiness auto-starting it)
-    room = { id: rid, name: (opts.name || (ME.name + "'s Room")).slice(0, 28), priv: !!opts.priv, combat: !!opts.combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
+    room = { id: rid, name: (opts.name || (ME.name + "'s Room")).slice(0, 28), priv: !!opts.priv, combat: !!opts.combat, matched: !!opts.matched, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
     try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio (build102z p1.5: nor its video backdrop)
     joinRoomChannel(room.id, 'p1');
     reannounce();
@@ -2482,7 +2556,7 @@
     var _bbStage = '';
     try { if (room.show && sel && sel.env && window.RhythmLevels && window.RhythmLevels.envById) { var _bbe = window.RhythmLevels.envById(sel.env); _bbStage = (_bbe && _bbe.name) ? String(_bbe.name).slice(0, 24) : ''; } } catch (e) {}
     lobbyCh.send({ type: 'broadcast', event: 'room-meta', payload: {
-      rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now(),
+      rid: room.id, name: room.name, priv: room.priv, combat: !!room.combat, matched: !!room.matched, hostId: ME.id, hostName: ME.name, count: count, max: 2, at: Date.now(),
       show: room.show ? 1 : 0, live: matchLive ? 1 : 0,   // build102s: additive show/live flags (old clients ignore unknown fields; joiners adopt `show` for the seat policy)
       // build109 s4: the live match id, so a spectator who discovers this room from LIVE NOW AFTER room-start
       // already fired (the normal case — broadcast events aren't replayed to late joiners) can catch up straight
@@ -2502,7 +2576,7 @@
   function leaveGuestRoom() {
     var _wasShow = !!room.show;
     leaveRoomChannel();
-    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
+    room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
     spectating = false;
     if (_wasShow) { try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {} }
     reannounce(); backToLobby();
@@ -2523,7 +2597,7 @@
     }
     if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
     leaveRoomChannel();
-    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
+    room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
       show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
     spectating = false; reannounce();
     if (!silent) { step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
@@ -2676,8 +2750,8 @@
     if (!meta.show) clearShowRoom();   // playtest-3 fix (Bug C): joining a NORMAL room clears any stale rr_showroom key (host-only persistence — harmless to clear as a guest); a real show-room join keeps it untouched.
     meReady = false; roomOppReady = false;   // playtest-3 fix (Bug D): fresh join = un-ready both sides
     if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
-    room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
-      show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
+    room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, matched: !!meta.matched, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
+      show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build116 p3: + matched (fairness). build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
     spectating = !!asSpec;
     joinRoomChannel(rid, room.seat);
     reannounce();
@@ -3130,7 +3204,7 @@
     try { closeTour(true); } catch (e) {}
     try { if (room.id) closeRoom(true); } catch (e) {}
     teardownMatch();   // never inherit stale match state into the show
-    room = { id: newRoomId(), name: ((spec.title || 'Review') + ' — LIVE').slice(0, 28), priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null,
+    room = { id: newRoomId(), name: ((spec.title || 'Review') + ' — LIVE').slice(0, 28), priv: false, combat: false, matched: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null,
       show: true, submitterId: spec.submitterId || null, submitterName: spec.submitterName || '', revToken: spec.revToken || null, invited: false, pendingChal: null, declined: {},
       openSeat: (spec.openSeat === 'confirm' || spec.openSeat === 'auto') ? spec.openSeat : 'artist' };   // build102y step5: challenger seat policy from the launch card (whitelisted — junk collapses to today's artist-only)
     // the review song is PRE-LOCKED; audioUrl is the NEW sel field resolveShowStart routes on (never the demo)
@@ -3825,7 +3899,7 @@
       var P = JSON.parse(raw); if (!P || !P.rid) return;
       if (Date.now() - (P.at || 0) > 90000) { clearShowRoom(); return; }
       teardownMatch();   // clear stale match state — the orphaned pre-refresh run is gone
-      room = { id: P.rid, name: P.name || 'LIVE SHOW', priv: false, combat: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id,
+      room = { id: P.rid, name: P.name || 'LIVE SHOW', priv: false, combat: false, matched: false, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id,
         p2: P.p2 || null,   // review fix 4b: restore the accepted challenger's seat across the refresh
         show: true, submitterId: P.submitterId || null, submitterName: P.submitterName || '', revToken: null, invited: !!P.invited,
         pendingChal: P.pend || null, declined: {},
@@ -5471,6 +5545,7 @@
   wire('mpx-room-create-cancel', 'click', function () { step('lobby'); onLobbySync(); });
   wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
   wire('mpx-room-combat', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build69: segmented combat select for the room (read at openRoom into room.combat)
+  wire('mpx-room-matched', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build116 p3: segmented matched-settings select for the room (read at openRoom into room.matched)
   // build8: room context (inside setup) — host closes / guest leaves
   wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else leaveGuestRoom(); });   // review fix 1/5: a guest leaving a SHOW drops the review audio (build102z p1.5: + the video backdrop); the stale back-label restores at the next enterSetup. build111 s3: guest-leave path extracted to leaveGuestRoom() so mod-kick can reuse it verbatim
   // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
@@ -5508,7 +5583,7 @@
       if (room.isHost) closeRoom(true);
       else {
         leaveRoomChannel();
-        room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
+        room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
           show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
         spectating = false; reannounce();
       }

@@ -1816,6 +1816,14 @@
   #game.vs-mode .vs-opp-pill { position: absolute; left: 8px; background: rgba(10,6,6,0.55); border: 1px solid rgba(218,215,210,0.3); border-radius: 999px; padding: 3px 11px; z-index: 45; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; color: var(--chrome); }
   #game.vs-mode #vs-opp-mult { top: 84px; left: 18px; }                                                          /* outer LEFT gap, under the opp score plate */
   #game.vs-mode #vs-opp-combo { top: 150px; bottom: auto; left: 18px; transform: none; }                         /* docked into the opp top-outer cluster (under the opp dial) */
+  /* build116 p3: opponent-settings awareness pill — smaller/quieter than the score pills (informational, not gameplay) */
+  #game.vs-mode #vs-opp-settings { top: 216px; bottom: auto; left: 18px; transform: none; font-size: 10px; letter-spacing: 0.06em;
+    padding: 3px 9px; color: var(--ink-dim); background: rgba(10,6,6,0.5); font-family: 'Chakra Petch', sans-serif; font-weight: 700; }
+  /* MATCHED SETTINGS fairness chip — narrow #vs-seam can't hold this text, so it overflows centered (matches the
+     vs-lead knot's overflow precedent) just above the delta readout. Gold = "fairness enforced," visible to both players. */
+  #game.vs-mode #vs-matched-chip { position: absolute; left: 50%; top: -6px; transform: translate(-50%, -100%); white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; padding: 3px 10px; border-radius: 999px;
+    color: #0a0706; background: linear-gradient(180deg, #f0c25a, #d39a2c); box-shadow: 0 0 12px rgba(224,169,63,0.5); z-index: 47; }
   /* overdrive underglow bars (one per deck) */
   #game.vs-mode .vs-od { display: block; position: absolute; left: 14px; right: 14px; bottom: 8px; height: 6px; background: #1a1210; z-index: 45; overflow: visible; }   /* lifted + inset so it clears the catcher/flame band and the side-gap HUD (scaleX fill can't overshoot, so the ready-tag stays unclipped) */
   #game.vs-mode .vs-od > i { position: absolute; left: 6px; right: 6px; top: 0; bottom: 0; width: auto; transform-origin: left center; transform: scaleX(0); background: linear-gradient(90deg, var(--gold), #ffd98a); }   /* scaleX-driven fill: can't overshoot the trough cap (JS writes style.transform) */
@@ -5379,6 +5387,16 @@
                 <button data-combat="on" type="button">COMBAT ON</button>
               </div>
               <div class="mxr-hint" id="mpx-room-combat-hint">Combat is the host's match modifier — your combo streaks shock the rival (~2s stun). Applies to every match in this room.</div>
+            </div>
+            <!-- build116 p3: MP settings fairness — force identical scroll-speed/fail-mode/chart for every match in
+                 this room (canonical fair defaults: scroll 1x, fail off, musical chart). Awareness (the opponent-
+                 settings pill) always shows regardless of this toggle; this ADDITIONALLY forces both sides equal. -->
+            <div class="mxrow"><span class="mxr-lab">FAIRNESS</span>
+              <div class="mpx-privrow" id="mpx-room-matched" role="radiogroup" aria-label="Matched settings for this room">
+                <button data-matched="off" class="active" type="button">FREE SETTINGS</button>
+                <button data-matched="on" type="button">MATCHED SETTINGS</button>
+              </div>
+              <div class="mxr-hint" id="mpx-room-matched-hint">Matched forces the same scroll-speed, fail-mode and chart for both players (scroll 1×, fail off, musical) — for a ranked/fair match. Off = everyone keeps their own settings (you'll still see the rival's).</div>
             </div>
           </div>
           <div class="mpx-readyrow" style="margin-top:6px;">
