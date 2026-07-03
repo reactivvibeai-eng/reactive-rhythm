@@ -12126,5 +12126,269 @@
     } catch (e) {}
   })();
 </script>
+
+<!-- ===========================================================================
+     build119 p2: MODERATION ENFORCEMENT — reads window.RhythmCatalog.getSanctions()
+     (live GET /sanctions/me) and enforces:
+       • blocks_all (ban / full suspend)   -> full-screen SUSPEND GATE, blocks the whole app
+       • blocks_social (social suspend)    -> blocks MP entry only; solo play unaffected
+       • mute                              -> window.RhythmSanctions.isMuted() flag chat.js checks before a send
+       • pending_notices                   -> one dismissible modal at a time, ack'd on dismiss
+     Checked on boot (after auth resolves) AND every multiplayer.js onActivated() (re-checked live,
+     see the RhythmMP.open()/joinLobby() call below — multiplayer.js calls
+     window.RhythmSanctions.recheckForMP() itself). SAFE DEFAULT: getSanctions() null/all-null ->
+     this module paints nothing at all — no gate, no mute, no modal. Self-contained (own injected
+     DOM/CSS, like chat.js) so it never depends on index.html markup existing ahead of time.
+     Brand: black/crimson/chrome/gold, Oxanium/Chakra Petch — NO purple/blue.
+     =========================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  var state = {
+    suspend: null,       // {id,type,scope,level,reason,message,issued_at,expires_at}
+    mute: null,           // {id,level,reason,message,expires_at}
+    pending: [],           // notices still to show, oldest-shown-first per severity queue (newest-first from server; we pop from the front)
+    blocksAll: false,
+    blocksSocial: false,
+    lastFetched: 0
+  };
+
+  // -------------------- shared helpers --------------------
+  function fmtWhen(iso) {
+    if (!iso) return 'permanently';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return 'permanently';
+      return 'until ' + d.toLocaleString();
+    } catch (e) { return 'permanently'; }
+  }
+  function isExpired(iso) {
+    if (!iso) return false;   // null expires_at = permanent (ban) / never treat as expired
+    try { return Date.now() >= new Date(iso).getTime(); } catch (e) { return false; }
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+
+  // -------------------- CSS (injected once) --------------------
+  var _cssInjected = false;
+  function injectCss() {
+    if (_cssInjected) return; _cssInjected = true;
+    var css = '' +
+      // SUSPEND GATE — mirrors #beta-gate's card language (same brand tokens), sits one z-tier above it.
+      '#rrs-suspend-gate{position:fixed;inset:0;z-index:100001;display:flex;align-items:center;justify-content:center;padding:24px;' +
+        'background:radial-gradient(ellipse at 50% 16%,rgba(163,6,15,0.32),transparent 60%),radial-gradient(ellipse at 50% 100%,rgba(255,31,46,0.15),transparent 55%),linear-gradient(180deg,#0a0706 0%,#050304 100%);' +
+        'font-family:"Chakra Petch","JetBrains Mono",ui-monospace,monospace;}' +
+      '#rrs-suspend-gate[hidden]{display:none;}' +
+      '#rrs-suspend-gate .rrs-card{width:min(460px,100%);position:relative;overflow:hidden;text-align:center;' +
+        'background:linear-gradient(180deg,rgba(22,12,11,0.94),rgba(10,7,6,0.97));border:1px solid rgba(160,40,46,0.32);border-radius:18px;padding:38px 34px 30px;' +
+        'box-shadow:0 0 0 1px rgba(255,31,46,0.10),0 30px 80px rgba(0,0,0,0.6),0 0 60px rgba(163,6,15,0.22);animation:rrsCardIn .5s cubic-bezier(.2,.7,.2,1) both;}' +
+      '@keyframes rrsCardIn{from{opacity:0;transform:translateY(14px) scale(.97);}}' +
+      '#rrs-suspend-gate .rrs-card::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,transparent,#ff1f2e,transparent);}' +
+      '#rrs-suspend-gate .rrs-kicker{font-size:12px;letter-spacing:.38em;text-transform:uppercase;color:#ff1f2e;font-weight:700;margin-bottom:14px;}' +
+      '#rrs-suspend-gate .rrs-title{font-family:"Oxanium","Chakra Petch",sans-serif;font-size:27px;line-height:1.1;font-weight:800;color:#f4eef0;margin-bottom:14px;}' +
+      '#rrs-suspend-gate .rrs-msg{font-size:14px;line-height:1.55;color:#dad7d2;margin-bottom:16px;}' +
+      '#rrs-suspend-gate .rrs-until{display:inline-block;font-family:"Oxanium",sans-serif;font-size:12.5px;letter-spacing:.06em;color:#e0a93f;background:rgba(224,169,63,0.10);border:1px solid rgba(224,169,63,0.32);border-radius:999px;padding:7px 16px;margin-bottom:20px;}' +
+      '#rrs-suspend-gate .rrs-foot{font-size:11.5px;color:#a0938f;line-height:1.5;}' +
+      '#rrs-suspend-gate .rrs-foot a{color:#dad7d2;text-decoration:none;border-bottom:1px solid rgba(160,40,46,0.32);}' +
+      // pending-notice modal — severity-scaled tone (info=gentle chrome, warning=firm gold, severe=final crimson)
+      '#rrs-notice-scrim{position:fixed;inset:0;z-index:99900;background:rgba(6,3,3,0.74);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Chakra Petch",sans-serif;}' +
+      '#rrs-notice-scrim[hidden]{display:none;}' +
+      '#rrs-notice-scrim .rrs-nmodal{width:min(400px,100%);background:linear-gradient(180deg,rgba(40,20,22,0.96),rgba(10,7,6,0.98));border:1px solid rgba(218,210,206,0.22);border-radius:16px;padding:22px 22px 20px;box-shadow:0 24px 60px -20px rgba(0,0,0,0.8);position:relative;overflow:hidden;animation:rrsCardIn .4s cubic-bezier(.2,.7,.2,1) both;}' +
+      '#rrs-notice-scrim .rrs-nmodal::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-info::before{background:linear-gradient(90deg,transparent,#dad7d2,transparent);}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-warning::before{background:linear-gradient(90deg,transparent,#e0a93f,transparent);}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-severe::before{background:linear-gradient(90deg,transparent,#ff1f2e,transparent);}' +
+      '#rrs-notice-scrim .rrs-ntag{font-family:"Oxanium",sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;margin-bottom:10px;}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-info .rrs-ntag{color:#dad7d2;}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-warning .rrs-ntag{color:#e0a93f;}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-severe .rrs-ntag{color:#ff1f2e;}' +
+      '#rrs-notice-scrim h3{font-family:"Oxanium",sans-serif;font-size:16.5px;letter-spacing:.02em;color:#f4eef0;margin-bottom:8px;}' +
+      '#rrs-notice-scrim .rrs-nbody{font-size:13px;line-height:1.55;color:#dad7d2;margin-bottom:18px;white-space:pre-wrap;}' +
+      '#rrs-notice-scrim .rrs-nbtn{width:100%;cursor:pointer;font-family:"Oxanium",sans-serif;font-size:13.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px;transition:filter .15s;}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-info .rrs-nbtn, #rrs-notice-scrim .rrs-nmodal.sev-warning .rrs-nbtn{background:linear-gradient(180deg,#3a2422,#211110);color:#f4eef0;border-color:rgba(218,210,206,0.22);}' +
+      '#rrs-notice-scrim .rrs-nmodal.sev-severe .rrs-nbtn{background:linear-gradient(180deg,#ff3a47 0%,#e21d2b 46%,#b3121f 100%);}' +
+      '#rrs-notice-scrim .rrs-nbtn:hover{filter:brightness(1.1);}' +
+      // small non-blocking mute hint painted into the chat drawer area
+      '#rrs-mute-hint{position:fixed;left:16px;bottom:78px;z-index:519;max-width:min(290px,calc(100vw - 32px));background:linear-gradient(180deg,rgba(40,20,22,0.90),rgba(10,7,6,0.94));border:1px solid rgba(224,169,63,0.35);border-radius:12px;padding:9px 13px;font-family:"Chakra Petch",sans-serif;font-size:11.5px;line-height:1.4;color:#e0a93f;box-shadow:0 14px 30px -12px rgba(0,0,0,0.6);pointer-events:none;}' +
+      '#rrs-mute-hint[hidden]{display:none;}' +
+      // MP-entry social-block banner text uses the existing #mpx-lobby-msg surface — no extra CSS needed there.
+      '';
+    var st = document.createElement('style'); st.setAttribute('data-rrs', '1'); st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  // -------------------- SUSPEND GATE (blocks_all) --------------------
+  var gateEl = null;
+  function ensureGateDom() {
+    if (gateEl) return gateEl;
+    injectCss();
+    var wrap = document.createElement('div');
+    wrap.id = 'rrs-suspend-gate'; wrap.hidden = true;
+    wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-modal', 'true'); wrap.setAttribute('aria-label', 'Account suspended');
+    wrap.innerHTML =
+      '<div class="rrs-card">' +
+        '<div class="rrs-kicker" id="rrs-gate-kicker">Account Suspended</div>' +
+        '<div class="rrs-title" id="rrs-gate-title">Access restricted</div>' +
+        '<div class="rrs-msg" id="rrs-gate-msg"></div>' +
+        '<div class="rrs-until" id="rrs-gate-until"></div>' +
+        '<div class="rrs-foot">Think this is a mistake? <a href="https://reactivvibeai.com" target="_blank" rel="noopener">Contact us at reactivvibeai.com</a></div>' +
+      '</div>';
+    document.body.appendChild(wrap);
+    // non-dismissible while active: swallow Escape/Enter/Space so they can't fall through to whatever's underneath
+    wrap.addEventListener('keydown', function (e) { e.stopPropagation(); }, true);
+    gateEl = wrap;
+    return wrap;
+  }
+  function showSuspendGate(sus) {
+    var el = ensureGateDom();
+    var scope = sus && sus.scope === 'social' ? 'social features' : 'account';
+    var isBan = sus && sus.type === 'ban';
+    document.getElementById('rrs-gate-kicker').textContent = isBan ? 'Account Banned' : 'Account Suspended';
+    document.getElementById('rrs-gate-title').textContent = isBan ? 'This account has been banned' : 'Your ' + scope + ' access is suspended';
+    document.getElementById('rrs-gate-msg').textContent = (sus && sus.message) || 'Your access has been restricted by moderation.';
+    document.getElementById('rrs-gate-until').textContent = (sus && sus.expires_at) ? fmtWhen(sus.expires_at) : 'permanently';
+    el.hidden = false;
+    document.documentElement.classList.add('rrs-gated');
+  }
+  function hideSuspendGate() {
+    if (gateEl) gateEl.hidden = true;
+    document.documentElement.classList.remove('rrs-gated');
+  }
+  // belt-and-suspenders input block while the gate is up: a capture-phase keydown swallow so stray key input
+  // (Space/Enter for a mid-launch track, WASD, etc.) can't reach the engine even if something was already running.
+  // Pure input-blocking only — never touches scoring/chart/note logic.
+  document.addEventListener('keydown', function (e) {
+    if (state.blocksAll) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  // -------------------- PENDING NOTICE MODAL (one at a time) --------------------
+  var noticeShowing = false;
+  function showNextNotice() {
+    if (noticeShowing) return;
+    if (!state.pending.length) return;
+    injectCss();
+    var n = state.pending[0];
+    noticeShowing = true;
+    var sev = (n.severity === 'warning' || n.severity === 'severe') ? n.severity : 'info';
+    var scrim = document.createElement('div');
+    scrim.id = 'rrs-notice-scrim';
+    scrim.setAttribute('role', 'dialog'); scrim.setAttribute('aria-modal', 'true');
+    var tag = sev === 'severe' ? 'Final Notice' : sev === 'warning' ? 'Warning' : 'Notice';
+    scrim.innerHTML =
+      '<div class="rrs-nmodal sev-' + sev + '">' +
+        '<div class="rrs-ntag">' + esc(tag) + '</div>' +
+        '<h3>' + esc(n.title || 'Moderation notice') + '</h3>' +
+        '<div class="rrs-nbody">' + esc(n.body || '') + '</div>' +
+        '<button type="button" class="rrs-nbtn" id="rrs-notice-dismiss">Got it</button>' +
+      '</div>';
+    document.body.appendChild(scrim);
+    var closing = false;
+    function dismiss() {
+      if (closing) return; closing = true;
+      try { scrim.remove(); } catch (e) {}
+      noticeShowing = false;
+      try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice) window.RhythmCatalog.ackNotice(n.id); } catch (e) {}
+      state.pending.shift();
+      showNextNotice();   // chain to the next queued notice, if any
+    }
+    scrim.querySelector('#rrs-notice-dismiss').addEventListener('click', dismiss);
+    try { scrim.querySelector('#rrs-notice-dismiss').focus(); } catch (e) {}
+  }
+
+  // -------------------- MUTE flag + non-blocking hint --------------------
+  var muteHintEl = null;
+  function paintMuteHint() {
+    var active = state.mute && !isExpired(state.mute.expires_at);
+    if (!active) { if (muteHintEl) muteHintEl.hidden = true; return; }
+    if (!muteHintEl) {
+      injectCss();
+      muteHintEl = document.createElement('div');
+      muteHintEl.id = 'rrs-mute-hint'; muteHintEl.hidden = true;
+      document.body.appendChild(muteHintEl);
+    }
+    muteHintEl.textContent = "You're muted " + fmtWhen(state.mute.expires_at) + (state.mute.message ? (' — ' + state.mute.message) : '');
+    muteHintEl.hidden = false;
+  }
+  // isMuted() — the single source of truth chat.js checks before a local send (part 3). Re-validates expiry
+  // live at call time so a mute that lapsed mid-session stops blocking sends without needing a fresh fetch.
+  function isMuted() { return !!(state.mute && !isExpired(state.mute.expires_at)); }
+  function muteInfo() { return isMuted() ? state.mute : null; }
+
+  // -------------------- apply a freshly-fetched sanctions object --------------------
+  function apply(sanc) {
+    // SAFE DEFAULT: null / no sanction object at all -> everything off, nothing painted, nothing changes.
+    if (!sanc) {
+      state.suspend = null; state.mute = null; state.pending = [];
+      state.blocksAll = false; state.blocksSocial = false;
+      hideSuspendGate(); paintMuteHint();
+      return;
+    }
+    state.suspend = sanc.suspend || null;
+    state.mute = sanc.mute || null;
+    state.blocksAll = !!sanc.blocks_all;
+    state.blocksSocial = !!sanc.blocks_social;
+    // merge freshly-arrived notices onto whatever's still queued, de-duped by id, newest-first as the server sends
+    var incoming = Array.isArray(sanc.pending_notices) ? sanc.pending_notices : [];
+    if (incoming.length) {
+      var haveIds = {}; state.pending.forEach(function (p) { haveIds[p.id] = true; });
+      incoming.forEach(function (n) { if (n && n.id && !haveIds[n.id]) { state.pending.push(n); haveIds[n.id] = true; } });
+    }
+
+    if (state.blocksAll && state.suspend) showSuspendGate(state.suspend); else hideSuspendGate();
+    paintMuteHint();
+    if (!state.blocksAll) showNextNotice();   // don't stack a dismissible notice modal on top of a non-dismissible gate
+  }
+
+  // -------------------- fetch + entry points --------------------
+  var _fetching = false;
+  async function refresh() {
+    if (_fetching) return;
+    _fetching = true;
+    try {
+      if (!(window.RhythmCatalog && window.RhythmCatalog.getSanctions)) return;
+      var sanc = await window.RhythmCatalog.getSanctions();
+      state.lastFetched = Date.now();
+      apply(sanc);
+    } catch (e) { /* never let a moderation-check hiccup block boot or gameplay */ }
+    finally { _fetching = false; }
+  }
+
+  // boot: after auth resolves. catalog.js's refreshAdmin() already runs at boot and on every onAuthChange —
+  // ride the same signal instead of inventing a second boot-timing race.
+  function bootHook() {
+    var tries = 0;
+    (function wait() {
+      if (window.RhythmCatalog && window.RhythmCatalog.getSanctions) { refresh(); return; }
+      if (++tries > 40) return;   // ~10s of polling for catalog.js to finish its IIFE, then give up quietly
+      setTimeout(wait, 250);
+    })();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootHook); else bootHook();
+  try { if (window.RhythmCatalog && window.RhythmCatalog.onAuthChange) window.RhythmCatalog.onAuthChange(refresh); } catch (e) {}
+
+  // MP entry: multiplayer.js calls this from onActivated() (every time the MP screen is entered) so a fresh
+  // suspend/mute applies without needing a reload. Returns {blocked:boolean, message:string|null} so
+  // multiplayer.js can show its own "sign in" -style banner via the existing banner() helper instead of us
+  // reaching into its DOM. blocks_all also blocks MP (the full gate is already up over everything).
+  async function recheckForMP() {
+    await refresh();
+    if (state.blocksAll) return { blocked: true, message: null };   // the full gate already covers this; MP doesn't need its own message
+    if (state.blocksSocial && state.suspend) {
+      return { blocked: true, message: 'Your social features are suspended ' + fmtWhen(state.suspend.expires_at) + (state.suspend.message ? (' — ' + state.suspend.message) : '') + '.' };
+    }
+    return { blocked: false, message: null };
+  }
+
+  window.RhythmSanctions = {
+    refresh: refresh,
+    recheckForMP: recheckForMP,
+    isMuted: isMuted,
+    muteInfo: muteInfo,
+    blocksAll: function () { return state.blocksAll; },
+    blocksSocial: function () { return state.blocksSocial; },
+    state: function () { return state; }   // dev/debug hook — mirrors window.__rrDebug's read-only shape
+  };
+})();
+</script>
 </body>
 </html>

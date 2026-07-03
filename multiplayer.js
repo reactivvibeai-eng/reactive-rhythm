@@ -463,6 +463,24 @@
     try { paintRankChip(); paintCombatToggle(); } catch (e) {}   // v254: rank chip + combat toggle
     // build60: collapse the friends disclosure on entry, surface the sign-in note, and show the one-time coach card.
     try { toggleFriends(false); refreshSigninNote(); if (!mpSeen()) showCoach(); } catch (e) {}
+    // build119 p2: re-check moderation sanctions on EVERY entry into MP so a fresh suspend/mute applies without
+    // a reload — a full suspend (blocks_all) already shows its own non-dismissible full-screen gate (painted by
+    // index.html's RhythmSanctions module) so we don't duplicate messaging here; a SOCIAL-only suspend blocks
+    // just the lobby join with a clear banner, leaving solo play untouched. Guarded + async-safe: if the module
+    // isn't loaded, or the check hiccups, MP behaves exactly as it does today (byte-identical safe default).
+    try {
+      if (window.RhythmSanctions && window.RhythmSanctions.recheckForMP) {
+        window.RhythmSanctions.recheckForMP().then(function (res) {
+          if (res && res.blocked) {
+            if (res.message) banner('mpx-lobby-msg', res.message);
+            roEmpty(true, res.message || 'Online play is unavailable right now.');
+            return;   // don't joinLobby() while sanctioned
+          }
+          joinLobby();
+        }).catch(function () { joinLobby(); });   // check itself failed (not a sanction) — fail OPEN, same as any other backend hiccup in this file
+        return;
+      }
+    } catch (e) {}
     joinLobby();
   }
   function leaveAll() {
