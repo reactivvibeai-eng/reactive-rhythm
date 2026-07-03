@@ -3833,6 +3833,7 @@
     text-shadow: 0 0 10px rgba(224,169,63,0.5); }
   .mgc-body { flex: 1 1 auto; min-width: 0; }
   .mgc-row { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+  .mgc-row[hidden] { display: none; }   /* build112 p1: [hidden] attr must beat the class's own display:flex — otherwise .hidden=true (goalsRow/completeRow) never actually hides (found while verifying the daily-complete-bug fix) */
   .mgc-goal { display: flex; flex-direction: column; gap: 3px; }
   .mgc-goal-l { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700;
     letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
@@ -10898,6 +10899,7 @@
   function showHub() {
     try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
     hub.classList.add('active');
+    try { window.RhythmGoals && window.RhythmGoals.checkRollover(); } catch (e) {}  // build112 p1: belt-and-suspenders rollover before any hub reader of RG.state()
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
     try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
     try { paintGoalsCard(); } catch (e) {}    // build110: "you're back today" XP/streak/goals hero card (render-only; never throws)
@@ -11119,6 +11121,7 @@
     var RG = window.RhythmGoals; if (!RG) { card.hidden = true; return; }
     var dismissed = false; try { dismissed = sessionStorage.getItem('rr_goals_card_dismissed') === '1'; } catch (e) {}
     if (dismissed) { card.hidden = true; return; }
+    try { RG.checkRollover(); } catch (e) {}   // build112 p1: stale-read fix — force same-tick rollover before reading state
     var st = RG.state();
     var g = st.goals, s = st.streak;
     // only show once the player has SOME history — a brand-new guest with zero runs doesn't need a
