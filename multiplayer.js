@@ -1852,7 +1852,7 @@
       return '<div class="mpx-online-row" data-uid="' + esc(String(u.id || '')) + '">' +
         '<span class="mpx-online-av"' + av + '>' + (u.avatar ? '' : PERSON_GLYPH) + '</span>' +
         '<span class="mpx-online-name">' + esc(String(u.name || 'Player').slice(0, 24)) + '</span>' +
-        '<button class="mpx-online-call" type="button" data-i="' + i + '">BATTLE CALL</button></div>';
+        '<button class="mpx-online-call" type="button" data-i="' + i + '">CHALLENGE</button></div>';
     }).join('');
     _onUsers.forEach(function (u) {   // re-apply live cooldown states across repaints
       var rs = _onRowState[u.id];
@@ -1890,7 +1890,7 @@
     if (!room.id) { _setRow(uid, '', 'Try again', 0); banner('mpx-lobby-msg', 'Couldn\'t open a battle room — check your connection and retry.'); return; }
     window.RhythmCatalog.challenge(uid, room.id).then(function () {
       _setRow(uid, 'ringing', '✓ RINGING — they\'ve got 45s', 60000);   // row rests ~60s (server dedupes the pair for 60s anyway)
-      setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.state === 'ringing') _setRow(uid, '', 'BATTLE CALL', 0); }, 60000);
+      setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.state === 'ringing') _setRow(uid, '', 'CHALLENGE', 0); }, 60000);
       banner('mpx-setup-msg', nm + ' is ringing — they\'ve got 45s to accept. Pick the song while you wait.');
     }).catch(function (e) {
       // v415 review fix: the challenge never went out → don't strand the caller in a live, advertised, empty room
@@ -1903,7 +1903,7 @@
         banner(_bc, nm + ' isn\'t taking battle calls right now.');
       } else if (/\b409\b/.test(m)) {                // rate-limited — re-arm after the 20s window
         _setRow(uid, 'dim', 'Wait a moment…', 20000);
-        setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.label === 'Wait a moment…') _setRow(uid, '', 'BATTLE CALL', 0); }, 20000);
+        setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.label === 'Wait a moment…') _setRow(uid, '', 'CHALLENGE', 0); }, 20000);
         banner(_bc, 'Easy — one battle call every 20 seconds.');
       } else {
         _setRow(uid, '', 'Try again', 0);
