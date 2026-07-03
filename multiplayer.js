@@ -253,6 +253,8 @@
 
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // build111 s4: report-flag glyph for lobby roster rows (crimson/gold/chrome only — no off-brand emoji, matching the visual-overhaul SVG-glyph convention already used for SVG_TROPHY/SVG_PICK below).
+  var RRC_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"></path><path d="M5 4h13l-3 4 3 4H5"></path></svg>';
   function newMatchId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function safeUrl(u) { return String(u == null ? '' : u).replace(/["\\]/g, ''); }
   // ---- v254: MP RANKED LADDER (local-first; SWAP-SEAM for a future server ladder) ----
@@ -573,14 +575,17 @@
       } else {
         actions = '<button class="mpx-challenge' + (revenge && !inMatch ? ' revenge' : '') + '" data-ch="' + esc(id) + '"' + (inMatch ? ' disabled' : '') + '>' + (inMatch ? 'IN MATCH' : 'CHALLENGE') + '</button>';
       }
+      // build111 s4: report flag on every lobby roster row (peers, not just chat authors/opponents)
+      var flag = '<button class="mpx-r-flag" data-report="' + esc(id) + '" data-reportname="' + esc(p.name || 'Player') + '" type="button" aria-label="Report ' + esc(p.name || 'this player') + '">' + RRC_FLAG_SVG + '</button>';
       return '<div class="mpx-row' + (incoming[id] ? ' incoming' : '') + '">' + av +
         '<span class="mpx-r-meta"><span class="mpx-r-name">' + esc(p.name || 'Player') + badge + (revenge ? ' <span class="mpx-revenge">REVENGE</span>' : '') + '</span>' +
         '<span class="mpx-r-sub">' + (incoming[id] ? 'wants to duel you' : (inMatch ? 'in a match' : 'online')) + h2h + '</span></span>' +
-        actions + '</div>';
+        actions + flag + '</div>';
     }).join('');
     // wire row buttons
     [].forEach.call(host.querySelectorAll('[data-ch]'), function (b) { b.addEventListener('click', function () { sendChallenge(b.getAttribute('data-ch')); }); });
     [].forEach.call(host.querySelectorAll('[data-acc]'), function (b) { b.addEventListener('click', function () { acceptChallenge(b.getAttribute('data-acc')); }); });
+    [].forEach.call(host.querySelectorAll('[data-report]'), function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); try { if (window.RhythmChat && window.RhythmChat.openReportModal) window.RhythmChat.openReportModal({ targetId: b.getAttribute('data-report'), targetName: b.getAttribute('data-reportname'), roomId: null, matchId: null }); } catch (err) {} }); });
     [].forEach.call(host.querySelectorAll('[data-dec]'), function (b) { b.addEventListener('click', function () { declineChallenge(b.getAttribute('data-dec')); }); });
   }
 
@@ -2543,7 +2548,7 @@
     // chat.js owns the kebab UI; we just hand it the current opponent identity + whether I'm the host each repaint.
     try {
       if (window.RhythmChat && window.RhythmChat.paintModKebab && dot) {
-        window.RhythmChat.paintModKebab(dot, { isHost: room.isHost, oppId: opp ? oppId : null, oppName: opp && opp.name, roomCh: room.ch, meId: ME.id, hostId: room.p1 });
+        window.RhythmChat.paintModKebab(dot, { isHost: room.isHost, oppId: opp ? oppId : null, oppName: opp && opp.name, roomCh: room.ch, meId: ME.id, hostId: room.p1, roomId: room.id });
       }
     } catch (e) {}
     // build60: explicit, updating waiting status (announces arrivals so the wait never reads as frozen).

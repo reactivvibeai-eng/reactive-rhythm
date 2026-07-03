@@ -1794,8 +1794,49 @@
     } catch (e) { return null; }
   }
 
+  // build111 s4: USER REPORTING, client half. The rr_reports table + edge function are being dispatched
+  // separately as a Lovable brief (parallel track, not blocking) — until it lands, submitReport is a STUB that
+  // queues to localStorage (rr_reports_queue) with the last ~30 buffered chat lines attached as evidence
+  // (multiplayer/chat.js supplies `payload.evidence` when it has any). Fire-and-forget + silent-fail-safe,
+  // matching the resilience pattern used throughout this file (mpSettle/mpRoundStart above, etc.).
+  //
+  // Flipping this to a live POST later is meant to be a one-liner: once `rr_reports` exists, replace the
+  // localStorage push below with `await api('/reports', { method: 'POST', body: payload, auth: true })`
+  // (same getToken()-bearer pattern as every other authed call in this file) and add a flush-queued-reports
+  // pass (iterate rr_reports_queue, POST each, drop on success) — the queue shape below is already exactly
+  // what that POST body would be, so no reshaping needed at flip time.
+  var REPORTS_QUEUE_KEY = 'rr_reports_queue';
+  var REPORTS_QUEUE_MAX = 50;   // local safety cap — an unbounded queue on a device that never flushes would grow forever
+  function _loadReportsQueue() {
+    try { var a = JSON.parse(localStorage.getItem(REPORTS_QUEUE_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function _saveReportsQueue(a) {
+    try { localStorage.setItem(REPORTS_QUEUE_KEY, JSON.stringify(a.slice(-REPORTS_QUEUE_MAX))); } catch (e) {}
+  }
+  async function submitReport(payload) {
+    try {
+      if (!payload || !payload.targetId) return { queued: false, error: 'missing-target' };
+      var entry = {
+        targetId: String(payload.targetId).slice(0, 128),
+        targetName: String(payload.targetName || 'Player').slice(0, 60),
+        roomId: payload.roomId || null,
+        matchId: payload.matchId || null,
+        reason: String(payload.reason || 'Other').slice(0, 40),
+        note: payload.note ? String(payload.note).slice(0, 140) : '',
+        evidence: Array.isArray(payload.evidence) ? payload.evidence.slice(-30) : [],   // last ~30 buffered chat lines, if the caller has any
+        reporterId: null, reporterName: null,
+        at: Date.now()
+      };
+      try { var u = await getUser(); if (u) { entry.reporterId = u.id; entry.reporterName = u.name; } } catch (e) {}
+      var q = _loadReportsQueue(); q.push(entry); _saveReportsQueue(q);
+      return { queued: true };
+    } catch (e) { return { queued: false, error: 'exception' }; }
+  }
+
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
+    submitReport,   // build111 s4: user-reporting stub (queues to localStorage rr_reports_queue until the backend table lands)
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
     // BONUS SPARKS — platform-only soft currency (gameplay earn loop; NOT cashable). SWAP-SEAM in catalog.js.

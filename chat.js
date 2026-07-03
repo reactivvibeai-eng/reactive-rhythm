@@ -27,7 +27,12 @@
 
   // Leet-speak normalization (mirrors scrubName/cleanName) — used only to DETECT
   // a hit; the mask is applied against the ORIGINAL string so punctuation/case
-  // in the source text survives untouched outside the masked span.
+  // in the source text survives untouched outside the masked span. Strips
+  // spacing/punctuation WITHIN a token (so "n1gg3r", "n-i-g-g-e-r" still
+  // normalize to a hit) — callers that need cross-word safety must chunk the
+  // input into words FIRST (see filterChatText's fallback below), because
+  // collapsing spaces across an entire multi-word string is exactly the
+  // "Scunthorpe problem": "was hitting" -> "washitting" contains "shit".
   function normalize(s) {
     return String(s == null ? '' : s).toLowerCase()
       .replace(/[\s_\-.]/g, '')
@@ -46,28 +51,36 @@
     return _rx;
   }
 
-  // mask-not-reject: replace each matched run of letters with a same-length
-  // '***' (fixed 3 stars, not length-matched — avoids leaking word length as a
-  // side channel for anything egregious, matches common chat-filter convention).
-  // Runs a plain substring pass on the RAW text first (catches exact-cased
-  // hits fast + handles the common case); falls back to a normalized re-scan
-  // so leet/spacing tricks ("n1gg3r", "n i g g e r") still get caught, at the
-  // cost of masking the whole matched span (normalization collapses spacing,
-  // so we can't map back to exact original offsets in that fallback path —
-  // acceptable for a defense-in-depth chat filter, not a leaderboard identity).
+  // mask-not-reject: replace each matched run of letters with a fixed '***'
+  // (not length-matched — avoids leaking word length as a side channel for
+  // anything egregious, matches common chat-filter convention).
+  // Pass 1: a plain substring regex over the RAW text (catches exact-cased
+  // hits, preserves surrounding punctuation/case exactly).
+  // Pass 2 (fallback, only runs if pass 1 found nothing): a PER-WORD leet-
+  // normalized re-scan, so "n1gg3r" / "n-i-g-g-e-r" still get caught — but
+  // normalization + substring-matching happens WITHIN each whitespace-
+  // separated token, never across the whole message. Matching across the
+  // whole space-stripped string is the classic "Scunthorpe problem": "was
+  // hitting notes" -> "washittingnotes" contains "shit" as a false positive
+  // spanning a word boundary. Chunking by word first avoids that while still
+  // catching the leet/hyphen/dot tricks within a single word.
   function filterChatText(s) {
     var raw = String(s == null ? '' : s);
     if (!raw) return raw;
     var out = raw.replace(matcher(), '***');
-    // fallback: normalized scan catches leet/spaced variants the raw regex missed.
-    // If the normalized form contains a badword but the raw pass found nothing,
-    // mask the ENTIRE message — we can't safely map normalized offsets back to
-    // the original string's punctuation/spacing.
     if (out === raw) {
-      var norm = normalize(raw);
-      for (var i = 0; i < BADWORDS.length; i++) {
-        if (norm.indexOf(BADWORDS[i]) >= 0) return '***';
-      }
+      var tokens = raw.split(/(\s+)/);   // keep whitespace runs as their own tokens so the mask can drop back in-place
+      var hit = false;
+      var masked = tokens.map(function (tok) {
+        if (!tok || /^\s+$/.test(tok)) return tok;
+        var norm = normalize(tok);
+        if (!norm) return tok;
+        for (var i = 0; i < BADWORDS.length; i++) {
+          if (norm.indexOf(BADWORDS[i]) >= 0) { hit = true; return '***'; }
+        }
+        return tok;
+      });
+      if (hit) return masked.join('');
     }
     return out;
   }
@@ -440,19 +453,33 @@
     if (live && !live.contains(e.target) && e.target.id !== 'rrc-kebab-btn') closeKebabMenu();
   });
 
-  // paintModKebab(anchorEl, {isHost, oppId, oppName, roomCh, meId, hostId}) — called from multiplayer.js's
-  // paintRoomWaiting() every repaint; mounts/unmounts a kebab button next to `anchorEl` (the #mpx-dot-opp span).
+  // paintModKebab(anchorEl, {isHost, oppId, oppName, roomCh, meId, hostId, roomId}) — called from multiplayer.js's
+  // paintRoomWaiting() every repaint; mounts/unmounts a report-flag (always, once an opponent is seated) + a
+  // host-only kebab (⋮ mute/kick) next to `anchorEl` (the #mpx-dot-opp span). Both live in one small wrap so
+  // repaint diffing stays a single insert/remove.
   function paintModKebab(anchorEl, opts) {
     if (!anchorEl || !anchorEl.parentNode) return;
     var existing = anchorEl.parentNode.querySelector('.rrc-kebab-wrap');
-    if (!opts.isHost || !opts.oppId) { if (existing) existing.remove(); closeKebabMenu(); return; }
+    if (!opts.oppId) { if (existing) existing.remove(); closeKebabMenu(); return; }
     injectCss();
     var wrapEl = existing;
     if (!wrapEl) {
       wrapEl = document.createElement('span');
       wrapEl.className = 'rrc-kebab-wrap';
-      wrapEl.innerHTML = '<button class="rrc-kebab" id="rrc-kebab-btn" type="button" aria-label="Moderation menu" aria-haspopup="true">⋮</button>';
       anchorEl.parentNode.insertBefore(wrapEl, anchorEl.nextSibling);
+    }
+    var wantFlag = opts.oppId !== opts.meId;   // never let a player flag themselves (defensive — oppId is never meId in practice)
+    var wantKebab = !!opts.isHost;
+    wrapEl.innerHTML =
+      (wantFlag ? '<button class="rrc-flag" id="rrc-peer-flag" type="button" aria-label="Report ' + esc(opts.oppName || 'this player') + '">' + FLAG_SVG + '</button>' : '') +
+      (wantKebab ? '<button class="rrc-kebab" id="rrc-kebab-btn" type="button" aria-label="Moderation menu" aria-haspopup="true">⋮</button>' : '');
+    if (wantFlag) {
+      wrapEl.querySelector('#rrc-peer-flag').addEventListener('click', function (e) {
+        e.stopPropagation();
+        openReportModal({ targetId: opts.oppId, targetName: opts.oppName, roomId: opts.roomId || null, matchId: null });
+      });
+    }
+    if (wantKebab) {
       wrapEl.querySelector('#rrc-kebab-btn').addEventListener('click', function (e) {
         e.stopPropagation();
         var already = document.getElementById('rrc-kmenu-live');
@@ -499,6 +526,82 @@
     }
   }
 
+  // =========================================================================
+  // build111 s4: REPORT MODAL — reason chips + optional filtered note. Reported
+  // user is NEVER notified (no broadcast sent at all — this only talks to
+  // RhythmCatalog.submitReport, a local queue). Session-scoped "already
+  // reported this target" guard prevents re-reporting the same id/session.
+  // Evidence = the last ~30 buffered chat lines across BOTH surfaces (lobby +
+  // room ring buffers) at submit time — best-effort context for a reviewer,
+  // matches the localStorage-buffered-evidence approach from the spec (no
+  // durable chat persistence in this build).
+  // =========================================================================
+  var REASONS = ['Harassment', 'Hate speech', 'Cheating', 'Spam', 'Other'];
+  var alreadyReported = {};   // session-scoped: { [targetId]: true }
+
+  function collectEvidence() {
+    var all = [].concat(lobby.buf || [], room.buf || [])
+      .filter(function (m) { return !m.sys; })
+      .sort(function (a, b) { return (a.at || 0) - (b.at || 0); })
+      .slice(-30)
+      .map(function (m) { return { id: m.id, name: m.name, text: m.text, at: m.at }; });
+    return all;
+  }
+
+  function closeReportModal() {
+    var scrim = document.getElementById('rrc-modal-scrim'); if (scrim) scrim.remove();
+  }
+
+  // openReportModal({targetId, targetName, roomId, matchId}) — real implementation, replaces the s2 forward stub.
+  openReportModal = function (ctx) {
+    ctx = ctx || {};
+    if (!ctx.targetId) return;
+    if (alreadyReported[ctx.targetId]) { localToast('You already reported this player this session'); return; }
+    injectCss();
+    closeReportModal();
+    var chosenReason = REASONS[0];
+    var scrim = document.createElement('div');
+    scrim.className = 'rrc-modal-scrim'; scrim.id = 'rrc-modal-scrim';
+    scrim.innerHTML =
+      '<div class="rrc-modal" role="dialog" aria-modal="true" aria-labelledby="rrc-modal-h">' +
+        '<h3 id="rrc-modal-h">Report ' + esc(ctx.targetName || 'player') + '</h3>' +
+        '<div class="rrc-sub">They won’t be notified. Pick the closest reason.</div>' +
+        '<div class="rrc-chips" id="rrc-modal-chips">' +
+          REASONS.map(function (r, i) { return '<button type="button" class="rrc-chip' + (i === 0 ? ' active' : '') + '" data-reason="' + esc(r) + '">' + esc(r) + '</button>'; }).join('') +
+        '</div>' +
+        '<textarea id="rrc-modal-note" maxlength="140" aria-label="Optional note (140 characters)" placeholder="Optional details (140 chars)…"></textarea>' +
+        '<div class="rrc-modal-btns"><button class="rrc-btn ghost" id="rrc-modal-cancel" type="button">CANCEL</button><button class="rrc-btn primary" id="rrc-modal-submit" type="button">SUBMIT REPORT</button></div>' +
+      '</div>';
+    document.body.appendChild(scrim);
+    scrim.addEventListener('click', function (e) { if (e.target === scrim) closeReportModal(); });
+    var chipsWrap = scrim.querySelector('#rrc-modal-chips');
+    chipsWrap.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-reason]'); if (!b) return;
+      chosenReason = b.getAttribute('data-reason');
+      [].forEach.call(chipsWrap.querySelectorAll('.rrc-chip'), function (c) { c.classList.toggle('active', c === b); });
+    });
+    scrim.querySelector('#rrc-modal-cancel').addEventListener('click', closeReportModal);
+    scrim.querySelector('#rrc-modal-submit').addEventListener('click', function () {
+      var btn = scrim.querySelector('#rrc-modal-submit'); btn.disabled = true;
+      var note = filterChatText(String(scrim.querySelector('#rrc-modal-note').value || '').trim().slice(0, 140));
+      var payload = {
+        targetId: ctx.targetId, targetName: ctx.targetName || 'Player',
+        roomId: ctx.roomId || null, matchId: ctx.matchId || null,
+        reason: chosenReason, note: note, evidence: collectEvidence()
+      };
+      alreadyReported[ctx.targetId] = true;   // session guard set optimistically — fire-and-forget submit below never blocks the UI
+      try {
+        if (window.RhythmCatalog && window.RhythmCatalog.submitReport) {
+          window.RhythmCatalog.submitReport(payload).catch(function () {});
+        }
+      } catch (e) { /* silent-fail-safe: the report attempt itself must never throw into the caller */ }
+      recordReportForCircuitBreaker(ctx.targetId);
+      closeReportModal();
+      localToast('Report submitted — thanks for flagging this');
+    });
+    try { scrim.querySelector('#rrc-modal-note').focus(); } catch (e) {}
+  };
+
   window.RhythmChat = {
     filterChatText: filterChatText,
     filterDisplayName: filterDisplayName,
@@ -513,6 +616,7 @@
     paintModKebab: paintModKebab,
     applyModMute: applyModMute,
     isMuted: isMuted,
-    recordReportForCircuitBreaker: recordReportForCircuitBreaker
+    recordReportForCircuitBreaker: recordReportForCircuitBreaker,
+    openReportModal: function (ctx) { return openReportModal(ctx); }   // stable reference — openReportModal itself is reassigned once (s2 stub -> s4 real impl)
   };
 })();
