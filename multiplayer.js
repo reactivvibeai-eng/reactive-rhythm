@@ -1693,6 +1693,49 @@
     var _scY = document.querySelector('.mpx-step-winner .mpx-sc.you'), _scO = document.querySelector('.mpx-step-winner .mpx-sc.opp');
     if (_scY) { _scY.classList.remove('win', 'lose'); if (!draw) _scY.classList.add(win ? 'win' : 'lose'); }
     if (_scO) { _scO.classList.remove('win', 'lose'); if (!draw && op && !oppLeft) _scO.classList.add(win ? 'lose' : 'win'); }
+    // build109 s1: near-miss margin hook for a genuine loss (not a forfeit/no-result) — a 40k blowout and
+    // a 12-point nail-biter used to both just say "YOU LOSE" on a flat plate. Real losses under a small
+    // margin get a crimson "SO CLOSE — -N pts" sub-line + a pulsing RUN IT BACK CTA to pull the rematch.
+    var _vsub = $('mpx-verdict-sub'); var _nearMiss = false;
+    if (_vsub) {
+      _vsub.hidden = true; _vsub.textContent = '';
+      if (!draw && !win && op && !oppLeft) {
+        var _margin = Math.max(0, (op.score || 0) - (me.score || 0));
+        var _marginPct = op.score ? (_margin / op.score) : 1;
+        if (_marginPct < 0.03) {
+          _nearMiss = true;
+          _vsub.textContent = 'SO CLOSE — -' + _margin.toLocaleString() + ' pts';
+          _vsub.hidden = false;
+        }
+      }
+    }
+    var _rematchBtn = $('mpx-rematch');
+    if (_rematchBtn) _rematchBtn.classList.toggle('encore-armed', _nearMiss && !_reduceMo());
+    // build109 s1: WINNER DOPAMINE — reuse the existing solo results celebration (confetti/firework via
+    // fxUi + a screen punch), never rebuilt. Losses/draws keep the flat treatment on purpose (asymmetry
+    // is the design — a visibly bigger win reads correctly against loss aversion). fireCelebrationOn is
+    // itself reduce-motion/fxLite-gated inside game.js, so no duplicate gating needed here for the FX call.
+    try {
+      if (win && !draw && window.RhythmGame) {
+        var _rvIdEarly = (oppMeta && oppMeta.id) || (op && op.id) || null;
+        var _rvEarly = (!spectating && !(oppMeta && oppMeta.bot)) ? rivalRec(_rvIdEarly) : null;
+        var _bigWin = !!(_rvEarly && _rvEarly.l > _rvEarly.w);   // revenge win — a rival you trail against
+        var _winnerCard = document.querySelector('.mpx-step-winner .mpx-sc.you') || screen;
+        if (window.RhythmGame.fireCelebration) window.RhythmGame.fireCelebration(_winnerCard, { count: _bigWin ? 7 : 5, stagger: [150, 260] });
+        if (!(window.RhythmGame.isMuted && window.RhythmGame.isMuted())) {
+          if (window.RhythmGame.playSting) window.RhythmGame.playSting('big');
+          if (window.RhythmGame.playCheer) window.RhythmGame.playCheer();
+        }
+        if (window.RhythmGame.shakeScreen) window.RhythmGame.shakeScreen(10);   // same lever failRun() uses for a loss — a WIN should punch the screen too
+        if (!_reduceMo() && v) { v.classList.add('vpunch'); }
+        var _winStep = document.querySelector('.mpx-step-winner');
+        if (_winStep && !_reduceMo()) {
+          _winStep.classList.remove('win-flash'); void _winStep.offsetWidth; _winStep.classList.add('win-flash');
+        }
+      } else if (window.RhythmGame && window.RhythmGame.stopCelebration) {
+        window.RhythmGame.stopCelebration();   // a loss/draw after a prior win-screen visit shouldn't leave stray confetti canvas state
+      }
+    } catch (e) {}
     // v254: record the RANKED result (1v1 HUMAN matches only — CPU warm-ups never count). A forfeit (rival left) is a W with 0 pts.
     if (!_rankRecorded && !spectating && !(oppMeta && oppMeta.bot)) {   // v258: a SPECTATOR's myFinal defaults to {score:0} → would record a phantom LOSS on their own ladder; gate it out
       _rankRecorded = true;
@@ -1743,6 +1786,13 @@
     if (_settleSafetyT) { clearTimeout(_settleSafetyT); _settleSafetyT = 0; }   // v258: kill the prior round's settle safety-timer before a rematch
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
+    // build109 s1: clear the prior verdict's win-celebration state so a rematch never inherits stray
+    // confetti-canvas draws, the scale-punch class, the one-shot gold flash, or the encore-armed pulse.
+    try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}
+    var _vPrev = $('mpx-verdict'); if (_vPrev) _vPrev.classList.remove('vpunch');
+    var _wsPrev = document.querySelector('.mpx-step-winner'); if (_wsPrev) _wsPrev.classList.remove('win-flash');
+    var _rbPrev = $('mpx-rematch'); if (_rbPrev) _rbPrev.classList.remove('encore-armed');
+    var _vsubPrev = $('mpx-verdict-sub'); if (_vsubPrev) { _vsubPrev.hidden = true; _vsubPrev.textContent = ''; }
     step('setup'); paintSelection(); refreshReadyEnabled();
     var rs = $('mpx-readystate'); if (rs) rs.textContent = 'Rematch — READY when set.';
     screen.classList.add('active'); activeNow = true;
@@ -1756,6 +1806,7 @@
     if (_npcRaf) { cancelAnimationFrame(_npcRaf); _npcRaf = 0; }   // stop the NPC ghost-drive loop
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
+    try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}   // build109 s1: leaving the match shouldn't leave a stray winner-confetti canvas alive
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false;
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;

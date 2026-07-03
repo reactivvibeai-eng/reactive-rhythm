@@ -3815,6 +3815,8 @@
   .mp-card .mpx-step[hidden] { display: none; }
   /* only the ceremonial screens stay centered — GO countdown + WINNER verdict theater */
   .mp-card .mpx-step-go, .mp-card .mpx-step-winner { align-items: center; text-align: center; }
+  .mp-card .mpx-step-winner { position: relative; }
+  .mp-card .mpx-step-winner > * { position: relative; z-index: 1; }
   .mpx-youbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; text-align: left;
     background: linear-gradient(180deg, rgba(255,31,46,0.14), rgba(255,31,46,0.05)); border: 1px solid rgba(255,31,46,0.34); margin: 6px 0 14px; }
   .mpx-you-av, .mpx-r-av { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center;
@@ -3897,6 +3899,19 @@
   .mpx-verdict.win { color: var(--gold, #e0a93f); text-shadow: 0 0 28px rgba(224,169,63,0.5); }
   .mpx-verdict.lose { color: #8d8380; }
   .mpx-verdict.draw { color: var(--chrome, #dad7d2); }
+  /* build109 s1: winner scale-punch entrance (reduce-motion-gated) + a one-time gold radial flash behind
+     the winner card. Loss/draw stay on the pre-existing static/flat treatment on purpose — the asymmetry
+     IS the design (a visibly bigger win reads correctly against loss aversion). */
+  .mpx-verdict.win.vpunch { animation: mpxVerdictPunch 0.45s cubic-bezier(.2,1.4,.3,1) both; }
+  @keyframes mpxVerdictPunch { 0% { transform: scale(0.7); opacity: 0.2; } 62% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  html.rr-reduce-motion .mpx-verdict.win.vpunch { animation: none; }
+  .mpx-step-winner.win-flash::before { content: ''; position: absolute; inset: -10%; z-index: 0; pointer-events: none;
+    background: radial-gradient(circle at 50% 32%, rgba(224,169,63,0.55), rgba(224,169,63,0) 62%);
+    animation: mpxWinFlash 0.6s ease-out both; }
+  @keyframes mpxWinFlash { from { opacity: 1; } to { opacity: 0; } }
+  html.rr-reduce-motion .mpx-step-winner.win-flash::before { display: none; }
+  .mpx-verdict-sub { font-family: 'Chakra Petch', sans-serif; font-size: 15px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--crimson, #ff1f2e); margin: -10px 0 16px; }
   .mpx-scorecard { display: flex; align-items: stretch; justify-content: center; gap: 14px; }
   /* raised-glass scorecard plates; container-type lets the score auto-fit the plate width (QA overflow fix) */
   .mpx-sc { flex: 1; max-width: 210px; padding: 18px 14px; border-radius: 16px;
@@ -5440,6 +5455,8 @@
            drive per-role visibility by id — whichever primary survives IS the hero. -->
       <div class="mpx-step mpx-step-winner" hidden>
         <div class="mpx-verdict" id="mpx-verdict">YOU WIN</div>
+        <!-- build109 s1: near-miss margin hook — "SO CLOSE — -247 pts" instead of a flat loss; hidden otherwise -->
+        <div class="mpx-verdict-sub" id="mpx-verdict-sub" hidden></div>
         <div class="mpx-scorecard">
           <div class="mpx-sc you">
             <div class="mpx-sc-who">YOU</div>

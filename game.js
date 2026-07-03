@@ -1097,6 +1097,11 @@
   window.RhythmGame.playZap = (incoming) => { try { playZapSfx(!!incoming); } catch (e) {} };
   window.RhythmGame.playSting = (kind) => { try { playStingSfx(kind); } catch (e) {} };
   window.RhythmGame.playCheer = () => { try { playCheerSfx(); } catch (e) {} };
+  // build109 s1: MP winner celebration reuse hook — fires the same confetti/firework burst as solo
+  // results (celebrateResults) but targeting an arbitrary DOM element (the MP winner card).
+  window.RhythmGame.fireCelebration = (targetEl, opts) => { try { fireCelebrationOn(targetEl, opts); } catch (e) {} };
+  window.RhythmGame.stopCelebration = () => { try { stopCelebrationOn(); } catch (e) {} };
+  window.RhythmGame.shakeScreen = (amt) => { try { cameraShake = Math.max(cameraShake, (typeof amt === 'number' ? amt : 10)); } catch (e) {} };
   // first user gesture anywhere unlocks audio for the session
   ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
     window.addEventListener(ev, unlockAudio, { once: true, passive: true }));
@@ -4464,6 +4469,58 @@
         else { cx2.clearRect(0, 0, W, H); _celRaf = 0; }
       })(t0);
     } catch (e) {}
+  }
+
+  // build109 s1: generic celebration burst over an ARBITRARY element (not just #results) — same fxUi/
+  // FxPlayer machinery as celebrateResults, own canvas + generation counter so it can run independently
+  // (e.g. the MP winner card, which lives on a different screen than solo results). reuse, not rebuild.
+  let _cel2Canvas = null, _cel2Raf = 0, _cel2Gen = 0;
+  function fireCelebrationOn(targetEl, opts) {
+    try {
+      if (reduceMotion) return;
+      _bootFxUi();
+      const scr = targetEl; if (!scr) return;
+      const host = (scr.style && (scr.style.position === 'relative' || scr.style.position === 'absolute')) ? scr : scr;
+      if (!_cel2Canvas || _cel2Canvas.parentNode !== host) {
+        if (_cel2Canvas && _cel2Canvas.parentNode) { try { _cel2Canvas.parentNode.removeChild(_cel2Canvas); } catch (e) {} }
+        _cel2Canvas = document.createElement('canvas');
+        _cel2Canvas.id = 'mp-cel-fx';
+        _cel2Canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:9;';
+        const cs = window.getComputedStyle(host);
+        if (cs && cs.position === 'static') host.style.position = 'relative';
+        host.appendChild(_cel2Canvas);
+      }
+      const dpr2 = Math.min(2, window.devicePixelRatio || 1);
+      const W = scr.clientWidth || window.innerWidth, H = scr.clientHeight || window.innerHeight;
+      _cel2Canvas.width = Math.max(1, Math.floor(W * dpr2)); _cel2Canvas.height = Math.max(1, Math.floor(H * dpr2));
+      const cx2 = _cel2Canvas.getContext('2d'); cx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+      const gen = ++_cel2Gen;
+      const k = Math.min(W, H) / 560;
+      const n = fxLite ? 3 : Math.max(1, (opts && opts.count) || 5);
+      const stagger = (opts && opts.stagger) || [150, 260];
+      let lastT = 0;
+      for (let i = 0; i < n; i++) {
+        const p = { t: stagger[0] + i * stagger[1], name: (i % 2) ? 'firework-gold' : 'confetti-pop',
+          x: W * (0.2 + Math.random() * 0.6), y: H * (0.14 + Math.random() * 0.3), s: (1.2 + Math.random() * 0.6) * k };
+        lastT = p.t;
+        setTimeout(function () { if (gen === _cel2Gen && fxUi) { try { fxUi.play(p.name, p.x, p.y, { scale: p.s }); } catch (e) {} } }, p.t);
+      }
+      const t0 = performance.now();
+      if (_cel2Raf) cancelAnimationFrame(_cel2Raf);
+      (function frame(now) {
+        if (gen !== _cel2Gen) return;
+        const el = now - t0;
+        cx2.clearRect(0, 0, W, H);
+        const live = fxUi ? fxUi.draw(cx2, now) : 0;
+        if ((live > 0 || el < lastT + 1400) && el < 9000) { _cel2Raf = requestAnimationFrame(frame); }
+        else { cx2.clearRect(0, 0, W, H); _cel2Raf = 0; }
+      })(t0);
+    } catch (e) {}
+  }
+  function stopCelebrationOn() {
+    _cel2Gen++;
+    if (_cel2Raf) { cancelAnimationFrame(_cel2Raf); _cel2Raf = 0; }
+    if (_cel2Canvas) { try { const cx2 = _cel2Canvas.getContext('2d'); cx2.clearRect(0, 0, _cel2Canvas.width, _cel2Canvas.height); } catch (e) {} }
   }
 
   // VISUAL-ONLY: register a miss/break for the feedback FX (vignette + lane desat + recoil + mass-fail).
