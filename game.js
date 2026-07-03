@@ -132,6 +132,8 @@
   let overdrive = 0;                            // 0..1 meter
   let odActive = false;                         // overdrive mode engaged (x2 payoff)
   let odTimer = 0;                              // seconds of overdrive remaining
+  let odIgniteT = 0;                            // build109 s3: seconds remaining on the activation wind-up pre-charge (0=idle, counts down from ODIGNITE_MS/1000)
+  const ODIGNITE_MS = 140;                      // build109 s3: anticipation beat before the OD payoff fires
   let odBurst = 0;                              // one-shot OD-ignition shockwave (1→0 over ~0.6s, render-only)
   let odReadyAnnounced = false;                // one-shot "OVERDRIVE READY" cue per fill
   let lastMult = 1;                             // last applied score multiplier (HUD)
@@ -1022,6 +1024,24 @@
         o.connect(og); og.connect(g);
         o.start(now); o.stop(now + 0.55);
       });
+    } catch (e) {}
+  }
+  // build109 s3: OD activation WIND-UP pre-charge tone — a short, quiet rising pitch stinger that plays
+  // the instant the player commits (Space/tilt/pad), BEFORE the full payoff riser (playOverdriveSfx)
+  // fires ~140ms later. Single sine ramp, low gain — reads as anticipation, not a duplicate activation.
+  function playOdIgniteSfx() {
+    if (muted) return;
+    try {
+      const ac = getAC(); const now = ac.currentTime, dur = ODIGNITE_MS / 1000;
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.16, SFX_LEVEL * 1.4)), now + dur * 0.5);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      g.connect(ac.destination);
+      const o = ac.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(520, now);
+      o.frequency.exponentialRampToValueAtTime(1180, now + dur);
+      o.connect(g); o.start(now); o.stop(now + dur);
     } catch (e) {}
   }
   // v257 SOUND DESIGN: procedural ZAP (P-vs-P combat shock) — a noise crackle through a sweeping bandpass + a pitch-dropping
@@ -2711,7 +2731,7 @@
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null); _mpStunUntil = 0;
     _frets.clear();   // GH require-strum: clear held-fret state at every run boundary so a stale fret can't carry into the next run (B78-1)
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
-    odActive = false; odTimer = 0; lastMult = 1; odReadyAnnounced = false;
+    odActive = false; odTimer = 0; odIgniteT = 0; lastMult = 1; odReadyAnnounced = false;   // build109 s3: a run boundary must not leave the OD wind-up armed to fire into the next run
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
     // build85 (Phase 3.1): light the BEST chip from the stored per-song best (the thing to chase)
@@ -3424,7 +3444,7 @@
       setCombo: (n) => { combo = Math.max(0, n | 0); if (combo > maxCombo) maxCombo = combo; const nt = comboTierIdx(combo); if (nt > comboTierCur) { comboTierCur = nt; onComboTierUp(nt, 2); } else { comboTierCur = nt; } updateHUD(); const cd = document.getElementById('combo-display'); return { combo, tier: comboTierCur, name: COMBO_TIERS[comboTierCur].name, dataTier: cd && cd.getAttribute('data-tier'), numColor: cd && cd.style.getPropertyValue('--ct-num') }; },
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
-      od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive }),
+      od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive, igniteT: +odIgniteT.toFixed(3) }),   // build109 s3: igniteT exposed for the wind-up verification pass
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3), offsetMs: Math.round(audioOffset * 1000) }),
       // build104 s2 dev probes (strip at content-freeze): seed the timing-sample buffer with a fixed bias so the
       // results auto-calibration chip is verifiable headless, + end the live run on demand (a real 4-min playthrough
@@ -3502,8 +3522,21 @@
   });
 
   const odFlame = $('od-flame');
+  // build109 s3: OVERDRIVE ACTIVATION WIND-UP — activateOverdrive() used to fire shake/burst/comets/
+  // flash/SFX all on the same synchronous tick, no anticipation beat. It's now a short pre-charge
+  // (ODIGNITE_MS): during the window the existing OD-READY chrome-pulse rings (_readyRings, already
+  // rendered whenever overdrive>=1 && !odActive) ramp sharply in alpha/scale + a rising pitch stinger
+  // plays; the payoff below fires exactly as before once the window elapses. Self-contained state-machine
+  // addition — doesn't touch the payoff code that already worked. Reduce-motion/fxLite: the ramp read is
+  // driven by the same _readyRings the ready-cue already shows under those gates (a scale/alpha tween on
+  // an existing element, not new motion), so it's left ungated like the ring cue it rides; the SFX has its
+  // own `muted` guard as always.
   function activateOverdrive() {
-    if (state !== 'playing' || overdrive < 1 || odActive) return;
+    if (state !== 'playing' || overdrive < 1 || odActive || odIgniteT > 0) return;
+    odIgniteT = ODIGNITE_MS / 1000;
+    try { playOdIgniteSfx(); } catch (e) {}
+  }
+  function _fireOverdrivePayoff() {
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
     scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
     try {
@@ -3917,6 +3950,11 @@
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
       // build8: level-fx combo milestone hook (Skully swaps to the intense backdrop). No-op when unset.
       try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, big); } catch (e) {}
+      // build109 s3: reuse comboMidT as the "just had a combo-tier burst" gate for the additive-brightness
+      // budget below — no new state. This IS the tier burst (not the halfway pulse further down), so it
+      // arms the same timer; whichever fires last within a ~0.34s window wins, which is fine (both mean
+      // "something bright just happened here, mute the ambient stream so it doesn't stack toward white").
+      comboMidT = Math.max(comboMidT, 0.34);
     }
     // 3B-i: MID-STREAK PULSE — a smaller cue at the HALFWAY point of each 25-combo interval (15, 40, 65, …)
     // so the 11-24 (and every post-milestone) dead zone feels alive between the full lightning payoffs.
@@ -5052,8 +5090,17 @@
     }
     // build65: OVERDRIVE sustained gold ENERGY STREAM — a steady rise off the catcher row so OD reads as a real MODE
     // takeover (paired with the rainbow strings + gold edge-glow), not just a faint vignette. Cheap + capped.
-    if (odActive && !reduceMotion && !fxLite) {
+    // build109 s3: ADDITIVE BRIGHTNESS BUDGET (cheap version, per the polish plan — not the full per-frame
+    // tracker). At 150+ combo with OD active, this ember stream + the multiplier fire-loop (curMult()>=3)
+    // + the per-hit burst + rainbow spray can all be 'lighter'-composite on the same frame with no shared
+    // ceiling, clipping to white exactly when the game should read as "amazing." Two cheap levers, both
+    // reusing existing state (no new coordination timer): (1) mute the ember spawn entirely for ~300ms
+    // after a combo-tier burst (comboMidT, already armed at every 25-combo tier-up above) since that
+    // burst is already the brightest moment on screen; (2) when fire-loop is ALSO concurrently active
+    // (high mult), cap this stream's own additive alpha instead of letting both stack unbounded.
+    if (odActive && !reduceMotion && !fxLite && comboMidT <= 0) {
       const fgo = fretGeom(), _mid = (LANE_COUNT - 1) / 2;
+      const _emberCap = curMult() >= 3 ? 0.55 : 1;   // combined-budget cap only kicks in once fire-loop is also live
       for (let i = 0; i < LANE_COUNT; i++) {
         if (Math.random() > 0.32) continue;   // build65 (cycle-3): lower emit rate so the ambient stream doesn't crowd the read-path
         // edge-bias: embers drift OUTWARD from the playfield center (rise along the rails, not straight up the gem columns)
@@ -5061,7 +5108,7 @@
         particles.push({ kit: true, shape: 'ember', x: fgo.nearX[i] + side * fgo.lw * 0.34, y: fgo.nearY,
           vx: side * (18 + Math.random() * 30), vy: -120 - Math.random() * 120, grav: 0.18, z: 0, vz: 0.12,
           rot: 0, vrot: 0, size: 1.8 + Math.random() * 2.4, life: 0.6 + Math.random() * 0.5, age: 0,
-          color: Math.random() < 0.5 ? '255,210,110' : '255,176,70', add: true, glow: '255,214,130' });
+          color: Math.random() < 0.5 ? '255,210,110' : '255,176,70', add: true, glow: '255,214,130', capMul: _emberCap });
       }
     }
     // build65 PERF: re-cap AFTER this frame's spawn loops (streak flames + OD stream + the per-hit burst all push above)
@@ -5074,6 +5121,13 @@
       const el = $('hud-score'); if (el) el.textContent = Math.floor(scoreDisplay).toLocaleString();
     }
     // (gamepad now polled at frame-top — see loop start)
+    // build109 s3: OD activation wind-up — count down the pre-charge (the ready-ring visual ramp itself
+    // lives in render(), where lw/_readyRings are in scope); fire the payoff (unchanged code, moved to
+    // _fireOverdrivePayoff) the instant the window elapses.
+    if (odIgniteT > 0) {
+      odIgniteT = Math.max(0, odIgniteT - dt);
+      if (odIgniteT <= 0) _fireOverdrivePayoff();
+    }
     // drain overdrive while active; meter empties over the duration, then ends
     if (odActive) {
       odTimer -= dt;
@@ -5135,7 +5189,18 @@
       // build8c: OD-READY cue — a chrome pulse ring on every catcher while star power is armed
       if (overdrive >= 1 && !odActive) {
         if (!_readyRings) { _readyRings = []; for (let i = 0; i < LANE_COUNT; i++) _readyRings.push(_fxRide('chrome-pulse-ring', nearX[i], nearY, (lw * 1.7 / 128), 0.5)); }
-        else { for (let i = 0; i < _readyRings.length && i < LANE_COUNT; i++) { const h = _readyRings[i]; if (h && h.alive()) h.move(nearX[i], nearY); } }
+        else {
+          // build109 s3: during the activation wind-up (odIgniteT>0), ramp the SAME ready-ring sharply in
+          // scale so the ignition reads as a building charge instead of an instant cut to the full payoff.
+          // Idle (not igniting) keeps the exact prior behavior (move-only, base scale) — byte-identical then.
+          const _ig = odIgniteT > 0 ? (1 - (odIgniteT / (ODIGNITE_MS / 1000))) : 0;
+          const _rs = 1 + _ig * 0.9;
+          for (let i = 0; i < _readyRings.length && i < LANE_COUNT; i++) {
+            const h = _readyRings[i]; if (!h || !h.alive()) continue;
+            h.move(nearX[i], nearY);
+            if (_ig > 0 && h.setScale) { try { h.setScale((lw * 1.7 / 128) * _rs); } catch (e) {} }
+          }
+        }
       } else { _stopReadyRings(); }
       // build8c: SUSTAIN charge loop — rides the catcher while a hold is actively banking
       for (let i = 0; i < LANE_COUNT; i++) {
@@ -5514,8 +5579,17 @@
         fgr.addColorStop(1, 'rgba(' + p.color + ',0)');
         ctx.fillStyle = fgr; ctx.beginPath(); ctx.arc(p.x, p.y, fr, 0, Math.PI * 2); ctx.fill();
       } else if (p.ring) {
-        const r = (p.age / p.life) * p.max;
-        ctx.strokeStyle = 'rgba(' + p.color + ',' + (a * 0.8) + ')'; ctx.lineWidth = 2.5 * a + 0.5;
+        // build109 s3: cubic ease-out expansion (was linear r=(age/life)*max) — a SINGLE shared change
+        // that upgrades every ring particle at once (perfect-hit double-crack, every 25-combo ripple, the
+        // OD shockwave — they all route through this one primitive). Linear read mechanical; cubic-out
+        // reads like an impact: fast initial expansion that decelerates, same curve already used at the
+        // wipeout/mass-fail site. Alpha now peaks early (sin ramp) and decays instead of a flat a*0.8, so
+        // the ring's brightness arcs with its motion instead of just fading on a timer.
+        const _t = p.age / p.life;
+        const _e = 1 - Math.pow(1 - _t, 3);
+        const r = _e * p.max;
+        const _ringA = Math.sin(Math.PI * Math.min(1, _t * 1.4)) * 0.8;
+        ctx.strokeStyle = 'rgba(' + p.color + ',' + _ringA.toFixed(3) + ')'; ctx.lineWidth = 2.5 * a + 0.5;
         ctx.shadowColor = 'rgb(' + p.color + ')'; ctx.shadowBlur = 14 * a;
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.stroke();
       } else if (p.column) {
@@ -5535,6 +5609,7 @@
         const s3 = 1 + (p.z || 0);                                   // toward-camera particles GROW (fake-3D)
         const sz = p.size * s3 * (p.grow ? (0.55 + (1 - a) * 1.1) : (0.45 + 0.55 * a));
         let pa = a; if (p.grow) pa = a * Math.max(0, 1 - (p.z || 0) * 0.45);   // fade as it flies past the lens
+        if (p.capMul != null && p.capMul < 1) pa *= p.capMul;   // build109 s3: additive-brightness budget cap (cheap version) — only the OD ember stream opts in via capMul
         ctx.globalCompositeOperation = p.add ? 'lighter' : 'source-over';
         const sh = p.shape;
         if (sh === 'ember' || sh === 'mote') {
