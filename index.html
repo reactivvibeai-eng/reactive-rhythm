@@ -2200,6 +2200,10 @@
     color: var(--ink);
     font-variant-numeric: tabular-nums;
     text-shadow: 0 0 24px rgba(255,255,255,0.07);
+    /* build108 s3a (sanity pass alongside the MP score-bleed fix): the side panel is normally wide enough that
+       a fixed 44px never overflows, but this is a hard safety net — a long score/combo can never bleed out of
+       the HUD block regardless of panel width. No visual change at normal sizes (44px is already < 100cqi here). */
+    max-width: 100%; white-space: nowrap; overflow: hidden;
   }
   .hud-block .val.small { font-size: 24px; font-weight: 600; }
   .hud-block .val.crimson { color: var(--crimson); text-shadow: 0 0 26px rgba(255,31,46,0.45); }
@@ -3867,8 +3871,14 @@
   .mpx-results { max-height: 230px; overflow-y: auto; }
   .mpx-result { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; border-bottom: 1px solid rgba(218,215,210,0.06); }
   .mpx-result:hover { background: rgba(255,31,46,0.08); }
-  .mpx-result .r-t { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 14px; color: var(--ink, #f3eceb); }
-  .mpx-result .r-a { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; }
+  /* build108 s3b (owner playtest-3: "rows show tiny text with NO cover thumbnail"): a small cover square per row
+     so the picker is scannable at a glance, matching the jukebox's own art-first pattern. Fixed size + object-fit
+     so a missing/broken art URL never distorts the row; a branded fallback swatch covers a missing cover. */
+  .mpx-result .r-art { width: 34px; height: 34px; border-radius: 6px; flex: none; object-fit: cover; background: linear-gradient(135deg, #241412, #120a09); border: 1px solid rgba(218,215,210,0.12); }
+  .mpx-result .r-art.r-art-fallback { display: flex; align-items: center; justify-content: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: var(--crimson, #ff1f2e); }
+  .mpx-result .r-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .mpx-result .r-t { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 14px; color: var(--ink, #f3eceb); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mpx-result .r-a { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mpx-readyrow { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
   .mpx-ready { width: 100%; max-width: none; padding: 14px 0; font-size: 15px; }   /* pkg1.4: full-width COMMIT — the step's one crimson act when armed */
   .mpx-ready.armed { background: linear-gradient(180deg, var(--crimson, #ff1f2e), #a3060f); border-color: rgba(255,31,46,0.5); }
@@ -3987,7 +3997,11 @@
   #mp-opp .mo-delta { font-weight: 800; font-size: 13px; }
   #mp-opp .mo-delta.ahead { color: var(--gold, #e0a93f); }
   #mp-opp .mo-delta.behind { color: var(--crimson, #ff1f2e); }
-  @media (max-width: 760px) { #mp-opp { width: 140px; top: 8px; right: 8px; padding: 9px 10px; } #mp-opp .mo-score { font-size: 20px; } }
+  /* build108 s3a (owner playtest-3: "MP score HUD text bleeds out of its container"): the 760px breakpoint's
+     fixed 20px font-size UNDID the clamp() auto-fit above at exactly the width where it's needed most (a
+     7-digit comma score no longer had room to shrink) — swap to a narrower clamp so long scores keep fitting
+     the smaller 140px mobile panel instead of overflowing it. */
+  @media (max-width: 760px) { #mp-opp { width: 140px; top: 8px; right: 8px; padding: 9px 10px; } #mp-opp .mo-score { font-size: clamp(13px, 15cqi, 20px); } }
   html.rr-reduce-motion #mp-opp .mo-bar > span { transition: none; }
   html.rr-reduce-motion .mpx-challenge:hover { transform: none; }
 

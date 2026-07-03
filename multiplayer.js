@@ -3817,7 +3817,11 @@
       return (t.title || '').toLowerCase().indexOf(q) >= 0 || (t.artist_credit_name || t.artist_name || '').toLowerCase().indexOf(q) >= 0;
     }).slice(0, 40);
     box.innerHTML = rows.map(function (t, i) {
-      return '<div class="mpx-result" data-i="' + i + '"><div><div class="r-t">' + esc(t.title || 'Untitled') + '</div><div class="r-a">' + esc(t.artist_credit_name || t.artist_name || '') + '</div></div></div>';
+      // build108 s3b: same cover-thumbnail treatment as the 1v1 picker (renderPicker) — see _picThumb above.
+      var title = t.title || 'Untitled';
+      var art = t.artwork_url ? ('<img class="r-art" loading="lazy" src="' + safeUrl(_picThumb(t.artwork_url, 80)) + '" alt="" onerror="this.outerHTML=\'<div class=&quot;r-art r-art-fallback&quot;>' + esc((title[0] || '?').toUpperCase()) + '</div>\'">')
+        : ('<div class="r-art r-art-fallback">' + esc((title[0] || '?').toUpperCase()) + '</div>');
+      return '<div class="mpx-result" data-i="' + i + '">' + art + '<div class="r-body"><div class="r-t">' + esc(title) + '</div><div class="r-a">' + esc(t.artist_credit_name || t.artist_name || '') + '</div></div></div>';
     }).join('') || '<div class="mpx-result"><div class="r-a">No tracks found.</div></div>';
     [].forEach.call(box.querySelectorAll('.mpx-result[data-i]'), function (el) {
       el.addEventListener('click', function () {
@@ -4929,6 +4933,18 @@
   }
 
   // ===================== TRACK PICKER (host) =====================
+  // build108 s3b: thumbnail helper — mirrors jukebox.js's private thumb() (Supabase Storage → the image-transform
+  // endpoint with a width cap) so the picker's covers load fast instead of pulling full-res ~1MB+ art. Not shared
+  // across files (jukebox.js doesn't expose it), so this is a small local copy — keep in sync if that one changes.
+  function _picThumb(url, w) {
+    try {
+      if (!url || typeof url !== 'string') return url || '';
+      if (/supabase\.co\/storage\/v1\/object\/public\//.test(url)) {
+        return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + (url.indexOf('?') >= 0 ? '&' : '?') + 'width=' + (w || 80) + '&quality=72';
+      }
+    } catch (e) {}
+    return url;
+  }
   function renderPicker(q) {
     var box = $('mpx-results'); if (!box) return;
     var RC = window.RhythmCatalog;
@@ -4940,7 +4956,13 @@
       return (t.title || '').toLowerCase().indexOf(q) >= 0 || (t.artist_credit_name || t.artist_name || '').toLowerCase().indexOf(q) >= 0;
     }).slice(0, 40);
     box.innerHTML = rows.map(function (t, i) {
-      return '<div class="mpx-result" data-i="' + i + '"><div><div class="r-t">' + esc(t.title || 'Untitled') + '</div><div class="r-a">' + esc(t.artist_credit_name || t.artist_name || '') + '</div></div></div>';
+      // build108 s3b (owner playtest-3: "rows show tiny text with NO cover thumbnail"): a small cover square per
+      // row — real art via <img> (onerror falls back to a branded initial swatch so a broken URL never shows a
+      // broken-image icon), or the initial swatch straight away when the track has no art.
+      var title = t.title || 'Untitled';
+      var art = t.artwork_url ? ('<img class="r-art" loading="lazy" src="' + safeUrl(_picThumb(t.artwork_url, 80)) + '" alt="" onerror="this.outerHTML=\'<div class=&quot;r-art r-art-fallback&quot;>' + esc((title[0] || '?').toUpperCase()) + '</div>\'">')
+        : ('<div class="r-art r-art-fallback">' + esc((title[0] || '?').toUpperCase()) + '</div>');
+      return '<div class="mpx-result" data-i="' + i + '">' + art + '<div class="r-body"><div class="r-t">' + esc(title) + '</div><div class="r-a">' + esc(t.artist_credit_name || t.artist_name || '') + '</div></div></div>';
     }).join('') || '<div class="mpx-result"><div class="r-a">No tracks found.</div></div>';
     [].forEach.call(box.querySelectorAll('.mpx-result[data-i]'), function (el) {
       el.addEventListener('click', function () {
