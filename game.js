@@ -87,6 +87,12 @@
   //   accents:    + accents × 0.5 × 375 × 4 (=750/accent; PERFECT-judged accents pay 1.5× base — s8)
   //   full chord: + Σ over chords of 0.3 × (chord_lanes × 375 × 4) (all-lanes-down bonus, 1.3× the chord — s7)
   // The old flat "notes_total*1500 + holds*880" formula is CHART_VERSION 1 era — do not enforce it against v2 scores.
+  // build104 s11 (close the batch): the ACTUAL stamped chart epoch. buildNotes (grid-refine + snap + sanitizer + hold
+  // overhaul + chord/accent/star + pattern vocab) AND the scoring above all moved this run — a v2 score is not
+  // comparable to a v1 score. Every leaderboard submission carries this (catalog /score body) so the backend can
+  // segment eras; bump ONLY when a change again alters achievable score for a fixed (track,difficulty).
+  const CHART_VERSION = 2;
+  try { window.RhythmGame = window.RhythmGame || {}; window.RhythmGame.CHART_VERSION = CHART_VERSION; } catch (e) {}
   const JUDGE = {
     perfect: { name: 'PERFECT', color: '#dad7d2', score: 375, accW: 1.00 },
     great:   { name: 'GREAT',   color: '#e0a93f', score: 250, accW: 0.85 },

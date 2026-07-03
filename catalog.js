@@ -1621,6 +1621,9 @@
             track_id: currentTrack.id, difficulty: results.difficulty,
             score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
             notes_hit: results.notes_hit, notes_total: results.notes_total,
+            // build104 s11: stamp the chart epoch — the buildNotes + scoring rewrite moved achievable score, so a v2
+            // score must not rank against a v1 score. The backend can segment/label by this; an absent field = era 1.
+            chart_version: (window.RhythmGame && window.RhythmGame.CHART_VERSION) || 1,
           } });
           // build100i: Lovable returns { id, play_id, rank_global } from /score (a /plays alias). Capture the canonical
           // play_id, then earn server Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _rift3x carries
