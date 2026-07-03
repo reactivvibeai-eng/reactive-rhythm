@@ -2155,19 +2155,18 @@
         // resolver (host tokens only, host-locked) → treat as 'host' for back-compat; GO LIVE keys on this.
         _role: r.role || 'host', _submitterId: r.submitter_id || null, _submitterName: r.submitter_name || ''
       };
-      // build102z p1.5: VIDEO submission → flag the flix-style launch. Backdrop = the best NON-HLS video
-      // source (Chrome's <video> can't play .m3u8): prefer the charted media itself when it's a video
-      // container (same file → chart timing IS video timing), else a video-looking payload field (the
-      // same-source Mux rendition pair — the flix contract). A video-classified payload with NO non-HLS
-      // video (HLS-only film) still launches flix-style off the charted audio — a dark backdrop beats a
-      // dead PLAY button (launchTrack hard-refuses isVideo tracks, which is exactly the bug this fixes).
-      // Audio submissions never enter this block — the normal review flow below is byte-identical.
-      if (_rvIsVideoUrl(aurl) || isVideo(r)) {
-        _revTrack._flixReview = true;
-        var _vcands = [aurl, r.video_url, r.stream_url, r.media_url], _vurl = null;
-        for (var _vi = 0; _vi < _vcands.length; _vi++) { var _vu = _dec(_vcands[_vi]); if (_vu && _rvIsVideoUrl(_vu)) { _vurl = _vu; break; } }
-        if (_vurl) _revTrack.video_url = _vurl;   // videoWatchUrl() reads this → playFlix's backdrop
-      }
+      // build102z p1.5 + v415 review fix: VIDEO submission → flix-style launch, but ONLY when a REAL, playable
+      // (non-HLS) video backdrop actually exists. Find that source first — the charted media itself when it's a
+      // video container (same file → chart timing IS video timing), else a video-looking payload field (the
+      // same-source Mux rendition pair). The title/genre heuristic (isVideo) must NEVER flip flix mode on its
+      // own: an AUDIO track merely TITLED "... Official Video" / "Lyric Video" would otherwise get a permanent
+      // BLACK flix backdrop. When no playable video is found we force the synthetic track audio-shaped
+      // (media_type is mediaType()'s #1 signal → overrides the title heuristic → launchTrack accepts it as a
+      // normal review with a normal backdrop, never a dead button). Audio submissions are byte-identical below.
+      var _vcands = [aurl, r.video_url, r.stream_url, r.media_url], _vurl = null;
+      for (var _vi = 0; _vi < _vcands.length; _vi++) { var _vu = _dec(_vcands[_vi]); if (_vu && _rvIsVideoUrl(_vu)) { _vurl = _vu; break; } }
+      if (_vurl) { _revTrack._flixReview = true; _revTrack.video_url = _vurl; }   // real backdrop → flix (videoWatchUrl() reads video_url)
+      else { _revTrack.media_type = 'audio'; }                                    // no playable video → normal audio review (immune to a title false-positive)
       _setupReviewReturn();
       _openReviewLaunch(_revTrack);
       try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review track — pick a difficulty and PLAY. This run is scored.', 'neutral'); } catch (e) {}

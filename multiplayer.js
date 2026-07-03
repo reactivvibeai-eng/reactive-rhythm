@@ -1836,25 +1836,35 @@
     if (!ME.signedIn) { banner('mpx-lobby-msg', 'Sign in to battle-call players.'); return; }
     var uid = u.id, nm = String(u.name || 'them').slice(0, 24);
     _setRow(uid, 'calling', 'CALLING…', 15000);
-    // no room yet → open a PRIVATE battle room first (openRoomWithId cancels any live qm search — the v405 guard)
-    try { if (!room.id) openRoomWithId(newRoomId(), { priv: true, name: (ME.name + "'s Battle").slice(0, 28) }); } catch (e) {}
+    // v415 review fix: a battle call must ALWAYS route into a PRIVATE 1:1 room — never hijack an already-open PUBLIC
+    // room (the target's ACCEPT would drop them into a public room strangers can also join). Close a stale public
+    // room first, then open a fresh private one (openRoomWithId also cancels any live qm search — the v405 guard).
+    var _bcOpened = false;
+    try {
+      if (room.id && !room.priv) { closeRoom(true); }
+      if (!room.id) { openRoomWithId(newRoomId(), { priv: true, name: (ME.name + "'s Battle").slice(0, 28) }); _bcOpened = true; }
+    } catch (e) {}
     if (!room.id) { _setRow(uid, '', 'Try again', 0); banner('mpx-lobby-msg', 'Couldn\'t open a battle room — check your connection and retry.'); return; }
     window.RhythmCatalog.challenge(uid, room.id).then(function () {
       _setRow(uid, 'ringing', '✓ RINGING — they\'ve got 45s', 60000);   // row rests ~60s (server dedupes the pair for 60s anyway)
       setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.state === 'ringing') _setRow(uid, '', 'BATTLE CALL', 0); }, 60000);
       banner('mpx-setup-msg', nm + ' is ringing — they\'ve got 45s to accept. Pick the song while you wait.');
     }).catch(function (e) {
+      // v415 review fix: the challenge never went out → don't strand the caller in a live, advertised, empty room
+      // waiting for a rival who was never called. Tear down a room WE opened this call and return to the roster.
+      var _bc = 'mpx-setup-msg';
+      if (_bcOpened) { try { closeRoom(true); step('lobby'); _onlineStart(); _bc = 'mpx-lobby-msg'; } catch (e2) {} }
       var m = String((e && e.message) || '');
       if (/\b403\b/.test(m)) {                       // their Battle-calls toggle is OFF
         _setRow(uid, 'dim', 'Not taking calls', 3600000);
-        banner('mpx-setup-msg', nm + ' isn\'t taking battle calls right now.');
+        banner(_bc, nm + ' isn\'t taking battle calls right now.');
       } else if (/\b409\b/.test(m)) {                // rate-limited — re-arm after the 20s window
         _setRow(uid, 'dim', 'Wait a moment…', 20000);
         setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.label === 'Wait a moment…') _setRow(uid, '', 'BATTLE CALL', 0); }, 20000);
-        banner('mpx-setup-msg', 'Easy — one battle call every 20 seconds.');
+        banner(_bc, 'Easy — one battle call every 20 seconds.');
       } else {
         _setRow(uid, '', 'Try again', 0);
-        banner('mpx-setup-msg', 'Couldn\'t send the battle call — try again.');
+        banner(_bc, 'Couldn\'t send the battle call — try again.');
       }
     });
   }
@@ -1928,6 +1938,14 @@
     _ringUp = false;
   }
   try { _ringStart(); } catch (e) {}
+  // v415 review fix: a ring shown moments before the player launches a song must DIE on game start — _ringPoll only
+  // gates NEW rings on _inMenus(); an already-mounted card (looping audio + ACCEPT/Decline) would otherwise survive
+  // over live gameplay for up to 45s. Watch #game/#loading for the 'active' class (mirrors the syncActive observer
+  // pattern) and dismiss the moment either goes live.
+  try {
+    var _rgObsCb = function () { if (_ringUp && !_inMenus()) _dismissRing(); };
+    [$('game'), $('loading')].forEach(function (el) { if (el) new MutationObserver(_rgObsCb).observe(el, { attributes: true, attributeFilter: ['class'] }); });
+  } catch (e) {}
 
   // ===================== build102x: SERVER MATCHMAKING (PHASE3_MATCHMAKING_DESIGN.md) =====================
   // Site-wide queue: POST /match/queue {on} + GET /match/status via RhythmCatalog wrappers (authed REST — no
@@ -5295,6 +5313,7 @@
     else if (!nowActive && activeNow) {
       activeNow = false;
       try { qmStop(true); } catch (e) {}   // build102x: NEVER keep the matchmaking poll running behind a hidden MP screen; also clears my queue row ({on:false}). No-op unless searching (matched pairs already stopped it).
+      try { _onlineStop(); } catch (e) {}   // v415 review fix: the ONLINE NOW poll is MP-screen-scoped like qmStop — clear it on ANY deactivate (hub-nav away while on the lobby step never hit step()'s stop), for full interval-lifecycle symmetry.
       if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; }
     }
   }

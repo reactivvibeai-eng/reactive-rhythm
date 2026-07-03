@@ -724,8 +724,12 @@
     _missK = Math.max(0, _missK - dt / 1.5);
     if (_hold > 0) _hold = Math.max(0, _hold - dt);                 // held breath FIRST…
     else if (_cut > 0) _cut = Math.max(0, _cut - dt / 0.6);         // …then the 600ms wave
-    st.cut = _reduce() ? 0 : _cut;                                  // reduce-motion: no ring (state change still lands, just uneventfully)
-    st.hold = _hold; st.missK = _missK;
+    // v415 review fix: reduce-motion must be FULLY uneventful — st.cut was already zeroed, but st.hold leaked the
+    // ~90ms phase-freeze AND still armed the (st.hold>0) cutaway gate (palette advance + 40-particle gold burst).
+    // Zero BOTH so a reduce-motion tier-up neither freezes nor erupts (matches the documented contract).
+    var _rm = _reduce();
+    st.cut = _rm ? 0 : _cut;
+    st.hold = _rm ? 0 : _hold; st.missK = _missK;
     var crisp = !!CRISP[_type];
     if (crisp) {
       _updateCam(dt, st);
