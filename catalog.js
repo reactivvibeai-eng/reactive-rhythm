@@ -136,6 +136,10 @@
       const u = await getUser();
       const em = (u && u.email ? String(u.email) : '').trim().toLowerCase();
       _isAdmin = !!em && ADMIN_EMAILS.indexOf(em) >= 0;
+      // build119 p1: opportunistic drain of any queued reports (offline/failed submitReport calls) — only
+      // worth trying once we know someone is actually signed in (the POST is authed either way). Fire-and-forget:
+      // flushReportsQueue is itself fully guarded and never throws, so this can't affect admin resolution above.
+      if (u) { try { flushReportsQueue(); } catch (e) {} }
     } catch (e) { _isAdmin = false; }
     return _isAdmin;
   }
@@ -1858,17 +1862,17 @@
     } catch (e) { return null; }
   }
 
-  // build111 s4: USER REPORTING, client half. The rr_reports table + edge function are being dispatched
-  // separately as a Lovable brief (parallel track, not blocking) — until it lands, submitReport is a STUB that
-  // queues to localStorage (rr_reports_queue) with the last ~30 buffered chat lines attached as evidence
-  // (multiplayer/chat.js supplies `payload.evidence` when it has any). Fire-and-forget + silent-fail-safe,
-  // matching the resilience pattern used throughout this file (mpSettle/mpRoundStart above, etc.).
+  // build119 p1: USER REPORTING, client half. LIVE — POSTs to the deployed `game-catalog` moderation
+  // backend (POST /reports, authed bearer, same getToken()-bearer pattern as every other authed call in this
+  // file — see /plays and mpSettle above). The backend accepts `evidence` OR `context`, clamps note<=140,
+  // soft-validates reason, and overwrites reporter_id from the JWT server-side — so the client-built
+  // reporterId/reporterName below are best-effort local context only, not trusted identity.
   //
-  // Flipping this to a live POST later is meant to be a one-liner: once `rr_reports` exists, replace the
-  // localStorage push below with `await api('/reports', { method: 'POST', body: payload, auth: true })`
-  // (same getToken()-bearer pattern as every other authed call in this file) and add a flush-queued-reports
-  // pass (iterate rr_reports_queue, POST each, drop on success) — the queue shape below is already exactly
-  // what that POST body would be, so no reshaping needed at flip time.
+  // The localStorage queue (rr_reports_queue) is KEPT as an offline/failure fallback: a failed/offline POST
+  // still queues locally exactly as before, and flushReportsQueue() (called opportunistically after a
+  // successful getUser()/boot) drains it — POSTing each entry and dropping it on success, leaving anything
+  // that still fails queued for the next opportunity. The queue entry shape IS the POST body already (no
+  // reshaping needed at flush time — same payload submitReport would have POSTed live).
   var REPORTS_QUEUE_KEY = 'rr_reports_queue';
   var REPORTS_QUEUE_MAX = 50;   // local safety cap — an unbounded queue on a device that never flushes would grow forever
   function _loadReportsQueue() {
@@ -1893,14 +1897,72 @@
         at: Date.now()
       };
       try { var u = await getUser(); if (u) { entry.reporterId = u.id; entry.reporterName = u.name; } } catch (e) {}
-      var q = _loadReportsQueue(); q.push(entry); _saveReportsQueue(q);
-      return { queued: true };
+      // LIVE path first: try the real endpoint. Only fall back to the local queue if the POST itself fails
+      // (offline, backend hiccup, not signed in, etc.) — matches the resilience pattern used throughout this
+      // file (mpSettle/mpRoundStart), where a backend hiccup must never throw into the caller.
+      try {
+        var out = await api('/reports', { method: 'POST', body: entry, auth: true });
+        return { queued: false, ok: true, id: out && out.id };
+      } catch (postErr) {
+        var q = _loadReportsQueue(); q.push(entry); _saveReportsQueue(q);
+        return { queued: true };
+      }
     } catch (e) { return { queued: false, error: 'exception' }; }
+  }
+  // Drains rr_reports_queue by POSTing each entry to /reports; a queue entry is dropped only on a confirmed
+  // success. Anything that still fails (offline / backend down) stays queued for the next opportunity. Safe to
+  // call opportunistically and often — no-ops instantly when the queue is empty or the backend is unreachable.
+  var _flushingReports = false;
+  async function flushReportsQueue() {
+    if (_flushingReports) return { flushed: 0, remaining: 0 };
+    _flushingReports = true;
+    try {
+      var q = _loadReportsQueue();
+      if (!q.length) return { flushed: 0, remaining: 0 };
+      var remaining = [];
+      var flushed = 0;
+      for (var i = 0; i < q.length; i++) {
+        try {
+          await api('/reports', { method: 'POST', body: q[i], auth: true });
+          flushed++;
+        } catch (e) {
+          remaining.push(q[i]);   // still failing (offline/backend down) — keep it queued
+        }
+      }
+      _saveReportsQueue(remaining);
+      return { flushed: flushed, remaining: remaining.length };
+    } catch (e) { return { flushed: 0, remaining: 0 }; }
+    finally { _flushingReports = false; }
+  }
+
+  // build119 p1: SANCTIONS client — GET /game-catalog/sanctions/me (authed, derives user from the JWT, no
+  // params). Returns the sanction/mute/pending_notices object described in the backend contract, or null when
+  // signed out / unreachable / anything hiccups — this must NEVER throw, and a null/empty result must be
+  // indistinguishable from "no sanction" to every caller (safe-default: no gate, no mute, no modal).
+  async function getSanctions() {
+    try {
+      if (!API_BASE) return null;
+      var tk = await getToken(); if (!tk) return null;   // signed-out → nothing to enforce
+      var out = await api('/sanctions/me', { auth: true });
+      return out || null;
+    } catch (e) { return null; }
+  }
+  // Fire-and-forget ack — marks a pending notice acknowledged server-side so it stops re-showing on next launch.
+  // Guarded end-to-end: a failed ack just means the notice may re-show next time, never breaks the caller.
+  async function ackNotice(id) {
+    try {
+      if (!API_BASE || !id) return false;
+      var tk = await getToken(); if (!tk) return false;
+      await api('/notifications/' + encodeURIComponent(id) + '/ack', { method: 'POST', auth: true });
+      return true;
+    } catch (e) { return false; }
   }
 
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
-    submitReport,   // build111 s4: user-reporting stub (queues to localStorage rr_reports_queue until the backend table lands)
+    submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback
+    flushReportsQueue, // build119 p1: drains rr_reports_queue against the live endpoint — call opportunistically (e.g. after boot/getUser)
+    getSanctions, ackNotice,   // build119 p1: moderation — GET /sanctions/me + POST /notifications/:id/ack (both authed, fail-soft to null/false)
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
     adoptSiteSession: _adoptSiteSession,   // build115 p1: single source of truth for "adopt the site's shared localStorage session" — the sign-in gate (index.html) routes through this instead of duplicating key-matching logic
