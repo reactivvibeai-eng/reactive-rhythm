@@ -1765,6 +1765,7 @@
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
     playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
+    flixBackdrop: _startFlixBackdrop, flixBackdropStop: _stopFlixBackdrop,   // build102z p1.5: multiplayer stages a VIDEO-review backdrop on host+challenger (gated on sel.flixVideo — normal MP never calls these)
     // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.
     dailyRiftTrack, dailyRiftState, dailyRiftToday, setDailyRift,
     search, sortTracks, sections, getBest,
@@ -1927,7 +1928,12 @@
           // to Arena; keepEnvironment stops launchTrack's clearEnvironment (the launchLevel/couch.js contract).
           // No chip (_rvEnvSel null) = the exact pre-102y launch line.
           try {
-            if (_rvEnvSel && window.RhythmLevels && window.RhythmLevels.applyEnvironment) {
+            // build102z p1.5: VIDEO submission → flix-style launch (the video plays behind the highway;
+            // playFlix manages its own #bg-video backdrop, clears any leftover env, sets currentTrack, and
+            // charts the same media's decoded audio — scoring identical to a normal review run). No stage
+            // chip exists for a flix review (_rvEnvSel stays null), so the audio branches below are untouched.
+            if (track._flixReview) { playFlix(track); }
+            else if (_rvEnvSel && window.RhythmLevels && window.RhythmLevels.applyEnvironment) {
               window.RhythmLevels.applyEnvironment(_rvEnvSel);
               launchTrack(track, { keepEnvironment: true });
             } else launchTrack(track);
@@ -1960,6 +1966,12 @@
                 submitterId: track._submitterId || null, submitterName: track._submitterName || '',
                 env: _rvEnvSel || null,   // build102y step4: the picked stage rides sel.env — beginMatch applies it on BOTH seats, the show snap carries it to late joiners
                 openSeat: _rvSeatPol,     // build102y step5: challenger seat policy ('artist'|'confirm'|'auto') — multiplayer routes it onto the room
+                // build102z p1.5: VIDEO review → the flix backdrop URL rides sel to any seat that RUNS the
+                // engine (host + seated challenger). Spectator decks stay video-less v1: #bg-video only
+                // renders inside an ACTIVE #game (index.html gates it) and spectators never activate it.
+                // Same visibility class as audioUrl (may ride Realtime; the token never does). null for
+                // audio reviews → multiplayer stays byte-identical.
+                flixVideo: (track._flixReview && track.video_url) || null,
                 revToken: _revRawToken
               });
               ok = true;
@@ -1973,7 +1985,13 @@
       }
     }
     // build102y step4: render the stage chips LAST — _canLive decides whether paid chips hide (edge case 1).
-    try { _renderRvStages(_canLive); } catch (e) {}
+    // build102z p1.5: a VIDEO review hides the whole stage strip — the video IS the stage (owner spec).
+    // _rvEnvSel stays null (reset at card open) so nothing env-shaped rides the launch.
+    if (track._flixReview) {
+      var _sr0 = _rvEl('rvl-stage-row'); if (_sr0) _sr0.hidden = true;
+      var _sn0 = _rvEl('rvl-stage-name'); if (_sn0) _sn0.hidden = true;
+    }
+    else { try { _renderRvStages(_canLive); } catch (e) {} }
   }
   // build102s: CALL IN THE ARTIST — multiplayer.js passes only the room id; the token stays module-local here.
   // Backend contract: POST /show/invite { token, room, renotify } → { invited, outcome } | 401/403 | 429.
@@ -2043,6 +2061,12 @@
     res.addEventListener('pointerdown', function () { _cancelReturnCountdown(); }, true);
     window.addEventListener('keydown', function () { if (_rvTimer) _cancelReturnCountdown(); }, true);
   }
+  // build102z p1.5 (owner mandate): a VIDEO submission ("Play in Reactive Rhythm" on a film/MV) still plays —
+  // FLIX-STYLE, the video full-bleed behind the highway while the chart runs off the same media's decoded
+  // audio (WebAudio decodes an mp4/mov/webm's audio track — the exact AI-Flix contract). Detection is the
+  // same FUZZY class as mediaType(): the resolve payload has no media_type field either, so we sniff the
+  // chosen playable URL's container extension + the payload's own genre/title hints (isVideo(r)).
+  function _rvIsVideoUrl(u) { return !!u && /\.(mp4|m4v|mov|webm)(\?|#|$)/i.test(String(u)); }
   async function _resolveReview(token) {
     if (!token || !API_BASE) { _rvState('Missing review link — head back to the show and press Play in Reactive Rhythm again.'); return; }
     _revRawToken = token;   // build102s: kept for POST /show/invite (GO LIVE artist call-in)
@@ -2082,6 +2106,19 @@
         // resolver (host tokens only, host-locked) → treat as 'host' for back-compat; GO LIVE keys on this.
         _role: r.role || 'host', _submitterId: r.submitter_id || null, _submitterName: r.submitter_name || ''
       };
+      // build102z p1.5: VIDEO submission → flag the flix-style launch. Backdrop = the best NON-HLS video
+      // source (Chrome's <video> can't play .m3u8): prefer the charted media itself when it's a video
+      // container (same file → chart timing IS video timing), else a video-looking payload field (the
+      // same-source Mux rendition pair — the flix contract). A video-classified payload with NO non-HLS
+      // video (HLS-only film) still launches flix-style off the charted audio — a dark backdrop beats a
+      // dead PLAY button (launchTrack hard-refuses isVideo tracks, which is exactly the bug this fixes).
+      // Audio submissions never enter this block — the normal review flow below is byte-identical.
+      if (_rvIsVideoUrl(aurl) || isVideo(r)) {
+        _revTrack._flixReview = true;
+        var _vcands = [aurl, r.video_url, r.stream_url, r.media_url], _vurl = null;
+        for (var _vi = 0; _vi < _vcands.length; _vi++) { var _vu = _dec(_vcands[_vi]); if (_vu && _rvIsVideoUrl(_vu)) { _vurl = _vu; break; } }
+        if (_vurl) _revTrack.video_url = _vurl;   // videoWatchUrl() reads this → playFlix's backdrop
+      }
       _setupReviewReturn();
       _openReviewLaunch(_revTrack);
       try { window.RhythmGame.showToast && window.RhythmGame.showToast('Review track — pick a difficulty and PLAY. This run is scored.', 'neutral'); } catch (e) {}
@@ -2097,7 +2134,7 @@
     }
   }
   // dev hook (strip at launch with __rrDebug & co) — lets a headless preview drive the card without a real token
-  try { window.__rrReview = { open: _openReviewLaunch, loading: _openReviewLoading, state: _rvState, arm: _startReturnCountdown, cancel: _cancelReturnCountdown, setup: _setupReviewReturn }; } catch (e) {}
+  try { window.__rrReview = { open: _openReviewLaunch, loading: _openReviewLoading, state: _rvState, arm: _startReturnCountdown, cancel: _cancelReturnCountdown, setup: _setupReviewReturn, vid: _rvIsVideoUrl }; } catch (e) {}   // build102z p1.5: .vid = the video-URL sniffer (headless verify)
 
   async function boot() {
     if (!window.RhythmGame) { console.error('engine not loaded'); return; }

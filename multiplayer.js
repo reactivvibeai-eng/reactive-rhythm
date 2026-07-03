@@ -1204,6 +1204,14 @@
     window.RhythmGame.onSongEnd(onLocalSongEnd);
     // v262: apply the room's chosen STAGE (level/env) on BOTH sides before launch so the backdrop/journey matches. Arena → clear.
     try { if (window.RhythmLevels) { if (sel.env && sel.env !== '__default') window.RhythmLevels.applyEnvironment(sel.env); else window.RhythmLevels.clearEnvironment(); } } catch (e) {}
+    // build102z p1.5: VIDEO review show — stage the flix backdrop (the submission's video behind the highway)
+    // on any seat that RUNS the engine: host + seated challenger (both adopt sel via show snap/onStart, and each
+    // fetches the video itself — it's a URL, same visibility class as sel.audioUrl). SPECTATOR decks stay
+    // video-less v1: #bg-video only renders inside an ACTIVE #game (index.html gates it with
+    // `#game:not(.active) #bg-video { display:none }`) and a spectator never activates the game screen — an
+    // honest limitation, not an oversight. Gated on room.show + sel.flixVideo, so every normal match and every
+    // AUDIO review is byte-identical. The backdrop self-tears when the run ends; teardownMatch backstops it.
+    try { if (room.show && sel && sel.flixVideo && window.RhythmCatalog && window.RhythmCatalog.flixBackdrop) window.RhythmCatalog.flixBackdrop(sel.flixVideo); } catch (e) {}
     // resolve provider + start synced. The engine surface stays minimal: resolve the
     // track and reuse the SAME launch paths the rest of the app uses (byte-identical play).
     resolveAndStart(sel, atMs);
@@ -1240,6 +1248,7 @@
     // must never hijack a normal match with stale review audio; strip it and resolve by trackId as always.
     if (s && s.audioUrl && room.show) { resolveShowStart(s, atMs); return; }
     if (s && s.audioUrl) { try { delete s.audioUrl; } catch (e) {} }
+    if (s && s.flixVideo) { try { delete s.flixVideo; } catch (e) {} }   // build102z p1.5 (review fix 1 mirror): a leaked video-review backdrop must never ride a normal match
     var RC = window.RhythmCatalog;
     var t = (RC && RC.allTracks) ? RC.allTracks().filter(function (x) { return x.id === s.trackId; })[0] : null;
     if (t && RC && RC.isVideo && RC.isVideo(t)) t = null;   // defense-in-depth: never start a video in MP → falls to demo
@@ -1544,6 +1553,7 @@
     _showAtMs = 0; _specShowSolo = false; _soloRun = false;   // build102s: show-run flags die with the match (review fix 8: a torn-down show start must never leave _soloRun armed for a later unrelated song end)
     try { if (window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(false); } catch (e) {}   // build102u: auto-pause back to normal for everything after a show run (no-op if never suppressed)
     try { _unmountSpecStage(); } catch (e) {}                 // build102t: leak-proof — the leaveAll/mp-back paths tear the stage + spectator audio down too (no-op when never mounted)
+    try { if (sel && sel.flixVideo && window.RhythmCatalog && window.RhythmCatalog.flixBackdropStop) window.RhythmCatalog.flixBackdropStop(); } catch (e) {}   // build102z p1.5: a VIDEO-review backdrop dies with the match (gated — normal matches never call it; the stop itself no-ops unless a flix backdrop is live)
     setLobbyInMatch(false);
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
@@ -1795,7 +1805,7 @@
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     if (_qm.on) qmStop(true);   // v405 review fix: hosting a room cancels a live matchmaking search (a match landing mid-room stomps it). No-op on the qmMatched host path (_qm.on already false, so the MATCHED pill survives).
     room = { id: rid, name: (opts.name || (ME.name + "'s Room")).slice(0, 28), priv: !!opts.priv, combat: !!opts.combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
-    try { delete sel.audioUrl; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio
+    try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio (build102z p1.5: nor its video backdrop)
     joinRoomChannel(room.id, 'p1');
     reannounce();
     enterRoomWaiting();
@@ -1828,7 +1838,7 @@
       // is idempotent + accepts expired tokens, and catalog fire-and-forgets it (the close must never block).
       try { if (room.isHost && window.RhythmCatalog && window.RhythmCatalog.livematchEnd) window.RhythmCatalog.livematchEnd(room.id); } catch (e) {}
       stopShowHeartbeat(); clearShowRoom();
-      try { delete sel.audioUrl; } catch (e) {}   // review fix 1: the review audio dies with the show — it must never leak into a later normal match
+      try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: the review audio dies with the show — it must never leak into a later normal match (build102z p1.5: the video backdrop too)
       var _wy = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wy) _wy.textContent = 'YOU';   // undo the spectator-verdict relabel
     }
     if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
@@ -2355,6 +2365,10 @@
     // seats and sendShowSnap ships sel wholesale, so the challenger + late joiners inherit the stage for free.
     sel = { trackId: spec.trackId || null, title: spec.title || null, artist: spec.artist || null, art: spec.art || null,
       difficulty: spec.difficulty || 'medium', demo: false, env: spec.env || null, audioUrl: spec.audioUrl || null };
+    // build102z p1.5: VIDEO review — the flix backdrop URL rides sel (show snap ships sel wholesale, so the
+    // seated challenger + late joiners inherit it for free; same visibility class as audioUrl, never the token).
+    // Only set when present, so an AUDIO review's sel shape is byte-identical to before.
+    if (spec.flixVideo) sel.flixVideo = String(spec.flixVideo);
     _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteAt = 0; _inviteRenotified = false;
     // fresh watchdog for the ROOM-channel subscribe stage (the internal closeRoom above cancels any prior one);
     // guarded so it can only ever fail THIS show room — never one the host opened later.
@@ -2376,6 +2390,10 @@
       if (window.__rrReview && window.__rrReview.open && spec && spec.trackId) {
         window.__rrReview.open({ id: spec.trackId, title: spec.title, artist_name: spec.artist, artist_credit_name: spec.artist,
           artwork_url: spec.art, audio_url: spec.audioUrl, analysis_url: spec.audioUrl, chart_status: 'pending', _review: true,
+          // build102z p1.5: a VIDEO review keeps its flix identity on the re-shown card (stage strip stays
+          // hidden, PLAY relaunches flix-style). A backdrop-less video review (HLS-only film) loses only the
+          // cosmetic strip-hide here — the PLAY handler was wired once with the ORIGINAL flix track and survives.
+          _flixReview: !!spec.flixVideo, video_url: spec.flixVideo || null,
           _role: 'host', _submitterId: spec.submitterId || null, _submitterName: spec.submitterName || '' });
         return;
       }
@@ -4551,7 +4569,7 @@
       el.addEventListener('click', function () {
         var t = rows[+el.getAttribute('data-i')]; if (!t) return;
         sel.trackId = t.id; sel.title = t.title; sel.artist = t.artist_credit_name || t.artist_name; sel.art = t.artwork_url; sel.demo = (t.id === 'demo');
-        try { delete sel.audioUrl; } catch (e) {}   // review fix 1: picking a NEW track invalidates any show/review audio riding the old sel (it would play the wrong song)
+        try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: picking a NEW track invalidates any show/review audio riding the old sel (it would play the wrong song) (build102z p1.5: the video backdrop too)
         var pk = $('mpx-picker'); if (pk) pk.hidden = true;
         paintSelection(); broadcastSong();
         meReady = false; oppReady = false; setReadyBtn(); refreshReadyEnabled();
@@ -4618,7 +4636,7 @@
   wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
   wire('mpx-room-combat', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build69: segmented combat select for the room (read at openRoom into room.combat)
   // build8: room context (inside setup) — host closes / guest leaves
-  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { var _wasShow = !!room.show; leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; if (_wasShow) { try { delete sel.audioUrl; } catch (e) {} } reannounce(); backToLobby(); } });   // review fix 1/5: a guest leaving a SHOW drops the review audio; the stale back-label restores at the next enterSetup
+  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { var _wasShow = !!room.show; leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; if (_wasShow) { try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {} } reannounce(); backToLobby(); } });   // review fix 1/5: a guest leaving a SHOW drops the review audio (build102z p1.5: + the video backdrop); the stale back-label restores at the next enterSetup
   // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
   wire('mpx-invite-friend', 'click', function () {
     if (!room.id) return;
