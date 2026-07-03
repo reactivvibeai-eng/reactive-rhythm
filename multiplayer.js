@@ -752,6 +752,12 @@
       });
     } catch (e) { return []; }
   }
+  // build108 s3 coordinator addition: stage chips were bare text — add a small cover/preview thumbnail per chip
+  // (same MPX design-system swatch pattern as the track picker's .r-art / _picThumb). e.cover is a local asset
+  // path (RhythmLevels.environments(), not peer data) so no esc()/safeUrl() is needed for the URL itself; the
+  // NAME text still goes through textContent (never innerHTML) same as before. loading="lazy" + the browser's
+  // normal image cache keep this cheap on repeated renderStageRow() calls (same URL = no re-fetch) — no extra
+  // caching layer needed, and nothing here touches the render loop, so it can't cost a frame at 60fps.
   function renderStageRow() {
     var row = $('mpx-stage-row'); if (!row) return;
     var list = _stageList(), host = amPicker(), cur = sel.env || '__default';
@@ -761,7 +767,20 @@
       b.className = 'mpx-stage-chip' + (cur === e.id ? ' sel' : '');
       b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', cur === e.id ? 'true' : 'false'); b.disabled = !host;
       if (e.accent) b.style.setProperty('--ec', e.accent);
-      b.textContent = e.isDefault ? 'Arena' : (e.name || 'Stage');
+      var label = e.isDefault ? 'Arena' : (e.name || 'Stage');
+      var art;
+      if (e.cover) {
+        art = document.createElement('img'); art.className = 'sc-art'; art.loading = 'lazy'; art.alt = '';
+        art.src = _picThumb(e.cover, 60);
+        art.addEventListener('error', function () {
+          var fb = document.createElement('span'); fb.className = 'sc-art sc-art-fallback'; fb.textContent = (label[0] || '?').toUpperCase();
+          if (art.parentNode) art.parentNode.replaceChild(fb, art);
+        });
+      } else {
+        art = document.createElement('span'); art.className = 'sc-art sc-art-fallback'; art.textContent = (label[0] || '?').toUpperCase();
+      }
+      b.appendChild(art);
+      var txt = document.createElement('span'); txt.textContent = label; b.appendChild(txt);
       b.addEventListener('click', function () { if (!amPicker()) return; sel.env = e.id; broadcastSong(); renderStageRow(); });
       row.appendChild(b);
     });

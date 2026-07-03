@@ -3861,10 +3861,15 @@
   .mpx-diff { margin-top: 10px; }
   /* v262: room STAGE (level/environment) picker chips */
   .mpx-stage-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
-  .mpx-stage-chip { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.04em; padding: 7px 13px; border-radius: 999px; cursor: pointer; color: var(--ink-dim, #a0938f); background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.16)); transition: color .14s ease, border-color .14s ease, background .14s ease, box-shadow .14s ease; }
+  .mpx-stage-chip { display: inline-flex; align-items: center; gap: 7px; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.04em; padding: 5px 13px 5px 5px; border-radius: 999px; cursor: pointer; color: var(--ink-dim, #a0938f); background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.16)); transition: color .14s ease, border-color .14s ease, background .14s ease, box-shadow .14s ease; }
   .mpx-stage-chip:hover:not(:disabled) { color: var(--ink, #f3eceb); border-color: var(--ec, rgba(255,31,46,0.4)); }
   .mpx-stage-chip.sel { color: #fff; background: linear-gradient(180deg, rgba(255,42,48,0.26), rgba(179,18,31,0.16)); border-color: var(--ec, rgba(255,31,46,0.6)); box-shadow: 0 0 16px -5px var(--ec, rgba(255,31,46,0.6)); }
   .mpx-stage-chip:disabled { opacity: 0.55; cursor: default; }
+  /* build108 s3 coordinator addition: small round cover thumbnail per stage chip (mirrors the track picker's
+     .r-art treatment) — img with lazy loading for 60fps scroll; a chip with no cover art (e.g. Arena, whose
+     cover is '') falls back to the same accent-colored initial swatch pattern, never a broken-image icon. */
+  .mpx-stage-chip .sc-art { width: 22px; height: 22px; border-radius: 999px; flex: none; object-fit: cover; background: rgba(218,215,210,0.08); }
+  .mpx-stage-chip .sc-art.sc-art-fallback { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--ec, rgba(255,31,46,0.85)); background: rgba(255,255,255,0.06); border: 1px solid var(--ec, rgba(255,31,46,0.35)); }
   .mpx-picker { margin-top: 10px; border-radius: 12px; border: 1px solid var(--line, rgba(218,215,210,0.16)); overflow: hidden; background: rgba(10,7,6,0.7); }
   .mpx-search { width: 100%; box-sizing: border-box; padding: 11px 14px; border: none; border-bottom: 1px solid var(--line, rgba(218,215,210,0.14));
     background: transparent; color: var(--ink, #f3eceb); font-family: 'Chakra Petch', sans-serif; font-size: 14px; }
