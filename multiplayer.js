@@ -3224,7 +3224,21 @@
     var isShow = !!(room.id && room.show);
     if (bn) bn.hidden = !isShow;
     if (seatEl) seatEl.hidden = !isShow;
-    if (!isShow) { return; }
+    if (!isShow) {
+      // build108 s3d hotfix (CRITICAL, owner hit live on v418): a BATTLE-CALL / normal room (room.show falsy) was
+      // rendering full show-room chrome — LIVE SHOW banner, ARTIST SEAT card, CALL IN THE ARTIST, TAKE THE STAGE,
+      // the pending ACCEPT/DECLINE card, BEAT THAT — all inert here and confusing. Root cause: hiding the two OUTER
+      // containers above (mpx-show-banner / mpx-show-seat) should cascade-hide everything nested inside them via
+      // [hidden]{display:none}, but each control ALSO carries its OWN .hidden that a PRIOR show-room render can leave
+      // false — a plain attribute set once doesn't get reset just because an ancestor is later re-hidden, so if any
+      // one of these controls is later moved, restyled, or read for its OWN hidden state elsewhere, a stale `false`
+      // survives across the show→normal room transition. Explicitly re-hide every show-only control here so a
+      // normal/battle/quick-match room can NEVER show artist/challenger-seat chrome, independent of DOM nesting.
+      ['mpx-show-invite-row', 'mpx-show-invite', 'mpx-show-nudge', 'mpx-show-accept', 'mpx-show-decline',
+       'mpx-show-pend', 'mpx-show-swap', 'mpx-show-take-row', 'mpx-show-take', 'mpx-beat-that', 'mpx-beat-room'
+      ].forEach(function (id) { var el = $(id); if (el) el.hidden = true; });
+      return;
+    }
     if (ls) ls.textContent = room.isHost ? '⏹ END THE SHOW' : 'LEAVE THE SHOW';   // restored by closeRoom
     var art = $('msb-art'); if (art && sel.art) art.src = safeUrl(sel.art);
     var ti = $('msb-title'); if (ti) ti.textContent = sel.title || 'Review track';
