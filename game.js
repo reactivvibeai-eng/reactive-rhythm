@@ -1627,9 +1627,20 @@
     // none, keeps plain tap scoring (no hit-detection change). Works on dense charts (Hard) where
     // there are no rest gaps to host inserts. Spaced out so trills stay special. Default (flag
     // off) skips this entirely → chart byte-identical. ----
+    // build104 s9: shared run-ownership counter — qualifying fast runs ALTERNATE between the trill pass (odd)
+    // and the stair/zipper pass (even). Trill-first used to claim every run, starving the pattern pass to
+    // patNotes=0 on every difficulty.
+    let _runTurn = 0;
     if (noteVariety && difficulty !== 'easy') {
-      const trillMaxGap = difficulty === 'hard' ? 0.26 : 0.30;   // build62: medium 0.55→0.30 — trills stay a FLOURISH on medium (the loose gate over-trilled it, re-laning melody notes into mechanical alternation → tanked its centroid/melody-following 0.87→0.68)
-      const minLen = 3;                                          // notes needed to call it a trill (L-R-L)
+      // build104 s9: CHART-RELATIVE gate — "a fast run" must be relative to the difficulty's own density floor
+      // (MINGAP), not an absolute constant: Medium's old 0.30 gate sat BELOW its 0.38 min-gap, so no run could
+      // mathematically qualify (trills measured 0 on Medium since build62). Gate = max(legacy, MINGAP×1.15).
+      // build62 regression guards stay LOAD-BEARING: Medium requires runs ≥4 notes and ≥6s apart (the loose-gate
+      // experiment tanked melody-following 0.87→0.68 once), and centroidLaneR ≥ 0.85 stays the Medium acceptance
+      // gate across genre-diverse tracks.
+      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22 }[difficulty] || 0.22;
+      const trillMaxGap = Math.max(difficulty === 'hard' ? 0.26 : 0.30, MINGAP_D * 1.15);
+      const minLen = difficulty === 'medium' ? 4 : 3;            // notes needed to call it a trill (Medium guard: real runs only)
       let lastTrillT = -999, i = 0;
       const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord;
       while (i < notes.length - 1) {
@@ -1637,9 +1648,12 @@
         let j = i;                                               // grow a run of fast consecutive singles
         while (j + 1 < notes.length && single(notes[j + 1]) && (notes[j + 1].time - notes[j].time) <= trillMaxGap) j++;
         if ((j - i + 1) >= minLen && (notes[i].time - lastTrillT) >= 6) {
-          let l1 = notes[i].lane, l2 = inSpan(l1 + 1); if (l2 === l1) l2 = inSpan(l1 + 2);
-          for (let k = i; k <= j; k++) { notes[k].lane = ((k - i) % 2) ? l2 : l1; notes[k]._trill = true; }
-          lastTrillT = notes[j].time;
+          _runTurn++;
+          if (_runTurn % 2 === 1) {                              // odd runs → trills; even runs stay for the stair/zipper pass
+            let l1 = notes[i].lane, l2 = inSpan(l1 + 1); if (l2 === l1) l2 = inSpan(l1 + 2);
+            for (let k = i; k <= j; k++) { notes[k].lane = ((k - i) % 2) ? l2 : l1; notes[k]._trill = true; }
+            lastTrillT = notes[j].time;
+          }
           i = j + 1;
         } else { i++; }
       }
@@ -1648,8 +1662,18 @@
     // STAIR (lane sweep) or ZIPPER (bounce). DENSITY-NEUTRAL re-laning (adds none; plain tap scoring;
     // times untouched so every note stays on its onset). Spaced out. Default off → skip. ----
     if (noteVariety && difficulty !== 'easy') {
-      const patMaxGap = difficulty === 'hard' ? 0.30 : 0.36;   // build62: medium 0.60→0.36 (same reason as trills — keep stair-runs a flourish on medium, not a melody override)
+      // build104 s9: same chart-relative gate treatment as the trill pass — Medium's 0.36 gate sat below its own
+      // 0.38 density floor (patNotes was 0 EVERYWHERE). Gate = max(legacy, MINGAP×1.35); Medium keeps the ≥6s
+      // spacing regression guard.
+      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22 }[difficulty] || 0.22;
+      const patMaxGap = Math.max(difficulty === 'hard' ? 0.30 : 0.36, MINGAP_D * 1.35);
       const minLen = 4;
+      // build104 s9: Medium PATTERN BUDGET — the chart-relative gate wakes the pass up, but on a run-heavy song
+      // it converted 50+ notes and measurably dented melody-following (A/B: centroidLaneR 0.820→0.766 on an
+      // electronic track). Patterns stay a FLOURISH on Medium: at most ~4% of the chart re-lanes (Hard uncapped —
+      // its runs are the texture). The stair direction already follows the melodic contour.
+      const patBudget = difficulty === 'medium' ? Math.max(8, Math.round(notes.length * 0.04)) : Infinity;
+      let patUsed = 0;
       const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord && !x._trill;
       let lastPatT = -999, i = 0, patSeed = 7;
       while (i < notes.length - 1) {
@@ -1657,9 +1681,16 @@
         let j = i;
         while (j + 1 < notes.length && single(notes[j + 1]) && (notes[j + 1].time - notes[j].time) <= patMaxGap) j++;
         const runLen = j - i + 1;
-        if (runLen >= minLen && (notes[i].time - lastPatT) >= 5) {
+        if (runLen >= minLen && (notes[i].time - lastPatT) >= (difficulty === 'medium' ? 6 : 5) && (patUsed + runLen) <= patBudget) {
           patSeed = (patSeed * 1103515245 + 12345) & 0x7fffffff;
-          const shape = patSeed % 3;                           // 0=stair up, 1=stair down, 2=zipper
+          // build104 s9: the stair DIRECTION follows the run's own melodic contour (centroid slope) — an
+          // ascending line sweeps UP the strings, a descending one sweeps DOWN, a flat one zippers. This keeps
+          // the build62 melody-following guarantee (centroidLaneR) intact while the patterns actually fire;
+          // the hashed shape remains the fallback for centroid-less (classic) charts.
+          let shape;
+          const c0 = notes[i]._centroid, c1 = notes[j]._centroid;
+          if (typeof c0 === 'number' && typeof c1 === 'number') shape = (c1 - c0) > 0.03 ? 0 : (c1 - c0) < -0.03 ? 1 : 2;
+          else shape = patSeed % 3;                            // 0=stair up, 1=stair down, 2=zipper
           for (let k = i; k <= j; k++) {
             const r = k - i;
             let lane;
@@ -1669,6 +1700,7 @@
             notes[k].lane = lane;
             notes[k]._pat = shape;
           }
+          patUsed += runLen;
           lastPatT = notes[j].time;
           i = j + 1;
         } else { i++; }
