@@ -2376,7 +2376,18 @@
     const _go = () => {
       player.play();
       state = 'playing';
-      try { if (requireStrum()) _ensureFastPoll(); } catch (e) {}   // build102w: run begin = arm the ~4ms strum-mode input poller HERE (not only in loop() — a throttled rAF must not delay first-strum latency)
+      // build104 s1b: SEED audio-latency compensation for devices that never calibrated. Chrome reports the real
+      // hardware output latency only once the context is LIVE (0/jittery at construction — hence here, not at boot).
+      // A saved manual calibration (rr_offset_ms) ALWAYS wins; the seed is session-only (never persisted) and clamped
+      // to [0, 120ms] so a bogus report can't skew judging. Leaderboard-neutral: it corrects a device artifact,
+      // exactly like the existing calibration slider.
+      try {
+        if (localStorage.getItem('rr_offset_ms') == null) {
+          const _lac = (player && player.ctx) || getAC();
+          audioOffset = Math.min(0.12, Math.max(0, _lac.outputLatency || _lac.baseLatency || 0));
+        }
+      } catch (e) {}
+      try { if (anyPadConnected()) _ensureFastPoll(); } catch (e) {}   // build102w/104 s3: run begin = arm the ~4ms input poller HERE for any connected pad (not only in loop() — a throttled rAF must not delay first-press latency)
       try { window.RhythmProcBg && window.RhythmProcBg.play(); } catch (e) {}   // build66: drive the procedural reactive backdrop in lockstep (covers the deferred pre-roll resume too)
       // telemetry: song_start — the run actually begins (audio + chart playing). NON-PII (track id + difficulty only).
       try {
@@ -2644,6 +2655,46 @@
         const _rb = $('results-blurb'); if (_rb && _rb.insertAdjacentHTML) _rb.insertAdjacentHTML('afterend', _html);
       }
     } catch (e) {}
+    // build104 s2 — AUTO-CALIBRATION from real play: a whole run's hits already measured the player's device bias
+    // (_timingSamples). When the run shows a CONSISTENT lean (|median| > 25ms over ≥40 hits), offer a one-tap fix:
+    // apply HALF the median (converges over runs without overshoot), clamped ±150ms, through the exact calib-save
+    // path (rr_offset_ms + live audioOffset + the Settings chip). rr_autocal='0' = "don't ask again" so it never
+    // nags. Post-run only — zero per-frame cost, zero determinism impact, leaderboard-neutral (device artifact).
+    try {
+      const _oac = document.getElementById('results-autocal'); if (_oac) _oac.remove();
+      if (localStorage.getItem('rr_autocal') !== '0' && _timingSamples.length >= 40) {
+        const _sv = _timingSamples.map(s => s * 1000).sort((a, b) => a - b);
+        const _med = Math.round(_sv.length % 2 ? _sv[(_sv.length - 1) / 2] : (_sv[_sv.length / 2 - 1] + _sv[_sv.length / 2]) / 2);
+        const _curMs = Math.round(audioOffset * 1000);
+        const _newMs = Math.max(-150, Math.min(150, _curMs + Math.round(_med / 2)));
+        if (Math.abs(_med) > 25 && _newMs !== _curMs) {
+          const _btn = 'padding:5px 12px;border-radius:8px;border:1px solid rgba(236,231,227,0.25);background:rgba(20,12,10,0.6);color:#ece7e3;font-family:\'Chakra Petch\',sans-serif;font-size:11px;letter-spacing:0.08em;cursor:pointer;';
+          const _achtml = '<div id="results-autocal" style="margin:10px auto 0;max-width:340px;padding:9px 12px;border:1px solid rgba(224,169,63,0.35);border-radius:10px;background:rgba(28,16,10,0.55);">'
+            + '<div style="font-size:11.5px;letter-spacing:0.06em;color:#e0a93f;font-family:\'Chakra Petch\',sans-serif;">Your hits ran ~' + Math.abs(_med) + 'ms ' + (_med > 0 ? 'LATE' : 'EARLY') + ' — auto-calibrate?</div>'
+            + '<div style="display:flex;gap:8px;justify-content:center;margin-top:7px;">'
+            + '<button id="autocal-apply" style="' + _btn + 'border-color:rgba(224,169,63,0.6);color:#ffe08a;">APPLY ' + (_newMs > 0 ? '+' : '') + _newMs + 'ms</button>'
+            + '<button id="autocal-later" style="' + _btn + '">NOT NOW</button>'
+            + '<button id="autocal-never" style="' + _btn + 'opacity:0.7;">DON’T ASK</button>'
+            + '</div></div>';
+          const _anchor = document.getElementById('results-timing') || $('results-blurb');
+          if (_anchor && _anchor.insertAdjacentHTML) {
+            _anchor.insertAdjacentHTML('afterend', _achtml);
+            const _chip = document.getElementById('results-autocal');
+            const _ap = document.getElementById('autocal-apply');
+            if (_ap) _ap.addEventListener('click', () => {
+              audioOffset = _newMs / 1000;
+              try { localStorage.setItem('rr_offset_ms', String(_newMs)); } catch (e2) {}
+              try { updateCalibMenuVal(); } catch (e2) {}
+              if (_chip) _chip.innerHTML = '<div style="font-size:11.5px;letter-spacing:0.06em;color:#ffe08a;font-family:\'Chakra Petch\',sans-serif;text-align:center;">✓ Timing offset set to ' + (_newMs > 0 ? '+' : '') + _newMs + 'ms — fine-tune anytime in Settings ▸ Calibration</div>';
+            });
+            const _la = document.getElementById('autocal-later');
+            if (_la) _la.addEventListener('click', () => { if (_chip) _chip.remove(); });
+            const _nv = document.getElementById('autocal-never');
+            if (_nv) _nv.addEventListener('click', () => { try { localStorage.setItem('rr_autocal', '0'); } catch (e2) {} if (_chip) _chip.remove(); });
+          }
+        }
+      }
+    } catch (e) {}
 
     // judgment composition bar — proportional inline-block segments (fills from 0)
     const rbTotal = Math.max(1, counts.perfect + counts.great + counts.good + counts.miss);
@@ -2714,7 +2765,7 @@
     // would be a no-op on a player that never played) instead of resuming.
     if (_deferredStart) { var _f = _deferredStart; _deferredStart = null; $('pause-overlay').classList.remove('show'); _f(); return; }
     player.resume(); state = 'playing';
-    try { if (requireStrum()) _ensureFastPoll(); } catch (e) {}   // build102w: resume = re-arm the strum-mode input poller (it self-disarmed on pause)
+    try { if (anyPadConnected()) _ensureFastPoll(); } catch (e) {}   // build102w/104 s3: resume = re-arm the pad input poller (it self-disarmed on pause)
     try { window.RhythmProcBg && window.RhythmProcBg.resume(); } catch (e) {}   // build66: resume the reactive backdrop
     $('pause-overlay').classList.remove('show');
     lastFrame = performance.now();
@@ -2883,7 +2934,7 @@
       score: () => Math.floor(score),
       nextHold: () => { const j = songTime() - audioOffset; const h = notes.find(n => n.type === 'hold' && !n.judged && n.time > j - 0.05); return h ? { lane: h.lane, time: +h.time.toFixed(3), inSec: +(h.time - j).toFixed(3), hold: +h.hold.toFixed(2) } : null; },
       holding: () => holdNote.map((h, i) => h ? { lane: i, scored: +holdScored[i].toFixed(2) } : null).filter(Boolean),
-      press: (lane) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now()); } },
+      press: (lane, lagMs) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now() - (lagMs || 0)); } },   // build104 s1a: optional lagMs simulates a delayed input event (late-edge race probe)
       release: (lane) => onLaneRelease(lane),
       // GH require-strum dev hooks (strip at content-freeze): verify the gate + live config + held frets
       requireStrum: () => requireStrum(),
@@ -2893,7 +2944,12 @@
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive }),
-      audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3) }),
+      audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3), offsetMs: Math.round(audioOffset * 1000) }),
+      // build104 s2 dev probes (strip at content-freeze): seed the timing-sample buffer with a fixed bias so the
+      // results auto-calibration chip is verifiable headless, + end the live run on demand (a real 4-min playthrough
+      // is not viable in a throttled tab).
+      seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
+      endRun: () => { if (state === 'playing') { endGame(); return true; } return state; },
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
       fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }), pts: (fx.active || []).map(function (i) { return { n: (i.meta && i.meta.src ? i.meta.src.split('/').pop().replace('.png', '') : '?'), x: Math.round(i.x), y: Math.round(i.y), s: +(+i.scale).toFixed(2) }; }) } : { loaded: false },
@@ -3255,15 +3311,18 @@
     }
   }
   // build102w: LOW-LATENCY INPUT POLL — pollGamepad rode the rAF loop only (16-33ms worst case; worse on a 30fps
-  // machine), and that queue delay reads as "the strum needs a hard push". While a STRUM-MODE run is live, a dedicated
-  // ~4ms interval polls too. Edge detection (_padPrev) is stateful + synchronous, so extra calls are safe — the rAF
-  // frame-top call stays and whoever runs first simply wins the edge. The interval self-disarms the moment the run
-  // ends / pauses or strum mode flips off; loop() re-arms it next playing frame. One interval max (_fastPollId guard).
+  // machine), and that queue delay reads as "the strum needs a hard push". While a run is live with ANY pad
+  // connected, a dedicated ~4ms interval polls too. Edge detection (_padPrev) is stateful + synchronous, so extra
+  // calls are safe — the rAF frame-top call stays and whoever runs first simply wins the edge. The interval
+  // self-disarms the moment the run ends / pauses or the pad unplugs; loop() re-arms it next playing frame. One
+  // interval max (_fastPollId guard). build104 s3: gate widened from requireStrum() to anyPadConnected() — a
+  // PRESS-mode controller/guitar player was still stuck on rAF cadence (16-33ms of avoidable input latency);
+  // the shared _padPrev edge map means the fast poll + frame-top poll can never double-fire one press.
   let _fastPollId = 0, _strumPollMs = 4;
   function _ensureFastPoll() {
     if (_fastPollId) return;
     _fastPollId = setInterval(() => {
-      if (state !== 'playing' || !requireStrum()) { clearInterval(_fastPollId); _fastPollId = 0; return; }
+      if (state !== 'playing' || !anyPadConnected()) { clearInterval(_fastPollId); _fastPollId = 0; return; }
       try { pollGamepad(true); } catch (e) {}   // liteAxes: buttons + strum/tilt edges only — whammy stays rAF-sampled (delta-gated, rate-sensitive)
     }, _strumPollMs);
   }
@@ -4296,14 +4355,24 @@
     if (!fxLite && !_qAutoDone) _qSample(_rawMs);   // build66: adaptive-quality sampler (only while actually playing)
 
     pollGamepad();              // poll at frame-top so a controller/guitar press is judged this frame
-    if (requireStrum()) _ensureFastPoll();   // build102w: arm the ~4ms low-latency poller for strum-mode runs (self-disarms on run end / pause / mode off)
+    if (anyPadConnected()) _ensureFastPoll();   // build102w/104 s3: arm the ~4ms low-latency poller whenever a pad is connected mid-run — press mode AND strum mode (self-disarms on run end / pause / unplug)
     const t = songTime();
     const jt = t - audioOffset;
     const diff = DIFFICULTY[difficulty];
+    // build104 s1a (timing fairness — the late-edge race): handleHit back-dates a press by up to 50ms of event/queue
+    // lag (inputLag), so a LEGAL hit at n.time + hitWindow − ε whose event arrived a frame late was losing the race to
+    // this sweep — declared MISS before the press could be judged. Miss *declaration* now waits one lag budget (50ms)
+    // + ~a frame (10ms) past the window for scored taps. Hit LEGALITY (handleHit's own `n.time < t − hitWindow` bound)
+    // is unchanged → scoring windows stay deterministic; only the miss call moves 60ms later. BOMBS still resolve
+    // 'avoided' at the exact window edge (their press-penalty window must not stretch), and HOLD heads keep the exact
+    // edge too (sustain-start bookkeeping assumes the head resolves at the old boundary). Mirrored in the P2 scorer.
+    const MISS_GRACE = 0.06;
     for (const n of notes) {
-      if (n.judged || jt <= n.time + diff.hitWindow) continue;
-      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } }   // dodged the hazard — safe, no penalty
-      else missNote(n);
+      if (n.judged) continue;
+      if (n.type === 'bomb') { if (jt <= n.time + diff.hitWindow) continue; n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } continue; }   // dodged the hazard — safe, no penalty
+      if (n.type === 'hold') { if (jt <= n.time + diff.hitWindow) continue; missNote(n); continue; }
+      if (jt <= n.time + diff.hitWindow + MISS_GRACE) continue;
+      missNote(n);
     }
 
     // ---- sustain (hold) scoring: a struck hold pays out continuously while held ----
@@ -6575,7 +6644,7 @@
       if (!resetArmed) { resetArmed = true; ra.textContent = 'TAP AGAIN TO RESET'; ra.classList.add('arm'); clearTimeout(resetArmT); resetArmT = setTimeout(disarmReset, 3000); return; }
       clearTimeout(resetArmT); disarmReset();
       // build65 (cycle-5): added rr_notes / rr_offset_ms / rr_open — they were SURVIVING a "reset all" that claimed to wipe everything.
-      try { ['rr_settings', 'rr_keymap', 'rr_keymap_gh', 'rr_padmap', 'rr_padmap_gh', 'rr_timinghint', 'rr_juice', 'rr_notes', 'rr_offset_ms', 'rr_open'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+      try { ['rr_settings', 'rr_keymap', 'rr_keymap_gh', 'rr_padmap', 'rr_padmap_gh', 'rr_timinghint', 'rr_juice', 'rr_notes', 'rr_offset_ms', 'rr_open', 'rr_autocal'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
       // canonical defaults (match getSettings/applySettings defaults)
       try { window.RhythmGame.applySettings({ scroll: 1, fxLite: false, reduceMotion: false, bgMode: 'cinematic', music: 1, sfx: 0.05, failMode: false, chartMode: 'musical', levelGuitar: 'mine', fxIntensity: 'balanced' }); } catch (e) {}
       try { window.RhythmGame.setTimingFeel && window.RhythmGame.setTimingFeel('classic'); } catch (e) {}
@@ -6683,7 +6752,7 @@
         try { localStorage.setItem('rr_gh_autoadopted', '1'); } catch (e2) {}
       }
     } catch (err) {}
-    try { if (state === 'playing' && requireStrum()) _ensureFastPoll(); } catch (err2) {}   // build102w: pad plugged in MID-RUN → arm the strum-mode poller now (don't wait on a possibly-throttled rAF frame)
+    try { if (state === 'playing') _ensureFastPoll(); } catch (err2) {}   // build102w/104 s3: pad plugged in MID-RUN → arm the low-latency poller now (don't wait on a possibly-throttled rAF frame)
     if (settingsScreen.classList.contains('active')) renderDeviceStatus();
   });
   window.addEventListener('gamepaddisconnected', (e) => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); _frets.clear(); if (e && e.gamepad) { const pre = e.gamepad.index + ':'; for (const k in _padPrev) if (k.indexOf(pre) === 0) delete _padPrev[k]; } if (settingsScreen.classList.contains('active')) renderDeviceStatus(); });   // build71: a pad unplugged mid-hold can't send its release → free every lane + clear the dead pad's stale edge-state so a fret can't stay stuck-down/sustaining. build79-fix(B78-2): also clear GH held-fret Set so an unplugged-mid-hold guitar can't leave phantom frets that the next strum fires.
@@ -6947,11 +7016,14 @@
         const gain = frac - P.holdScored[i];
         if (gain > 0) { P.score += gain * HOLD_TOTAL * _p2Mult(); P.holdScored[i] = frac; }
       }
-      // P2 MISS pass: a note that passed P2's window unjudged-for-P2 breaks P2's combo (bombs dodged = safe)
+      // P2 MISS pass: a note that passed P2's window unjudged-for-P2 breaks P2's combo (bombs dodged = safe).
+      // build104 s1a mirror: scored taps get the same +60ms miss-DECLARATION grace as P1's sweep (bombs + hold
+      // heads resolve at the exact window edge, matching P1) — the late-edge input race is fixed for both players.
       for (let i = 0; i < notes.length; i++) {
         const n = notes[i];
         if (P.judged.has(i)) continue;
-        if (jt <= n.time + diff.hitWindow) continue;
+        const edge = n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold') ? 0 : 0.06);
+        if (jt <= edge) continue;
         P.judged.add(i);
         if (n.type === 'bomb') continue;          // dodged hazard — no penalty (matches P1)
         P.counts.miss++; P.combo = 0;
@@ -7042,7 +7114,7 @@
       _tick: function () { p2PollPad(); },                    // one input poll (reads navigator.getGamepads)
       _scoreTick: function () {                               // one scoring frame WITHOUT rAF (sustains + miss pass)
         const t = songTime(), jt = t - audioOffset, diff = DIFFICULTY[difficulty];
-        for (let i = 0; i < notes.length; i++) { const n = notes[i]; if (P.judged.has(i)) continue; if (jt <= n.time + diff.hitWindow) continue; P.judged.add(i); if (n.type === 'bomb') continue; P.counts.miss++; P.combo = 0; _p2push(n.lane, 'm'); }
+        for (let i = 0; i < notes.length; i++) { const n = notes[i]; if (P.judged.has(i)) continue; if (jt <= n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold') ? 0 : 0.06)) continue; P.judged.add(i); if (n.type === 'bomb') continue; P.counts.miss++; P.combo = 0; _p2push(n.lane, 'm'); }
       }
     };
     _p2 = api;
