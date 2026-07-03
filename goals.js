@@ -23,13 +23,19 @@
     var mm = ('0' + (d.getMonth() + 1)).slice(-2), dd = ('0' + d.getDate()).slice(-2);
     return d.getFullYear() + '-' + mm + '-' + dd;
   }
-  // ISO week key — same math as catalog.js _isoWeekKey() (catalog.js ~168-173), duplicated verbatim.
+  // ISO week key — same ALGORITHM as catalog.js _isoWeekKey() but computed in LOCAL time (not UTC),
+  // ON PURPOSE (build110 review): dayKey() above is local, and pairing a UTC week-key with a local
+  // day-key made checkRollover() flip the week EARLY for US timezones — a player in UTC-7 who plays
+  // Sunday after ~5pm local (= Mon 00:00 UTC) had this return next week's key while their local week
+  // was still going, zeroing their weekly-goal progress hours before their week actually ended. Local
+  // fields keep the weekly boundary on the player's own Monday. (This is rr_goals.weekKey, independent
+  // of catalog.js's UTC rr_bonus_week — they don't need to match.)
   function isoWeekKey() {
-    var d = new Date(); var day = (d.getUTCDay() + 6) % 7;
-    var t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day + 3));
-    var w1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
-    var wk = 1 + Math.round(((t - w1) / 86400000 - 3 + ((w1.getUTCDay() + 6) % 7)) / 7);
-    return t.getUTCFullYear() + '-W' + wk;
+    var d = new Date(); var day = (d.getDay() + 6) % 7;
+    var t = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + 3);
+    var w1 = new Date(t.getFullYear(), 0, 4);
+    var wk = 1 + Math.round(((t - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7);
+    return t.getFullYear() + '-W' + wk;
   }
   // yesterday's day-key relative to a given day-key (used for streak continuity check).
   function prevDayKey(fromKey) {
@@ -44,7 +50,7 @@
 
   // ---- storage plumbing ----
   function load(key, def) {
-    try { var v = JSON.parse(localStorage.getItem(key) || 'null'); return (v && typeof v === 'object') ? v : def(); }
+    try { var v = JSON.parse(localStorage.getItem(key) || 'null'); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : def(); }   // build110 review: !Array.isArray — typeof []==='object', so a bare JSON array would be accepted then stringify back to "[]", silently dropping all named state on the next save
     catch (e) { return def(); }
   }
   function save(key, obj) { try { localStorage.setItem(key, JSON.stringify(obj)); } catch (e) {} }
@@ -130,7 +136,7 @@
     3: 'namecolor:bronze',
     5: 'noteskin:embertrail',
     8: 'flair:badgeframe_anim',
-    12: 'namecolor:rare_violet',
+    12: 'namecolor:rare_crimson',
     15: 'noteskin:exclusive_15',
     20: 'flair:animated_badge'
   };
@@ -264,7 +270,11 @@
   function claimWeeklyIfEligible() {
     var g = loadGoals();
     if (g.claimedWeekly) return g;
-    if ((g.weekLevels || 0) >= WEEKLY_LEVELS && (g.weekMp || 0) >= WEEKLY_MP) {
+    // build110 review: weekLevels/weekMp only receive a day's total at the NEXT day's rollover, so TODAY's
+    // live g.levels/g.mp must be added in — else a player who hits 15/10 in a single session gets no +200 XP
+    // that day (it'd wait until tomorrow's first play, or the week-rollover grace payout). Once claimed here,
+    // claimedWeekly gates any re-claim when tomorrow's rollover folds g.levels into weekLevels (sum stays consistent).
+    if (((g.weekLevels || 0) + (g.levels || 0)) >= WEEKLY_LEVELS && ((g.weekMp || 0) + (g.mp || 0)) >= WEEKLY_MP) {
       g.claimedWeekly = true;
       saveGoals(g);
       grantXp(200, 'Weekly Goal');
