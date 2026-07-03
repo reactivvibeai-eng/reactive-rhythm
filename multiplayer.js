@@ -1245,6 +1245,7 @@
       if (tKnot) { tKnot.style.left = tugP + '%'; tKnot.classList.toggle('you-lead', _tugX > 0.04); tKnot.classList.toggle('opp-lead', _tugX < -0.04); }
       tug.classList.toggle('you-tide', _tugX > 0.04);     // under-glow tide follows the leader
       tug.classList.toggle('opp-tide', _tugX < -0.04);
+      tug.classList.toggle('hot', Math.abs(_tugX) > 0.5);  // build118 p1: near-blowout lead heat/glow (pure CSS)
       // 2.3 endgame heat — honest photo-finish escalation; a blowout stays calm BY DESIGN (no class churn: _wasEnd/_wasPhoto)
       var endgT = Math.max(myP, _oppEase.pr) >= 0.9;
       if (endgT !== _wasEnd) { _wasEnd = endgT; tug.classList.toggle('endgame', endgT); }
@@ -1256,7 +1257,11 @@
         _tugFlipAt = nowT;
         if (!_tugRM) {                                    // reduce-motion flip = the instant you-lead/opp-lead color swap above
           if (!_tugLite) _tugSpawnFlip(tugP, sgnT);
-          if (tKnot) { tKnot.classList.remove('flip'); void tKnot.offsetWidth; tKnot.classList.add('flip'); setTimeout(function () { var k = $('vs-tug-knot'); if (k) k.classList.remove('flip'); }, 260); }
+          _tugJolt(tug);                                   // build118 p1: every flip now shoves the bar (was impulse-only) — sells a physical "shove" simultaneous with the spark burst
+          if (tKnot) {
+            tKnot.classList.remove('flip', 'shove'); void tKnot.offsetWidth; tKnot.classList.add('flip', 'shove');
+            setTimeout(function () { var k = $('vs-tug-knot'); if (k) k.classList.remove('flip', 'shove'); }, 260);
+          }
         }
       }
       if (sgnT !== 0) _tugSign = sgnT;
@@ -1269,7 +1274,13 @@
         var dAr = Math.round(stt.score - _oppEase.sc);
         tug.setAttribute('aria-label', 'Versus score bar: ' + (dAr > 150 ? 'you lead by ' + dAr.toLocaleString() : dAr < -150 ? 'Rival leads by ' + Math.abs(dAr).toLocaleString() : 'even'));
       }
-      if (!_tugLite && !_tugRM) _tugFxTick(dtT * 1000);   // pooled sparks — sleeps completely (zero ctx work) at zero live sparks
+      if (!_tugLite && !_tugRM) {                          // pooled sparks — sleeps completely (zero ctx work) at zero live sparks
+        // build118 p1: ambient clash sparks — continuous low-rate emitter gated on contest intensity (spring
+        // velocity), additive to the existing one-shot flip burst. Reuses the SAME pool/canvas — no new state.
+        var _clashInt = Math.min(1, Math.abs(_tugV) / 0.6);
+        if (_clashInt > 0.15 && Math.random() < _clashInt * 0.5) _tugSpawnClash(tugP);
+        _tugFxTick(dtT * 1000);
+      }
     }
   }
   // pkg2 helpers — jolt shudder, lead-flip spark burst, pooled spark tick (24 slots, canvas ONLY for sparks)
@@ -1283,7 +1294,7 @@
     var w = cv.clientWidth || 0; if (!w) return;
     if (cv.width !== w) { cv.width = w; cv.height = 44; }
     var x0 = tugP / 100 * w, n = 0;
-    for (var i = 0; i < _tugSpk.length && n < 10; i++) {
+    for (var i = 0; i < _tugSpk.length && n < 16; i++) {  // build118 p1: 10→16 particles — a bigger, more satisfying shove burst
       var P = _tugSpk[i]; if (P.on) continue;
       P.on = true; n++;
       P.x = x0; P.y = 9 + Math.random() * 6;
@@ -1292,6 +1303,27 @@
       P.vy = -(30 + Math.random() * 60);
       P.max = P.life = 200 + Math.random() * 120;
       P.cr = dir < 0;                                     // crimson when the rival takes the front, gold when you do
+    }
+    _tugFxDirty = true;
+  }
+  // build118 p1: ambient clash-at-the-seam sparks — low-rate continuous emitter (0-1/frame, caller-gated on
+  // intensity) using the SAME pool as _tugSpawnFlip. Smaller vy spread than the flip burst (a "sizzle" not a
+  // "shove"), colored by the CURRENT leader sign (not a flip direction — there may be no flip in progress).
+  function _tugSpawnClash(tugP) {
+    var cv = $('vs-tug-fx'); if (!cv) return;
+    var w = cv.clientWidth || 0; if (!w) return;
+    if (cv.width !== w) { cv.width = w; cv.height = 44; }
+    var x0 = tugP / 100 * w;
+    for (var i = 0; i < _tugSpk.length; i++) {
+      var P = _tugSpk[i]; if (P.on) continue;
+      P.on = true;
+      P.x = x0 + (Math.random() * 6 - 3); P.y = 9 + Math.random() * 6;
+      var sp = 20 + Math.random() * 60;                    // narrower spread than a flip burst
+      P.vx = (Math.random() < 0.5 ? 1 : -1) * sp;
+      P.vy = -(16 + Math.random() * 30);
+      P.max = P.life = 120 + Math.random() * 80;           // shorter-lived — a sizzle, not a shower
+      P.cr = _tugSign < 0;                                 // colored by the CURRENT leader, not a flip dir
+      break;                                                // spawn exactly one slot per call (caller caps to ≤1/frame)
     }
     _tugFxDirty = true;
   }
