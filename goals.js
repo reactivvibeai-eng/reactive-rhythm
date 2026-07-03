@@ -191,7 +191,16 @@
   }
 
   // ---- rollover: runs once per session boot AND once per completed run (spec §1.6) ----
+  var _rolling = false;
   function checkRollover() {
+    // build112 review: reentrancy guard. checkRollover is now also called from the render path (paintGoalsCard/
+    // renderGoalsTrack). The weekly grace-payout below calls grantXp(200), which synchronously dispatches
+    // 'rr-levelup'; a listener repaints the goals card → calls checkRollover AGAIN before this call's saveGoals()
+    // has landed → it re-reads the not-yet-saved disk state, re-crosses the same weekly threshold, and double-grants
+    // +200 XP (and a second level-up). Serialize: a reentrant call is a no-op read; the outer call owns the write.
+    if (_rolling) return loadGoals();
+    _rolling = true;
+    try {
     var g = loadGoals();
     var today = dayKey();
     var changed = false;
@@ -217,6 +226,7 @@
     }
     if (changed) saveGoals(g);
     return g;
+    } finally { _rolling = false; }
   }
 
   // ---- streak update: only called when today's Daily Goal is FIRST claimed today (spec §1.6 step 3) ----

@@ -1782,7 +1782,7 @@
     // handlers (navigator.share needs the transient activation of the click itself). Loser framing flips the
     // label — the revenge-summon is the half that converts. Battle link ONLY on rooms a stranger may enter:
     // never priv (qm matched rooms are priv:true), never show, and only while the room is still open.
-    _lastVerdict = { win: win, draw: draw, me: me, op: op, oppName: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival' };
+    if (!spectating) _lastVerdict = { win: win, draw: draw, me: me, op: op, oppName: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival' };   // build112 review: a normal-room spectator computes win=false (their myFinal={score:0}) — do NOT stash it, else the new VIEW LAST RESULT button would replay a fake "YOU LOSE" for a match they only watched (every sibling line here is already !spectating-gated)
     var _sw = $('mpx-share-w');
     if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); (_sw.querySelector('.lbl') || _sw).textContent = draw ? 'SHARE THE DRAW' : (win ? 'SHARE THE W' : 'RUN IT BACK'); }   // pkg1: label writes target .lbl (the 14px camera SVG survives repaints); emoji retired
     var _cb = $('mpx-copy-battle');
@@ -3215,11 +3215,12 @@
         if (tr) launched = !!RC.launchTrack(tr, { targetScore: target.score, targetName: target.name });
       }
     } catch (e) {}
-    if (!launched) {
+    if (!launched && sel.audioUrl) {   // build112 review: only try the direct-audioUrl fallback when we actually HAVE one. A normal 1v1 pick DELETES sel.audioUrl (trackId-only), so without this guard playUrl(undefined) just rejects into a generic error toast when launchTrack couldn't resolve the cached record.
       try { if (window.RhythmGame.setGhostTarget) window.RhythmGame.setGhostTarget({ score: target.score, name: target.name }); } catch (e) {}
       try { window.RhythmGame.playUrl(sel.audioUrl, { id: sel.trackId || null, title: sel.title, artist: sel.artist, artwork: sel.art }); launched = true; }
       catch (e2) { try { window.RhythmGame.setGhostTarget && window.RhythmGame.setGhostTarget(null); } catch (e3) {} banner('mpx-setup-msg', 'Couldn\'t start the track — try again.'); }
     }
+    if (!launched) { try { banner('mpx-setup-msg', 'That track isn\'t ready yet — give it a moment and try again.'); } catch (e4) {} }
     if (launched) _ghostRunActive = true;   // build102y review fix C: park auto-spectate until this run resolves
   }
   // unwind a spectator's watch channel back to the room-waiting screen (room channel stays joined)
