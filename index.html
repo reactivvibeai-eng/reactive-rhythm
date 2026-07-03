@@ -2911,6 +2911,35 @@
   .rr-toast.sev-neutral .rr-toast-ico { color: var(--chrome); }
   html.rr-reduce-motion .rr-toast { transition: opacity .2s ease; transform: translateX(-50%) translateY(0); }
 
+  /* build110: LEVEL-UP / STREAK-MILESTONE celebration toast — reuses the .rbadge.gradeup gold/crimson
+     visual language already proven on the results screen (no new visual language invented). Centered,
+     auto-dismissing, non-blocking (pointer-events:none so it never eats a click mid-session). */
+  #levelup-toast {
+    position: fixed; left: 50%; top: 18%; transform: translate(-50%, -12px) scale(0.92);
+    z-index: 2000; pointer-events: none; text-align: center;
+    padding: 18px 34px; border-radius: 18px;
+    background: linear-gradient(180deg, rgba(30,14,10,0.94), rgba(14,7,6,0.96));
+    border: 1px solid rgba(224,169,63,0.6);
+    box-shadow: 0 0 0 1px rgba(255,31,46,0.18) inset, 0 18px 50px rgba(0,0,0,0.6), 0 0 40px rgba(224,169,63,0.35);
+    opacity: 0; transition: opacity .28s cubic-bezier(.2,1,.3,1), transform .32s cubic-bezier(.2,1.4,.3,1);
+  }
+  #levelup-toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  #levelup-toast .lut-eyebrow {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.3em; text-transform: uppercase; color: var(--crimson);
+    text-shadow: 0 0 14px rgba(255,31,46,0.5);
+  }
+  #levelup-toast .lut-main {
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: clamp(22px, 4vw, 34px);
+    letter-spacing: 0.04em; color: #f4d488; margin-top: 4px;
+    text-shadow: 0 0 22px rgba(224,169,63,0.55), 0 2px 0 rgba(0,0,0,0.45);
+  }
+  #levelup-toast .lut-sub {
+    font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #cdbf9a; margin-top: 6px;
+  }
+  html.rr-reduce-motion #levelup-toast { transition: opacity .2s ease; transform: translate(-50%, 0) scale(1); }
+
   /* ---------- Sparks balance chip + identity (library top bar) ---------- */
   .rr-idwrap { display: flex; align-items: center; gap: 9px; }
   .rr-sparks {
@@ -10822,6 +10851,53 @@
   })();
   // showHub() calls paintDailyRift through this thin shim (defined above as window.__rrPaintDailyRift).
   function paintDailyRift() { try { if (window.__rrPaintDailyRift) window.__rrPaintDailyRift(); } catch (e) {} }
+
+  // ===========================================================================
+  // build110 Phase 3: LEVEL-UP + STREAK-MILESTONE celebration toast.
+  // goals.js is a pure ledger (no DOM) — it dispatches document CustomEvents ('rr-levelup',
+  // 'rr-streak-milestone', 'rr-streak-freeze-used') and this listens + paints. Dynamically-created
+  // element (mirrors game.js showToast's #rr-toast pattern) — auto-dismisses, never blocks input.
+  // ===========================================================================
+  (function () {
+    var el = null, timer = null;
+    function ensureEl() {
+      if (el) return el;
+      el = document.createElement('div');
+      el.id = 'levelup-toast';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.innerHTML = '<div class="lut-eyebrow"></div><div class="lut-main"></div><div class="lut-sub"></div>';
+      document.body.appendChild(el);
+      return el;
+    }
+    function fire(eyebrow, main, sub) {
+      var node = ensureEl();
+      node.querySelector('.lut-eyebrow').textContent = eyebrow;
+      node.querySelector('.lut-main').textContent = main;
+      node.querySelector('.lut-sub').textContent = sub || '';
+      requestAnimationFrame(function () { node.classList.add('show'); });
+      clearTimeout(timer);
+      timer = setTimeout(function () { node.classList.remove('show'); }, 3200);
+    }
+    document.addEventListener('rr-levelup', function (ev) {
+      var d = (ev && ev.detail) || {};
+      fire('LEVEL UP', 'LEVEL ' + (d.level || '?'), 'Keep playing — your rank climbs too');
+    });
+    document.addEventListener('rr-streak-milestone', function (ev) {
+      var d = (ev && ev.detail) || {};
+      var sub = d.item ? 'New cosmetic unlocked' : 'Streak milestone reached';
+      fire('STREAK MILESTONE', (d.days || '?') + '-DAY FLAME', sub);
+    });
+    document.addEventListener('rr-streak-freeze-used', function () {
+      fire('STREAK FREEZE USED', 'YOUR FLAME IS SAFE', 'Missed a day — the freeze covered you');
+    });
+    document.addEventListener('rr-daily-goal-complete', function () {
+      try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Daily Goal complete — +50 XP', 'success'); } catch (e) {}
+    });
+    document.addEventListener('rr-weekly-goal-complete', function () {
+      try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Weekly Goal complete — +200 XP', 'success'); } catch (e) {}
+    });
+  })();
 
   var mb = $('menu-back'); if (mb) mb.addEventListener('click', showHub);
   var pb = $('mp-back');   if (pb) pb.addEventListener('click', showHub);
