@@ -170,6 +170,32 @@
     };
   }
 
+  // build119 p3: MUTE enforcement — reads the flag index.html's RhythmSanctions module sets from the live
+  // GET /sanctions/me `mute` object (see index.html's isMuted()/muteInfo(), themselves fed by catalog.js's
+  // getSanctions()). Re-validated live here too (not just trusted from the flag) so a mute that lapsed
+  // mid-session can't linger after its expires_at just because RhythmSanctions hasn't re-fetched yet. Degrades
+  // cleanly to "not muted" if the module isn't loaded or the mute object is absent/malformed — chat behaves
+  // exactly as it does today for anyone who was never muted.
+  function _liveMuteInfo() {
+    try {
+      if (window.RhythmSanctions && window.RhythmSanctions.muteInfo) return window.RhythmSanctions.muteInfo();
+    } catch (e) {}
+    return null;
+  }
+  function _isSelfMuted() {
+    var m = _liveMuteInfo();
+    if (!m) return false;
+    if (!m.expires_at) return true;   // no expiry on the mute object itself = treat as active (server always sets one per contract, but don't send on a malformed record)
+    try { return Date.now() < new Date(m.expires_at).getTime(); } catch (e) { return true; }
+  }
+  function _muteHintText() {
+    var m = _liveMuteInfo();
+    if (!m) return 'You are muted — try again later';
+    var until = 'later';
+    try { var d = new Date(m.expires_at); if (!isNaN(d.getTime())) until = 'until ' + d.toLocaleString(); } catch (e) {}
+    return "You're muted " + until + (m.message ? (' — ' + m.message) : '');
+  }
+
   // ---- tiny local toast (chat.js is self-contained — doesn't assume game.js loaded yet) ----
   function localToast(msg) {
     try { if (window.RhythmGame && window.RhythmGame.showToast) { window.RhythmGame.showToast(msg, 'neutral'); return; } } catch (e) {}
@@ -354,6 +380,7 @@
 
   function sendLobbyMsg(text) {
     if (!lobby.ch) return;
+    if (_isSelfMuted()) { localToast(_muteHintText()); return; }   // build119 p3: drop the send entirely — never broadcast a muted player's message
     if (!lobby.bucket()) { localToast('Slow down — chat is rate-limited'); return; }
     var clean = filterChatText(String(text).trim().slice(0, 140));
     if (!clean) return;
@@ -441,6 +468,7 @@
 
   function sendRoomMsg(text) {
     if (!room.ch) return;
+    if (_isSelfMuted()) { localToast(_muteHintText()); return; }   // build119 p3: drop the send entirely — never broadcast a muted player's message
     if (!room.bucket()) { localToast('Slow down — chat is rate-limited'); return; }
     var clean = filterChatText(String(text).trim().slice(0, 140));
     if (!clean) return;
@@ -684,6 +712,7 @@
     paintModKebab: paintModKebab,
     applyModMute: applyModMute,
     isMuted: isMuted,
+    isSelfMuted: _isSelfMuted,   // build119 p3: server-side moderation mute (RhythmSanctions), distinct from isMuted (host-side session mute of a PEER)
     recordReportForCircuitBreaker: recordReportForCircuitBreaker,
     openReportModal: function (ctx) { return openReportModal(ctx); }   // stable reference — openReportModal itself is reassigned once (s2 stub -> s4 real impl)
   };
