@@ -279,6 +279,11 @@
   let perspOverride = 0;   // ?persp=N URL override to A/B the highway depth (gh only); 0 = use the profile default
   let warpOverride = -1;   // ?warp=N URL override for the gh neck-recede warp (-1 = use the profile default)
   let counts = { perfect: 0, great: 0, good: 0, miss: 0 };
+  // build108 s4 (owner decision: keep empty presses free — no score/combo/miss penalty — but a masher's rank
+  // should still read as sloppy): count of presses that landed on NO real note in the hit window. DISPLAY-ONLY —
+  // never read by scoring/accFrac/grade/leaderboard-submit; a pure informational signal surfaced in the results
+  // sub-line so spamming every lane can't pass as clean play even though it costs nothing to try.
+  let wastedInputs = 0;
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
   // versus split-screen (P2): a drained hit/miss event buffer + cached mult tier for getRenderFrame()
@@ -2681,6 +2686,7 @@
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
+    wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
     _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
@@ -3062,6 +3068,21 @@
           + '<div style="display:flex;justify-content:space-between;font-size:9px;color:#8a847d;margin-top:2px;font-family:\'JetBrains Mono\',monospace;"><span>EARLY</span><span>on-beat</span><span>LATE</span></div>'
           + '</div>';
         const _rb = $('results-blurb'); if (_rb && _rb.insertAdjacentHTML) _rb.insertAdjacentHTML('afterend', _html);
+      }
+    } catch (e) {}
+    // build108 s4 — SLOPPINESS reflection (owner decision: mashing must earn ZERO score/combo — already true, see
+    // handleHit's empty-press branch — but a masher's RESULTS should still read as sloppy). DISPLAY-ONLY: never
+    // touches score/accFrac/grade/leaderboard-submit (those are computed above from `counts`/`notes.length` alone,
+    // never from wastedInputs). Only shows when the waste rate is meaningfully high relative to real hits, so a
+    // normal player who whiffs a couple of notes never sees a nag.
+    try {
+      const _old2 = document.getElementById('results-sloppy'); if (_old2) _old2.remove();
+      const _realHits = results.notes_hit || 0;
+      if (wastedInputs >= 8 && wastedInputs > _realHits * 0.5) {
+        const _sloppyHtml = '<div id="results-sloppy" style="margin:8px auto 0;max-width:340px;font-size:10.5px;letter-spacing:0.05em;color:#8a847d;font-family:\'JetBrains Mono\',monospace;text-align:center;">'
+          + wastedInputs + ' presses missed every note nearby — button-mashing doesn’t pay off here.</div>';
+        const _anchor2 = document.getElementById('results-timing') || $('results-blurb');
+        if (_anchor2 && _anchor2.insertAdjacentHTML) _anchor2.insertAdjacentHTML('afterend', _sloppyHtml);
       }
     } catch (e) {}
     // build104 s2 — AUTO-CALIBRATION from real play: a whole run's hits already measured the player's device bias
@@ -3798,7 +3819,8 @@
       // build102w: an EMPTY STRUM is FREE. In strum mode, alternate-strumming between notes is normal technique —
       // the whiff dash + whiff SFX + catcher recoil on every stroke read as constant complaints (part of the "weird
       // and tiring" report). Guitar-source empties do NOTHING; keyboard/touch/press-mode keep the build85 cue.
-      if (src === 'guitar') return;
+      if (src === 'guitar') return;   // NOT counted as sloppiness — a strum-mode alternate-strum miss is normal technique, not a mash
+      wastedInputs++;   // build108 s4: anti-mash — display-only tally (see the declaration comment). Never touches score/combo/miss/grade.
       // build89: warm-grey dash (#8a807c, R>=G>=B — brand law); skip the flash if a real judgment fired this frame so the dash can't clobber it
       if (performance.now() - _lastRealJudgeMs > 30) flashJudgment('—', '#8a807c', true);
       playWhiffSfx();
@@ -7348,6 +7370,7 @@
     const P = {
       score: 0, combo: 0, maxCombo: 0,
       counts: { perfect: 0, great: 0, good: 0, miss: 0 },
+      wastedInputs: 0,                 // build108 s4 mirror: P1's display-only sloppiness tally, P2 namespace — never read by scoring
       overdrive: 0, odActive: false,
       judged: new Set(),               // note indices P2 has resolved (hit OR missed) — parallel to P1's notes[].judged
       hitKind: Object.create(null),    // index -> 'perfect'|'great'|'good'|'bomb' (for P2 deck gem fade; display-only)
@@ -7385,7 +7408,7 @@
         const d = Math.abs(n.time - t);
         if (d < targetDiff) { targetDiff = d; target = n; targetIdx = i; }
       }
-      if (!target) return;   // empty press: no combo break, no penalty (matches P1's keyboard-feel whiff guardrail)
+      if (!target) { P.wastedInputs++; return; }   // empty press: no combo break, no penalty (matches P1's keyboard-feel whiff guardrail); build108 s4: tally mirrored, display-only
 
       // BOMB: P2 striking a bomb takes the same penalty the main engine applies (combo reset).
       if (target.type === 'bomb') {
