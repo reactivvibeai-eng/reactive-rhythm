@@ -131,36 +131,58 @@
     return false;
   }
 
-  // XP-level milestone -> unlock map (spec §1.5)
+  // XP-level milestone -> unlock map (spec §1.5). build118 p2: added namefont:*/frame:* alongside the
+  // existing namecolor/noteskin/flair prefixes — same grant plumbing, just new item-type prefixes.
   var XP_UNLOCKS = {
     3: 'namecolor:bronze',
     5: 'noteskin:embertrail',
     8: 'flair:badgeframe_anim',
+    10: 'namefont:rajdhani',
     12: 'namecolor:rare_crimson',
     15: 'noteskin:exclusive_15',
+    18: 'frame:badgeframe',
     20: 'flair:animated_badge'
   };
-  // streak-day milestone -> unlock map (spec §1.5)
+  // streak-day milestone -> unlock map (spec §1.5). build118 p2: added namefont:*/frame:* milestones.
   var STREAK_UNLOCKS = {
     7: 'namecolor:ember',
     14: 'notecolor:embertrail_perm',
+    21: 'namefont:orbitron',
     30: 'flair:accent_decal',
+    45: 'frame:undying_ring',
     60: 'namecolor:whitehot',
     100: 'flair:undying_ring'
   };
+  // build118 p2 (spec item 4 — prestige recognition): a 5th tier beyond flair — a name PREFIX/TITLE tag,
+  // unlocked only when BOTH XP Level 20 AND a 100-day streak are reached (checked from either trigger
+  // site below; grantCosmetic's own arr.indexOf dedup makes this idempotent no matter which fires last).
+  var PRESTIGE_ITEM = 'title:rift_legend';
+  function maybeGrantPrestige() {
+    var lvl = (loadXp().level || 1), days = (loadStreak().count || 0);
+    if (lvl < 20 || days < 100) return;
+    var granted = grantCosmetic(PRESTIGE_ITEM);
+    if (granted) {
+      try { document.dispatchEvent(new CustomEvent('rr-cosmetic-unlock', { detail: { item: PRESTIGE_ITEM, source: 'prestige' } })); } catch (e) {}
+    }
+  }
 
   function unlockForXpLevel(level) {
     var item = XP_UNLOCKS[level];
-    if (!item) return;
-    var granted = grantCosmetic(item);
-    if (granted) {
-      try { document.dispatchEvent(new CustomEvent('rr-cosmetic-unlock', { detail: { item: item, source: 'xp', level: level } })); } catch (e) {}
+    if (item) {
+      var granted = grantCosmetic(item);
+      if (granted) {
+        try { document.dispatchEvent(new CustomEvent('rr-cosmetic-unlock', { detail: { item: item, source: 'xp', level: level } })); } catch (e) {}
+      }
     }
+    if (level >= 20) maybeGrantPrestige();
   }
 
   // streak milestone days that grant a cosmetic (subset of STREAK_UNLOCKS) plus 3 which is
   // toast-only per spec table (no unlock listed at day 3, but it IS a milestone-seen entry).
-  var STREAK_MILESTONE_DAYS = [3, 7, 14, 30, 60, 100];
+  // build118 p2: added 21/45 for the new namefont:orbitron/frame:undying_ring streak unlocks (STREAK_UNLOCKS
+  // below) — every original day (7/14/30/60/100) already carried an item, so new milestones needed new days
+  // rather than overloading an existing one (fireStreakMilestones only grants ONE item per day).
+  var STREAK_MILESTONE_DAYS = [3, 7, 14, 21, 30, 45, 60, 100];
 
   function fireStreakMilestones(streak) {
     streak.milestonesSeen = streak.milestonesSeen || [];
@@ -175,6 +197,7 @@
         try { document.dispatchEvent(new CustomEvent('rr-streak-milestone', { detail: { days: d, item: item || null } })); } catch (e) {}
         // day-30 milestone also resets the freeze re-earn cadence per spec table ("streak freeze re-earn reset")
         if (d === 30) { streak.freezeEarnedAtCount = streak.count; }
+        if (d >= 100) maybeGrantPrestige();   // build118 p2: prestige tag needs BOTH L20 + 100-day streak — check here too (order-independent with the XP-side check)
       }
     });
   }
@@ -368,7 +391,8 @@
     levelForXp: levelForXp,
     DAILY_LEVELS: DAILY_LEVELS, DAILY_MP: DAILY_MP,
     WEEKLY_LEVELS: WEEKLY_LEVELS, WEEKLY_MP: WEEKLY_MP,
-    XP_UNLOCKS: XP_UNLOCKS, STREAK_UNLOCKS: STREAK_UNLOCKS
+    XP_UNLOCKS: XP_UNLOCKS, STREAK_UNLOCKS: STREAK_UNLOCKS,
+    PRESTIGE_ITEM: PRESTIGE_ITEM   // build118 p2: 'title:rift_legend' — L20 + 100-day streak (both required)
   };
 
   // run once at boot (rollover only — never claims/grants on load)

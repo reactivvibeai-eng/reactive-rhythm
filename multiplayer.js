@@ -267,6 +267,17 @@
 
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  // build118 p2: MP-side wrapper for the shared window.RhythmCosmetics.renderPlayerName — falls back to a
+  // plain esc()'d name if the module hasn't loaded (defense-in-depth; index.html always loads it before
+  // multiplayer.js in practice, but a load-order regression must degrade to plain text, never throw/blank).
+  function _rpName(p, opts) {
+    try { if (window.RhythmCosmetics && window.RhythmCosmetics.renderPlayerName) return window.RhythmCosmetics.renderPlayerName(p || {}, opts); } catch (e) {}
+    return esc((p && p.name) || 'Player');
+  }
+  // VS-bar deck/tug labels truncate the opponent's name to 12 chars (pre-existing behavior) — truncate the
+  // NAME only, on a shallow copy, so cosmetic fields (name_color/name_font/flair_id/frame_id) still pass
+  // through to _rpName unchanged.
+  function _oppTrunc12(meta) { return Object.assign({}, meta, { name: String(meta.name || '').slice(0, 12) }); }
   // build111 s4: report-flag glyph for lobby roster rows (crimson/gold/chrome only — no off-brand emoji, matching the visual-overhaul SVG-glyph convention already used for SVG_TROPHY/SVG_PICK below).
   var RRC_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"></path><path d="M5 4h13l-3 4 3 4H5"></path></svg>';
   function newMatchId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -402,10 +413,17 @@
     // build69: this is your DEFAULT when YOU host (quick-match) + the prefill for the Room dialog — NOT a lobby-wide switch.
     banner('mpx-lobby-msg', combatOn ? 'Combat default ON — when YOU host a match your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. Nobody can flip combat for the whole lobby.' : 'Combat default OFF — pure score race when you host. Pick Combat per room when you create one.');
   }
+  // build118 p2: the 4 peer-visible cosmetic fields (name_color/name_font/flair_id/frame_id), read fresh on
+  // every presence heartbeat via the shared window.RhythmCosmetics.fields() so an equip change mid-lobby
+  // propagates on the next heartbeat without a reconnect. Degrades to {} (spread of nothing) if the module
+  // hasn't loaded — every consumer (myPresence/roomSP/matchSP) already tolerates missing cosmetic fields.
+  function _cosmeticFields() {
+    try { return (window.RhythmCosmetics && window.RhythmCosmetics.fields) ? window.RhythmCosmetics.fields() : {}; } catch (e) { return {}; }
+  }
   function myPresence(inMatch) {
-    return { id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch,
+    return Object.assign({ id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch,
       lf: !!QM.looking, room: (room.id || null), hostRoom: (room.id && room.isHost ? room.id : null),
-      tourn: (tour.id || null), hostTourn: (tour.id && tour.isHost ? tour.id : null) };
+      tourn: (tour.id || null), hostTourn: (tour.id && tour.isHost ? tour.id : null) }, _cosmeticFields());
   }
   function reannounce() { try { if (lobbySP) { lobbySP.refresh(); lobby = lobbySP.peers(); onLobbySync(); } } catch (e) {} }
 
@@ -594,7 +612,7 @@
       // build111 s4: report flag on every lobby roster row (peers, not just chat authors/opponents)
       var flag = '<button class="mpx-r-flag" data-report="' + esc(id) + '" data-reportname="' + esc(p.name || 'Player') + '" type="button" aria-label="Report ' + esc(p.name || 'this player') + '">' + RRC_FLAG_SVG + '</button>';
       return '<div class="mpx-row' + (incoming[id] ? ' incoming' : '') + '">' + av +
-        '<span class="mpx-r-meta"><span class="mpx-r-name">' + esc(p.name || 'Player') + badge + (revenge ? ' <span class="mpx-revenge">REVENGE</span>' : '') + '</span>' +
+        '<span class="mpx-r-meta"><span class="mpx-r-name">' + _rpName(p) + badge + (revenge ? ' <span class="mpx-revenge">REVENGE</span>' : '') + '</span>' +
         '<span class="mpx-r-sub">' + (incoming[id] ? 'wants to duel you' : (inMatch ? 'in a match' : 'online')) + h2h + '</span></span>' +
         actions + flag + '</div>';
     }).join('');
@@ -653,7 +671,7 @@
     sel = { trackId: null, title: null, artist: null, art: null, difficulty: sel.difficulty || 'medium', demo: false };
     setLobbyInMatch(true);
     matchCh = supa.channel('rr-match-' + mid, { config: { broadcast: { self: false } } });
-    matchSP = softPresence(matchCh, function () { return { id: ME.id, name: ME.name, role: matchRole, at: Date.now() }; }, onMatchPeers);
+    matchSP = softPresence(matchCh, function () { return Object.assign({ id: ME.id, name: ME.name, role: matchRole, at: Date.now() }, _cosmeticFields()); }, onMatchPeers);
     matchCh.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });
     matchCh.on('broadcast', { event: 'ready' }, function (m) { onReady(m.payload); });
     matchCh.on('broadcast', { event: 'start' }, function (m) { onStart(m.payload); });
@@ -1061,7 +1079,7 @@
     var deck = _vsEl('div', 'vs-opp-deck');
     deck.appendChild(_vsEl('canvas', 'vs-opp-hwy'));
     var oppScore = _vsEl('div', 'vs-opp-score');
-    var ol = _vsEl('div', null, 'vs-lab'); ol.textContent = (oppMeta && oppMeta.name ? oppMeta.name.slice(0, 12) : 'OPPONENT'); oppScore.appendChild(ol);
+    var ol = _vsEl('div', null, 'vs-lab'); ol.innerHTML = oppMeta && oppMeta.name ? _rpName(_oppTrunc12(oppMeta), { compact: true }) : 'OPPONENT'; oppScore.appendChild(ol);
     var ov = _vsEl('div', 'vs-opp-val', 'vs-val'); ov.textContent = '0'; oppScore.appendChild(ov);
     deck.appendChild(oppScore);
     var oMult = _vsEl('div', 'vs-opp-mult', 'vs-opp-pill'); oMult.textContent = '1x'; deck.appendChild(oMult);
@@ -1097,7 +1115,7 @@
     tug.appendChild(tTrack);
     tug.appendChild(_vsEl('div', 'vs-tug-notch'));              // the always-visible "even" datum
     var tKnot = _vsEl('div', 'vs-tug-knot'); tKnot.appendChild(_vsEl('i')); tug.appendChild(tKnot);
-    var tlO = _vsEl('span', null, 'vs-tug-lab opp'); tlO.textContent = (oppMeta && oppMeta.name ? oppMeta.name.slice(0, 12) : 'OPPONENT'); tug.appendChild(tlO);
+    var tlO = _vsEl('span', null, 'vs-tug-lab opp'); tlO.innerHTML = oppMeta && oppMeta.name ? _rpName(_oppTrunc12(oppMeta), { compact: true }) : 'OPPONENT'; tug.appendChild(tlO);
     var tlY = _vsEl('span', null, 'vs-tug-lab you'); tlY.textContent = 'YOU'; tug.appendChild(tlY);
     var chO = _vsEl('span', null, 'vs-tug-chip opp'); chO.textContent = (oppMeta && oppMeta.bot) ? 'AI' : String((oppMeta && oppMeta.name) || 'R').slice(0, 1).toUpperCase(); tug.appendChild(chO);
     var chY = _vsEl('span', null, 'vs-tug-chip you'); chY.textContent = 'YOU'; tug.appendChild(chY);
@@ -2646,7 +2664,7 @@
     room.id = rid; room.seat = seat;
     var ch = supa.channel('rr-room-' + rid, { config: { broadcast: { self: false } } });
     room.ch = ch;
-    roomSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }; }, onRoomPeers);
+    roomSP = softPresence(ch, function () { return Object.assign({ id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }, _cosmeticFields()); }, onRoomPeers);
     // build111 s2: room TEXT CHAT — same channel, new 'chat-msg' broadcast event. teardownRoomChat() runs first
     // inside mountRoomChat (a fresh join/rejoin never leaks a prior room's ring buffer). Panel mounts into the
     // waiting-room step, right after #mpx-roomctx; hidden the instant room-start fires (see onRoomStart).
@@ -4084,7 +4102,7 @@
       }
     } catch (e) {}
     if (!tour._joinAt) tour._joinAt = Date.now();   // build42: STABLE join time → deterministic host election (migration)
-    tourSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, at: tour._joinAt }; }, onTourPeers);
+    tourSP = softPresence(ch, function () { return Object.assign({ id: ME.id, name: ME.name, avatar: ME.avatar, at: tour._joinAt }, _cosmeticFields()); }, onTourPeers);
     ch.on('broadcast', { event: 't-snapshot' }, function (m) { applyTourSnapshot(m.payload); });   // build42: host state-heartbeat
     ch.on('broadcast', { event: 't-track' },  function (m) { onTourTrack(m.payload); });
     ch.on('broadcast', { event: 't-round' },  function (m) { onTourRound(m.payload); });

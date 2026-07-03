@@ -133,6 +133,20 @@
   // =========================================================================
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); };
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
+  // build118 p2: shared cosmetic name renderer — falls back to plain esc()'d text if the module hasn't
+  // loaded (defense-in-depth; RhythmCosmetics is defined inline in index.html, well before any chat row
+  // actually renders, but a load-order regression must never throw or blank a message row).
+  function _rpName(m, opts) {
+    try { if (window.RhythmCosmetics && window.RhythmCosmetics.renderPlayerName) return window.RhythmCosmetics.renderPlayerName(m || {}, opts); } catch (e) {}
+    return '<span class="rrc-name">' + esc((m && m.name) || 'Player') + '</span>';
+  }
+  // build118 p2: my currently-equipped cosmetic fields, attached to every outgoing chat message so peers'
+  // rowHtml can render them via _rpName. Same shape as multiplayer.js's presence payload (name_color/
+  // name_font/flair_id/frame_id) — kept minimal for chat (flair/frame are dropped at render time anyway
+  // since chat rows always render compact; sent here regardless so a future non-compact chat skin can use them).
+  function _myCosmeticFields() {
+    try { return (window.RhythmCosmetics && window.RhythmCosmetics.fields) ? window.RhythmCosmetics.fields() : {}; } catch (e) { return {}; }
+  }
   // build111 s4 defines the real modal — forward-declared here so s2's flag-button wiring (chat rows render a
   // report flag) never throws before s4 lands. Reassigned near the bottom of this file.
   var openReportModal = function () {};
@@ -179,8 +193,14 @@
     var av = '<span class="rrc-av">' + esc(initial(m.name)) + '</span>';
     var flag = (opts && opts.onReport && m.id !== (opts.meId || '')) ?
       '<button class="rrc-flag" type="button" data-flag="' + esc(m.id) + '" data-flagname="' + esc(m.name || 'Player') + '" aria-label="Report ' + esc(m.name || 'this player') + '">' + FLAG_SVG + '</button>' : '';
+    // build118 p2: sender name now runs through the shared cosmetics renderer (name_color/name_font, if the
+    // message carries them — see sendLobbyMsg/sendRoomMsg below) — compact mode (no flair/frame icon) to
+    // keep the dense scrolling chat list from growing per-row height. rrc-name class kept on the fallback
+    // path (chat.js's own CSS targets .rrc-name; renderPlayerName's compact output uses .rpn-nm instead,
+    // styled to inherit — see the .rrc-meta .rpn-nm rule added to chat.js's injected CSS below).
+    var nameHtml = _rpName(m, { compact: true });
     return '<div class="rrc-row' + hostTag + '" data-mid="' + esc(m.id) + '">' + av +
-      '<span class="rrc-body"><span class="rrc-meta"><span class="rrc-name">' + esc(m.name || 'Player') + '</span><span class="rrc-t">' + relTime(m.at) + '</span></span>' +
+      '<span class="rrc-body"><span class="rrc-meta">' + nameHtml + '<span class="rrc-t">' + relTime(m.at) + '</span></span>' +
       '<span class="rrc-txt">' + esc(m.text) + '</span></span>' + flag + '</div>';
   }
   var FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"></path><path d="M5 4h13l-3 4 3 4H5"></path></svg>';
@@ -215,6 +235,12 @@
       '.rrc-meta{display:flex;align-items:baseline;gap:6px;}' +
       '.rrc-name{font-family:"Oxanium",sans-serif;font-weight:700;font-size:11.5px;color:#dad7d2;}' +
       '.rrc-row.host .rrc-name{color:#e0a93f;}' +
+      /* build118 p2: renderPlayerName's compact output (.rpn/.rpn-nm) replaces .rrc-name for cosmetic-carrying
+         rows — inherit the same size/weight/color baseline; an inline style (equipped name-color/font) wins
+         over both this and the .host gold override, same cascade rule as everywhere else renderPlayerName is used. */
+      '.rrc-meta .rpn{display:inline-flex;min-width:0;}' +
+      '.rrc-meta .rpn-nm{font-family:"Oxanium",sans-serif;font-weight:700;font-size:11.5px;color:#dad7d2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;}' +
+      '.rrc-row.host .rrc-meta .rpn-nm{color:#e0a93f;}' +
       '.rrc-t{font-size:9.5px;color:#7d736e;letter-spacing:.03em;}' +
       '.rrc-txt{font-size:12.5px;color:#f4eef0;word-break:break-word;line-height:1.35;}' +
       '.rrc-flag{flex:0 0 auto;background:none;border:none;color:#7d736e;cursor:pointer;padding:2px;opacity:.6;}' +
@@ -331,7 +357,7 @@
     if (!lobby.bucket()) { localToast('Slow down — chat is rate-limited'); return; }
     var clean = filterChatText(String(text).trim().slice(0, 140));
     if (!clean) return;
-    var payload = { id: lobby.meId, name: lobby.meName, text: clean, at: Date.now() };
+    var payload = Object.assign({ id: lobby.meId, name: lobby.meName, text: clean, at: Date.now() }, _myCosmeticFields());
     try { lobby.ch.send({ type: 'broadcast', event: 'chat-msg', payload: payload }); } catch (e) { return; }
     pushLobbyRow(payload);   // optimistic local echo (broadcast self:false — sender doesn't get its own message back)
   }
@@ -347,7 +373,8 @@
     try {
       ch.on('broadcast', { event: 'chat-msg' }, function (m) {
         var p = m && m.payload; if (!p || !p.id || !p.text) return;
-        pushLobbyRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });   // build111 review: a modified client can broadcast a slur as its display NAME — filter it, not just escape it
+        pushLobbyRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now(),
+          name_color: p.name_color || '', name_font: p.name_font || '', flair_id: p.flair_id || '', frame_id: p.frame_id || '' });   // build111 review: a modified client can broadcast a slur as its display NAME — filter it, not just escape it. build118 p2: pass through the sender's cosmetic fields (never trusted for anything but display — renderPlayerName only ever reads a whitelisted id set, never raw HTML)
       });
     } catch (e) {}
   }
@@ -417,7 +444,7 @@
     if (!room.bucket()) { localToast('Slow down — chat is rate-limited'); return; }
     var clean = filterChatText(String(text).trim().slice(0, 140));
     if (!clean) return;
-    var payload = { id: room.meId, name: room.meName, text: clean, at: Date.now() };
+    var payload = Object.assign({ id: room.meId, name: room.meName, text: clean, at: Date.now() }, _myCosmeticFields());
     try { room.ch.send({ type: 'broadcast', event: 'chat-msg', payload: payload }); } catch (e) { return; }
     pushRoomRow(payload);
   }
@@ -436,7 +463,8 @@
     try {
       ch.on('broadcast', { event: 'chat-msg' }, function (m) {
         var p = m && m.payload; if (!p || !p.id || !p.text) return;
-        pushRoomRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now() });   // build111 review: filter the broadcast display NAME, not just escape it
+        pushRoomRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now(),
+          name_color: p.name_color || '', name_font: p.name_font || '', flair_id: p.flair_id || '', frame_id: p.frame_id || '' });   // build111 review: filter the broadcast display NAME, not just escape it. build118 p2: pass through cosmetic fields
       });
     } catch (e) {}
   }
