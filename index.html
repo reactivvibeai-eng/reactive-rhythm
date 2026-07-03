@@ -4242,6 +4242,41 @@
   html.rr-reduce-motion .mpx-tour-hero .mth-cta { transition: none; }
   html.rr-reduce-motion .mpx-tour-hero .mth-cta:hover { transform: none; }
 
+  /* build105 PHASE-3: ONLINE NOW roster — site-wide presence rows + outline-first BATTLE CALL
+     (COLOR LAW: a roster can't each carry a filled crimson act; crimson fills only while CALLING) */
+  .mpx-online { width: 100%; box-sizing: border-box; }
+  .mpx-online[hidden] { display: none; }
+  .mpx-online-list { display: flex; flex-direction: column; max-height: 176px; overflow-y: auto; scrollbar-width: thin; }
+  .mpx-online-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; }
+  .mpx-online-row + .mpx-online-row { border-top: 1px solid var(--mx-line); }
+  .mpx-online-av { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%; background: rgba(255,255,255,0.04) center/cover no-repeat;
+    border: 1px solid rgba(222,216,212,0.18); display: grid; place-items: center; color: #9c918e; overflow: hidden; }
+  .mpx-online-av svg { width: 15px; height: 15px; }
+  .mpx-online-name { flex: 1; min-width: 0; font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 13px; color: var(--ink, #f3eceb);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .mpx-online-call { flex: 0 0 auto; padding: 6px 12px; border-radius: 9px; cursor: pointer; font-family: 'Oxanium', sans-serif; font-weight: 800;
+    font-size: 11px; letter-spacing: 0.05em; color: #ff8d96; background: transparent; border: 1px solid rgba(255,31,46,0.5);
+    transition: color .12s ease, background .12s ease, border-color .12s ease; white-space: nowrap; }
+  .mpx-online-call:hover:not(:disabled), .mpx-online-call:focus-visible:not(:disabled) { color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); }
+  .mpx-online-call.calling { color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); }
+  .mpx-online-call.ringing { color: #ffd98c; border-color: rgba(224,169,63,0.55); background: rgba(224,169,63,0.08); }
+  .mpx-online-call.dim { color: #9c918e; border-color: var(--mx-line, rgba(222,216,212,0.11)); background: transparent; }
+  .mpx-online-call:disabled { cursor: default; }
+  .mpx-online-empty { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; padding: 4px 2px 2px; text-align: left; }
+  .mpx-online-empty[hidden] { display: none; }
+  /* build105 stretch: in-game battle-call RING card (multiplayer.js builds it; pulse killed under reduce-motion) */
+  #mpx-ring { position: fixed; right: 18px; bottom: 18px; z-index: 320; width: min(320px, 92vw); padding: 14px 16px; border-radius: 16px; text-align: left;
+    background: linear-gradient(180deg, #1c0e0f, #120a0b); border: 1px solid rgba(255,31,46,0.5);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.7), 0 0 28px -10px rgba(255,31,46,0.6); animation: qmPulse 1.6s ease-in-out infinite; }
+  html.rr-reduce-motion #mpx-ring { animation: none; }
+  #mpx-ring .mr-head { font: 700 10px 'JetBrains Mono', monospace; letter-spacing: 0.22em; color: #ff8d96; margin-bottom: 6px; }
+  #mpx-ring .mr-name { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 16px; color: #f3eceb; margin-bottom: 10px; }
+  #mpx-ring .mr-btns { display: flex; gap: 8px; }
+  #mpx-ring .mr-accept { flex: 1; padding: 10px 0; border-radius: 10px; border: 1px solid rgba(255,31,46,0.6); cursor: pointer;
+    background: linear-gradient(180deg, #ff2a38, #b3121f); color: #fff; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.08em; }
+  #mpx-ring .mr-decline { flex: 0 0 auto; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--mx-line, rgba(222,216,212,0.18));
+    background: transparent; color: #cdbfae; font-family: 'Chakra Petch', sans-serif; font-size: 12px; cursor: pointer; }
+
   /* build60: header "?" help affordance */
   .mpx-help { position: absolute; top: 14px; right: 16px; z-index: 6; width: 28px; height: 28px; border-radius: 50%;
     display: grid; place-items: center; cursor: pointer; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px;
@@ -4939,6 +4974,17 @@
         <button class="mpx-act-cpu-min" id="mpx-act-npc" type="button">
           <span class="mac-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"></rect><path d="M12 4.5V8M12 4.5a1.4 1.4 0 1 0 0-.05"></path><circle cx="9" cy="13" r="1.2"></circle><circle cx="15" cy="13" r="1.2"></circle><path d="M2.5 12v3M21.5 12v3"></path></svg></span>Practice vs CPU — warm up, no waiting
         </button>
+
+        <!-- build105 PHASE-3: ONLINE NOW — everyone on ReactivVibe right now (site + in-game presence), each row a
+             direct BATTLE CALL into a private room (owner mandate: "pick and choose any people on the website").
+             Painted/refreshed by multiplayer.js (lobby-step activation + 45s while showing); hidden entirely when
+             signed out / 401. Placed in the MAIN lobby flow, not the collapsed drawer — a headline feature can't
+             live behind a disclosure; the capped scroll keeps the hero dominant. -->
+        <div class="mxc mpx-online" id="mpx-online" hidden>
+          <div class="mxh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 3.5 14 14M6.5 17.5 3 21M14 14l3.5 3.5"></path><path d="M20.5 3.5 10 14M17.5 17.5 21 21M10 14l-3.5 3.5"></path></svg>ON REACTIVVIBE NOW<span class="mxh-r" id="mpx-online-n"></span></div>
+          <div class="mpx-online-list" id="mpx-online-list"></div>
+          <div class="mpx-online-empty" id="mpx-online-empty" hidden>No one's on the site right now — share a battle link instead.</div>
+        </div>
 
         <!-- TIER 3 — collapsed "More ways to play" drawer (closed by default) -->
         <button class="mpx-friends-toggle" id="mpx-friends-toggle" type="button" aria-expanded="false" aria-controls="mpx-friends-panel">

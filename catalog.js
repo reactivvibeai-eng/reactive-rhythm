@@ -1782,6 +1782,8 @@
     showInvite,   // build102s (Phase-2 C1): live-show artist call-in — POST /show/invite (token stays module-local here)
     livematchAnnounce, livematchEnd,   // build102x: site Navbar LIVE MATCH chip (review token stays module-local; fire-and-forget)
     matchQueue, matchStatus,           // build102x: server matchmaking queue (authed REST; throws on !ok)
+    presenceOnline, challenge,         // build105: ONLINE NOW roster + direct battle-calls (authed REST; 403/409 distinguishable via the error message)
+    notifRecent,                       // build105 stretch: own-rows battle-call notification probe (null = none/unavailable; self-disables on first RLS failure)
   };
 
   // ===========================================================================
@@ -2027,6 +2029,50 @@
   // Authed REST, THROW on !ok so multiplayer.js can distinguish 401 (signed-out banner) from transient errors.
   async function matchQueue(on) { return api('/match/queue', { method: 'POST', body: { on: !!on }, auth: true }); }
   async function matchStatus(authWaitMs) { return api('/match/status', { auth: true, authWaitMs: authWaitMs || 0 }); }   // v405: optional auth-hydration grace for the ?mpqm=resume boot path
+  // build105 PHASE-3 game-side: ONLINE NOW roster + direct battle-calls (backend live).
+  // GET /presence/online → {users:[{id,name,avatar}]} — signed-in site+game users (<90s heartbeat), caller excluded. Throws on !ok.
+  async function presenceOnline() { return api('/presence/online', { auth: true }); }
+  // POST /challenge — rings the target's SITE (BattleCallAlert; ACCEPT deep-links them into ?mproom=<room_id>).
+  // Errors carry the status in the message (api() format 'API <status> …') so callers can distinguish:
+  // 403 = target's Battle-calls toggle is OFF · 409 = rate-limited (1/20s per caller, 3/min, 60s same-pair dedupe).
+  async function challenge(targetUserId, roomId) { return api('/challenge', { method: 'POST', auth: true, body: { target_user_id: String(targetUserId || ''), room_id: String(roomId || '') } }); }
+  // build105: GAME-SIDE presence heartbeat — puts in-game players on the ONLINE NOW roster too. Mirrors the site
+  // hook semantics: POST /presence/ping every 60s while signed in AND the tab is visible; paused on document.hidden,
+  // an immediate ping on return to visibility. Fire-and-forget, errors swallowed, no-op signed out (getToken null).
+  var _presT = 0;
+  async function _presPing() {
+    try {
+      if (document.hidden || !API_BASE) return;
+      var tk = await getToken(); if (!tk) return;
+      api('/presence/ping', { method: 'POST', auth: true, body: {} }).catch(function () {});
+    } catch (e) {}
+  }
+  function _presStart() {
+    if (_presT) return;
+    _presT = setInterval(_presPing, 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) _presPing(); });
+    _presPing();
+  }
+  try { _presStart(); } catch (e) {}
+  // build105 STRETCH: own-rows notifications probe (the in-game battle-call ring). A REST select with the USER's
+  // JWT (RLS scopes rows to the caller); the FIRST failure of any kind (RLS block, missing table/columns) marks it
+  // unavailable for the whole session — the SITE ring already covers every call, so this degrades to silence.
+  var _notifOK = null;
+  async function notifRecent() {
+    try {
+      if (_notifOK === false) return null;
+      var base = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SUPABASE_URL) || '';
+      var key = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SUPABASE_KEY) || '';
+      if (!base || !key) { _notifOK = false; return null; }
+      var tk = await getToken(); if (!tk) return null;                    // signed out → try again later (not a hard fail)
+      var since = new Date(Date.now() - 120000).toISOString();           // fresh calls only (<2min)
+      var r = await fetch(base.replace(/\/$/, '') + '/rest/v1/notifications?select=*&type=eq.live_match_invite&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=3',
+        { headers: { apikey: key, Authorization: 'Bearer ' + tk } });
+      if (!r.ok) { if (_notifOK === null) _notifOK = false; return null; }
+      _notifOK = true;
+      return await r.json();
+    } catch (e) { if (_notifOK === null) _notifOK = false; return null; }
+  }
   // ---- results auto-return ("Returning to the show in Ns") — armed only while the review track is current ----
   var _rvTimer = 0, _rvPill = null;
   function _cancelReturnCountdown() { if (_rvTimer) { clearInterval(_rvTimer); _rvTimer = 0; } if (_rvPill) { try { _rvPill.remove(); } catch (e) {} _rvPill = null; } }

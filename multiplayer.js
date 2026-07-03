@@ -392,6 +392,7 @@
     });
     if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows
     if (name === 'setup') { try { renderStageRow(); } catch (e) {} }   // v262: render the room STAGE picker when the setup step shows
+    try { if (name === 'lobby') _onlineStart(); else _onlineStop(); } catch (e) {}   // build105: ONLINE NOW polls only while the lobby step shows (stop cold otherwise — qm teardown discipline)
   }
   function banner(id, txt) { var el = $(id); if (!el) return; if (txt) { el.textContent = txt; el.hidden = false; } else { el.hidden = true; el.textContent = ''; } }
   // close any transient full-screen overlay that could occlude a starting round (the first-run How-To at z-260 was
@@ -426,6 +427,7 @@
     try { closeTour(true); } catch (e) {}    // build9: host dissolves / entrant forfeits the bracket
     QM.looking = false;                       // build8: drop quick-match queue
     try { qmStop(true); } catch (e) {}        // build102x: leaving MP stops the server matchmaking search + clears my queue row
+    try { _onlineStop(); } catch (e) {}       // build105: ONLINE NOW polling stops cold with the screen
     teardownMatch();
     try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {}
     lobbyCh = null; lobbySP = null; lobby = {};
@@ -1768,6 +1770,164 @@
     QM.looking = false; paintQuickBtn(); reannounce();
     startMatchChannel(p.mid, 'guest', lobby[p.aId]);  // I'm the callee = guest
   }
+
+  // ===================== build105 PHASE-3: ONLINE NOW roster + direct BATTLE CALLS =====================
+  // Owner mandate: "pick and choose any people that are on the website to battle call them into multiplayer."
+  // GET /presence/online (site+game heartbeats) paints the lobby roster; BATTLE CALL opens a PRIVATE room and
+  // POSTs /challenge — the target's SITE rings and their ACCEPT deep-links back via the normal ?mproom auto-join
+  // (onRoomMeta honors private rooms for pending joins). Polling: fetch on lobby-step activation + every 45s while
+  // the MP screen is active AND the lobby step is showing; stopped cold otherwise (no hidden polling).
+  var _onT = 0, _onBusy = false, _onUsers = [], _onRowState = {};   // _onRowState: uid → {state,label,until} so a 45s repaint can't resurrect a cooling-down button
+  var PERSON_GLYPH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.4" r="3.6"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>';
+  function _lobbyStepShowing() { var el = screen.querySelector('.mpx-step-lobby'); return !!(el && !el.hidden); }
+  function _onlineStart() {
+    if (!_onT) _onT = setInterval(function () { if (activeNow && _lobbyStepShowing()) _onlineFetch(); }, 45000);
+    _onlineFetch();
+  }
+  function _onlineStop() { if (_onT) { clearInterval(_onT); _onT = 0; } }
+  function _onlineFetch() {
+    var box = $('mpx-online'); if (!box) return;
+    if (!ME.signedIn || !(window.RhythmCatalog && window.RhythmCatalog.presenceOnline)) { box.hidden = true; return; }   // signed out → hidden entirely (the sign-in note covers it)
+    if (_onBusy) return; _onBusy = true;
+    window.RhythmCatalog.presenceOnline().then(function (r) {
+      _onBusy = false;
+      renderOnline((r && r.users) || []);
+    }).catch(function () {
+      _onBusy = false;
+      var b2 = $('mpx-online'); if (b2) b2.hidden = true;   // 401/transient → hide quietly, never a nag or a broken card
+    });
+  }
+  function renderOnline(users) {
+    var box = $('mpx-online'), list = $('mpx-online-list'), n = $('mpx-online-n'), emp = $('mpx-online-empty');
+    if (!box || !list) return;
+    _onUsers = (users || []).slice(0, 200);
+    box.hidden = false;
+    if (n) n.textContent = _onUsers.length ? String(_onUsers.length) : '';
+    if (emp) emp.hidden = _onUsers.length !== 0;
+    list.innerHTML = _onUsers.map(function (u, i) {   // esc()/safeUrl() on EVERY server string (peer-supplied names/avatars)
+      var av = u.avatar ? ' style="background-image:url(&quot;' + esc(safeUrl(u.avatar)) + '&quot;)"' : '';
+      return '<div class="mpx-online-row" data-uid="' + esc(String(u.id || '')) + '">' +
+        '<span class="mpx-online-av"' + av + '>' + (u.avatar ? '' : PERSON_GLYPH) + '</span>' +
+        '<span class="mpx-online-name">' + esc(String(u.name || 'Player').slice(0, 24)) + '</span>' +
+        '<button class="mpx-online-call" type="button" data-i="' + i + '">BATTLE CALL</button></div>';
+    }).join('');
+    _onUsers.forEach(function (u) {   // re-apply live cooldown states across repaints
+      var rs = _onRowState[u.id];
+      if (rs && (!rs.until || Date.now() < rs.until)) _paintCallBtn(u.id, rs.state, rs.label);
+    });
+    [].forEach.call(list.querySelectorAll('.mpx-online-call'), function (b) {
+      b.addEventListener('click', function (ev) {
+        if (ev && ev.isTrusted === false) return;   // never a synthetic auto-call (same guard as every MP entry button)
+        var u = _onUsers[+b.getAttribute('data-i')]; if (u) battleCall(u);
+      });
+    });
+  }
+  function _paintCallBtn(uid, state, label) {
+    var row; try { row = screen.querySelector('.mpx-online-row[data-uid="' + CSS.escape(String(uid)) + '"]'); } catch (e) { row = null; }
+    if (!row) return;
+    var b = row.querySelector('.mpx-online-call'); if (!b) return;
+    b.className = 'mpx-online-call' + (state ? ' ' + state : '');
+    b.disabled = state === 'calling' || state === 'ringing' || state === 'dim';
+    b.textContent = label;
+  }
+  function _setRow(uid, state, label, ms) { _onRowState[uid] = { state: state, label: label, until: ms ? Date.now() + ms : 0 }; _paintCallBtn(uid, state, label); }
+  function battleCall(u) {
+    if (!u || !u.id) return;
+    if (!ME.signedIn) { banner('mpx-lobby-msg', 'Sign in to battle-call players.'); return; }
+    var uid = u.id, nm = String(u.name || 'them').slice(0, 24);
+    _setRow(uid, 'calling', 'CALLING…', 15000);
+    // no room yet → open a PRIVATE battle room first (openRoomWithId cancels any live qm search — the v405 guard)
+    try { if (!room.id) openRoomWithId(newRoomId(), { priv: true, name: (ME.name + "'s Battle").slice(0, 28) }); } catch (e) {}
+    if (!room.id) { _setRow(uid, '', 'Try again', 0); banner('mpx-lobby-msg', 'Couldn\'t open a battle room — check your connection and retry.'); return; }
+    window.RhythmCatalog.challenge(uid, room.id).then(function () {
+      _setRow(uid, 'ringing', '✓ RINGING — they\'ve got 45s', 60000);   // row rests ~60s (server dedupes the pair for 60s anyway)
+      setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.state === 'ringing') _setRow(uid, '', 'BATTLE CALL', 0); }, 60000);
+      banner('mpx-setup-msg', nm + ' is ringing — they\'ve got 45s to accept. Pick the song while you wait.');
+    }).catch(function (e) {
+      var m = String((e && e.message) || '');
+      if (/\b403\b/.test(m)) {                       // their Battle-calls toggle is OFF
+        _setRow(uid, 'dim', 'Not taking calls', 3600000);
+        banner('mpx-setup-msg', nm + ' isn\'t taking battle calls right now.');
+      } else if (/\b409\b/.test(m)) {                // rate-limited — re-arm after the 20s window
+        _setRow(uid, 'dim', 'Wait a moment…', 20000);
+        setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.label === 'Wait a moment…') _setRow(uid, '', 'BATTLE CALL', 0); }, 20000);
+        banner('mpx-setup-msg', 'Easy — one battle call every 20 seconds.');
+      } else {
+        _setRow(uid, '', 'Try again', 0);
+        banner('mpx-setup-msg', 'Couldn\'t send the battle call — try again.');
+      }
+    });
+  }
+
+  // ---- build105 STRETCH: the IN-GAME ring — a compact battle-call card + looping ring tone while in MENUS.
+  // Feeds off RhythmCatalog.notifRecent() (own-rows REST probe; self-disables on the first RLS failure, in which
+  // case this whole feature silently never fires — the SITE ring already covers every call). Polls every 30s,
+  // MENUS ONLY (never over #game/#loading), one card at a time, 45s max ring, dedupe by notification id.
+  var _ringT = 0, _ringSeen = {}, _ringUp = false, _ringAudio = null, _ringKillT = 0;
+  function _inMenus() { var g = $('game'), ld = $('loading'); return !((g && g.classList.contains('active')) || (ld && ld.classList.contains('active'))); }
+  function _ringStart() { if (_ringT) return; _ringT = setInterval(_ringPoll, 30000); setTimeout(_ringPoll, 5000); }
+  function _ringPoll() {
+    if (_ringUp || !ME.signedIn || !_inMenus()) return;
+    if (!(window.RhythmCatalog && window.RhythmCatalog.notifRecent)) return;
+    window.RhythmCatalog.notifRecent().then(function (rows) {
+      if (!rows || !rows.length || _ringUp || !_inMenus()) return;
+      for (var i = 0; i < rows.length; i++) {
+        var nrow = rows[i], nid = String(nrow.id != null ? nrow.id : (nrow.created_at || i));
+        if (_ringSeen[nid]) continue;
+        _ringSeen[nid] = 1;
+        if (nrow.read === true || nrow.is_read === true || nrow.read_at) continue;   // honor whichever unread shape exists
+        var d = nrow.data || nrow.payload || nrow.meta || {};
+        if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+        var rid = d.room_id || d.room || null;
+        if (!rid) { var mm = null; try { mm = JSON.stringify(nrow).match(/mproom=([a-z0-9]+)/i); } catch (e) {} if (mm) rid = mm[1]; }
+        if (!rid) continue;                                        // schema doesn't carry a joinable room → skip (never a dead ACCEPT)
+        var from = d.from_name || d.caller_name || d.sender_name || nrow.title || 'A rival';
+        _showRing(String(from).slice(0, 22), String(rid).replace(/[^a-z0-9]/gi, ''));
+        break;
+      }
+    }).catch(function () {});
+  }
+  function _showRing(name, rid) {
+    if (_ringUp || !rid) return;
+    _ringUp = true;
+    var card = document.createElement('div'); card.id = 'mpx-ring'; card.setAttribute('role', 'alertdialog'); card.setAttribute('aria-label', 'Battle call');
+    var head = document.createElement('div'); head.className = 'mr-head'; head.textContent = '● BATTLE CALL'; card.appendChild(head);
+    var nm = document.createElement('div'); nm.className = 'mr-name'; nm.textContent = name + ' is calling you out'; card.appendChild(nm);   // textContent — peer string never touches innerHTML
+    var btns = document.createElement('div'); btns.className = 'mr-btns';
+    var acc = document.createElement('button'); acc.type = 'button'; acc.className = 'mr-accept'; acc.textContent = 'ACCEPT';
+    var dec = document.createElement('button'); dec.type = 'button'; dec.className = 'mr-decline'; dec.textContent = 'Decline';
+    btns.appendChild(acc); btns.appendChild(dec); card.appendChild(btns);
+    document.body.appendChild(card);
+    try {                                                          // ring tone — looped at 0.85, muted players stay silent
+      if (!(window.RhythmGame && window.RhythmGame.isMuted && window.RhythmGame.isMuted())) {
+        _ringAudio = new Audio('assets/battle-call.mp3'); _ringAudio.loop = true; _ringAudio.volume = 0.85;
+        var p = _ringAudio.play(); if (p && p.catch) p.catch(function () {});
+      }
+    } catch (e) {}
+    _ringKillT = setTimeout(_dismissRing, 45000);                  // 45s max — mirrors the site card's window
+    acc.addEventListener('click', function (ev) {
+      if (ev && ev.isTrusted === false) return;
+      _dismissRing();
+      // the same in-page path the ?mproom deep-link takes: pend the rid, raise MP, ping hosts to re-advertise
+      _pendingRoomSpec = false; _pendingRoomJoin = rid;
+      try { open(); } catch (e) {}
+      var tries = 0;
+      var t = setInterval(function () {                            // qmMatched-guest ping loop (host meta may lag)
+        if (!_pendingRoomJoin || room.id) { clearInterval(t); return; }
+        if (++tries > 12) { clearInterval(t); _pendingRoomJoin = null; banner('mpx-lobby-msg', 'Couldn\'t reach that battle room — it may have closed.'); return; }
+        try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+      }, 2500);
+    });
+    dec.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; _dismissRing(); });
+  }
+  function _dismissRing() {
+    if (_ringKillT) { clearTimeout(_ringKillT); _ringKillT = 0; }
+    try { if (_ringAudio) { _ringAudio.pause(); _ringAudio.src = ''; } } catch (e) {}
+    _ringAudio = null;
+    var c = document.getElementById('mpx-ring'); if (c && c.parentNode) c.parentNode.removeChild(c);
+    _ringUp = false;
+  }
+  try { _ringStart(); } catch (e) {}
 
   // ===================== build102x: SERVER MATCHMAKING (PHASE3_MATCHMAKING_DESIGN.md) =====================
   // Site-wide queue: POST /match/queue {on} + GET /match/status via RhythmCatalog wrappers (authed REST — no
@@ -5118,7 +5278,7 @@
   // The hub's #mp-back / Esc already route to RhythmHub.show(). During a LIVE match the
   // active screen is #game (engine), so they can't fire mid-song. We additionally guard
   // #mp-back so leaving from a WINNER/SETUP step tears the match channel down cleanly.
-  wire('mp-back', 'click', function () { try { _cancelShowOpen(); if (room.id && room.show) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist)
+  wire('mp-back', 'click', function () { try { _cancelShowOpen(); if (room.id && room.show) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
