@@ -1475,6 +1475,19 @@
       '<span class="rbonus-hint" style="flex-basis:100%;font-size:10px;letter-spacing:0.08em;color:#b9b2ac;margin-top:2px;">Spend in the Store on guitars &amp; levels</span>';
     el.style.display = '';
   }
+  // build110: Paint the "+N XP" reward line on the results screen — same idempotent-per-run pattern as
+  // renderBonusSparksLine, but visually/physically SEPARATE (own element, own gold-pill styling) so XP
+  // (pure status) never blurs with Bonus Sparks (currency-adjacent platform spend) — spec §2.4 decree.
+  function renderXpLine(earned) {
+    const el = document.getElementById('results-xp');
+    if (!el) return;
+    var lvl = 1; try { if (window.RhythmGoals) lvl = window.RhythmGoals.xpState().level; } catch (e) {}
+    el.innerHTML =
+      '<span class="rxp-amt">+' + Number(earned).toLocaleString() + '</span>' +
+      '<span class="rxp-label">XP</span>' +
+      '<span class="rxp-total">LV ' + lvl + '</span>';
+    el.style.display = '';
+  }
 
   // ---------- ALWAYS-on local recorder — called by the engine on EVERY completed run,
   // including in-browser-charted tracks that have no server submit (i.e. all live tracks
@@ -1485,6 +1498,9 @@
     if ((currentTrack && currentTrack._preview) || (results && results.preview)) return;   // build100h+: host review preview — NO career/best/bonus/plays/score submit (scoring:'preview_only')
     const grade = results.grade || gradeFor(results.accuracy || 0);
     const failed = !!results.failed;
+    // build110: captured by block 2 below (per-song best) for the RhythmGoals hook in block 3 — a
+    // trackless/zero-score run (e.g. practice demo) never sets these, so they default to "not a first clear".
+    let _rrIsFirstClear = false, _rrIsGradeUp = false;
     // build100 DAILY RIFT: CONSUME the rift flag exactly once per recordLocal (pass OR fail) so a failed/bailed rift
     // run can never leak the ×3 onto a later normal run. The ×3 is applied below only for a NON-failed run; a failed
     // rift earns nothing and does NOT stamp the day done, so the player can retry today for the bonus.
@@ -1538,6 +1554,7 @@
       // thread these onto the results object so the Share Card (game.js share handler) can flag
       // a NEW BEST / GRADE UP run without recomputing — recordLocal runs once, right after render.
       try { results._newBest = isNewBest; results._gradeUp = isGradeUp; } catch (e) {}
+      _rrIsFirstClear = (prevReal === null); _rrIsGradeUp = isGradeUp;   // build110: for the RhythmGoals XP hook below
       saveBest(currentTrack.id, results);
       const badges = document.getElementById('results-badges');
       if (badges) {
@@ -1571,6 +1588,23 @@
     // (a failed run earns nothing). NEVER touches the cashable Sparks balance. The amount is
     // stashed on results._bonusAwarded so the results screen can show "+N BONUS SPARKS".
     if (!failed) {
+      // build110: RETENTION SYSTEM hook — XP/Level/Streak/Daily+Weekly Goals (goals.js, window.RhythmGoals).
+      // Fires once per completed (non-failed) run, mirroring the Bonus Sparks earn loop right below it.
+      // Never throws into the reward/submit paths; stashes the XP total onto results._xpEarned the same
+      // way results._bonusAwarded is stashed, so the results screen can render "+N XP" (see game.js/catalog.js).
+      try {
+        if (window.RhythmGoals) {
+          const _rrGoalsOut = window.RhythmGoals.recordLevelComplete({
+            grade: grade,
+            isNewBest: !!(results && results._newBest),
+            isGradeUp: _rrIsGradeUp,
+            isFirstClear: _rrIsFirstClear,
+            fullCombo: !!results.full_combo,
+            songId: (currentTrack && currentTrack.id) || null
+          });
+          if (_rrGoalsOut && _rrGoalsOut.xpEarned) { results._xpEarned = _rrGoalsOut.xpEarned; try { renderXpLine(_rrGoalsOut.xpEarned); } catch (e) {} }
+        }
+      } catch (e) {}
       if (bonusServerReady()) {
         // build100i: SERVER-authoritative Bonus. The earn does NOT happen here — it fires from the /score|/plays success
         // handler below, once the canonical play_id is known (POST /bonus-sparks/earn { play_id, daily_rift } → server

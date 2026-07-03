@@ -2565,6 +2565,30 @@
     border-left: 1px solid rgba(218,215,210,0.18); margin-left: 2px;
   }
 
+  /* build110: XP earn line — gold pill, deliberately SEPARATE from .results-bonus (Bonus Sparks) so the
+     two reward tracks (pure status vs currency-adjacent) never visually blur — spec §2.4 decree. */
+  .results-xp {
+    display: inline-flex; align-items: center; gap: 9px; margin-top: 10px; margin-left: 8px;
+    padding: 9px 16px; border-radius: 999px;
+    border: 1px solid rgba(224,169,63,0.45); background: rgba(12,8,8,0.55);
+    box-shadow: 0 0 20px rgba(224,169,63,0.28), inset 0 0 14px rgba(0,0,0,0.4);
+    animation: badgePop 0.55s cubic-bezier(.2,1.4,.3,1) both 0.42s;
+  }
+  .results-xp .rxp-amt {
+    font-family: 'Oxanium', monospace; font-weight: 800; font-size: 19px;
+    color: #e0a93f; line-height: 1; font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 14px rgba(224,169,63,0.5);
+  }
+  .results-xp .rxp-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase; color: #f4d488;
+  }
+  .results-xp .rxp-total {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ink-dim); padding-left: 6px;
+    border-left: 1px solid rgba(224,169,63,0.25); margin-left: 2px;
+  }
+
   /* judgment composition bar */
   .results-breakdown { margin-top: 28px; }
   .rb-bar { height: 10px; border-radius: 6px; overflow: hidden; background: rgba(255,255,255,0.05); border: 1px solid var(--line); white-space: nowrap; font-size: 0; }
@@ -6640,6 +6664,7 @@
       <!-- v255: optional crowd-cheer SFX for the ENCORE moment — self-healing (an absent file simply won't play). -->
       <audio id="encore-cheer" src="assets/crowd-cheer.mp3" preload="none"></audio><!-- build65: preload none — don't fetch a celebratory SFX on every boot; renderResults .play() loads it on demand (procedural playCheerSfx covers an absent file). -->
       <div class="results-bonus" id="results-bonus" style="display:none;" aria-live="polite"></div>
+      <div class="results-xp" id="results-xp" style="display:none;" aria-live="polite"></div>
       <p class="tagline" style="margin-top: 12px;" id="results-blurb">The cathedral is humming. Echoes have folded inward. The rift accepts you.</p>
 
       <div class="results-summary">

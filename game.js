@@ -3198,6 +3198,10 @@
     // reset the Bonus-Sparks line each render — the catalog layer (recordLocal) re-paints it for a COMPLETED
     // run; a failed run leaves it cleared so a prior run's "+N BONUS SPARKS" can't linger on this screen.
     { const rb = $('results-bonus'); if (rb) { rb.innerHTML = ''; rb.style.display = 'none'; } }
+    // build110: same reset for the XP earn line — the catalog layer (recordLocal → RhythmGoals.recordLevelComplete)
+    // re-paints it for a COMPLETED run via renderXpLine(); a failed run leaves it cleared so a prior run's
+    // "+N XP" can't linger on this screen.
+    { const rx = $('results-xp'); if (rx) { rx.innerHTML = ''; rx.style.display = 'none'; } }
 
     // remember for the Share Score action — extend with everything the Share Card needs.
     // (newBest/gradeUp are set on `results` by catalog.recordLocal, which runs AFTER this in
