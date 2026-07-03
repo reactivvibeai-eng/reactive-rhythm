@@ -94,7 +94,7 @@
   // build100t 10s back down — still comfortably longer than the old 3.6s so slower machines/loads have room, but no
   // longer a 10-count. Wall-clock synced via the shared atMs (both peers derive their local countdown off the SAME
   // broadcast atMs, so shortening this value changes nothing about sync — just how far in the future atMs lands).
-  var TOUR_LEADIN_MS = 4500;      // build108 s1: matches VS_LEADIN_MS — see note above (host-adjustable via the lead-in control)
+  var TOUR_LEADIN_MS = 5000;      // build108 review fix: the lead-in picker only has 5s/10s/15s buttons, so 4500 showed NO active selection on entry — snap to the 5s button (shortest option; the 3-beat tournament cinematic wants a touch more runway than a 1v1 anyway)
   var _countdownRaf = 0;          // the 1v1 lead-in 3·2·1·GO! loop (off shared atMs)
   var _tourCdRaf = 0, _verdictT = 0;   // the tournament cinematic-countdown loop (own rAF so it can't cancel the 1v1 one) + verdict auto-hide timer
   var _mountT = 0;                // deferred split-screen mount timer (beginMatch/onTourRound) — cleared on teardown so a mid-lead-in abort can't resurrect vs-mode

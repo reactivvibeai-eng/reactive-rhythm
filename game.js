@@ -2922,7 +2922,10 @@
     runFailed = true; _endingLock = true;
     cameraShake = Math.max(cameraShake, 14); glitchAmount = 1;
     flashJudgment('SIGNAL LOST', '#ff1f2e');
-    setTimeout(() => { _endingLock = false; endGame(); }, 550);
+    // build108 review fix (critical): only end THIS still-live failed run. A restart/quit during the beat resets
+    // runFailed (resetScoring) or state, so a stale timer can't end a fresh run; and pause is now blocked during the
+    // beat (see pauseGame) so state stays 'playing' and endGame's re-entry guard passes.
+    setTimeout(() => { if (!runFailed || state !== 'playing') return; _endingLock = false; endGame(); }, 550);
   }
 
   async function endGame() {
@@ -3138,7 +3141,9 @@
             + '<button id="autocal-later" style="' + _btn + '">NOT NOW</button>'
             + '<button id="autocal-never" style="' + _btn + 'opacity:0.7;">DON’T ASK</button>'
             + '</div></div>';
-          const _anchor = document.getElementById('results-timing') || $('results-blurb');
+          // build108 review fix (minor): anchor AFTER the sloppiness note when it's present so the two inserts don't
+          // both 'afterend' the same node and land in reverse order — order is now timing → sloppy → autocal.
+          const _anchor = document.getElementById('results-sloppy') || document.getElementById('results-timing') || $('results-blurb');
           if (_anchor && _anchor.insertAdjacentHTML) {
             _anchor.insertAdjacentHTML('afterend', _achtml);
             const _chip = document.getElementById('results-autocal');
@@ -3213,7 +3218,7 @@
   // ---------- PAUSE ----------
   let _deferredStart = null;   // build65 (cycle-4): a stashed run-start thunk, set when a pause lands during the lead-in/countdown pre-roll (before the song began); consumed by resumeGame() so we never force-start audio behind a stuck PAUSED overlay.
   function pauseGame() {
-    if (state !== 'playing') return;
+    if (state !== 'playing' || _endingLock) return;   // build108 review fix (critical): NEVER pause during the fail-out wipeout beat — a pause (Escape/gamepad/blur/visibilitychange all route here) would flip state off 'playing', so the deferred endGame() re-entry guard would silently swallow the only teardown call and strand the failed run (resume then continues it as if it never failed).
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
     try { window.RhythmProcBg && window.RhythmProcBg.pause(); } catch (e) {}   // build66: freeze the reactive backdrop while paused
   }
