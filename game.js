@@ -1168,6 +1168,44 @@
     // plain (centroid-less) onsets, degrade to the classic placer so a track is never left unplayable.
     const musical = (chartMode === 'musical') && beats.length && (typeof beats[0].centroid === 'number');
     let last = -1, last2 = -1;
+    // build104 s4: GRID TRUST — before the tempo grid is allowed to MOVE notes (snap) or privilege on-grid onsets
+    // (effOf weighting / downbeat bonuses), measure whether the song's STRONG onsets actually CONCENTRATE on that
+    // grid. Statistic = the circular resultant R of the onset residuals on the half-beat grid (0 = uniform/no
+    // beat relation, 1 = metronome) — tolerance-free, so ±30ms onset-detector jitter doesn't drown the signal the
+    // way a fixed ±48ms count did (measured: tolerance-counting scored a locked 130bpm track at random-chance).
+    // Trust needs R ≥ 0.25 AND the two song HALVES to agree (a mid-song tempo change/drift passes a whole-song
+    // average while wrecking one half — the #7 stopgap). VERIFIED against this catalog: AI-generated tracks
+    // genuinely wobble (R ≤ 0.17 across genres, no candidate period fits their raw onsets), so most of the
+    // library correctly fails OPEN — notes chart on the audio's real transients instead of being dragged onto a
+    // fictional lattice. A metronome-true track (R ≥ 0.25) still earns snapping + grid privilege.
+    let _gridFit = null, _gridFitA = null, _gridFitB = null, _gridTrust = false;
+    {
+      const perG = beats._period || 0, phG = beats._phase || 0;
+      if (perG > 0 && beats.length) {
+        const halfB = perG / 2;
+        let strong = beats.filter(b => (b.strength || 1) >= 1.2);
+        if (strong.length < 20) strong = beats.slice();
+        const rOf = (arr) => {
+          if (arr.length < 10) return null;
+          let sx = 0, sy = 0, sw = 0;
+          for (const b of arr) {
+            const r = (((b.t - phG) % halfB) + halfB) % halfB;
+            const a = (r / halfB) * 2 * Math.PI, w = b.strength || 1;
+            sx += Math.cos(a) * w; sy += Math.sin(a) * w; sw += w;
+          }
+          return sw > 0 ? Math.sqrt(sx * sx + sy * sy) / sw : null;
+        };
+        const durG = beats[beats.length - 1].t || 0;
+        const fA = rOf(strong.filter(b => b.t < durG / 2));
+        const fB = rOf(strong.filter(b => b.t >= durG / 2));
+        const fAll = rOf(strong);
+        _gridFit = fAll == null ? null : Math.round(fAll * 1000) / 1000;
+        _gridFitA = fA == null ? null : Math.round(fA * 1000) / 1000;
+        _gridFitB = fB == null ? null : Math.round(fB * 1000) / 1000;
+        const agree = !((fA != null && fB != null) && ((fA >= 0.25) !== (fB >= 0.25)));
+        _gridTrust = (fAll != null && fAll >= 0.25 && agree);
+      }
+    }
     if (musical) {
       // DYNAMIC DENSITY: keep onsets on a difficulty-scaled min-gap, but let a clearly stronger / on-beat
       // onset BUMP a weaker recent pick — so busy passages stay busy, quiet ones breathe, and emphasis
@@ -1194,7 +1232,7 @@
       // CHANGE 5 — privilege STRONG beats: when deciding whether a new onset should bump the recent pick out of its
       // gap-window, compare EFFECTIVE strength (downbeats ×1.6, on-grid ×1.3) — so emphasis lands on the beat, not on
       // whatever transient happened to be loudest. Also used to pick the weakest onset to drop under the NPS cap below.
-      const effOf = (b) => (b.strength || 1) * (b.downbeat ? 1.6 : b.onGrid ? 1.3 : 1.0);
+      const effOf = (b) => (b.strength || 1) * (_gridTrust ? (b.downbeat ? 1.6 : b.onGrid ? 1.3 : 1.0) : 1.0);   // build104 s4: grid privilege only when the grid is TRUSTED (see gridTrust above)
       let filtered = [];
       for (let i = 0; i < beats.length; i++) {
         const b = beats[i];
@@ -1212,11 +1250,16 @@
       // Easy snaps to 1/2-beats (eighths feel), Medium/Hard to 1/4-beats (sixteenths) so fast runs still resolve.
       const per = beats._period || 0, ph = beats._phase || 0;
       const sub = per / (difficulty === 'easy' ? 2 : 4);
-      if (per > 0 && sub > 0) {
+      // build104 s4: BOUNDED snapping — the old 0.18·period gate could move a note ±139ms at 78bpm, i.e. past the
+      // Medium PERFECT half-window (0.16·0.30 = ±48ms): the snap itself could carry a note across a judgment
+      // boundary the player then got graded against. The gate is now min(0.10·period, 48ms), so a snapped note can
+      // never be displaced past the tightest half-window in play. Skipped entirely when the grid isn't trusted.
+      if (_gridTrust && per > 0 && sub > 0) {
+        const snapTol = Math.min(0.10 * per, 0.048);
         for (let i = 0; i < filtered.length; i++) {
           const t = filtered[i].t;
           const g = ph + Math.round((t - ph) / sub) * sub;
-          if (Math.abs(t - g) < per * 0.18) {
+          if (Math.abs(t - g) < snapTol) {
             // clone so we never mutate the shared source onset (it may be reused if buildNotes re-runs)
             filtered[i] = Object.assign({}, filtered[i], { t: Math.round(g * 1000) / 1000 });
           }
@@ -1690,7 +1733,93 @@
           const cov = sxy - sx * sy / n, vx = sxx - sx * sx / n, vy = syy - sy * sy / n;
           return (vx > 0 && vy > 0) ? Math.round(cov / Math.sqrt(vx * vy) * 1000) / 1000 : null;
         })(),
-        durationSec: (notes.length ? Math.round(notes[notes.length - 1].time) : 0)
+        durationSec: (notes.length ? Math.round(notes[notes.length - 1].time) : 0),
+        // ---- build104 chart probes (verification-only; charts unaffected) --------------------------------
+        gridFit: _gridFit, gridFitA: _gridFitA, gridFitB: _gridFitB, gridTrust: _gridTrust,
+        accents: notes.filter(n => n.type === 'accent').length,
+        // meanSnapErr: mean |scored note − nearest STRONG analyzer onset| (ms). Bounded snapping should DROP this
+        // vs. the old 0.18·period gate; fillers/bombs excluded (invented notes have no source onset).
+        meanSnapErr: (function () {
+          let strong = beats.filter(b => (b.strength || 1) >= 1.2);
+          if (strong.length < 12) strong = beats;
+          const sc = notes.filter(n => n.type !== 'bomb' && !n._fill);
+          if (!strong.length || !sc.length) return null;
+          let j = 0, sum = 0;
+          for (const n of sc) {
+            while (j + 1 < strong.length && Math.abs(strong[j + 1].t - n.time) <= Math.abs(strong[j].t - n.time)) j++;
+            sum += Math.abs(strong[j].t - n.time);
+          }
+          return Math.round(sum / sc.length * 1000 * 10) / 10;
+        })(),
+        meanHold: (function () { const h = notes.filter(n => n.type === 'hold'); return h.length ? Math.round(h.reduce((a, n) => a + n.hold, 0) / h.length * 100) / 100 : 0; })(),
+        maxHold: (function () { let m = 0; for (const n of notes) if (n.type === 'hold' && n.hold > m) m = n.hold; return Math.round(m * 100) / 100; })(),
+        // holdConflicts: scored same-lane notes falling INSIDE a hold's span (+re-press clearance) — a held key
+        // physically can't strike them. Sanitizer target: 0.
+        holdConflicts: (function () {
+          const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03;
+          let c = 0;
+          for (const h of notes) {
+            if (h.type !== 'hold') continue;
+            for (const n of notes) {
+              if (n === h || n.type === 'bomb') continue;
+              if (n.lane === h.lane && n.time > h.time + 0.02 && n.time < h.time + h.hold + clear) c++;
+            }
+          }
+          return c;
+        })(),
+        chordOnDownbeatPct: (function () { const L = notes.filter(n => n.chordLead); if (!L.length) return null; return Math.round(L.filter(n => n._downbeat).length / L.length * 1000) / 1000; })(),
+        // interChordCv: sd/mean of the gaps between chord instants — modulo cadence ≈ low; musical placement ≈ higher
+        interChordCv: (function () {
+          const ts = notes.filter(n => n.chordLead).map(n => n.time);
+          if (ts.length < 3) return null;
+          const g = []; for (let i = 1; i < ts.length; i++) g.push(ts[i] - ts[i - 1]);
+          const m = g.reduce((a, b) => a + b, 0) / g.length;
+          const sd = Math.sqrt(g.reduce((a, b) => a + (b - m) * (b - m), 0) / g.length);
+          return m > 0 ? Math.round(sd / m * 1000) / 1000 : null;
+        })(),
+        starCv: (function () {
+          const ts = notes.filter(n => n.type === 'star').map(n => n.time);
+          if (ts.length < 3) return null;
+          const g = []; for (let i = 1; i < ts.length; i++) g.push(ts[i] - ts[i - 1]);
+          const m = g.reduce((a, b) => a + b, 0) / g.length;
+          const sd = Math.sqrt(g.reduce((a, b) => a + (b - m) * (b - m), 0) / g.length);
+          return m > 0 ? Math.round(sd / m * 1000) / 1000 : null;
+        })(),
+        // maxFastJack: longest same-lane run whose internal gaps are ALL < 0.30s (jack-cap target: <=3).
+        maxFastJack: (function () {
+          const sc = notes.filter(n => n.type !== 'bomb' && !n.chord);
+          let best = 0, run = 1;
+          for (let i = 1; i < sc.length; i++) {
+            if (sc[i].lane === sc[i - 1].lane && (sc[i].time - sc[i - 1].time) < 0.30 && (sc[i].time - sc[i - 1].time) > 0.005) run++;
+            else { if (run > best) best = run; run = 1; }
+          }
+          return Math.max(best, run);
+        })(),
+        // maxJumpFast: biggest lane leap between consecutive scored notes < 0.35s apart (chord spreads excluded)
+        maxJumpFast: (function () {
+          const sc = notes.filter(n => n.type !== 'bomb' && !n.chord);
+          let m = 0;
+          for (let i = 1; i < sc.length; i++) {
+            const dt = sc[i].time - sc[i - 1].time;
+            if (dt < 0.35 && dt > 0.005) { const d = Math.abs(sc[i].lane - sc[i - 1].lane); if (d > m) m = d; }
+          }
+          return m;
+        })(),
+        // npsDecile: scored notes/sec per 10% song slice — the intro-ramp + finale shape probe
+        npsDecile: (function () {
+          const sc = notes.filter(n => n.type !== 'bomb');
+          if (!sc.length) return null;
+          const dur = Math.max(1, sc[sc.length - 1].time);
+          const bins = new Array(10).fill(0);
+          for (const n of sc) bins[Math.min(9, Math.floor(n.time / dur * 10))]++;
+          return bins.map(c => Math.round(c / (dur / 10) * 100) / 100);
+        })(),
+        lane04Share: (function () {
+          const sc = notes.filter(n => typeof n.lane === 'number' && n.type !== 'bomb');
+          if (!sc.length) return null;
+          const c = sc.filter(n => n.lane === 0 || n.lane === LANE_COUNT - 1).length;
+          return Math.round(c / sc.length * 1000) / 1000;
+        })()
       };
     } catch (e) {}
   }
@@ -2030,13 +2159,63 @@
         if (s > bestScore) { bestScore = s; bestLag = lag; }
       }
       if (bestLag > 0 && out.length) {
-        const period = bestLag * secPerF;
-        // phase = beat offset that best lines up with detected onsets
+        // build104 s4: GRID REFINEMENT — the integer autocorrelation lag quantizes the period to the ~11ms frame
+        // hop; a half-frame error compounds to WHOLE BEATS of grid drift across a 3-minute song, which is why the
+        // grid features read as noise on real tracks (measured: a locked 130bpm EDM track scored ~random on
+        // grid-fit before this). Three deterministic, pure refinements on the same onsets:
+        //   1) parabolic interpolation on the autocorrelation peak → sub-frame period;
+        //   2) a windowed circular-mean drift fit (residual-vs-time slope, unwrapped) → ppm-level period trim;
+        //   3) a global circular-mean phase shift → sub-ms phase.
+        let period = bestLag * secPerF;
+        {
+          const sAt = (lag) => { let s = 0; for (let f = lag; f < nF; f++) s += nov[f] * nov[f - lag]; return s; };
+          const y0 = sAt(bestLag - 1), y1 = bestScore, y2 = sAt(bestLag + 1);
+          const den = y0 - 2 * y1 + y2;
+          if (den < 0) { const d = 0.5 * (y0 - y2) / den; if (d > -1 && d < 1) period = (bestLag + d) * secPerF; }
+        }
+        // phase = beat offset that best lines up with detected onsets (coarse 12-step seed)
         let bestPhase = 0, bestHits = -1;
         for (let p = 0; p < 12; p++) {
           const ph = (p / 12) * period; let hits = 0;
           for (const o of out) { const r = ((o.t - ph) % period + period) % period; if (r < 0.06 || r > period - 0.06) hits++; }
           if (hits > bestHits) { bestHits = hits; bestPhase = ph; }
+        }
+        // circular-mean residual of the near-grid onsets in [t0,t1) — angles so ±wraps cancel; strength-weighted
+        const cmean = (t0, t1, per, ph) => {
+          let sx = 0, sy = 0, cnt = 0, st = 0;
+          for (const o of out) {
+            if (o.t < t0 || o.t >= t1) continue;
+            const r = ((o.t - ph) % per + per) % per;
+            if (r < per * 0.18 || r > per * 0.82) {
+              const ang = (r / per) * 2 * Math.PI, w = o.strength || 1;
+              sx += Math.cos(ang) * w; sy += Math.sin(ang) * w; cnt++; st += o.t;
+            }
+          }
+          if (cnt < 4 || (sx === 0 && sy === 0)) return null;
+          return { off: Math.atan2(sy, sx) / (2 * Math.PI) * per, cnt, tMid: st / cnt };
+        };
+        const durO = out[out.length - 1].t || 0;
+        for (let it = 0; it < 2; it++) {
+          // drift fit: per-window residual means, unwrapped, least-squares slope = fractional period error
+          const wins = Math.max(2, Math.min(12, Math.floor(durO / 20)));
+          const pts = [];
+          for (let w = 0; w < wins; w++) { const c = cmean(durO * w / wins, durO * (w + 1) / wins + (w === wins - 1 ? 1 : 0), period, bestPhase); if (c) pts.push(c); }
+          if (pts.length >= 2) {
+            for (let k = 1; k < pts.length; k++) {
+              let d = pts[k].off - pts[k - 1].off;
+              d = ((d % period) + period * 1.5) % period - period / 2;   // unwrap to the continuous branch
+              pts[k].off = pts[k - 1].off + d;
+            }
+            let np = pts.length, sxT = 0, syT = 0, sxxT = 0, sxyT = 0;
+            for (const p2 of pts) { sxT += p2.tMid; syT += p2.off; sxxT += p2.tMid * p2.tMid; sxyT += p2.tMid * p2.off; }
+            const denom = np * sxxT - sxT * sxT;
+            if (denom > 0) {
+              const eSlope = (np * sxyT - sxT * syT) / denom;
+              if (Math.abs(eSlope) < 0.02) period *= (1 + eSlope);       // bounded ≤2% trim — never re-tempos the song
+            }
+          }
+          const g = cmean(0, durO + 1, period, bestPhase);
+          if (g) bestPhase = ((bestPhase + g.off) % period + period) % period;
         }
         for (const o of out) {
           const beats = (o.t - bestPhase) / period;
@@ -2949,6 +3128,7 @@
       // results auto-calibration chip is verifiable headless, + end the live run on demand (a real 4-min playthrough
       // is not viable in a throttled tab).
       seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
+      beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
       endRun: () => { if (state === 'playing') { endGame(); return true; } return state; },
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
