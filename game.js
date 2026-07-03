@@ -5494,7 +5494,13 @@
           ctx.restore();
         }
       }
-      if (!resolving) drawNote(nx, ny, lw * 0.46 * sc, n);
+      if (!resolving) {
+        // build109 s2 Step D: travel-axis angle for the approach squash/stretch (visual only — drawNote
+        // reads d/angle purely for the transform; hit-judgment geometry stays keyed to nx/ny/note.time
+        // elsewhere and is untouched by this). Cheap: one extra noteY sample already using cached fn refs.
+        const _travelAng = Math.atan2(noteY(Math.max(0, d - 0.05)) - ny, noteX(n.lane, Math.max(0, d - 0.05)) - nx);
+        drawNote(nx, ny, lw * 0.46 * sc, n, d, _travelAng);
+      }
     }
 
     for (const p of particles) {
@@ -5862,7 +5868,68 @@
     // obsidian sphere + the blend-into-guitar theme tint). Rebuilt on resize/profile change; LANE_COLORS is
     // live by here (buildGameSprites runs from the draw loop, after applyLaneProfile set the gh palette).
     const gems = []; for (let l = 0; l < LANE_COUNT; l++) gems.push(buildMarble(base, l));   // build29: 3D marbles (was flat buildGem hexagons)
-    gfx = { lw: lw, base: base, gems: gems, star: buildStar(base) };
+    // build109 s2 Step C: baked per-TYPE overlay canvases (transparent, same S/pad as the marble) — one
+    // extra cached drawImage composited at draw time, keyed by lane so the overlay color always matches
+    // the ball beneath it. Built once per resize/profile change, zero runtime cost. accent=faceted diamond
+    // ring (sharper/harder read), hold=directional ticked ring toward the catcher (grab-and-hold cue before
+    // the beam becomes visible), chord=chrome bridge notch (pair reads as linked before the bar renders).
+    const accentOv = [], holdOv = [], chordOv = [];
+    for (let l = 0; l < LANE_COUNT; l++) {
+      accentOv.push(buildAccentOverlay(base, l));
+      holdOv.push(buildHoldOverlay(base, l));
+      chordOv.push(buildChordOverlay(base, l));
+    }
+    gfx = { lw: lw, base: base, gems: gems, star: buildStar(base), accentOv: accentOv, holdOv: holdOv, chordOv: chordOv };
+  }
+
+  // build109 s2 Step C: thin faceted diamond-cut ring — 5 straight chords across the face at low white
+  // alpha, baked onto a transparent canvas matching buildMarble's S/pad so it drops in at the same size.
+  function buildAccentOverlay(base, lane) {
+    const r = base / 2, pad = Math.ceil(base * 0.85), S = base + pad * 2, cx = S / 2, cy = S / 2;
+    const c = document.createElement('canvas'); c.width = S; c.height = S; const x = c.getContext('2d');
+    x.save(); x.globalCompositeOperation = 'lighter';
+    x.strokeStyle = 'rgba(255,255,255,0.15)'; x.lineWidth = Math.max(0.8, base * 0.02);
+    const N = 5;
+    for (let i = 0; i < N; i++) {
+      const a0 = (Math.PI * 2 * i) / N - Math.PI / 2, a1 = a0 + Math.PI * 0.62;
+      x.beginPath();
+      x.moveTo(cx + Math.cos(a0) * r * 0.82, cy + Math.sin(a0) * r * 0.82);
+      x.lineTo(cx + Math.cos(a1) * r * 0.82, cy + Math.sin(a1) * r * 0.82);
+      x.stroke();
+    }
+    x.restore();
+    return { c: c, S: S };
+  }
+  // build109 s2 Step C: 7 short radial ticks alternating with gaps around the rim — reads as "grab and
+  // hold" from the note head alone, before the sustain beam (drawn separately) becomes visible.
+  function buildHoldOverlay(base, lane) {
+    const r = base / 2, pad = Math.ceil(base * 0.85), S = base + pad * 2, cx = S / 2, cy = S / 2;
+    const c = document.createElement('canvas'); c.width = S; c.height = S; const x = c.getContext('2d');
+    x.save(); x.globalCompositeOperation = 'lighter';
+    x.strokeStyle = 'rgba(255,255,255,0.55)'; x.lineWidth = Math.max(1, base * 0.045); x.lineCap = 'round';
+    const N = 7;
+    for (let i = 0; i < N; i++) {
+      const a = (Math.PI * 2 * i) / N;
+      x.beginPath();
+      x.moveTo(cx + Math.cos(a) * r * 1.06, cy + Math.sin(a) * r * 1.06);
+      x.lineTo(cx + Math.cos(a) * r * 1.18, cy + Math.sin(a) * r * 1.18);
+      x.stroke();
+    }
+    x.restore();
+    return { c: c, S: S };
+  }
+  // build109 s2 Step C: a small chrome bridge/notch glyph at the inner edge — the linked pair reads as
+  // connected even before the chord-bar glow (drawn separately, only once both gems are on-screen) renders.
+  function buildChordOverlay(base, lane) {
+    const r = base / 2, pad = Math.ceil(base * 0.85), S = base + pad * 2, cx = S / 2, cy = S / 2;
+    const c = document.createElement('canvas'); c.width = S; c.height = S; const x = c.getContext('2d');
+    x.save(); x.globalCompositeOperation = 'lighter';
+    x.fillStyle = 'rgba(236,231,227,0.55)';
+    x.beginPath(); x.ellipse(cx, cy + r * 0.98, r * 0.22, r * 0.09, 0, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(236,231,227,0.8)'; x.lineWidth = Math.max(0.8, base * 0.025);
+    x.beginPath(); x.ellipse(cx, cy + r * 0.98, r * 0.22, r * 0.09, 0, 0, Math.PI * 2); x.stroke();
+    x.restore();
+    return { c: c, S: S };
   }
 
   // glossy obsidian note-sphere (black, crimson rim-light + bright specular) like the photo
@@ -5901,10 +5968,12 @@
     x.save(); x.fillStyle = 'rgba(0,0,0,0.38)'; x.shadowColor = 'rgba(0,0,0,0.5)'; x.shadowBlur = base * 0.25;
     x.beginPath(); x.ellipse(cx, cy + r * 0.82, r * 1.05, r * 0.32, 0, 0, Math.PI * 2); x.fill(); x.restore();
     // (1) spherical body — offset radial gradient (lit cap upper-left → true color → shadow core → reflected rim) + lane glow
+    // build109 s2 Step A: lit-cap stop widened 0.30→0.42 so the highlight reads at small (~20-40px)
+    // gameplay size instead of collapsing into a pinpoint (tuned for 1:1 inspection originally).
     x.save(); x.shadowColor = 'rgb(' + rgb + ')'; x.shadowBlur = base * 0.7;
     const g = x.createRadialGradient(cx - r * 0.34, cy - r * 0.40, r * 0.06, cx, cy, r * 1.02);
-    g.addColorStop(0.00, 'rgb(' + litCap + ')'); g.addColorStop(0.30, 'rgb(' + litMid + ')');
-    g.addColorStop(0.62, 'rgb(' + rgb + ')'); g.addColorStop(0.86, 'rgb(' + shadowCore + ')'); g.addColorStop(1.00, 'rgb(' + reflRim + ')');
+    g.addColorStop(0.00, 'rgb(' + litCap + ')'); g.addColorStop(0.42, 'rgb(' + litMid + ')');
+    g.addColorStop(0.68, 'rgb(' + rgb + ')'); g.addColorStop(0.88, 'rgb(' + shadowCore + ')'); g.addColorStop(1.00, 'rgb(' + reflRim + ')');
     x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore();
     // (2) deepen the terminator (bottom-right falls into shadow) — clipped to the ball
     x.save(); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.clip();
@@ -5915,13 +5984,19 @@
     x.save(); x.globalCompositeOperation = 'lighter'; x.lineWidth = Math.max(1.3, base * 0.05);
     x.strokeStyle = 'rgba(' + light + ',0.7)'; x.shadowColor = 'rgb(' + rgb + ')'; x.shadowBlur = base * 0.12;
     x.beginPath(); x.arc(cx, cy, r * 0.94, Math.PI * 0.06, Math.PI * 0.94); x.stroke(); x.restore();
-    // (4) warm near-black OUTER RING — pops on BRIGHT guitars
-    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.lineWidth = Math.max(2.4, base * 0.11); x.strokeStyle = 'rgba(18,7,7,0.85)'; x.stroke();
+    // (4) warm near-black OUTER RING — pops on BRIGHT guitars. build109 s2 Step A: widened + darkened for
+    // silhouette crispness at small size (was base*0.11 @ rgba(18,7,7,0.85)).
+    x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.lineWidth = Math.max(2.6, base * 0.14); x.strokeStyle = 'rgba(10,4,4,0.92)'; x.stroke();
     // (5) thin white top rim
     x.beginPath(); x.arc(cx, cy, r * 0.93, Math.PI * 1.04, Math.PI * 1.96); x.lineWidth = Math.max(1, base * 0.03); x.strokeStyle = 'rgba(255,255,255,0.55)'; x.stroke();
-    // (6) two-stage specular hotspot (upper-left) — the #1 "this is a 3D ball" cue
-    x.fillStyle = 'rgba(255,255,255,0.35)'; x.beginPath(); x.ellipse(cx - r * 0.30, cy - r * 0.36, r * 0.30, r * 0.20, -0.5, 0, Math.PI * 2); x.fill();
-    x.fillStyle = 'rgba(255,255,255,0.98)'; x.beginPath(); x.ellipse(cx - r * 0.32, cy - r * 0.38, r * 0.13, r * 0.085, -0.5, 0, Math.PI * 2); x.fill();
+    // (6) two-stage specular hotspot (upper-left) — the #1 "this is a 3D ball" cue. build109 s2 Step A:
+    // hotter core alpha + tighter falloff radius = a crisper point-light hit at gameplay size.
+    x.fillStyle = 'rgba(255,255,255,0.55)'; x.beginPath(); x.ellipse(cx - r * 0.30, cy - r * 0.36, r * 0.30, r * 0.20, -0.5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(255,255,255,1.0)'; x.beginPath(); x.ellipse(cx - r * 0.32, cy - r * 0.38, r * 0.10, r * 0.065, -0.5, 0, Math.PI * 2); x.fill();
+    // (7) one thin pure-white micro-rim arc at the very top edge — the classic "billiard ball" cue that
+    // survives downscaling because it's edge-anchored (a crisp stroke), not gradient-anchored like (6).
+    x.beginPath(); x.arc(cx, cy, r * 0.99, -0.95 * Math.PI, -0.05 * Math.PI);
+    x.lineWidth = Math.max(1, base * 0.018); x.strokeStyle = 'rgba(255,255,255,0.7)'; x.stroke();
     return { c: c, S: S };
   }
 
@@ -6048,7 +6123,7 @@
     ctx.restore();
   }
 
-  function drawNote(cx, y, w, note) {
+  function drawNote(cx, y, w, note, _d, _travelAng) {
     // build28 (playtest: notes were invisible — pink-on-pink / bone-on-bone / dark-on-dark): notes are now the
     // BRIGHT per-lane faceted gem (lane color + white core + dark ring + glow) so they pop on ANY guitar; the
     // gold star for surge notes. The level theme NO LONGER recolors the note body (that was the blend bug).
@@ -6061,7 +6136,44 @@
     GEM_K *= (0.88 + 0.34 * _emph);   // strong onsets render BIGGER (~0.88x weak → ~1.22x strong) so the chart looks like the song
     if (gem && gfx.base) {
       const Sd = w * GEM_K * (gem.S / gfx.base);
-      ctx.drawImage(gem.c, cx - Sd / 2, y - Sd / 2, Sd, Sd);
+      // build109 s2 Step B: a live specular rotation so the highlight visibly sweeps as the note falls —
+      // near-zero cost (one extra ctx.rotate per note/frame), highest-ROI item in the marble pass: turns
+      // a static stamped disc into a "rolling ball" for free. Per-lane phase offset so lanes don't sync.
+      ctx.save();
+      ctx.translate(cx, y);
+      // build109 s2 Step D (optional, last): mild anisotropic stretch along the travel axis for the
+      // closest ~25% of travel (d < 0.25 — small d IS near the catcher in this engine's convention:
+      // depthScale(d)=1-0.7d peaks at d=0, so "closest" is the LOW end of d, not d>0.75 as a naive literal
+      // reading might suggest), easing back to 1.0 at contact. Sells "rushing toward camera" instead of
+      // isotropic pop-in. Reduce-motion + fxLite gated (motion + perf, per the plan's step-4 gate table).
+      // VISUAL TRANSFORM ONLY — applied after translate, before the rotate/drawImage; hit-judgment reads
+      // nx/ny/note.time from the untransformed loop above and never sees this scale.
+      if (!reduceMotion && !fxLite && typeof _d === 'number' && _d < 0.25 && _d >= 0) {
+        const _st = 1 - (_d / 0.25);            // 0 at d=0.25 → 1 at contact (d=0)
+        const _amt = 1 + 0.12 * _st;             // up to 1.12x stretch along travel axis
+        const _amtInv = 1 - 0.06 * _st;          // mild inverse squash on the perpendicular axis
+        ctx.rotate(_travelAng || 0);
+        ctx.scale(_amtInv, _amt);
+        ctx.rotate(-(_travelAng || 0));
+      }
+      ctx.rotate((performance.now() / 1000) * 1.6 + note.lane);
+      ctx.drawImage(gem.c, -Sd / 2, -Sd / 2, Sd, Sd);
+      // build109 s2 Step C: per-type baked overlay composite (accent/hold/chord distinct + premium) —
+      // skipped under fxLite (weak-device perf gate per the polish plan; the base marble + rotation stay
+      // on). Rides the SAME rotation transform as the body — cheap (already-open ctx.save), and a ring/
+      // notch spinning WITH the ball reads fine (only the accent facets are orientation-sensitive-ish and
+      // even those read as "faceted," not wrong, while rotating).
+      if (!fxLite && gfx.base) {
+        const ov = note.type === 'accent' ? (gfx.accentOv && gfx.accentOv[note.lane])
+                 : note.type === 'hold' ? (gfx.holdOv && gfx.holdOv[note.lane])
+                 : null;
+        if (ov) { const Sdo = w * GEM_K * (ov.S / gfx.base); ctx.drawImage(ov.c, -Sdo / 2, -Sdo / 2, Sdo, Sdo); }
+        if (note.chord) {
+          const cv = gfx.chordOv && gfx.chordOv[note.lane];
+          if (cv) { const Sdc = w * GEM_K * (cv.S / gfx.base); ctx.drawImage(cv.c, -Sdc / 2, -Sdc / 2, Sdc, Sdc); }
+        }
+      }
+      ctx.restore();
     } else { ctx.fillStyle = '#141016'; ctx.beginPath(); ctx.arc(cx, y, w * 0.5, 0, Math.PI * 2); ctx.fill(); }
     // build75: DOWNBEAT emphasis ring — a thin lane-colored additive halo on the strong on-beat notes so the song's
     // PULSE reads in the falling notes (louder half only; skipped under reduce-motion + once judged).
