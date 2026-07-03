@@ -445,6 +445,9 @@
 
   // hides (does not destroy) the room panel — called the instant room-start fires (match/live view has no chat)
   function hideRoomChat() { if (room.els) room.els.wrap.hidden = true; }
+  // build116 p2: the inverse — un-hide a still-mounted panel (buffer + channel intact). Used by the tournament
+  // "between rounds" (t-await) transition, mirroring how showLobbyChat restores the lobby drawer after a match.
+  function showRoomChat() { if (room.els && room.ch) room.els.wrap.hidden = false; }
 
   // full teardown — called from closeRoom()/leaveRoomChannel() so a rejoin (same OR different room) never leaks
   // a prior room's ring buffer into the new one.
@@ -648,6 +651,7 @@
     mountRoomChat: mountRoomChat,
     teardownRoomChat: teardownRoomChat,
     hideRoomChat: hideRoomChat,
+    showRoomChat: showRoomChat,
     roomSystemLine: roomSystemLine,
     paintModKebab: paintModKebab,
     applyModMute: applyModMute,

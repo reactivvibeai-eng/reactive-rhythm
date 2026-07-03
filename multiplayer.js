@@ -3937,6 +3937,7 @@
       count: Object.keys(tour.members).length || 1, max: (tour.size || TOUR_MAX), size: tour.size, state: tour.state, at: Date.now() } });
   }
   function closeTour(silent) {
+    try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {}   // build116 p2: mirrors leaveRoomChannel — a fresh room/tournament join never leaks a prior chat ring buffer
     try { if (tour.stakes && tour.stakes !== 'free' && tour.state === 'open') _wagerRefundMine(); } catch (e) {}   // build71: WAGER — only refund a buy-in when a STAKED bracket dissolves BEFORE it goes live (state still 'open'). Once 'live'/'done' the only legit credit is settlement (champ payout / side-bet win) — a leaver must NOT reclaim their stake. (The old unconditional refund was an exploit: losers never settle, so refundPool's settled/refunded state guard never blocked them → guaranteed stake-back that deflated the champion pot.)
     if (tour.id && tour.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'tour-gone', payload: { tid: tour.id } }); } catch (e) {} }
     try { if (tour.id && window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // build11: drop the bracket's stage theme
@@ -3959,6 +3960,18 @@
   function joinTourChannel(tid) {
     var ch = supa.channel('rr-tour-' + tid, { config: { broadcast: { self: true } } });
     tour.ch = ch;
+    // build116 p2: TOURNAMENT TEXT CHAT — mirrors joinRoomChannel's room-chat mount verbatim (mountRoomChat is
+    // already generic: any Supabase channel + mount element). Mounts right after #mpx-tour-grid (always present
+    // once .mpx-step-tour shows). Rooms and tournaments are mutually-exclusive screens, so reusing the SAME
+    // mountRoomChat instance is safe — it tears down any prior mount internally (chat.js:428) before remounting.
+    try {
+      if (window.RhythmChat && window.RhythmChat.mountRoomChat) {
+        var _tcxEl = $('mpx-tour-grid');
+        var _mountEl = _tcxEl && _tcxEl.parentNode;
+        if (_mountEl) _mountEl._rrcAnchor = _tcxEl;
+        window.RhythmChat.mountRoomChat(ch, { id: ME.id, name: ME.name }, _mountEl, { hostId: tour.hostId, roomId: tour.id, onReport: true });
+      }
+    } catch (e) {}
     if (!tour._joinAt) tour._joinAt = Date.now();   // build42: STABLE join time → deterministic host election (migration)
     tourSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, at: tour._joinAt }; }, onTourPeers);
     ch.on('broadcast', { event: 't-snapshot' }, function (m) { applyTourSnapshot(m.payload); });   // build42: host state-heartbeat
@@ -4446,6 +4459,7 @@
     if (tour.state === 'live' && tour.round === p.n && p.atMs && tour.atMs && p.atMs < tour.atMs) return;   // a stale OLDER emission of the round we're already running
     tour._roundTok = _tok;
     tour.awaiting = false;
+    try { if (window.RhythmChat && window.RhythmChat.hideRoomChat) window.RhythmChat.hideRoomChat(); } catch (e) {}   // build116 p2: mirrors onRoomStart — a live round has no chat surface
     closeTransientOverlays();   // belt-and-suspenders: no overlay (How-To/store/levels/profile/settings) can occlude the starting round
     var _nw = $('mpx-tour-nextwrap'); if (_nw) _nw.hidden = true;
     var _nb = $('mpx-tour-next'); if (_nb) _nb.classList.remove('hot');
@@ -4708,6 +4722,7 @@
   }
   function onTourAwait(p) {
     if (!p) return;
+    try { if (window.RhythmChat && window.RhythmChat.showRoomChat) window.RhythmChat.showRoomChat(); } catch (e) {}   // build116 p2: back on the bracket between rounds — restore chat (buffer + channel intact, never re-mounted)
     tour.awaiting = true;
     tour._awaitWinners = p.winners || null;   // build42: every client stores the next-round winners so a promoted host can rebuild _next
     var survived = (p.winners || []).indexOf(ME.id) >= 0;
@@ -5436,7 +5451,11 @@
   // build99h: TIER-2 "Local versus" → hand off to the parallel couch-coop engine (RhythmCouch)
   wire('mpx-act-local', 'click', function () { try { if (window.RhythmCouch && window.RhythmCouch.open) window.RhythmCouch.open(); } catch (e) {} });
   wire('mpx-act-browse', 'click', function () { gotoRooms('browse'); });
-  // build108 s3c: the two promoted top-level quick-links — identical handlers to their drawer twins (mpx-act-browse /
+  // build116 p2: "Host a room" drawer row + its promoted quicklink twin — same gotoRooms('create') flow as the
+  // TIER-2 mpx-act-friend tile, just reachable from a clearly-labeled, non-gold, non-bracket button.
+  wire('mpx-act-room', 'click', function () { gotoRooms('create'); });
+  wire('mpx-act-room-top', 'click', function () { gotoRooms('create'); });
+  // build108 s3c: the promoted top-level quick-links — identical handlers to their drawer twins (mpx-act-browse /
   // mpx-act-tour) so "More ways to play" isn't the only door into Browse rooms / Host a tournament anymore.
   wire('mpx-act-browse-top', 'click', function () { gotoRooms('browse'); });
   wire('mpx-act-tour-top', 'click', function () { gotoRooms('tour-create'); });
