@@ -7124,6 +7124,7 @@
 <script src="game.js?v=421"></script>
 <script src="procbg.js?v=421"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
 <script src="jukebox.js?v=421"></script>
+<script src="chat.js?v=1"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
 <script src="catalog.js?v=421"></script>
 <script src="goals.js?v=421"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
 <script src="multiplayer.js?v=421"></script>
@@ -9181,8 +9182,11 @@
   // before any multiplayer). Leet-normalizes then substring-matches a slur/profanity blocklist; a hit
   // returns a safe generic so a slur never renders on the storefront. (Real server-side moderation is a
   // Phase-2 item — see RELEASE_ROADMAP OP.3 / the MP abuse-hardening row.) Errs toward masking.
+  // build111 s1: sourced from shared chat.js (window.RhythmChat.filterDisplayName) when available — falls back
+  // to this file's own copy so an out-of-order/missing chat.js load never regresses leaderboard filtering.
   var LB_BADWORDS = ['nigger','nigga','faggot','retard','cunt','rape','kike','spic','chink','fuck','shit','bitch','whore','slut','dick','cock','pussy','asshole','bastard','nazi','wank','twat','jizz','coon','tranny'];
   function cleanName(s) {
+    try { if (window.RhythmChat && window.RhythmChat.filterDisplayName) return window.RhythmChat.filterDisplayName(s); } catch (e) {}
     var raw = String(s == null ? '' : s).trim();
     if (!raw) return 'anon';
     var norm = raw.toLowerCase().replace(/[\s_\-.]/g, '').replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't').replace(/@/g, 'a').replace(/\$/g, 's').replace(/!/g, 'i');

@@ -1675,8 +1675,14 @@
 
   // build72: catalog-side mirror of index.html's cleanName (it lives in a separate IIFE we can't reach) — scrub
   // slur display names on the RESULTS leaderboard panel the same way the overlay board already does.
+  // build111 s1: LB_BADWORDS + the matcher now live in shared chat.js (window.RhythmChat) so multiplayer.js's
+  // new chat/report surfaces can reach the same wordlist. scrubName delegates to RhythmChat.filterDisplayName
+  // when chat.js has loaded (it's included before catalog.js in index.html); falls back to this file's OWN
+  // copy of the list/logic if chat.js is ever absent (older cached HTML, load-order regression, etc.) — so
+  // this extraction is zero-behavior-change even in a partial-load edge case.
   var LB_BADWORDS = ['nigger','nigga','faggot','retard','cunt','rape','kike','spic','chink','fuck','shit','bitch','whore','slut','dick','cock','pussy','asshole','bastard','nazi','wank','twat','jizz','coon','tranny'];
   function scrubName(s) {
+    try { if (window.RhythmChat && window.RhythmChat.filterDisplayName) return window.RhythmChat.filterDisplayName(s); } catch (e) {}
     var raw = String(s == null ? '' : s).trim();
     if (!raw) return 'anon';
     var norm = raw.toLowerCase().replace(/[\s_\-.]/g, '').replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't').replace(/@/g, 'a').replace(/\$/g, 's').replace(/!/g, 'i');
