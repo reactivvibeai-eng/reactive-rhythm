@@ -30,7 +30,7 @@
     if (document.getElementById('couch-css')) return;
     var s = document.createElement('style'); s.id = 'couch-css';
     s.textContent = [
-      '.couch-overlay{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;',
+      '.couch-overlay{position:fixed;inset:0;z-index:320;display:none;align-items:center;justify-content:center;',   // v413 owner-playtest fix: was 120 — UNDER the MP screen (z 240), so "Local versus" looked dead; 320 clears MP + the review card (300)
       '  background:rgba(6,4,3,0.86);backdrop-filter:blur(6px);font-family:"Chakra Petch",sans-serif;}',
       '.couch-overlay.open{display:flex;}',
       '.couch-card{width:min(760px,92vw);background:linear-gradient(180deg,rgba(20,12,10,0.96),rgba(10,7,6,0.97));',

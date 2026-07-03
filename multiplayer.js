@@ -189,6 +189,15 @@
   // spectate link would take the CHALLENGER seat (first fan to click steals the artist's spot in a live-show room).
   var _pendingRoomSpec = false;
   try { _pendingRoomSpec = /[?&]spectate=1\b/.test(location.search); } catch (e) {}
+  // v413 owner-playtest fix: the site's battle-call ACCEPT now carries the known pairing (&mproom=<rid>&mprole=host|guest)
+  // as a BOOT FALLBACK — the ring (45s) + navigation + game load can outlive the server pairing record, and /match/status
+  // coming back idle used to drop the accepting player at the lobby front door. A GUEST rides the normal ?mproom
+  // auto-join; a HOST must OPEN the room instead of joining it, so the host case is stashed and consumed by qmResume.
+  var _qmBootRoom = null;
+  try {
+    var _mrl = location.search.match(/[?&]mprole=(host|guest)\b/i);
+    if (_mrl && _mrl[1].toLowerCase() === 'host' && _pendingRoomJoin) { _qmBootRoom = _pendingRoomJoin; _pendingRoomJoin = null; }
+  } catch (e) {}
 
   // ===================== SOFT PRESENCE (build9 foundation fix) =====================
   // VERIFIED against the live project: Realtime BROADCAST round-trips fine, but native
@@ -402,6 +411,7 @@
   }
   function onActivated() {
     _ghostRunActive = false;   // build102y review fix C: the MP screen coming up = the ghost run is over/abandoned — un-park auto-spectate
+    try { if (!ME.signedIn) resolveMe(); } catch (e) {}   // v413 owner-playtest fix: identity can miss the boot-time getUser (session restore race) — a signed-in owner saw "Sign in to play online"; re-resolve every activation until signed in (paintYou→refreshSigninNote then hides the note)
     paintYou();
     if (!matchLive && !matchCh && !tour.id) step('lobby');   // don't reset a returning winner overlay or a live bracket (build9)
     banner('mpx-lobby-msg', '');
@@ -1706,6 +1716,17 @@
     qmStartTimers();
     return true;
   }
+  // v413: the host-side URL fallback — one-shot; the guest side needs nothing (its ?mproom pending-join machinery
+  // is the normal deep-link path). Opens the pre-minted paired room so the accepting HOST lands IN the match.
+  function _qmHostFallback() {
+    if (!_qmBootRoom) return false;
+    var rid = _qmBootRoom; _qmBootRoom = null;
+    if (room.id || tour.id || matchLive) return false;   // never stomp something already live
+    openRoomWithId(rid, { priv: true, name: (ME.name + "'s Match").slice(0, 28) });
+    paintQmPill('matched');
+    banner('mpx-setup-msg', 'Matched! Pick the song — your rival is on the way.');
+    return true;
+  }
   // ?mpqm=resume one-shot pickup (fired from the lobby SUBSCRIBED handler): route a 'matched' pair by role,
   // resume 'waiting' as a live SEARCHING state, or land on the lobby with a nudge.
   function qmResume() {
@@ -1715,7 +1736,7 @@
       // boot, and a not-yet-restored supabase session would 401 and tell a SIGNED-IN player (who just clicked the
       // site's MATCH FOUND CTA) to "sign in", dropping the pairing.
       window.RhythmCatalog.matchStatus(4000).then(function (st) {
-        if (st && st.status === 'matched' && st.matched_room) { qmMatched(st); return; }
+        if (st && st.status === 'matched' && st.matched_room) { _qmBootRoom = null; qmMatched(st); return; }
         if (st && st.status === 'waiting') {
           _qm.on = true;
           paintQmPill('searching');
@@ -1723,8 +1744,10 @@
           qmStartTimers();
           return;
         }
+        if (_qmHostFallback()) return;   // v413: pairing record expired mid-accept — open the room from the URL fallback
         banner('mpx-lobby-msg', '🎯 Not searching right now — tap FIND ME A MATCH to start.');
       }).catch(function (e) {
+        if (_qmHostFallback()) return;   // v413: even on a status error, an ACCEPT with a known room should land IN the room
         var msg = String((e && e.message) || '');
         if (/\b401\b/.test(msg)) banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.');
         else if (/\b404\b/.test(msg)) banner('mpx-lobby-msg', 'Matchmaking isn\'t live yet — check back soon.');   // build102x: deployed backend predates /match/* (see qmFail)

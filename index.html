@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="jukebox.css?v=412" />
+<link rel="stylesheet" href="jukebox.css?v=413" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3466,6 +3466,14 @@
   #menu-hub .mh-signin:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,31,46,0.32); }
   #menu-hub .mh-signin svg { width: 15px; height: 15px; }
   @media (max-width: 560px) { #menu-hub .mh-signin span { display: none; } #menu-hub .mh-signin { padding: 0; width: 38px; justify-content: center; border-radius: 50%; right: 62px; } }
+  /* v413: back-to-website (owner ask) — chrome/neutral pill top-left (navigation, not a CTA; crimson stays for actions) */
+  #menu-hub .mh-backsite { position: absolute; top: 16px; left: 16px; height: 38px; display: inline-flex; align-items: center; gap: 7px;
+    padding: 0 15px; border-radius: 19px; cursor: pointer; color: #cdc4c1; text-decoration: none; background: rgba(10,7,6,0.55);
+    border: 1px solid var(--line, rgba(218,215,210,0.22)); font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  #menu-hub .mh-backsite:hover { color: #f0ebe7; border-color: rgba(218,215,210,0.45); box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
+  #menu-hub .mh-backsite svg { width: 15px; height: 15px; }
+  @media (max-width: 560px) { #menu-hub .mh-backsite span { display: none; } #menu-hub .mh-backsite { padding: 0; width: 38px; justify-content: center; border-radius: 50%; } }
   .mh-grid { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   /* build8: living tiles — per-tile accent (--ta), a soft radial bloom that wakes on hover,
      a glass top-sheen, and an animated accent hairline along the top edge. Default --ta=crimson;
@@ -4594,6 +4602,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path></svg>
         <span>Sign In</span>
       </button>
+      <!-- v413 owner ask: a way BACK to the website from the mode-select menu ('/' = site home when the game lives at /game/) -->
+      <a class="mh-backsite" id="mh-backsite" href="/" title="Back to ReactivVibe" aria-label="Back to the ReactivVibe website">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+        <span>Back to site</span>
+      </a>
       <div class="mh-brand"><img src="assets/atom.png" alt="" /><span>REACTIVVIBEAI.COM</span></div>
       <div class="mh-pre">MAIN MENU</div>
       <!-- build19: produced TITLE WORDMARK slot (user order — crimson moon / chaos energy / anime,
@@ -6361,7 +6374,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=412"></script>
+<script src="telemetry.js?v=413"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -6531,14 +6544,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=412"></script>
-<script src="game.js?v=412"></script>
-<script src="procbg.js?v=412"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=412"></script>
-<script src="catalog.js?v=412"></script>
-<script src="multiplayer.js?v=412"></script>
-<script src="share.js?v=412"></script>
-<script src="couch.js?v=412"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=413"></script>
+<script src="game.js?v=413"></script>
+<script src="procbg.js?v=413"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=413"></script>
+<script src="catalog.js?v=413"></script>
+<script src="multiplayer.js?v=413"></script>
+<script src="share.js?v=413"></script>
+<script src="couch.js?v=413"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
