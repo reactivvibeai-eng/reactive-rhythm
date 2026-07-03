@@ -286,6 +286,12 @@
   let wastedInputs = 0;
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
+  // build108 (fail-out freeze-frame fix): true for the ~550ms "wipeout beat" between failRun() declaring the run
+  // over and endGame() actually tearing down. Freezes input/scoring/note-judging (no more hits, misses, or score
+  // changes can land after the run is already lost) while leaving `state==='playing'` so loop()'s existing
+  // per-frame decay (cameraShake/glitchAmount/particles/bgPulse/odBurst) keeps animating — the shake/glitch slam
+  // failRun() applies now visibly DECAYS instead of freezing at max intensity for the whole results crossfade.
+  let _endingLock = false;
   // versus split-screen (P2): a drained hit/miss event buffer + cached mult tier for getRenderFrame()
   let _rfHits = [];        // [{l:lane, j:'p'|'g'|'m'} …] drained each getRenderFrame() call
   let _rfMult = 1;         // last displayed multiplier tier (set by updateHUD)
@@ -2687,6 +2693,7 @@
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
+    _endingLock = false;   // build108: a fresh run always starts unlocked
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
     _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
@@ -2867,11 +2874,25 @@
 
   function stopGame() {
     state = 'menu';
+    _endingLock = false;   // build108: a quit/exit DURING the fail-out wipeout beat must not leave input/scoring stuck locked for the next run
     try { window.RhythmProcBg && window.RhythmProcBg.stop(); } catch (e) {}   // build66: idle the reactive backdrop on quit / song-end
     _deferredStart = null;   // build65 (cycle-4): drop any pre-roll deferred-start so a quit during a paused pre-roll can't fire it later
     if (player) { try { player.onended = null; player.stop(); } catch (e) {} player = null; }
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    // build108 (owner-flagged, hit live twice): "broken UI before the multiplayer results screen" — the rAF loop
+    // stopped here, but the screen-space JUICE state (particles/shake/glitch/wipeout/etc.) only zeroed in
+    // resetScoring() at the NEXT run's start, so the abandoned canvas stayed frozen on whatever mid-effect frame
+    // was live (a hit burst, maxed shake, glitch tears) — that garbled frame bled through the results crossfade.
+    // failRun() made it worse by slamming shake/glitch to MAX the same tick it calls endGame()→stopGame(). Mirrors
+    // resetScoring()'s clear-list (same var names) — a hard reset here + one calm final paint below settles the
+    // canvas before showScreen('results') crossfades over it. Covers song-end, fail-out, AND every quit/abort path
+    // that routes through stopGame() (this function is the single funnel).
+    particles = []; cameraShake = 0; glitchAmount = 0; bgPulse = 0;
+    missFlash = 0; wipeoutT = 0; stringsCold = 0; odBurst = 0;
+    if (fx) { try { fx.clear(); } catch (e) {} }
+    _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = []; _multFireL = [];
+    try { render(0, false); } catch (e) {}   // one calm final paint so the abandoned canvas isn't a stale garbled bitmap
     // v258: clear any pending MP-combat stun so a veil + dangling hide-timer can't linger past teardown (resetScoring
     // also zeroes _mpStunUntil before the next play; this is the exit-mid-stun belt-and-suspenders).
     clearTimeout(_stunHideT); _stunHideT = 0; _mpStunUntil = 0;
@@ -2890,15 +2911,26 @@
   function bossDrain(base) { return bossMode ? base * (bossPhase === 2 ? 2.4 : 1.8) : base; }
 
   // optional fail-out (Settings → Fail Mode): the stability meter emptied → the run collapses
+  // build108 (owner-flagged freeze-frame bug): this used to slam cameraShake/glitchAmount to MAX and call
+  // endGame() the SAME synchronous tick — loop() never got another frame to decay them, so the abandoned canvas
+  // froze at peak shake/glitch for the entire results crossfade. Now: freeze scoring/input immediately
+  // (_endingLock, checked by onLaneInput + loop's note-judging block) so the run can't keep changing after it's
+  // already lost, but let the wipeout beat actually ANIMATE for ~550ms (loop()'s FX-decay code stays outside the
+  // _endingLock guard, so cameraShake/glitchAmount visibly settle) before tearing down into results.
   function failRun() {
     if (runFailed || state !== 'playing') return;
-    runFailed = true;
+    runFailed = true; _endingLock = true;
     cameraShake = Math.max(cameraShake, 14); glitchAmount = 1;
     flashJudgment('SIGNAL LOST', '#ff1f2e');
-    endGame();
+    setTimeout(() => { _endingLock = false; endGame(); }, 550);
   }
 
   async function endGame() {
+    // build108: re-entry guard — failRun()'s deferred endGame() (550ms wipeout beat) plus any other caller
+    // (player.onended, the song-duration check, the __rrDebug.endRun dev hook) must never run the results/
+    // submit pipeline twice for the same run. state flips to 'menu' inside stopGame() below, so a second call
+    // arriving after the first already tore down is caught here before it touches anything.
+    if (state !== 'playing') return;
     stopGame();   // build102y review fix D: the ghost-target clear moved INTO stopGame (covers the EXIT path too)
     // build35 (audit P0): EXCLUDE bombs from the scored-note total. Bombs are dodged (hit='avoided'),
     // never counted in perfect/great/good — counting them in `total` deflated accuracy/grade (a clean
@@ -3295,6 +3327,7 @@
     if (lane == null || lane < 0 || lane >= LANE_COUNT) return;
     if (laneProbe) { try { laneProbe(lane, source); } catch (e) {} }
     if (performance.now() < _mpStunUntil) return;   // v254: MP combat — your inputs are shocked/dead for the stun window
+    if (_endingLock) return;   // build108: the run is already lost (fail-out wipeout beat) — no more hits can land
     if (state === 'playing') handleHit(lane, evTime, source);   // build102w: source rides along so guitar-strum empties can be free
   }
   // lane physically released (key-up / pointer-up) — ends any active sustain in that lane
@@ -4824,6 +4857,11 @@
     const t = songTime();
     const jt = t - audioOffset;
     const diff = DIFFICULTY[difficulty];
+    // build108: the fail-out wipeout beat (_endingLock) freezes note-judging/scoring for its ~550ms window — the
+    // run is already lost, endGame() is already scheduled (see failRun), so nothing here should keep mutating
+    // score/combo/notes or call endGame() a second time. The FX-decay code below (particles/lane pulses/
+    // cameraShake/glitchAmount/bgPulse/odBurst) is OUTSIDE this guard and keeps running every frame regardless.
+    if (!_endingLock) {
     // build104 s1a (timing fairness — the late-edge race): handleHit back-dates a press by up to 50ms of event/queue
     // lag (inputLag), so a LEGAL hit at n.time + hitWindow − ε whose event arrived a frame late was losing the race to
     // this sweep — declared MISS before the press could be judged. Miss *declaration* now waits one lag budget (50ms)
@@ -4875,6 +4913,7 @@
     if (sustaining) updateHUD();
 
     if (t > songDuration + 0.6) { for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i); endGame(); return; }   // build58: bank any sustain still correctly held when the clock crosses the end
+    }   // end !_endingLock (build108)
 
     if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);   // build64 PERF: cap runaway particle growth (oldest first)
     for (let i = particles.length - 1; i >= 0; i--) {
