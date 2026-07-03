@@ -2110,8 +2110,8 @@
         if (!rid) { var mm = null; try { mm = JSON.stringify(nrow).match(/mproom=([a-z0-9]+)/i); } catch (e) {} if (mm) rid = mm[1]; }
         if (!rid) continue;                                        // schema doesn't carry a joinable room → skip (never a dead ACCEPT)
         var ridKey = 'r:' + String(rid).replace(/[^a-z0-9]/gi, '');
-        if (_ringSeen[ridKey]) continue;                           // build113 fix: dedupe by ROOM too, not just notif id —
-        _ringSeen[ridKey] = 1;                                     // stops a retried /challenge (new nid, same room) from re-ringing
+        if (_ringSeen[ridKey] && (Date.now() - _ringSeen[ridKey]) < 60000) continue;   // build113 review: dedupe by ROOM but with a ~60s TTL. Was set permanently (`=1`), which silently ate EVERY later call to the same room for the whole session — a real "call won't go through" contributor (a caller reusing a still-open private room to rematch, or to ring a different player, got no ring). 60s still absorbs the retried-/challenge (new nid, same room, within seconds) case this dedupe was built for.
+        _ringSeen[ridKey] = Date.now();
         var from = d.from_name || d.caller_name || d.sender_name || nrow.title || 'A rival';
         _showRing(String(from).slice(0, 22), String(rid).replace(/[^a-z0-9]/gi, ''));
         break;
