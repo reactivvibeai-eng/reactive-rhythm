@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&family=Bungee&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani/Bungee are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=430" />
+<link rel="stylesheet" href="jukebox.css?v=431" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -7135,7 +7135,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=430"></script>
+<script src="telemetry.js?v=431"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7314,16 +7314,16 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=430"></script>
-<script src="game.js?v=430"></script>
-<script src="procbg.js?v=430"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=430"></script>
-<script src="chat.js?v=430"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=430"></script>
-<script src="goals.js?v=430"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=430"></script>
-<script src="share.js?v=430"></script>
-<script src="couch.js?v=430"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=431"></script>
+<script src="game.js?v=431"></script>
+<script src="procbg.js?v=431"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=431"></script>
+<script src="chat.js?v=431"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=431"></script>
+<script src="goals.js?v=431"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=431"></script>
+<script src="share.js?v=431"></script>
+<script src="couch.js?v=431"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -12334,7 +12334,11 @@
       incoming.forEach(function (n) { if (n && n.id && !haveIds[n.id]) { state.pending.push(n); haveIds[n.id] = true; } });
     }
 
-    if (state.blocksAll && state.suspend) showSuspendGate(state.suspend); else hideSuspendGate();
+    // build119 review: the capture-phase keydown swallow keys off state.blocksAll, so the VISIBLE gate must too —
+    // otherwise a backend response with blocks_all:true but suspend:null would kill all keyboard input with NO gate
+    // on screen (a silent input trap). showSuspendGate() null-guards its arg → a generic "restricted by moderation"
+    // gate shows even without a suspend record, and input-block + visible-gate can never diverge.
+    if (state.blocksAll) showSuspendGate(state.suspend || {}); else hideSuspendGate();
     paintMuteHint();
     if (!state.blocksAll) showNextNotice();   // don't stack a dismissible notice modal on top of a non-dismissible gate
   }
