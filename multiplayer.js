@@ -2034,6 +2034,11 @@
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
     _pendingChart = null;   // build114: a rematch of the SAME track+difficulty reuses the identical chartKey — drop any stale prior-round broadcast so a race can't let the guest consume last round's chart instead of waiting for the fresh one
     _resolveGen++;          // build114 review: invalidate any in-flight pollForChart from the prior round
+    // build116 review (CRITICAL): restore my REAL settings BEFORE the rematch re-snapshots. In a MATCHED room,
+    // maybeStart()/onStart re-snapshot on EVERY round; without restoring first, round 2 captures the round-1 FORCED
+    // values (scroll 1×, failMode off) as my "original" → I'd be permanently stuck on them even after I leave the
+    // room and teardownMatch "restores" the (now-wrong) snapshot. Mirror teardownMatch's restore; runs on both seats.
+    if (_mySettingsSnapshot) { try { window.RhythmGame.applySettings(_mySettingsSnapshot); } catch (e) {} _mySettingsSnapshot = null; }
 
     // FULLY tear down the prior split-screen so the rematch's beginMatch→mountVsHud re-seeds clean.
     // Without this, .vs-mode + #vs-seam linger → mountVsHud's idempotent guard skips the re-init and
@@ -4950,6 +4955,7 @@
   function onTourChamp(p) {
     if (!p) return;
     tour.state = 'done'; tour.champ = p.id;
+    try { if (window.RhythmChat && window.RhythmChat.showRoomChat) window.RhythmChat.showRoomChat(); } catch (e) {}   // build116 review: the FINAL round hid chat (onTourRound) but resolves via t-champ, NOT the t-await path that re-shows it — so chat stayed hidden through the champion screen. Restore it here.
     var _wagerWon = (tour.stakes && tour.stakes !== 'free') ? _wagerSettle() : 0;   // build66: WAGER — settle (pool: champ credited; side-bet: every correct picker splits the pot)
     if (tour.isHost) broadcastSnapshot();
     stopTourHeartbeat(); clearPersistedTour();   // build42: bracket over → stop the heartbeat + drop the reconnect pointer
