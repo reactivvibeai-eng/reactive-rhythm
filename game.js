@@ -226,6 +226,10 @@
 
   // scoring
   let score = 0, combo = 0, maxCombo = 0;
+  // build104 s7 (#26b): FULL CHORD bonus state — per-lane last-press timestamps + the pending re-check queue
+  // (a chord judged before the second finger landed re-checks for ~35ms so a 5ms-late finger still earns it).
+  const _lanePressMs = {};
+  let _pendFullChord = [];
   let scoreDisplay = 0;   // animated count-up value chasing `score` (game-feel juice)
   let lightningT = 0;     // seconds remaining on a combo-milestone lightning strike
   let comboMidT = 0;      // 3B-i: seconds remaining on the MID-STREAK pulse (a smaller flash at combo%25===15, fills the 11-24 / post-milestone dead zone — cosmetic only)
@@ -1380,9 +1384,8 @@
         sameRun = (lane === last) ? sameRun + 1 : 1;
         last2 = last; last = lane;
         let type = 'tap';
-        if (idx > 4 && idx % 31 === 0) type = 'star';                              // rare gold "surge" note
-        else if ((b.downbeat && b.strength >= 1.4) || b.strength >= 1.9) type = 'accent';  // on-beat / strong → accented gem
-        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (Math.floor(b.t * 97 + idx * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _centroid: b.centroid, _sustain: b.sustain || 0, _hotBands: b.hotBands || null, _onGrid: !!b.onGrid, _downbeat: !!b.downbeat };
+        if ((b.downbeat && b.strength >= 1.4) || b.strength >= 1.9) type = 'accent';  // on-beat / strong → accented gem (build104 s8: stars moved to the budgeted placeStars pass below)
+        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (Math.floor(b.t * 97 + idx * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _centroid: b.centroid, _sustain: b.sustain || 0, _hotBands: b.hotBands || null, _onGrid: !!b.onGrid, _downbeat: !!b.downbeat, _energy: b.energy || 0 };
       });
       // CHANGE 1 (dedupe) — snapping can collapse two onsets onto the same (time-slot, lane). Drop the collision,
       // keeping the STRONGEST, then re-sort ascending (the engine's hit-detection early-break requires sorted time).
@@ -1407,10 +1410,40 @@
         while ((lane === last || lane === last2) && guard < 4) { lane = inSpan(lane + 1); guard++; }
         last2 = last; last = lane;
         let type = 'tap';
-        if (idx > 4 && idx % 31 === 0) type = 'star';        // rare gold "surge" note
-        else if (b.strength >= 1.75) type = 'accent';        // strong beat → accented gem
+        if (b.strength >= 1.75) type = 'accent';             // strong beat → accented gem (build104 s8: stars moved to placeStars)
         return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false };
       });
+    }
+    // build104 s8: STAR PLACEMENT — replaces `idx % 31` (a metronomic index accident, starCv ≈ 0.06) with a
+    // BUDGETED musical pick: one gold surge per ~18s span, spent on the span's strongest EFFECTIVE onset
+    // (downbeat ×1.6 / on-grid ×1.3 when the grid is trusted, raw strength otherwise). Count-preserving by
+    // duration; the placement scoring carries directly into batch-2 star PHRASES (anchoring).
+    (function placeStars() {
+      if (!notes.length) return;
+      const durS = Math.max(1, notes[notes.length - 1].time);
+      const nStars = Math.max(1, Math.round(durS / 18));
+      const spanLen = durS / nStars;
+      const effN = (n) => (n.strength || 1) * (_gridTrust ? (n._downbeat ? 1.6 : n._onGrid ? 1.3 : 1.0) : 1.0);
+      for (let s = 0; s < nStars; s++) {
+        const t0 = s * spanLen, t1 = t0 + spanLen + (s === nStars - 1 ? 1 : 0);
+        let best = null, bestE = -1;
+        for (const n of notes) {
+          if (n.time < t0 || n.time >= t1) continue;
+          if (n.type !== 'tap' && n.type !== 'accent') continue;
+          const e = effN(n);
+          if (e > bestE) { bestE = e; best = n; }
+        }
+        if (best) best.type = 'star';
+      }
+    })();
+    // build104 s10: FINALE — the last 8% is the payoff. Promote the strongest downbeats (strongest notes when the
+    // grid isn't trusted) to accents so the outro reads like a finisher.
+    if (notes.length) {
+      const durF = notes[notes.length - 1].time;
+      const t8F = durF * 0.92;
+      const fin = notes.filter(n => n.time >= t8F && n.type === 'tap' && (!_gridTrust || n._downbeat));
+      fin.sort((a, b) => (b.strength || 1) - (a.strength || 1));
+      for (let k = 0; k < Math.min(3, fin.length); k++) fin[k].type = 'accent';
     }
     // derive HOLD notes: a note the song actually SUSTAINS (measured ring) — or a long-enough pause —
     // becomes a hold (still ONE scored note; the head is the hit, so notes_total is unchanged).
@@ -1447,39 +1480,85 @@
     const base = notes.slice();           // snapshot before we add to it
     const allowChord = difficulty !== 'easy';
     if (allowChord) {
-      // noteVariety packs chords tighter + adds more 3-note "double-stops"; defaults byte-identical.
-      // build59: Medium gets noticeably FEWER chords than Hard — simultaneous two-key presses were a big part of why
-      // Medium felt overwhelming. Hard unchanged (8 / every-4th); Medium ≈ half as many, more spaced (14 / every-6th).
-      // v253: even with noteVariety ON, MEDIUM gets fewer/looser chords than Hard — simultaneous two-key presses were a big
-      // part of why Medium felt "too challenging". Hard keeps the tight 5/every-3rd; Medium eases to 9/every-4th.
+      // build104 s7 — UNIFIED CHORD PLACEMENT (replaces the `(i−last)≥gap && i%mod` cadence, which put chords on
+      // arbitrary indices — measured 6-7% of chords on downbeats, interChordCv ~0.3 = near-metronomic modulo).
+      // Chords now land where the MUSIC stacks: every eligible onset scores
+      //     (≥2 hot bands co-fired → +2)  +  (trusted downbeat → +1)  +  normalized strength (0..1)
+      // and the top scorers win, spaced by a TIME floor (Medium ≥3.5s, Hard ≥2s) scaled by local energy —
+      // quiet ×2 sparser, loud ×0.8 (choruses chug, breakdowns breathe). The BUDGET is what the legacy cadence
+      // would have produced on this same chart (keeps totals within the v1 band; the scoring epoch already moves
+      // with this batch). Partner lanes still prefer the REAL co-fired bands; the mechanical +2 fan is only the
+      // fallback for a chosen lead without a measured stack.
       const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : difficulty === 'hard' ? 5 : 7) : (difficulty === 'medium' ? 14 : 8);
       const chordMod = noteVariety ? (difficulty === 'medium' ? 4 : 3) : (difficulty === 'medium' ? 6 : 4);
-      let lastChord = -99, chordId = 0;
+      let budget = 0;
+      { let lc = -99; for (let i = 0; i < base.length; i++) { const n = base[i]; if ((n.type === 'tap' || n.type === 'accent') && (i - lc) >= chordGapMin && i % chordMod === 0) { budget++; lc = i; } } }
+      const durAll = beats.length ? (beats[beats.length - 1].t || 0) : 0;
+      let eMaxC = 0, sMaxC = 0;
+      for (const n of base) { if ((n._energy || 0) > eMaxC) eMaxC = n._energy || 0; if ((n.strength || 1) > sMaxC) sMaxC = n.strength || 1; }
+      const floorBase = difficulty === 'hard' ? 2.0 : 3.5;
+      const floorFor = (n) => {
+        const e = eMaxC > 0 ? (n._energy || 0) / eMaxC : 0.5;
+        let f = floorBase * (2.0 - 1.2 * e);
+        // build104 s10 (#8 safe half): HARD RAMP-IN — the first 20% of a Fracture chart uses Medium's chord
+        // cadence (floor ×1.75 → ×1.0 across the ramp) so the song opens playable and tightens to full teeth.
+        if (difficulty === 'hard' && durAll > 0 && n.time < 0.2 * durAll) f *= 1.75 - 0.75 * (n.time / (0.2 * durAll));
+        return f;
+      };
+      const cands = [];
       for (let i = 0; i < base.length; i++) {
         const n = base[i];
-        if ((n.type === 'tap' || n.type === 'accent') && (i - lastChord) >= chordGapMin && i % chordMod === 0) {
-          chordId++;
-          let lanes;
-          // build58 charter-v2: when the AUDIO actually stacked frequencies here (≥2 bands co-fired), play THOSE bands as the
-          // chord lanes — a real "two strings at once" that matches the song — instead of the mechanical +2/+4 fan.
-          if (n._hotBands && n._hotBands.length >= 2) {
-            const set = {}; set[n.lane] = 1;
-            n._hotBands.forEach(function (bnd) { set[inSpan(laneBase + Math.max(0, Math.min(span - 1, bnd)))] = 1; });
-            const cap = difficulty === 'hard' ? 3 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord — the old lowest-N slice could drop n.lane when it was the highest hot-band member (→ a phantom lane got no note + the lead was excluded from the chord-bar centroid/connector)
-            if (lanes.length < 2) { let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl); }
-          } else {
-            lanes = [n.lane];
-            let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
-            // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
-            if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
-              let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
-            }
+        if (!(n.type === 'tap' || n.type === 'accent')) continue;
+        const sc = ((n._hotBands && n._hotBands.length >= 2) ? 2 : 0) + ((_gridTrust && n._downbeat) ? 1 : 0) + (sMaxC > 0 ? (n.strength || 1) / sMaxC : 0);
+        cands.push({ i: i, n: n, sc: sc });
+      }
+      cands.sort((a, b) => b.sc - a.sc || a.n.time - b.n.time);
+      const chosen = [];
+      for (const c of cands) {
+        if (chosen.length >= budget) break;
+        const f = floorFor(c.n);
+        let ok = true;
+        for (const t of chosen) { if (Math.abs(c.n.time - t.n.time) < f) { ok = false; break; } }
+        if (ok) chosen.push(c);
+      }
+      // build104 s10: FINALE chord guarantee (Med/Hard) — the last 8% must land at least one chord, on the final
+      // downbeat-ish strong note, so the outro pays off with a full-hand hit.
+      if (durAll > 0) {
+        const t8 = durAll * 0.92;
+        if (!chosen.some(c => c.n.time >= t8)) {
+          let pick = null;
+          for (const c of cands) { if (c.n.time >= t8 && (!_gridTrust || c.n._downbeat || !cands.some(x => x.n.time >= t8 && x.n._downbeat))) { if (!pick || c.sc > pick.sc) pick = c; } }
+          if (pick) chosen.push(pick);
+        }
+      }
+      chosen.sort((a, b) => a.n.time - b.n.time);
+      let chordId = 0;
+      for (const c of chosen) {
+        const n = c.n, i = c.i;
+        chordId++;
+        let lanes;
+        // build58 charter-v2: when the AUDIO actually stacked frequencies here (≥2 bands co-fired), play THOSE bands as the
+        // chord lanes — a real "two strings at once" that matches the song — instead of the mechanical +2/+4 fan.
+        if (n._hotBands && n._hotBands.length >= 2) {
+          const set = {}; set[n.lane] = 1;
+          n._hotBands.forEach(function (bnd) { set[inSpan(laneBase + Math.max(0, Math.min(span - 1, bnd)))] = 1; });
+          const cap = difficulty === 'hard' ? 3 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord
+          if (lanes.length < 2) { let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl); }
+        } else {
+          lanes = [n.lane];
+          let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
+          // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
+          if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
+            let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
           }
-          n.chord = true; n.chordId = chordId; n.chordLanes = lanes; n.chordLead = true;
-          for (let k = 1; k < lanes.length; k++) {
-            notes.push({ time: n.time, strength: n.strength, lane: lanes[k], type: 'tap', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false, chord: true, chordId: chordId, chordLanes: lanes });
-          }
-          lastChord = i;
+        }
+        n.chord = true; n.chordId = chordId; n.chordLanes = lanes; n.chordLead = true;
+        // build104 s7 FIX (pre-existing since build71): lanes is sorted ASCENDING, so the lead isn't necessarily
+        // lanes[0] — pushing lanes[1..] duplicated the LEAD's lane whenever a hot-band partner sat below it (a
+        // phantom same-lane gem) and the real partner lane never got its gem. Push every lane EXCEPT the lead's.
+        for (const pl of lanes) {
+          if (pl === n.lane) continue;
+          notes.push({ time: n.time, strength: n.strength, lane: pl, type: 'tap', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false, chord: true, chordId: chordId, chordLanes: lanes });
         }
       }
     }
@@ -2563,7 +2642,7 @@
 
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
-    counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = [];
+    counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
     _auraFx = null; _odAura = null; _readyRings = null; _holdFxL = [];   // build8b/c: instances cleared with fx.clear() → drop refs so they respawn
@@ -3649,6 +3728,7 @@
   function handleHit(lane, evTime, src) {   // build102w: src ('guitar' = strum-driven) — only the empty-press branch reads it
     lanePulse[lane] = 1.0;        // press feedback: button pushes down + lights
     lanePluckT[lane] = 0;         // pluck/vibrate this lane's string on EVERY press
+    _lanePressMs[lane] = performance.now();   // build104 s7: FULL-CHORD sampling — remember when each lane was last struck
     // Judge at the instant the player ACTUALLY pressed, not when this handler ran.
     // evTime is the event's DOMHighResTimeStamp; subtracting the elapsed lag recovers
     // timing lost to event-queue / frame-block latency (clamped so a bad value can't hurt).
@@ -3746,7 +3826,12 @@
     const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _tpM.comboStep));
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
     const mult = Math.min(MAX_MULT, Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier));   // v258: hard-clamp to MAX_MULT (=4) — keep score within the per-note ceiling on every timing profile
-    score += JUDGE[kind].score * mult;
+    // build104 s8: ACCENTS ARE MONEY NOTES — a PERFECT on a chart-authored accent pays 1.5× base, charges the OD
+    // meter deeper (0.04 vs 0.022), and kicks harder (hitFeel). Precision on the notes the song itself stressed is
+    // now worth aiming for. Accent counts are chart-fixed → ceiling extends by accents×750 (see ceiling comment);
+    // mirrored in the P2 scorer. GREAT/GOOD accents pay the normal rate — the bonus IS the precision reward.
+    const accPerf = (target.type === 'accent' && kind === 'perfect');
+    score += JUDGE[kind].score * mult * (accPerf ? 1.5 : 1);
     if (mult > lastMult) {
       // build19 (user screenshot: a big flame ring floating on the body "just looks out of place"):
       // the centered multiplier flare is GONE. A tier climb now reads at the play site — a quick
@@ -3765,7 +3850,7 @@
     }
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
-    if (!odActive) overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : 0.022)); // charge the meter (no top-up while OD is live — the render loop force-drains it anyway; build58 makes the no-extend rule explicit)
+    if (!odActive) overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : accPerf ? 0.04 : 0.022)); // charge the meter (no top-up while OD is live — the render loop force-drains it anyway; build58 makes the no-extend rule explicit). build104 s8: accent PERFECTs charge deeper.
     lanePluckT[lane] = 0;                 // pluck the string in this lane
     if (muteUntil > 0) { muteUntil = -1; applyGate(); }  // a clean hit recovers the music
     stability = Math.min(1.0, stability + 0.01);
@@ -3784,13 +3869,29 @@
     // array, so the lead and partner no longer share a reference and the old `!==` test skipped the partner on mirrored
     // levels → the bar never cleared. chordId survives the mirror (it remaps lanes only). Lead's judgment + mult; no combo bump.
     if (target.chordId != null && target.chordLanes && target.chordLanes.length > 1) {
+      let _chordPaid = JUDGE[kind].score * mult;   // the lead's own payment (build104 s7: feeds the FULL CHORD bonus base)
       for (const cn of notes) {
         if (cn === target || cn.judged || cn.chordId !== target.chordId) continue;
         cn.judged = true; cn.hit = kind;
         counts[kind]++;
         score += JUDGE[kind].score * mult;
+        _chordPaid += JUDGE[kind].score * mult;
         lanePluckT[cn.lane] = 0;
         try { spawnHitParticles(cn.lane, kind); emitFx('hit', kind, cn.lane); } catch (e) {}
+      }
+      // build104 s7 (#26b): FULL CHORD — the one-press assist stays the base case (a beginner clears the bar with
+      // one finger), but a player who PHYSICALLY has every chord lane down at the judge instant earns 1.3× on the
+      // whole chord. Sampling forgives a slightly-late second finger: a lane counts as down if it's held NOW or
+      // was struck within the last 30ms; if the shape isn't complete yet, the check re-arms in loop() until the
+      // ±35ms window closes. Chord count is chart-fixed → ceiling extends by 0.3×(chord total) per chord (see
+      // ceiling comment); mirrored in the P2 scorer.
+      const _nowFC = performance.now();
+      const _laneIn = (l) => laneDown[l] || (_nowFC - (_lanePressMs[l] || -1e9)) <= 30;
+      if (target.chordLanes.every(_laneIn)) {
+        score += _chordPaid * 0.3;
+        flashJudgment('FULL CHORD', '#ffe08a');
+      } else {
+        _pendFullChord.push({ lanes: target.chordLanes.slice(), bonus: _chordPaid * 0.3, until: _nowFC + 35 });
       }
     }
     // v253 (#92, GH feel): a judgment WORD on EVERY note spammed at speed (Hard ≈5/s). PERFECT is the common case and its
@@ -3799,7 +3900,7 @@
     // MISS still flash. Streak/tier/Overdrive/HOLD/BOMB callouts call flashJudgment directly and are unaffected.
     if (kind !== 'perfect') flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
-    hitFeel(kind, lane);
+    hitFeel(kind, lane, accPerf);   // build104 s8: an accent PERFECT kicks harder
     // a struck hold note becomes an active sustain — it keeps paying out (and the
     // string keeps ringing) for as long as this lane stays pressed (see loop()).
     if (target.type === 'hold' && target.hold > 0) {
@@ -3835,8 +3936,10 @@
   }
 
   // per-judgment tactile feedback: world reaction + guitar chug + haptics
-  function hitFeel(kind, lane) {
-    if (kind === 'perfect') { cameraShake = Math.max(cameraShake, 6); bgPulse = Math.min(1, bgPulse + 0.4); }
+  // build104 s8: `heavy` (accent PERFECT) = a deeper kick — more shake/pulse + a hotter chug, so money notes FEEL paid.
+  function hitFeel(kind, lane, heavy) {
+    if (heavy) { cameraShake = Math.max(cameraShake, 9); bgPulse = Math.min(1, bgPulse + 0.55); }
+    else if (kind === 'perfect') { cameraShake = Math.max(cameraShake, 6); bgPulse = Math.min(1, bgPulse + 0.4); }
     else if (kind === 'great') { cameraShake = Math.max(cameraShake, 3); bgPulse = Math.min(1, bgPulse + 0.25); }
     else { bgPulse = Math.min(1, bgPulse + 0.12); }
     if (!muted) {
@@ -3849,7 +3952,7 @@
           const L = (lane == null) ? 2.5 : lane;
           src.playbackRate.value = 0.92 + L * 0.032;          // lanes 0..5 → ~0.92..1.08
           const g = ac.createGain();
-          g.gain.value = (kind === 'perfect' ? 0.95 : kind === 'great' ? 0.8 : 0.62) * SFX_LEVEL;
+          g.gain.value = (heavy ? 1.1 : kind === 'perfect' ? 0.95 : kind === 'great' ? 0.8 : 0.62) * SFX_LEVEL;   // build104 s8: accent PERFECT chugs hotter
           src.connect(g); g.connect(ac.destination); src.start(now);
         } else {
           // fallback synth blip if the chug sample hasn't decoded yet
@@ -4669,6 +4772,21 @@
       if (n.type === 'hold') { if (jt <= n.time + diff.hitWindow) continue; missNote(n); continue; }
       if (jt <= n.time + diff.hitWindow + MISS_GRACE) continue;
       missNote(n);
+    }
+
+    // build104 s7: FULL-CHORD late-finger window — a chord judged with the shape incomplete re-checks here until
+    // its ±35ms sample window closes (a 5ms-late second finger still earns the 1.3×). Expired entries drop silently.
+    if (_pendFullChord.length) {
+      const nowFC = performance.now();
+      for (let i = _pendFullChord.length - 1; i >= 0; i--) {
+        const pc = _pendFullChord[i];
+        if (pc.lanes.every(l => laneDown[l] || (nowFC - (_lanePressMs[l] || -1e9)) <= 30)) {
+          score += pc.bonus;
+          flashJudgment('FULL CHORD', '#ffe08a');
+          updateHUD();
+          _pendFullChord.splice(i, 1);
+        } else if (nowFC > pc.until) _pendFullChord.splice(i, 1);
+      }
     }
 
     // ---- sustain (hold) scoring: a struck hold pays out continuously while held ----
@@ -7241,8 +7359,13 @@
       P.judged.add(targetIdx); P.hitKind[targetIdx] = kind;
       P.counts[kind]++; P.combo++; if (P.combo > P.maxCombo) P.maxCombo = P.combo;
       const mult = _p2Mult();
-      P.score += JUDGE[kind].score * mult;
-      if (!P.odActive) P.overdrive = Math.min(1, P.overdrive + (target.type === 'star' ? 0.14 : 0.022));
+      const accPerf2 = (target.type === 'accent' && kind === 'perfect');   // build104 s8 mirror: accent PERFECT pays 1.5× + deeper OD
+      P.score += JUDGE[kind].score * mult * (accPerf2 ? 1.5 : 1);
+      // build104 s7 mirror: FULL CHORD — P2 has no one-press assist (each member is struck individually), so the
+      // "all lanes down" case IS P2's natural chord clear: pay the same 0.3× bonus per member when the whole
+      // shape is held at this member's judge instant (same ceiling as P1's 0.3×chord-total).
+      if (target.chord && target.chordLanes && target.chordLanes.length > 1 && target.chordLanes.every(l => P.laneDown[l])) P.score += JUDGE[kind].score * mult * 0.3;
+      if (!P.odActive) P.overdrive = Math.min(1, P.overdrive + (target.type === 'star' ? 0.14 : accPerf2 ? 0.04 : 0.022));
       _p2push(lane, kind === 'perfect' ? 'p' : 'g');
       P.lastJudgeT = performance.now();
       // a struck hold → P2 sustain (scored continuously in p2Frame while the fret stays held)
