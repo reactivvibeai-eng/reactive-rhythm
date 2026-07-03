@@ -83,6 +83,7 @@
   var oppPresent = false, oppLeft = false;
   var sel = { trackId: null, title: null, artist: null, art: null, difficulty: 'medium', demo: false, env: '__default' };   // v262: env = the room's chosen STAGE/level (host picks; rides the song payload; applied on match start). __default = plain Arena.
   var meReady = false, oppReady = false;
+  var roomOppReady = false;   // playtest-3 (Bug D): the opponent's readiness during the ROOM-waiting stage (before the match channel exists). Match-channel readiness stays in oppReady.
   var matchLive = false, finishedLocal = false;
   var myFinal = null, oppFinal = null;
   var lastOppTick = null;
@@ -480,15 +481,26 @@
           }, 5000);
         }
         // build60: room invite deep-link — ask the host to re-advertise; onRoomMeta auto-joins when it lands.
+        // playtest-3 fix (Bug B): the host may be a couple seconds slow to boot/subscribe/advertise (cold Realtime,
+        // backgrounded tab). A ONE-SHOT 6s ping raced that and dead-ended with "room isn't open anymore" even though
+        // the meta was about to arrive. Mirror the proven qmMatched-guest retry (setInterval 2.5s × 12 ≈ 30s); clear
+        // the instant onRoomMeta auto-joins (room.id set) or the pending rid is cleared.
         if (_pendingRoomJoin) {
-          try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
           banner('mpx-lobby-msg', 'Joining the room you were invited to…');
-          setTimeout(function () {
-            if (_pendingRoomJoin && !room.id) { banner('mpx-lobby-msg', 'That room isn\'t open anymore — hit PLAY NOW, or open your own room.'); _pendingRoomJoin = null; }
-          }, 6000);
+          var _djTries = 0;
+          var _djT = setInterval(function () {
+            if (!_pendingRoomJoin || room.id) { clearInterval(_djT); return; }   // auto-joined (onRoomMeta) or abandoned
+            if (++_djTries > 12) { clearInterval(_djT); if (_pendingRoomJoin && !room.id) { banner('mpx-lobby-msg', 'That room isn\'t open anymore — hit PLAY NOW, or open your own room.'); _pendingRoomJoin = null; } return; }
+            try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+          }, 2500);
+          try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}   // fire once immediately, then the interval retries
         }
         // build102x: ?mpqm=resume — the lobby is up; ask the server where my match queue stands (one-shot).
+        // playtest-3 fix (Bug A): a battle-call ACCEPT arrives as ?mproom=<rid>&mprole=host (NO ?mpqm=resume), so
+        // _pendingQmResume is false and qmResume()/_qmHostFallback never ran → the HOST who accepted was stranded on
+        // the hub while the guest landed in the room. Consume _qmBootRoom here too (it opens the paired room).
         if (_pendingQmResume) { _pendingQmResume = false; qmResume(); }
+        else if (_qmBootRoom) { try { _qmHostFallback(); } catch (e) {} }
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         banner('mpx-lobby-msg', 'Could not reach the live lobby (' + status + '). Online multiplayer needs Realtime — retry shortly.');   // build100n: surface the exact status so a Realtime/anon issue is diagnosable
       }
@@ -606,7 +618,7 @@
     if (!supa) return;
     teardownMatch();   // safety
     matchId = mid; matchRole = role; oppMeta = opp || null;
-    oppPresent = false; oppLeft = false; meReady = false; oppReady = false;
+    oppPresent = false; oppLeft = false; meReady = false; oppReady = false; roomOppReady = false;
     sel = { trackId: null, title: null, artist: null, art: null, difficulty: sel.difficulty || 'medium', demo: false };
     setLobbyInMatch(true);
     matchCh = supa.channel('rr-match-' + mid, { config: { broadcast: { self: false } } });
@@ -714,11 +726,12 @@
   }
 
   // ---- song selection (host) ----
-  function broadcastSong() { if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: sel }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: sel }); }
+  function broadcastSong() { roomOppReady = false; meReady = false; try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {}   /* playtest-3 (Bug D): a track (re)pick un-readies BOTH sides so a stale guest-ready can't auto-start the new track */
+    if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: sel }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: sel }); }
   function onSong(p) {
     if (!p) return;
     sel = p; paintSelection();
-    meReady = false; oppReady = false; setReadyBtn(); refreshReadyEnabled();
+    meReady = false; oppReady = false; roomOppReady = false; setReadyBtn(); refreshReadyEnabled();
     var rs = $('mpx-readystate'); if (rs) rs.textContent = amPicker() ? 'Track locked. Hit READY.' : 'Host locked a track. Hit READY when set.';
   }
   // v262: the room STAGE (level/environment) options — Arena + every FINISHED level the player OWNS. No Random in MP (the host
@@ -764,9 +777,14 @@
 
   // ---- ready check ----
   function refreshReadyEnabled() {
-    // build102s: a SHOW-room host can always start (solo run with an empty challenger seat — owner's non-negotiable);
-    // normal duels keep the exact oppPresent gate.
-    var ok = (oppPresent || (room.show && room.isHost)) && !!sel.trackId;
+    // build102s: a SHOW-room host can always start (solo run with an empty challenger seat — owner's non-negotiable).
+    // playtest-3 fix (Bug D): during the ROOM-waiting stage there is NO match channel yet, so oppPresent (set only by
+    // onMatchPeers) is always false → READY was disabled forever for a normal duel and the start deadlocked. Gate on
+    // the ROOM opponent: the host waits for room.p2, the guest's host (room.p1) is always present → READY enables the
+    // moment a track is picked. Once the match channel exists we fall back to the original oppPresent gate.
+    var roomStage = !!(room.id && !matchCh && !room.show);
+    var oppHere = roomStage ? (room.isHost ? !!room.p2 : !!room.p1) : oppPresent;
+    var ok = (oppHere || (room.show && room.isHost)) && !!sel.trackId;
     var rb = $('mpx-ready'); if (rb) rb.disabled = !ok;
     var rs = $('mpx-readystate'); if (!rs) return;
     if (room.show) {   // build102s: show-room copy (song is locked to the review, host is never blocked)
@@ -774,8 +792,13 @@
                                    : 'The host runs the show — you’re pulled in when the match starts.';
       return;
     }
+    var peerReady = matchCh ? oppReady : roomOppReady;   // playtest-3 (Bug D): room-stage peer readiness lives in roomOppReady
     if (!sel.trackId) rs.textContent = amPicker() ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
-    else if (!oppPresent) rs.textContent = 'Waiting for your opponent…';
+    else if (!oppHere) rs.textContent = 'Waiting for your opponent…';
+    else if (meReady && !peerReady) rs.textContent = 'You\'re READY ✓ — waiting for the other player to ready up…';
+    else if (!meReady && peerReady) rs.textContent = 'Your opponent is READY ✓ — tap READY to start.';
+    else if (meReady && peerReady) rs.textContent = 'Both ready — starting…';
+    else rs.textContent = 'Tap READY when you\'re set.';
   }
   function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady);
     if (room.show && room.isHost) { b.textContent = meReady ? 'STARTING…' : (room.p2 ? '⚔ START VERSUS' : '▶ START (SOLO)'); return; }   // build102s: the show host's button IS the start switch
@@ -783,14 +806,17 @@
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
-    // build102s: a show-room host readies with NO match channel yet (the room-start path) — guard the send.
-    // Normal duels always have matchCh here (the button only enables via onMatchPeers), so this is byte-identical.
+    // playtest-3 fix (Bug D): a NORMAL duel readies on the ROOM channel — the match channel doesn't exist yet. The old
+    // code only sent on matchCh (null here), so a normal room's readiness went NOWHERE and the start handshake could
+    // never complete ("both in the room, couldn't start"). Broadcast 'room-ready' on the room channel so the peer sees
+    // my green check; once the match channel is up, the original 'ready' path takes over (byte-identical for that stage).
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id } });
-    // build60: reflect my own ready alongside the opponent's so both sides stay legible.
-    var oppName = (oppMeta && oppMeta.name) || 'Opponent';
-    if (meReady && oppReady) paintWaitStatus('Both ready — starting…', true);
-    else if (meReady && !oppReady) paintWaitStatus('You\'re READY — waiting for ' + oppName + '…', true);
-    else if (!meReady && oppReady) paintWaitStatus(oppName + ' is READY — tap READY to start.', true);
+    else if (room.id && room.ch && !room.show) { try { room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id } }); } catch (e) {} }
+    var oppName = (oppMeta && oppMeta.name) || 'the other player';
+    var peerReady = matchCh ? oppReady : roomOppReady;   // room stage → roomOppReady
+    if (meReady && peerReady) paintWaitStatus('Both ready — starting…', true);
+    else if (meReady && !peerReady) paintWaitStatus('You\'re READY ✓ — waiting for ' + oppName + '…', true);
+    else if (!meReady && peerReady) paintWaitStatus(oppName + ' is READY ✓ — tap READY to start.', true);
     else paintWaitStatus(sel.trackId ? 'Tap READY when you\'re set.' : 'Waiting for a track…');
     maybeStart();
   }
@@ -803,6 +829,19 @@
     else if (!oppReady && sel.trackId) paintWaitStatus('Waiting for ' + oppName + ' to ready up…');
     maybeStart();
   }
+  // playtest-3 fix (Bug D): ROOM-stage readiness handshake — the peer clicked READY in the room-waiting area (before
+  // any match channel). Track it in roomOppReady (distinct from match-channel oppReady); the host auto-starts once
+  // BOTH are ready (maybeStart), so neither player needs a separate START button (owner's "each readies → auto-start").
+  function onRoomReady(p) {
+    if (matchCh) return;   // match channel is up → its 'ready' is authoritative; ignore stale room-stage echoes
+    roomOppReady = !!(p && p.ready);
+    var oppName = (room._p2Name) || 'Your opponent';
+    if (roomOppReady && !meReady) paintWaitStatus(oppName + ' is READY ✓ — tap READY to start.', true);
+    else if (roomOppReady && meReady) paintWaitStatus('Both ready — starting…', true);
+    else if (!roomOppReady && sel.trackId) paintWaitStatus('Waiting for the other player to ready up…');
+    try { refreshReadyEnabled(); } catch (e) {}
+    maybeStart();
+  }
   function maybeStart() {
     // build8: in the ROOM WAITING AREA (no match channel yet), the host's start rides the ROOM
     // channel via room-start; both seated players then open the same rr-match-<mid>. Once that
@@ -811,7 +850,11 @@
     // build102s: in a SHOW room the host's meReady ALONE fires the room-start — solo (no p2) or versus (seated
     // challenger; the ready handshake then runs on the real match channel via the _fromRoom handoff). Room-stage
     // oppReady never syncs pre-matchCh, so gating a show on it would deadlock; normal rooms keep the exact old gate.
-    if (room.id && room.isHost && !matchCh && meReady && (oppReady || room.show) && sel.trackId) { startRoomMatch(); return; }
+    // playtest-3 fix (Bug D): a normal room auto-starts when the HOST is ready AND the guest is ready (roomOppReady,
+    // synced via the room-channel 'room-ready' handshake) — was gated on oppReady, which only exists on the match
+    // channel, so a normal duel could never satisfy it (the "couldn't start the match" deadlock). Show rooms keep the
+    // host-readies-alone start. The guest never fires this (isHost false) — it readies and waits for room-start.
+    if (room.id && room.isHost && !matchCh && meReady && (room.show || roomOppReady) && sel.trackId) { startRoomMatch(); return; }
     if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
       if (room.show) _showAtMs = atMs;               // build102s: show-snap carries the shared start for late arrivals
@@ -1667,7 +1710,7 @@
   function set(id, txt) { var el = $(id); if (el) el.textContent = txt; }
 
   function resetForRematch() {
-    myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false;
+    myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
 
@@ -1691,7 +1734,7 @@
     if (_npcRaf) { cancelAnimationFrame(_npcRaf); _npcRaf = 0; }   // stop the NPC ghost-drive loop
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
-    matchLive = false; finishedLocal = false; meReady = false; oppReady = false;
+    matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false;
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
@@ -2128,6 +2171,8 @@
     opts = opts || {};
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     if (_qm.on) qmStop(true);   // v405 review fix: hosting a room cancels a live matchmaking search (a match landing mid-room stomps it). No-op on the qmMatched host path (_qm.on already false, so the MATCHED pill survives).
+    clearShowRoom();   // playtest-3 fix (Bug C): opening a NORMAL/qm/battle room invalidates any stale rr_showroom key, so a boot-time maybeReconnectShowRoom() can never resurrect show-seat chrome ("accept the challenge"/"being called in") on top of it. This room is not a show; startShowHeartbeat re-persists for real show rooms only.
+    meReady = false; roomOppReady = false;   // playtest-3 fix (Bug D): a fresh room starts un-ready on both sides (no stale readiness auto-starting it)
     room = { id: rid, name: (opts.name || (ME.name + "'s Room")).slice(0, 28), priv: !!opts.priv, combat: !!opts.combat, isHost: true, ch: null, seat: 'p1', members: {}, p1: ME.id, p2: null };
     try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: a fresh NON-show room must never inherit a prior show's review audio (build102z p1.5: nor its video backdrop)
     joinRoomChannel(room.id, 'p1');
@@ -2182,6 +2227,7 @@
     roomSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }; }, onRoomPeers);
     ch.on('broadcast', { event: 'room-start' }, function (m) { onRoomStart(m.payload); });
     ch.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });   // build64: the room host's live track/stage/difficulty picks reach the joiner in the waiting room
+    ch.on('broadcast', { event: 'room-ready' }, function (m) { onRoomReady(m.payload); });   // playtest-3 fix (Bug D): the room-stage READY handshake (no match channel yet)
     ch.on('broadcast', { event: 'show-snap' }, function (m) { onShowSnap(m.payload); });   // build102s: live-show heartbeat (inert for normal rooms — only a show host ever emits it)
     ch.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
@@ -2280,6 +2326,8 @@
     if (!supa || !lobbyCh) return;
     var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
     if (_qm.on) qmStop(true);   // v405 review fix: joining a room cancels a live matchmaking search (mirror of openRoomWithId)
+    if (!meta.show) clearShowRoom();   // playtest-3 fix (Bug C): joining a NORMAL room clears any stale rr_showroom key (host-only persistence — harmless to clear as a guest); a real show-room join keeps it untouched.
+    meReady = false; roomOppReady = false;   // playtest-3 fix (Bug D): fresh join = un-ready both sides
     if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
     room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
       show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
@@ -2324,6 +2372,7 @@
     paintRoomWaiting();
   }
   function paintRoomWaiting() {
+    try { refreshReadyEnabled(); } catch (e) {}   // playtest-3 fix (Bug D): every room repaint (opponent arrives/leaves, track picked) re-evaluates the READY button so it enables the moment the duel is joinable — the old code left it disabled because it only re-checked on the match channel
     var specCount = Object.keys(room.members).filter(function (id) { return room.members[id].seat === 'spec'; }).length;
     // build102t: past the softPresence ≤10-peer design the roster is no longer authoritative — a show paints '10+'
     var sc = $('mpx-roomctx-spec'); if (sc) sc.textContent = specCount ? (((room.show && specCount > 10) ? '10+' : specCount) + ' watching') : '';
