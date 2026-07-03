@@ -147,8 +147,11 @@
       full_combo: !!data.full_combo,
       newBest: !!data.newBest,
       gradeUp: !!data.gradeUp,
-      // a song-less leaderboard share (global rank) shows "GLOBAL RANKING" instead of a fake song
-      song: clean(data.song) || (data.kind === 'leaderboard' ? 'GLOBAL RANKING' : 'LUNAR WAVES'),
+      // a song-less leaderboard share (global rank) shows "GLOBAL RANKING" instead of a fake song. build118 p3:
+      // 'rankings' (the MY-TOP-RUNS podium card, spans multiple songs) now gets a neutral "My Run" instead of
+      // falling through to 'LUNAR WAVES' (a stock demo-track name that would misleadingly read as a real title) —
+      // defense-in-depth; the leaderboard call site now exhausts a real-title lookup before ever reaching here.
+      song: clean(data.song) || (data.kind === 'leaderboard' ? 'GLOBAL RANKING' : (data.kind === 'rankings' ? 'My Run' : 'LUNAR WAVES')),
       artist: clean(data.artist),
       diff: (clean(data.diff) || 'PULSE').toUpperCase(),
       counts: data.counts || null,

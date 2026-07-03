@@ -1035,6 +1035,12 @@
   .lbd-board .lb-head { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--silver); margin-bottom: 8px; text-align: left; }
   .lbd-board .lb-row { display: grid; grid-template-columns: 48px 1fr auto auto auto; gap: 14px; align-items: center; padding: 11px 12px; border-bottom: 1px solid rgba(222,216,212,0.06); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: left; }
   .lbd-board .lb-rank { color: var(--crimson); font-weight: 700; }
+  /* build118 p3 (spec item 5): rank movement glyph — crimson down, gold up, chrome flat. NO green/blue
+     (brand hard rule). First-seen rows render nothing (rankDeltaGlyph returns '' for undefined delta). */
+  .lb-delta { display: inline-block; margin-left: 4px; font-size: 0.85em; font-weight: 800; }
+  .lb-delta.up { color: var(--gold); }
+  .lb-delta.down { color: var(--crimson); }
+  .lb-delta.flat { color: var(--chrome, #dad7d2); opacity: 0.6; }
   .lbd-board .lb-name { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-board .lb-name .lb-sub { color: var(--ink-dim); font-size: 11px; }
   .lbd-board .lb-score { color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -1102,6 +1108,15 @@
     transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
   .lbd-empty-cta:hover, .lbd-empty-cta:focus-visible { background: linear-gradient(180deg, rgba(255,31,46,0.36), rgba(255,31,46,0.16)); box-shadow: 0 0 32px rgba(255,31,46,0.45); transform: translateY(-1px); outline: none; }
   .lbd-empty-cta:active { transform: scale(0.97); }
+  /* build118 p3 (spec item 5): the "chase card" — X pts to pass <name above you> + NEW PB pill.
+     Sits above SHARE MY RANK; hidden entirely when there's nothing to show (paintChaseCard). */
+  .lbd-chase { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .lbd-chase[hidden] { display: none; }
+  .lbd-chase-txt { font-family: 'Chakra Petch', sans-serif; font-size: 12px; font-weight: 600; color: var(--ink-dim); letter-spacing: 0.02em; }
+  .lbd-chase-txt b { color: var(--gold); font-weight: 700; }
+  .lbd-pb-pill { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.1em;
+    color: #1b1206; background: linear-gradient(180deg, #f3c969, #d99a2c); border-radius: 999px; padding: 3px 10px;
+    box-shadow: 0 0 14px rgba(224,169,63,0.5); }
   /* ===== v254: MULTIPLAYER ranking + combat UI (lobby rank chip · combat toggle · stun veil · leaderboard MP tab) ===== */
   .mpx-rankrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
   .mpx-rank-chip { display: inline-flex; align-items: center; gap: 10px; padding: 7px 14px; border-radius: 999px;
@@ -6441,6 +6456,8 @@
         <span class="lbd-empty-txt" id="lbd-empty-txt">No scores yet — finish a run and you'll appear here.</span>
         <button class="lbd-empty-cta" id="lbd-empty-cta" type="button">PLAY A SONG</button>
       </div>
+      <!-- build118 p3: "X pts to pass <name>" + NEW PB pill — paintChaseCard(), sits above the share row -->
+      <div class="lbd-chase" id="lbd-chase" hidden></div>
       <!-- SHARE MY RANK — only shown when the LIVE board has the player's own ranked "you" row -->
       <div class="lbd-share-row" id="lbd-share-row" hidden style="margin-top:12px;text-align:center;">
         <button class="ghost-btn gold" id="lbd-share">SHARE MY RANK</button>
@@ -9499,6 +9516,23 @@
   var $ = function (id) { return document.getElementById(id); };
   var screen = $('leaderboard-screen'); if (!screen) return;
   var RC = function () { return window.RhythmCatalog; };
+  // build118 p3 (owner's explicit complaint — see brief augmentation 1): resolve the REAL track title
+  // before it ever reaches a share card. localRuns() deliberately leaves title '' when the catalog wasn't
+  // ready at LEADERBOARD-RENDER time (build115 fix, see localRuns() below) — but by SHARE-CLICK time
+  // (a later, separate user action) the catalog has almost always finished loading. Re-look-up by id here
+  // rather than trusting the possibly-stale row snapshot. Exhausts: (1) fresh catalog lookup by id,
+  // (2) the row's own already-known title, (3) a neutral fallback — NEVER a literal "unknown track".
+  function _resolveTrackTitle(id, knownTitle) {
+    if (knownTitle) return knownTitle;
+    try {
+      var C = RC();
+      if (id && C && C.allTracks) {
+        var hit = C.allTracks().filter(function (t) { return t.id === id; })[0];
+        if (hit && hit.title) return hit.title;
+      }
+    } catch (e) {}
+    return '';   // exhausted — caller applies its own neutral fallback (never a literal "unknown"/"Unknown track" string)
+  }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function fmt(n) { return Number(n || 0).toLocaleString(); }
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
@@ -9547,6 +9581,70 @@
     var hasLocal = false; try { hasLocal = localRuns().length > 0; } catch (e) {}
     if (row) row.hidden = !(youLiveRow || hasLocal);
     if (btn) btn.textContent = youLiveRow ? 'SHARE MY RANK' : 'SHARE MY RANKINGS';
+    // build118 p3 (spec item 5 — competitive juice): "X pts to pass <name above you>" sticky line, and a
+    // NEW PB pill when this live rank's score beats the player's own best LOCAL run for this context.
+    paintChaseCard(items);
+  }
+  // ---- competitive juice: rank movement deltas (localStorage-snapshotted) + chase card + NEW PB ----
+  // build118 p3 (spec item 5). Rank movement needs a PRIOR snapshot to diff against — the backend doesn't
+  // return one, so we cache the last-seen rank per name, keyed per board context, in localStorage. First
+  // time a board/name pair is ever seen there's nothing to diff against → no arrow (never fake a "flat").
+  var LB_SNAP_KEY = 'rr_lb_snapshot';
+  function loadLbSnap() { try { var v = JSON.parse(localStorage.getItem(LB_SNAP_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+  function saveLbSnap(s) { try { localStorage.setItem(LB_SNAP_KEY, JSON.stringify(s)); } catch (e) {} }
+  // annotates each item with .delta (1 = up/better rank, -1 = down/worse, 0 = flat, undefined = first-seen)
+  // and PERSISTS the new snapshot — call exactly once per successful live render (not on every repaint).
+  function applyRankDeltas(items, boardKey) {
+    if (!items || !items.length || !boardKey) return items;
+    var snap = loadLbSnap();
+    var prev = snap[boardKey] || {};
+    var next = {};
+    items.forEach(function (p) {
+      var key = String(p.name || '');
+      if (prev.hasOwnProperty(key)) {
+        var was = prev[key];
+        p.delta = was === p.rank ? 0 : (was > p.rank ? 1 : -1);   // lower rank number = better position = moved UP
+      }
+      next[key] = p.rank;
+    });
+    snap[boardKey] = next;
+    saveLbSnap(snap);
+    return items;
+  }
+  function rankDeltaGlyph(delta) {
+    // crimson down, gold up, chrome flat — NO green/blue (brand hard rule); undefined (first-seen) renders nothing
+    if (delta === 1) return '<span class="lb-delta up" title="Moved up since your last visit">▲</span>';
+    if (delta === -1) return '<span class="lb-delta down" title="Moved down since your last visit">▼</span>';
+    if (delta === 0) return '<span class="lb-delta flat" title="No change">–</span>';
+    return '';
+  }
+  // the sticky "chase card": name + score gap to the player directly above them on the CURRENT items array,
+  // plus a NEW PB pill when the live score beats their own local best for this context. Renders into
+  // #lbd-chase (inserted right above #lbd-share-row in the markup — see the HTML change below).
+  function paintChaseCard(items) {
+    var card = $('lbd-chase'); if (!card) return;
+    if (!items || !items.length || !youLiveRow) { card.hidden = true; card.innerHTML = ''; return; }
+    var youIdx = -1;
+    for (var i = 0; i < items.length; i++) { if (items[i].you && items[i].rank === youLiveRow.rank) { youIdx = i; break; } }
+    var chaseHtml = '';
+    if (youIdx > 0) {
+      var above = items[youIdx - 1];
+      var gap = Math.max(0, Math.round((above.score || 0) - (youLiveRow.score || 0)));
+      if (gap > 0) chaseHtml = '<span class="lbd-chase-txt">' + fmt(gap) + ' pts to pass <b>' + esc(above.name) + '</b></span>';
+    }
+    var pbHtml = '';
+    try {
+      var mine = localRuns().filter(function (r) { return !youLiveRow.song || r.title === youLiveRow.song; });
+      var prevBest = mine.length ? Math.max.apply(null, mine.map(function (r) { return r.score || 0; })) : 0;
+      // strictly greater — a tie is not a NEW best; local run history already includes THIS run once recorded,
+      // so compare against the second-highest when the top matches the live score exactly (avoid self-compare).
+      var sorted = mine.map(function (r) { return r.score || 0; }).sort(function (a, b) { return b - a; });
+      var priorBest = (sorted[0] === youLiveRow.score) ? (sorted[1] || 0) : sorted[0] || 0;
+      if (youLiveRow.score > priorBest && mine.length) pbHtml = '<span class="lbd-pb-pill">NEW PB</span>';
+    } catch (e) {}
+    if (!chaseHtml && !pbHtml) { card.hidden = true; card.innerHTML = ''; return; }
+    card.hidden = false;
+    card.innerHTML = chaseHtml + pbHtml;
   }
 
   function banner(html) {
@@ -9567,7 +9665,7 @@
       var medal = p.rank === 1 ? '🏆' : (p.rank === 2 ? '🥈' : '🥉');
       var crown = p.rank === 1 ? '<div class="lb-pod-crown" aria-hidden="true">👑</div>' : '';
       return '<div class="lb-pod r' + p.rank + (p.you ? ' you' : '') + '">' +
-        '<div class="lb-pod-medal">' + medal + '</div>' +
+        '<div class="lb-pod-medal">' + medal + rankDeltaGlyph(p.delta) + '</div>' +
         '<div class="lb-pod-av">' + crown + esc(initial(p.name)) + '</div>' +
         '<div class="lb-pod-name">' + esc(p.name) + '</div>' +
         '<div class="lb-pod-score">' + fmt(p.score) + '</div>' +
@@ -9577,7 +9675,7 @@
   }
   function listRow(p) {
     return '<div class="lb-row' + (p.you ? ' you' : '') + '">' +
-      '<span class="lb-rank">#' + (p.rank || '–') + '</span>' +
+      '<span class="lb-rank">#' + (p.rank || '–') + rankDeltaGlyph(p.delta) + '</span>' +
       '<span class="lb-name">' + esc(p.name) + (p.sub ? ' <span class="lb-sub">· ' + esc(p.sub) + '</span>' : '') + '</span>' +
       '<span class="lb-gradecol">' + gradeBadge(p.grade) + '</span>' +
       '<span class="lb-score">' + fmt(p.score) + '</span>' +
@@ -9599,6 +9697,27 @@
     });
   }
   var DORMANT = 'Live rankings switch on <b>when accounts connect</b>. For now this shows your local progress.';
+  // build118 p3 (spec item 4 / brief augmentation 4): the dormant/local fallback boards (Global, By-Song,
+  // By-Level) all showed the SAME "connect an account" copy regardless of WHY they're dormant — a signed-in
+  // user with zero backend rows read the identical banner as a fully signed-out guest. Distinguish via
+  // RhythmCatalog.getUser() (the established async local-session read, catalog.js ~103 — no network dependency
+  // for the "signed in at all" question). Shows the best-guess synchronously first (no blank flash), then
+  // repaints once the async check resolves — guarded against a stale resolve (tab/diff changed meanwhile) the
+  // same way the fetch race-guards above are.
+  var ERROR_BANNER = DORMANT;   // unreachable backend / network hiccup → keep the existing copy verbatim
+  var SIGNED_OUT_BANNER = 'Sign in to enter live rankings. For now this shows your local progress.';
+  var SIGNED_IN_EMPTY_BANNER = 'No ranked runs yet — be the first. For now this shows your local progress.';
+  function authBanner(isError) {
+    if (isError) { banner(ERROR_BANNER); return; }
+    banner(DORMANT);   // synchronous best-guess while the async auth check resolves
+    var reqTab = tab, reqDiff = diff;
+    var RCC = RC();
+    if (!RCC || !RCC.getUser) return;   // no catalog module → can't distinguish further, DORMANT copy stands
+    Promise.resolve(RCC.getUser()).then(function (u) {
+      if (tab !== reqTab || diff !== reqDiff) return;   // stale — user moved on before this resolved
+      banner(u ? SIGNED_IN_EMPTY_BANNER : SIGNED_OUT_BANNER);
+    }).catch(function () {});   // getUser() itself failing → leave the synchronous DORMANT copy in place
+  }
 
   // ---- GLOBAL board: live aggregate if backend offers it, else local career row ----
   // build115 p2: threads the difficulty filter (was previously ignored on this tab entirely).
@@ -9607,21 +9726,25 @@
     var head = '<div class="lb-head">All-time · Top players' + (diff ? ' · ' + esc(diff) : '') + '</div>';
     var c = (RC() && RC().getCareer) ? RC().getCareer() : null;
     var fetchG = RC() && RC().fetchGlobalLeaderboard;
+    // build118 p3: capture the SELECTED difficulty at call time — on resolve, bail if the user toggled
+    // difficulty mid-flight (a slow response for the OLD selection must never overwrite a newer one).
+    var reqDiff = diff;
     if (fetchG) {
       board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
       Promise.resolve(fetchG({ limit: 20, difficulty: diff })).then(function (res) {
-        if (tab !== 'global') return;
+        if (tab !== 'global' || diff !== reqDiff) return;
         if (res && res.rows && res.rows.length) {
           banner(null);
           var items = normLive(res.rows, res.youName);
+          applyRankDeltas(items, 'global' + (diff ? ':' + diff : ''));   // build118 p3: rank ▲/▼/– vs the last time this board+difficulty was viewed
           board.innerHTML = boardHtml(head, items);
           empty.hidden = true;
           setYouRow(items, '');   // global → no song context
-        } else { renderGlobalLocal(c); }
-      }).catch(function () { renderGlobalLocal(c); });
+        } else { renderGlobalLocal(c, false); }   // empty rows — NOT an error; authBanner distinguishes signed-in-empty from signed-out
+      }).catch(function () { if (tab === 'global' && diff === reqDiff) renderGlobalLocal(c, true); });   // a real fetch failure — keep the DORMANT/error copy verbatim
       return;
     }
-    renderGlobalLocal(c);
+    renderGlobalLocal(c, false);   // no fetchGlobalLeaderboard at all (offline build) — not an "error", just no live backend
   }
   // build58: read the player's own runs (rr_scores) so the LOCAL board is a real ranked leaderboard, not a single career row.
   function localRuns() {
@@ -9655,10 +9778,10 @@
   // "preview" pill distinguishing it, and playtesters mistook it for real people. The local/dormant Global board is now
   // an HONEST view: your own local runs (filtered by the difficulty toggle, same as By-Song), or a real empty/CTA state
   // when you have none — never fake competitors.
-  function renderGlobalLocal(c) {
+  function renderGlobalLocal(c, isError) {
     var board = $('lbd-board'), empty = $('lbd-empty');
     setYouRow(null);   // local/dormant board carries no real world rank
-    banner(DORMANT);
+    authBanner(isError);
     var runs = localRuns().filter(function (r) { return !diff || r.difficulty === diff; });
     if (!runs.length) {
       board.innerHTML = '';
@@ -9697,26 +9820,31 @@
     }
     var head = '<div class="lb-head">' + esc(pickTrack.title || '') + (diff ? ' · ' + diff : '') + '</div>';
     var fetchL = RC() && RC().fetchLeaderboard;
+    // build118 p3: capture BOTH the selected difficulty and the picked track at call time — on resolve,
+    // bail if either changed mid-flight (a slow response for a stale diff/track must never overwrite a
+    // newer selection). Mirrors the same guard added to renderGlobal above.
+    var reqDiff = diff, reqTrackId = pickTrack.id;
     if (fetchL) {
       board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
       Promise.resolve(fetchL(pickTrack.id, { difficulty: diff, limit: 20 })).then(function (res) {
-        if (tab !== 'song') return;
+        if (tab !== 'song' || diff !== reqDiff || !pickTrack || pickTrack.id !== reqTrackId) return;
         if (res && res.rows && res.rows.length) {
           banner(null);
           var items = normLive(res.rows, res.youName);
+          applyRankDeltas(items, 'song:' + pickTrack.id + (diff ? ':' + diff : ''));   // build118 p3: rank ▲/▼/– vs the last time THIS song+difficulty was viewed
           board.innerHTML = boardHtml(head, items);
           empty.hidden = true;
           setYouRow(items, pickTrack.title || '');   // song context for the share caption
-        } else { renderSongLocal(head); }
-      }).catch(function () { renderSongLocal(head); });
+        } else { renderSongLocal(head, false); }
+      }).catch(function () { if (tab === 'song' && diff === reqDiff && pickTrack && pickTrack.id === reqTrackId) renderSongLocal(head, true); });
       return;
     }
-    renderSongLocal(head);
+    renderSongLocal(head, false);
   }
-  function renderSongLocal(head) {
+  function renderSongLocal(head, isError) {
     var board = $('lbd-board'), empty = $('lbd-empty');
     setYouRow(null);   // local best rows aren't a real world rank
-    banner(DORMANT);
+    authBanner(isError);
     var scores; try { scores = JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { scores = {}; }
     var diffs = diff ? [diff] : ['hard', 'medium', 'easy'];   // build58: show your best on EACH difficulty (ranked by score), not one row
     var rows = [];
@@ -9734,7 +9862,7 @@
   function renderLevels() {
     var board = $('lbd-board'), empty = $('lbd-empty');
     setYouRow(null);   // level-champions board is local-only
-    banner(DORMANT);
+    authBanner(false);   // no fetch on this tab at all — never an "error" state, just local-only by design
     var levels = (window.RhythmLevels && window.RhythmLevels.champions) ? window.RhythmLevels.champions() : [];
     if (!levels.length) { board.innerHTML = ''; showEmpty('No levels yet.'); return; }
     var scores; try { scores = JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { scores = {}; }
@@ -9760,6 +9888,7 @@
     // build65 FIX: the MP tab has no per-player shareable rank CARD yet — clear any stale Global/Song SHARE state
     // (renderMp never called setYouRow, so the button kept sharing the wrong card). Hide the row on this tab.
     try { var _sr = $('lbd-share-row'); if (_sr) _sr.hidden = true; } catch (e) {}
+    try { var _cc = $('lbd-chase'); if (_cc) { _cc.hidden = true; _cc.innerHTML = ''; } } catch (e) {}   // build118 p3: same stale-state guard for the new chase card
     var MP = window.RhythmMP, r = (MP && MP.getRank) ? MP.getRank() : null;
     if (!r) { board.innerHTML = '<div class="lbd-empty">Multiplayer ranking unavailable — open Multiplayer and play a match.</div>'; return; }
     var lib = window.RhythmLibrary, cbadges = (lib && lib.earnedBadges) ? (lib.earnedBadges() || []) : [];
@@ -9922,12 +10051,15 @@
       if (!runs.length) { lsb.textContent = 'PLAY A SONG FIRST'; setTimeout(lsbReset, 1600); return; }
       var best = runs[0];
       var songSet = {}; runs.forEach(function (r) { if (r.id) songSet[r.id] = 1; });
+      // build118 p3: exhaust a real-title lookup (share-click time, catalog is likely ready now even if it
+      // wasn't when localRuns() first snapshotted this row) before falling back — share.js's own 'LUNAR WAVES'
+      // default is a stock demo-track name, not a neutral "unknown" label; skip it whenever we can resolve real data.
       payload = {
         kind: 'rankings',
         score: best.score,
         grade: best.grade,
         accuracy: best.accuracy,
-        song: best.title,
+        song: _resolveTrackTitle(best.id, best.title) || 'My run',
         cover: best.cover || '',
         diff: best.difficulty,
         totalRuns: runs.length,
