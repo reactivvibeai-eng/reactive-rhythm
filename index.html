@@ -3689,7 +3689,7 @@
      The old `.hub-back` override to position:relative dropped it into the centered flex flow → floated it mid-left. */
   .multiplayer-screen .mp-card { position: relative; z-index: 1; }
   .mp-card { width: min(640px, 94vw); display: flex; flex-direction: column; align-items: center;
-    gap: 14px; padding: 40px 26px 30px; text-align: center; border-radius: 24px;
+    gap: var(--mx4, 16px); padding: 32px 24px 26px; text-align: center; border-radius: 24px;
     background: linear-gradient(180deg, rgba(28,15,16,0.80), rgba(11,7,8,0.90));
     border: 1px solid var(--glass-line);
     box-shadow: var(--glass-bevel), 0 36px 90px -18px rgba(0,0,0,0.72), 0 0 0 1px rgba(255,31,46,0.07) inset, 0 14px 40px -22px rgba(255,31,46,0.28);
@@ -3700,9 +3700,61 @@
   .mp-logo.on { display: block; }
   .mp-title.img-replaced { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .multiplayer-screen.active .mp-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  /* ===== MPX DESIGN SYSTEM (visual-overhaul pkg1) =====
+     COLOR LAW — enforced on every MP step:
+       · exactly ONE .mxc--act / crimson-gradient element visible per step (the step's single primary action);
+       · GOLD only on earned/special things (HOST badge, LIVE SHOW, RANKED, prizes, brackets);
+       · section headers are chrome-dim (#9c918e), never crimson. */
+  .multiplayer-screen {
+    --mx1: 4px; --mx2: 8px; --mx3: 12px; --mx4: 16px; --mx5: 24px; --mx6: 32px;
+    --mx-card-r: 16px; --mx-line: rgba(222,216,212,0.11);
+    --mx-card-bg: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+  }
+  /* card tiers: .mxc = quiet INFO · .mxc--act = the step's ONE action · .mxc--gold = earned/special */
+  .mxc { border: 1px solid var(--mx-line); background: var(--mx-card-bg); border-radius: var(--mx-card-r); padding: var(--mx4); text-align: left; }
+  .mxc--act { background: linear-gradient(180deg, rgba(255,31,46,0.14), rgba(255,31,46,0.04)); border-color: rgba(255,31,46,0.42); }
+  .mxc--gold { background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(26,16,12,0.5)); border-color: rgba(224,169,63,0.4); }
+  /* section head — chrome-dim mono + 13px icon slot; .mxh-r = quiet gold right slot (counts) */
+  .mxh { display: flex; align-items: center; gap: 7px; margin: 0 0 var(--mx3);
+    font: 700 10px 'JetBrains Mono', monospace; letter-spacing: 0.24em; color: #9c918e; }
+  .mxh svg { width: 13px; height: 13px; flex: 0 0 auto; }
+  .mxh-r { margin-left: auto; letter-spacing: 0.1em; color: #c9a25a; }
+  /* row — 92px mono label · value; hints wrap to a full-width second line */
+  .mxrow { display: flex; align-items: center; gap: var(--mx3); padding: var(--mx3) 0; flex-wrap: wrap; }
+  .mxrow + .mxrow { border-top: 1px solid var(--mx-line); }
+  .mxr-lab { flex: 0 0 92px; font: 700 10px 'JetBrains Mono', monospace; letter-spacing: 0.2em; color: #9c918e; }
+  .mxr-hint { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: #9c918e; line-height: 1.45; margin-top: 6px; flex-basis: 100%; }
+  /* step-entrance motion — 30ms stagger over the first 8 children; killed under reduce-motion */
+  @keyframes mxIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .mp-card .mpx-step:not([hidden]) > * { animation: mxIn 0.24s cubic-bezier(.2,.9,.3,1) both; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(2) { animation-delay: 30ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(3) { animation-delay: 60ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(4) { animation-delay: 90ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(5) { animation-delay: 120ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(6) { animation-delay: 150ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(7) { animation-delay: 180ms; }
+  .mp-card .mpx-step:not([hidden]) > :nth-child(8) { animation-delay: 210ms; }
+  html.rr-reduce-motion .mp-card .mpx-step:not([hidden]) > * { animation: none; }
+  /* [hidden] must always win over the system's display:flex classes */
+  .mxc[hidden], .mxrow[hidden], .mxh[hidden], .mxsub[hidden], .mxbtnrow[hidden] { display: none; }
+  /* row values fill the space right of the 92px label */
+  .mxrow > input[type="text"], .mxrow > input[type="number"], .mxrow > .mpx-privrow, .mxrow > .set-seg, .mxrow > .mpx-buyin-wrap { flex: 1; min-width: 0; }
+  /* curated-list sub-labels inside a fieldset (tour songs/stages) */
+  .mxsub { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; color: #9c918e; margin: 10px 0 4px; line-height: 1.5; }
+  /* side-by-side action row inside a .mpx-readyrow */
+  .mxbtnrow { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  /* browse header count line — "N rooms open · M brackets filling" */
+  .mpx-rooms-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #9c918e; margin: -4px 2px 8px; text-align: left; }
+  .mpx-rooms-count:empty { display: none; }
+  /* pkg1.2: gold accent on the armed BUY-IN row (stakes ≠ free) */
+  .mxrow.staked .mxr-lab { color: #c9a25a; }
+  .mxrow.staked input[type="number"] { border-color: rgba(224,169,63,0.5); }
+
   /* ===== MULTIPLAYER (versus) — open-lobby steps (namespaced .mpx-*; in-game #mp-opp) ===== */
-  .mp-card .mpx-step { display: block; width: 100%; }
+  .mp-card .mpx-step { display: flex; flex-direction: column; gap: var(--mx4); width: 100%; text-align: left; }
   .mp-card .mpx-step[hidden] { display: none; }
+  /* only the ceremonial screens stay centered — GO countdown + WINNER verdict theater */
+  .mp-card .mpx-step-go, .mp-card .mpx-step-winner { align-items: center; text-align: center; }
   .mpx-youbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; text-align: left;
     background: linear-gradient(180deg, rgba(255,31,46,0.14), rgba(255,31,46,0.05)); border: 1px solid rgba(255,31,46,0.34); margin: 6px 0 14px; }
   .mpx-you-av, .mpx-r-av { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 50%; display: grid; place-items: center;
@@ -3718,10 +3770,11 @@
     background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.14)); }
   .mpx-row .mpx-r-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
   .mpx-row .mpx-r-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: #9c918e; }
+  /* pkg1.3: outline-first CHALLENGE — a roster of rows can't each carry a filled crimson act (COLOR LAW) */
   .mpx-challenge { margin-left: auto; flex: 0 0 auto; padding: 7px 14px; border-radius: 10px; cursor: pointer;
-    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.06em; color: #fff;
-    background: linear-gradient(180deg, #ff2a38, #b3121f); border: 1px solid rgba(255,31,46,0.5); transition: transform .12s ease, box-shadow .12s ease; }
-  .mpx-challenge:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(255,31,46,0.4); }
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.06em; color: #ff8d96;
+    background: transparent; border: 1px solid rgba(255,31,46,0.5); transition: transform .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease; }
+  .mpx-challenge:hover, .mpx-challenge:focus-visible { transform: translateY(-1px); color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); box-shadow: 0 8px 22px rgba(255,31,46,0.4); }
   .mpx-challenge[disabled] { opacity: 0.5; cursor: default; background: rgba(218,215,210,0.08); color: #9c918e; border-color: var(--line, rgba(218,215,210,0.14)); }
   .mpx-row.incoming { border-color: rgba(224,169,63,0.5); background: rgba(224,169,63,0.08); }
   .mpx-acc { padding: 6px 12px; border-radius: 9px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; cursor: pointer; color: #0a0706; background: var(--gold, #e0a93f); border: none; margin-left: auto; }
@@ -3735,7 +3788,7 @@
   .mpx-dot.opp[data-state="left"] { color: #ff7a4a; border-color: rgba(255,122,74,0.5); }
   .mpx-vs { color: #6f6663; font-size: 12px; }
   .mpx-songpick { text-align: left; margin: 4px 0 16px; }
-  .mpx-pick-head { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.3em; color: var(--crimson, #ff1f2e); margin-bottom: 7px; }
+  .mpx-pick-head { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.3em; color: #9c918e; margin-bottom: 7px; }   /* pkg1 COLOR LAW: headers are chrome-dim, never crimson */
   .mpx-pick { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border-radius: 12px;
     background: rgba(218,215,210,0.05); border: 1px solid var(--line, rgba(218,215,210,0.16)); cursor: pointer; color: var(--ink, #f3eceb); }
   .mpx-pick[disabled] { opacity: 0.6; cursor: default; }
@@ -3760,8 +3813,8 @@
   .mpx-result:hover { background: rgba(255,31,46,0.08); }
   .mpx-result .r-t { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 14px; color: var(--ink, #f3eceb); }
   .mpx-result .r-a { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #9c918e; }
-  .mpx-readyrow { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .mpx-ready { min-width: 220px; }
+  .mpx-readyrow { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+  .mpx-ready { width: 100%; max-width: none; padding: 14px 0; font-size: 15px; }   /* pkg1.4: full-width COMMIT — the step's one crimson act when armed */
   .mpx-ready.armed { background: linear-gradient(180deg, var(--crimson, #ff1f2e), #a3060f); border-color: rgba(255,31,46,0.5); }
   .mpx-readystate { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.05em; color: #9c918e; }
   .mpx-go-num { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(40px, 12vw, 88px); color: var(--crimson, #ff1f2e); letter-spacing: 0.04em; }
@@ -3791,6 +3844,74 @@
   .mpx-sc.you .mpx-sc-score { color: #fff; text-shadow: 0 0 16px rgba(255,31,46,0.35); }
   .mpx-sc-meta { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #b3a6a3; }
   .mpx-sc-vs { align-self: center; font-family: 'Oxanium', sans-serif; font-weight: 800; color: #6f6663; font-size: 14px; }
+  /* pkg1.1 WINNER verdict theater — H2H fused between the plates as a gold pill */
+  .mpx-sc-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .mpx-sc-mid .mpx-h2h { margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #ffd98c;
+    border: 1px solid rgba(224,169,63,0.45); border-radius: 999px; padding: 4px 10px; }
+  .mpx-sc.win { border-color: rgba(224,169,63,0.55); box-shadow: var(--glass-bevel), var(--glass-sheen), var(--glass-lift), 0 0 28px -8px rgba(224,169,63,0.5); }
+  .mpx-sc.lose { opacity: .8; }
+  /* three action rows: hero (the one crimson act) · quiet share chips · dotted text-link exits */
+  .mpx-win-primary, .mpx-win-share, .mpx-win-exit { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; width: 100%; }
+  .mpx-win-primary { margin-top: 6px; }
+  .mpx-win-primary .ghost-btn { flex: 0 1 260px; padding: 14px 18px; font-size: 15px;
+    background: linear-gradient(180deg, #ff2a38, #b3121f); border-color: rgba(255,31,46,0.5); color: #fff; }
+  .mpx-win-primary #mpx-next-rival { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; font-size: 12px; color: #ffe9b8;
+    background: linear-gradient(180deg, rgba(224,169,63,0.3), rgba(148,102,26,0.2)); border-color: rgba(224,169,63,0.5); }
+  .mpx-win-primary #mpx-next-rival svg { width: 14px; height: 14px; }
+  .mpx-win-share .ghost-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; font-size: 11px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--mx-line); color: #cdbfae; }
+  .mpx-win-share .ghost-btn svg { width: 14px; height: 14px; flex: 0 0 auto; }
+  .mpx-win-exit .ghost-btn { background: none; border: none; box-shadow: none; padding: 4px 8px; font-size: 11px; color: #9c918e;
+    text-decoration: underline dotted rgba(238,230,226,0.35); }
+  .mpx-win-exit .ghost-btn:hover { color: #eee6e2; background: none; }
+
+  /* ===== pkg1.4: MATCH-SETUP zones — FACE-OFF / SETUP / COMMIT ===== */
+  .mpx-step-setup { gap: var(--mx5, 24px); }
+  .mpx-roomctx { display: flex; align-items: center; gap: 10px; margin: 0 2px -10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #b9a892; text-align: left; }
+  .mpx-roomctx[hidden] { display: none; }
+  .mpx-roomctx .mpx-roomctx-l b { color: #ffb695; font-weight: 700; }
+  .mpx-roomctx #mpx-roomctx-priv { font-size: 9px; letter-spacing: .14em; opacity: .8; }
+  .mpx-roomctx-spec { color: #c9a25a; font-size: 10px; letter-spacing: .12em; }
+  .mpx-roomctx-close { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--ember, #ff7a4a);
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; padding: 4px 2px; white-space: nowrap; }
+  .mpx-roomctx-close::after { content: ' ▸'; }
+  .mpx-roomctx-close:hover { color: #ffb695; text-decoration: underline dotted rgba(255,122,74,0.5); }
+  .mpx-faceoff { display: flex; flex-direction: column; gap: 12px; }
+  .mpx-faceoff .mpx-show-banner { border-radius: 12px 12px 0 0; margin: -16px -16px 0; }
+  .mpx-fo-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+  .mpx-fo-cell { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; }
+  .mpx-fo-av { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #cdbfae;
+    background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,31,46,0.55); box-sizing: border-box; }
+  .mpx-fo-av svg { width: 22px; height: 22px; }
+  .mpx-fo-cell.opp .mpx-fo-av { border-color: rgba(222,216,212,0.3); }
+  .mpx-fo-vs { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 18px; color: #6f6663; }
+  .mpx-fo-name { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 14px; color: var(--ink, #f3eceb);
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mpx-fo-name[data-state="waiting"] { color: #8d8380; }
+  .mpx-fo-name[data-state="left"] { color: #ff7a4a; }
+  /* the avatar is a SIBLING of the JS-written name span — state ring via :has() on the cell */
+  .mpx-fo-cell:has(#mpx-dot-opp[data-state="waiting"]) .mpx-fo-av { border: 1.5px dashed rgba(224,169,63,0.55); animation: rvlPulse 1.6s ease-in-out infinite; }
+  .mpx-fo-cell:has(#mpx-dot-opp[data-state="here"]) .mpx-fo-av { border: 1.5px solid var(--chrome, #dad7d2); }
+  .mpx-fo-cell:has(#mpx-dot-opp[data-state="left"]) { color: #ff7a4a; }
+  html.rr-reduce-motion .mpx-fo-cell:has(#mpx-dot-opp[data-state="waiting"]) .mpx-fo-av { animation: none; }
+  /* the challenger-seat chrome rides inside the opponent cell — box stripped, sub-rows read as one chip row */
+  .mpx-fo-cell .mpx-show-seat { border: none; background: none; padding: 0; margin: 0; font-size: 11px; align-items: center; text-align: center; }
+  .mpx-fo-cell .mpx-show-pend { padding: 4px 8px; }
+  .mpx-fo-cell .mpx-show-pend button { padding: 5px 10px; font-size: 10px; }
+  .mpx-fo-cell .mpx-show-invite-btn { flex: 0 1 auto; min-width: 0; padding: 6px 12px; font-size: 11px; border-radius: 999px; }
+  .mpx-fo-cell .mpx-show-invite-row, .mpx-fo-cell .mpx-show-take-row { justify-content: center; }
+  .mpx-fo-cell .mpx-show-swap { align-self: center; }
+  .mpx-faceoff .mpx-waitstatus { margin: 12px 0 0; font-size: 12px; color: #b9b2ac; }
+  .mpx-beat-room { margin: 0 auto; display: block; }
+  /* SETUP rows — the value area fills right of the 92px label; segs right-align */
+  .mxrow > .mpx-pick { flex: 1; min-width: 0; }
+  .mxrow > .mpx-diff, .mxrow > .mpx-stage-row { flex: 1; margin-left: auto; margin-top: 0; justify-content: flex-end; }
+  .mxrow.mpx-invitebar { flex-direction: row; background: none; border: none; border-top: 1px solid var(--mx-line); border-radius: 0; margin: 0; padding: var(--mx3) 0; }
+  .mpx-invite-wrap { flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .mpx-leave-link, .mpx-leave-link:hover { background: none; border: none; box-shadow: none; }
+  .mpx-leave-link { padding: 4px 8px; font-size: 11px; color: #9c918e; text-decoration: underline dotted rgba(238,230,226,0.35); margin-top: 0; align-self: center; }
+  .mpx-leave-link:hover { color: #eee6e2; }
   .mpx-banner { margin-top: 14px; padding: 10px 14px; border-radius: 10px; font-family: 'Chakra Petch', sans-serif; font-size: 13px;
     background: rgba(255,122,74,0.1); border: 1px solid rgba(255,122,74,0.3); color: #ffb695; }
   #mp-opp { position: absolute; top: 14px; right: 14px; z-index: 40; width: 196px; padding: 13px 15px; border-radius: 16px;
@@ -3850,7 +3971,7 @@
 
   /* ===== build99h: MULTIPLAYER lobby — 3-tier journey (status strip · hero · 2-up · More drawer) ===== */
   /* STATUS STRIP — identity · online · rank, one slim ~34px row directly under the wordmark */
-  .mpx-statusstrip { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px;
+  .mpx-statusstrip { display: flex; align-items: center; gap: 10px; row-gap: 6px; width: 100%; min-height: 34px;
     margin: 2px 0 10px; padding: 4px 4px; text-align: left; flex-wrap: wrap; }
   .mpx-statusstrip .mpx-ss-id { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
   .mpx-statusstrip .mpx-you-av { width: 26px; height: 26px; font-size: 12px; }
@@ -3866,8 +3987,18 @@
 
   /* TIER 1 — the one dominant hero CTA */
   /* raised crimson GLASS hero — glossy top highlight + frosted depth, lifts off the panel */
-  .mpx-hero { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-    width: 100%; min-height: 92px; box-sizing: border-box; padding: 18px 22px; margin: 2px 0 4px; cursor: pointer; text-align: left;
+  /* pkg1.3: hero + queue pill fuse inside one wrapper (both stay REAL buttons — see the markup note) */
+  .mpx-hero-wrap { position: relative; width: 100%; margin: 2px 0 4px; }
+  .mpx-hero-wrap .mpx-qm-pill { position: absolute; left: 22px; right: auto; bottom: 8px; width: auto; margin: 0;
+    padding: 2px 0; background: none; border: none; border-radius: 0; box-shadow: none;
+    font: 700 10px 'JetBrains Mono', monospace; letter-spacing: 0.18em; color: #ffd8cd; opacity: .85; text-align: left; }
+  .mpx-hero-wrap .mpx-qm-pill:hover { color: #fff; text-decoration: underline dotted rgba(255,216,205,0.6); }
+  .mpx-hero-wrap .mpx-qm-pill.searching { animation: none; color: #fff; opacity: 1; }
+  .mpx-hero-wrap .mpx-qm-pill.matched { background: none; box-shadow: none; color: #ffd98c; }
+  .mpx-hero.searching { animation: qmPulse 1.6s ease-in-out infinite; border-color: rgba(255,80,90,0.95); }
+  html.rr-reduce-motion .mpx-hero.searching { animation: none; }
+  .mpx-hero { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    width: 100%; min-height: 92px; box-sizing: border-box; padding: 18px 18px 34px; margin: 0; cursor: pointer; text-align: left;
     border-radius: 18px; border: 1px solid rgba(255,60,72,0.6); overflow: hidden;
     background: linear-gradient(180deg, rgba(255,58,71,0.42), rgba(150,12,22,0.20));
     box-shadow: var(--cglass-bevel), 0 16px 40px -10px rgba(255,31,46,0.52), 0 0 30px -8px rgba(255,31,46,0.5);
@@ -3881,8 +4012,8 @@
   .mpx-hero[aria-busy="true"] { opacity: .8; pointer-events: none; }
   .mpx-hero-eyebrow, .mpx-hero-title, .mpx-hero-sub { position: relative; z-index: 1; }   /* sit above the glossy top sheen */
   .mpx-hero-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.28em; color: #ffd9c4; }
-  .mpx-hero-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 22px; line-height: 1; letter-spacing: 0.03em; color: #fff;
-    text-shadow: 0 2px 16px rgba(255,31,46,0.55); }
+  .mpx-hero-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 26px; line-height: 1; letter-spacing: 0.03em; color: #fff;
+    text-shadow: 0 2px 16px rgba(255,31,46,0.55); }   /* pkg1.3: 26px — the hero must sit ≥2 visual steps above the tiles */
   .mpx-hero-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.02em; color: #ffd8cd; text-transform: uppercase; }
   .mpx-hero .mpx-ranked-tag { top: 12px; right: 14px; }
   html.rr-reduce-motion .mpx-hero { transition: none; }
@@ -3891,7 +4022,7 @@
   /* TIER 2 — two equal secondary tiles + a small tertiary CPU entry */
   .mpx-tier2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin: 10px 0 0; }
   .mpx-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 15px 15px; cursor: pointer; text-align: left;
-    border-radius: 15px; border: 1px solid var(--glass-line);
+    border-radius: 15px; border: 1px solid rgba(222,216,212,0.10);   /* pkg1.3: quieter tier-2 border — the hero owns the room */
     background: var(--glass-fill);
     box-shadow: var(--glass-bevel), var(--glass-sheen), 0 10px 24px -14px rgba(0,0,0,0.6);
     -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
@@ -3900,7 +4031,7 @@
     box-shadow: var(--glass-bevel), var(--glass-sheen), 0 14px 30px -10px rgba(0,0,0,0.62), 0 0 22px -8px rgba(255,31,46,0.4); }
   .mpx-tile-ico { font-size: 18px; line-height: 1; margin-bottom: 3px; color: #ff7a4a; }
   .mpx-tile-ico svg { width: 22px; height: 22px; }   /* visual-overhaul: SVG icons replace off-brand emoji */
-  .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
+  .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13.5px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
   .mpx-tile-d { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-dim, #a0938f); text-transform: uppercase; }
   html.rr-reduce-motion .mpx-tile { transition: none; }
   html.rr-reduce-motion .mpx-tile:hover { transform: none; }
@@ -4005,6 +4136,13 @@
   .mpx-friends-panel .mpx-act.gold .mpx-act-ico { color: #ffe9bd; background: linear-gradient(135deg, rgba(224,169,63,0.28), rgba(224,169,63,0.08)); border-color: rgba(224,169,63,0.3); }
   .mpx-friends-panel .mpx-act.gold .a-t { color: #ffe9bd; }
   #mpx-act-browse-n { color: #c9a25a; font-family: 'Oxanium', sans-serif; font-weight: 700; }
+  /* pkg1.3: the drawer's browse/host rows fuse into one .mxc menu — the tiles become quiet separator rows */
+  .mpx-drawer-menu { padding: 2px 14px; }
+  .mpx-drawer-menu .mpx-act, .mpx-friends-panel .mpx-drawer-menu .mpx-act { background: none; border: none; border-radius: 0; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; padding: 13px 2px; }
+  .mpx-friends-panel .mpx-drawer-menu .mpx-act + .mpx-act { border-top: 1px solid var(--mx-line); }
+  .mpx-friends-panel .mpx-drawer-menu .mpx-act:hover { transform: none; box-shadow: none; }
+  .mpx-friends-panel .mpx-drawer-menu .mpx-act:hover .a-t { color: #fff; }
   html.rr-reduce-motion .mpx-friends-panel .mpx-act { transition: none; }
   html.rr-reduce-motion .mpx-friends-panel .mpx-act:hover { transform: none; }
 
@@ -4080,7 +4218,7 @@
   .mpx-invite-code-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
   .mpx-invite-lbl { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #9c918e; }
   .mpx-invite-code { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: 0.28em;
-    color: var(--gold, #e0a93f); text-shadow: 0 0 16px rgba(224,169,63,0.3); }
+    color: var(--gold, #e0a93f); border-bottom: 2px solid rgba(224,169,63,0.55); text-shadow: 0 0 12px rgba(224,169,63,0.35); }   /* pkg1.4: underline-glow — the code is the earned artifact */
   .mpx-invite-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   /* build65 (cycle-5): VS PLAYER / VS CPU are a PRIMARY match-type choice — give them real weight (they were the tiny
      refresh-pill idiom). VS CPU (add-cpu) reads as the accent action. Brand crimson; stays on the .rh-refresh base. */
@@ -4121,9 +4259,11 @@
   .mpx-rc-tag.priv { color: #ffb695; border: 1px solid rgba(255,122,74,0.4); }
   .mpx-rc-count { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; color: #c9a25a; }
   .mpx-rc-act { display: flex; gap: 6px; margin-left: auto; flex: 0 0 auto; }
+  /* pkg1.2: outline-first JOIN — a list of rooms is INFO; the gradient is the hover/focus invitation
+     (COLOR LAW: the browse step's cards can't each carry a filled crimson act) */
   .mpx-rc-join { padding: 7px 14px; border-radius: 10px; cursor: pointer; font-family: 'Oxanium', sans-serif; font-weight: 800;
-    font-size: 12px; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border: 1px solid rgba(255,31,46,0.5); }
-  .mpx-rc-join:hover { box-shadow: 0 8px 22px rgba(255,31,46,0.4); }
+    font-size: 12px; color: #ff8d96; background: transparent; border: 1px solid rgba(255,31,46,0.5); }
+  .mpx-rc-join:hover, .mpx-rc-join:focus-visible { color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); box-shadow: 0 8px 22px rgba(255,31,46,0.4); }
   .mpx-rc-join[disabled] { opacity: 0.5; cursor: default; background: rgba(218,215,210,0.08); color: #9c918e; border-color: var(--line, rgba(218,215,210,0.14)); box-shadow: none; }
   .mpx-rc-spec { padding: 7px 11px; border-radius: 10px; cursor: pointer; font-family: 'Oxanium', sans-serif; font-weight: 700;
     font-size: 11px; color: #cdbfae; background: transparent; border: 1px solid var(--line, rgba(218,215,210,0.2)); }
@@ -4363,9 +4503,8 @@
   .mpx-devbar-row { display: flex; gap: 7px; flex-wrap: wrap; }
   .mpx-devbar-row .rh-refresh { flex: 1 1 auto; }
   #mpx-dev-spectate.on { border-color: rgba(218,215,210,0.55); color: var(--chrome, #dad7d2); }
-  .mpx-sizerow { display: flex; align-items: center; gap: 11px; margin: 2px 2px 12px; }
-  .mpx-sizelbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; color: #c9a25a; white-space: nowrap; }
-  .mpx-sizeseg { flex: 1; }
+  /* pkg1.2: .mpx-sizerow/.mpx-sizelbl retired in favor of .mxrow/.mxr-lab (design system); the seg keeps its look */
+  .mpx-sizeseg { flex: 1; margin-left: auto; }
   .env-chip.sel .ec-art::after { content: "✓"; position: absolute; top: 3px; right: 4px; font-size: 11px; color: #ffe9bd; text-shadow: 0 0 6px rgba(224,169,63,0.8); }
   .mpx-rc-spark.tour { background: linear-gradient(135deg, rgba(224,169,63,0.3), rgba(255,122,74,0.12)); color: #ffe9bd; }
   .mpx-rc-tag.tour { color: #ffd98c; border: 1px solid rgba(224,169,63,0.45); }
@@ -4712,18 +4851,21 @@
           <span class="mpx-signin-txt" id="mpx-signin-txt">Sign in to play with others online.</span>
           <button class="mpx-signin-btn" id="mpx-signin-btn" type="button">Sign in</button>
         </div>
-        <p class="mp-sub">Race a rival head-to-head — top score wins.</p>
-
-        <!-- TIER 1 — the one dominant CTA. Quick-match → CPU fallback. -->
-        <button class="mpx-hero" id="mpx-act-quick" type="button">
-          <span class="mpx-hero-eyebrow">QUICK MATCH</span>
-          <span class="mpx-hero-title">PLAY NOW</span>
-          <span class="mpx-hero-sub">Instant 1-on-1 · CPU if no one's around</span>
-          <span class="mpx-ranked-tag" title="Quick Match affects your ranked ladder (RP)">RANKED</span>
-        </button>
-
-        <!-- build102x: server matchmaking (PHASE3) — site-wide queue; wired to RhythmMP.queueMatch in multiplayer.js -->
-        <button class="mpx-qm-pill" id="mpx-qm-pill" type="button" aria-pressed="false">🎯 FIND ME A MATCH</button>
+        <!-- TIER 1 — the one dominant CTA (pkg1.3: standalone tagline absorbed into the hero sub).
+             SYNTHESIS OVERRIDE (spec 1.3): #mpx-qm-pill STAYS a real <button> — a button can't nest in a button,
+             and demoting the hero to <div role="button"> would lose native Enter/Space activation (wire() binds
+             click only). So the pill fuses VISUALLY: absolutely positioned over the hero's bottom edge inside
+             this shared wrapper. toggleQuickMatch no-ops while the server queue searches (the pill is the cancel). -->
+        <div class="mpx-hero-wrap">
+          <button class="mpx-hero" id="mpx-act-quick" type="button">
+            <span class="mpx-hero-eyebrow">QUICK MATCH</span>
+            <span class="mpx-hero-title">PLAY NOW</span>
+            <span class="mpx-hero-sub">Race a rival head-to-head — top score wins</span>
+            <span class="mpx-ranked-tag" title="Quick Match affects your ranked ladder (RP)">RANKED</span>
+          </button>
+          <!-- build102x: server matchmaking (PHASE3) — site-wide queue; wired to RhythmMP.queueMatch in multiplayer.js -->
+          <button class="mpx-qm-pill" id="mpx-qm-pill" type="button" aria-pressed="false">FIND ME A MATCH</button>
+        </div>
 
         <!-- TIER 2 — two equal secondary tiles + a small tertiary CPU entry -->
         <div class="mpx-tier2">
@@ -4748,8 +4890,8 @@
         </button>
         <div class="mpx-friends-panel" id="mpx-friends-panel" hidden>
           <!-- build61: LIVE NOW — open tournaments/rooms; hidden when empty so the lobby never opens on a "nothing live" shell -->
-          <div class="mpx-livenow" id="mpx-livenow" hidden>
-            <div class="mpx-livenow-head"><span class="mln-dot">●</span><span class="mln-t">LIVE NOW</span><span class="mln-n" id="mpx-livenow-n"></span></div>
+          <div class="mpx-livenow mxc mxc--gold" id="mpx-livenow" hidden><!-- pkg1.3: earned-gold module (mxc--gold under the livenow skin) -->
+            <div class="mpx-livenow-head mxh"><span class="mln-dot">●</span><span class="mln-t">LIVE NOW</span><span class="mln-n mxh-r" id="mpx-livenow-n"></span></div>
             <!-- visual-overhaul: tournament HERO — promoted to FRONT-AND-CENTER by multiplayer.js whenever a bracket is
                  live, joinable, or hosted by you. Empty/no-bracket = hidden; the quiet "host one" strip below shows instead. -->
             <div class="mpx-tour-hero" id="mpx-tour-hero" hidden>
@@ -4774,21 +4916,25 @@
               <span class="mln-empty-txt">No live tournaments right now — host one below to pull a bracket together.</span>
             </div><!-- build99T: removed the redundant HOST ONE button (owner: "Host a tournament is in there twice"); the persistent "Host a tournament" row below is the single host entry, always available even while a bracket is live -->
           </div>
-          <button class="mpx-act" id="mpx-act-browse" type="button">
-            <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span>
-            <span class="mpx-act-txt"><span class="a-t">Browse rooms <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span></span>
-          </button>
-          <button class="mpx-act gold" id="mpx-act-tour" type="button">
-            <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
-            <span class="mpx-act-txt"><span class="a-t">Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span></span>
-          </button>
+          <!-- pkg1.3: browse + host fuse into ONE .mxc menu — the buttons become separator rows (ids stay on the rows) -->
+          <div class="mxc mpx-drawer-menu">
+            <button class="mpx-act" id="mpx-act-browse" type="button">
+              <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span>
+              <span class="mpx-act-txt"><span class="a-t">Browse rooms <span id="mpx-act-browse-n"></span></span><span class="a-d">Open rooms &amp; brackets · join or watch</span></span>
+            </button>
+            <button class="mpx-act gold" id="mpx-act-tour" type="button">
+              <span class="mpx-act-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
+              <span class="mpx-act-txt"><span class="a-t">Host a tournament</span><span class="a-d">Bracket · 3–10 players · last one standing</span></span>
+            </button>
+          </div>
           <!-- build100q (#172): combat is now a per-ROOM + per-TOURNAMENT setting (in those create dialogs), where the
                playtester expected it — NOT a confusing main-lobby toggle. Hidden here (kept in DOM so combatOn/quick-match
                wiring stays intact; quick-match defaults to its saved combatOn, off by default). -->
           <button class="mpx-combat-toggle" id="mpx-combat-toggle" type="button" aria-pressed="false" hidden style="display:none" title="Combat is set per room and per tournament in their create dialogs.">
             <span class="ct-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg></span><span class="ct-state">Combat (when I host): Off</span>
           </button>
-          <!-- full roster lives in the drawer, not stacked mid-page -->
+          <!-- full roster lives in the drawer, not stacked mid-page (pkg1.3: labeled head; the live count stays on the status strip) -->
+          <div class="mxh" style="margin:6px 2px 0;">PLAYERS ONLINE</div>
           <div class="mpx-roster" id="mpx-roster"></div>
           <p class="mpx-roster-empty" id="mpx-roster-empty" hidden>No one online yet — Play Now for a CPU warm-up.</p>
         </div>
@@ -4816,24 +4962,33 @@
             <span class="rh-t">OPEN ROOMS</span>
             <button class="rh-refresh" id="mpx-rooms-refresh" type="button">↻ REFRESH</button>
           </div>
+          <div class="mpx-rooms-count" id="mpx-rooms-count"></div><!-- pkg1.2: "N rooms open · M brackets filling" (painted in renderRooms) -->
           <div class="mpx-roomlist" id="mpx-roomlist"></div>
           <p class="mpx-rooms-empty" id="mpx-rooms-empty" hidden>No open rooms right now. Open one and others can join live.</p>
           <button class="ghost-btn" id="mpx-rooms-back" style="margin-top:14px;">BACK TO LOBBY</button>
         </div>
-        <!-- mode B: open-a-room form (build9: doubles as the tournament form via data-mode) -->
+        <!-- mode B: open-a-room form (build9: doubles as the tournament form via data-mode)
+             pkg1.2: labeled .mxc fieldset — NAME / VISIBILITY / COMBAT rows; OPEN ROOM stays the lone crimson act -->
         <div id="mpx-rooms-create" hidden data-mode="duel">
           <div class="mpx-rooms-head"><span class="rh-t" id="mpx-create-title">OPEN A ROOM</span></div>
-          <div class="mpx-roomform">
-            <input type="text" id="mpx-room-name" maxlength="28" placeholder="Room name (e.g. Friday Shred)" autocomplete="off" spellcheck="false" />
-            <div class="mpx-privrow" id="mpx-room-priv">
-              <button data-priv="public" class="active" type="button">PUBLIC</button>
-              <button data-priv="private" type="button">PRIVATE (invite only)</button>
+          <div class="mxc mpx-roomform">
+            <div class="mxh">ROOM</div>
+            <div class="mxrow"><span class="mxr-lab">NAME</span>
+              <input type="text" id="mpx-room-name" maxlength="28" placeholder="Room name (e.g. Friday Shred)" autocomplete="off" spellcheck="false" />
             </div>
-            <div class="mpx-privrow" id="mpx-room-combat" role="radiogroup" aria-label="Combat for this room">
-              <button data-combat="off" class="active" type="button">COMBAT OFF</button>
-              <button data-combat="on" type="button">COMBAT ON</button>
+            <div class="mxrow"><span class="mxr-lab">VISIBILITY</span>
+              <div class="mpx-privrow" id="mpx-room-priv">
+                <button data-priv="public" class="active" type="button">PUBLIC</button>
+                <button data-priv="private" type="button">PRIVATE (invite only)</button>
+              </div>
             </div>
-            <div id="mpx-room-combat-hint" style="font-size:12px;color:var(--ink-dim);margin-top:6px;line-height:1.4">Combat is the host's match modifier — your combo streaks shock the rival (~2s stun). Applies to every match in this room.</div>
+            <div class="mxrow"><span class="mxr-lab">COMBAT</span>
+              <div class="mpx-privrow" id="mpx-room-combat" role="radiogroup" aria-label="Combat for this room">
+                <button data-combat="off" class="active" type="button">COMBAT OFF</button>
+                <button data-combat="on" type="button">COMBAT ON</button>
+              </div>
+              <div class="mxr-hint" id="mpx-room-combat-hint">Combat is the host's match modifier — your combo streaks shock the rival (~2s stun). Applies to every match in this room.</div>
+            </div>
           </div>
           <div class="mpx-readyrow" style="margin-top:6px;">
             <button class="ghost-btn primary" id="mpx-room-create-go" style="min-width:220px;">OPEN ROOM</button>
@@ -4847,96 +5002,105 @@
       <!-- STEP: TOURNAMENT (bracket waiting room + live board + champion) — build9 -->
       <div class="mpx-step mpx-step-tour" hidden>
         <div class="mpx-rooms-head">
-          <span class="rh-t">🏆 <span id="mpx-tour-name">TOURNAMENT</span></span>
+          <span class="rh-t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:16px;height:16px;vertical-align:-3px;color:#c9a25a;"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg> <span id="mpx-tour-name">TOURNAMENT</span></span>
           <span class="mpx-tour-chip" id="mpx-tour-chip" data-state="open">FILLING</span>
         </div>
         <div class="mpx-tour-grid" id="mpx-tour-grid"></div>
         <div id="mpx-tour-setup">
           <!-- build65: clarify the opponent model — the user asked to "select PvE/PvP in tournament". A tournament IS a
                head-to-head PvP bracket; solo CPU practice lives in a 1-v-1 room (now an explicit "VS CPU" choice). -->
-          <div class="mpx-tour-typehint" style="font-size:12px; color:var(--ink-dim); margin:2px 0 10px; line-height:1.45">
-            🏆 A tournament is a head-to-head <b>VS&nbsp;PLAYER</b> bracket (3–10 humans). Want to practice solo against a <b>CPU</b>? Open a 1-v-1 <b>Room → 🤖&nbsp;VS&nbsp;CPU</b> from the lobby.
+          <div class="mxr-hint mpx-tour-typehint">
+            A tournament is a head-to-head <b>VS&nbsp;PLAYER</b> bracket (3–10 humans). Want to practice solo against a <b>CPU</b>? Open a 1-v-1 <b>Room → VS&nbsp;CPU</b> from the lobby.
           </div>
-          <div class="mpx-sizerow" id="mpx-tour-sizerow">
-            <span class="mpx-sizelbl">BRACKET SIZE</span>
-            <div class="set-seg mpx-sizeseg" id="mpx-tour-size" role="radiogroup" aria-label="Bracket size">
-              <button data-size="4" type="button">4</button>
-              <button data-size="8" type="button" class="active">8</button>
-              <button data-size="10" type="button">10</button>
+          <!-- pkg1.2: BRACKET fieldset — SIZE / LEAD-IN / STAKES / BUY-IN / COMBAT as labeled rows.
+               Every row keeps its id (JS host-gates `hidden` on the rows themselves). -->
+          <div class="mxc">
+            <div class="mxh">BRACKET</div>
+            <div class="mxrow" id="mpx-tour-sizerow">
+              <span class="mxr-lab">SIZE</span>
+              <div class="set-seg mpx-sizeseg" id="mpx-tour-size" role="radiogroup" aria-label="Bracket size">
+                <button data-size="4" type="button">4</button>
+                <button data-size="8" type="button" class="active">8</button>
+                <button data-size="10" type="button">10</button>
+              </div>
             </div>
-          </div>
-          <!-- build61: host-selectable round LEAD-IN (the 3·2·1·GO cinematic length). Default unchanged. Host-only. -->
-          <div class="mpx-sizerow" id="mpx-tour-leadinrow">
-            <span class="mpx-sizelbl">ROUND LEAD-IN</span>
-            <div class="set-seg mpx-sizeseg" id="mpx-tour-leadin" role="radiogroup" aria-label="Round lead-in">
-              <button data-lead="5000" type="button" class="active">5s</button>
-              <button data-lead="10000" type="button">10s</button>
-              <button data-lead="15000" type="button">15s</button>
+            <!-- build61: host-selectable round LEAD-IN (the 3·2·1·GO cinematic length). Default unchanged. Host-only. -->
+            <div class="mxrow" id="mpx-tour-leadinrow">
+              <span class="mxr-lab">LEAD-IN</span>
+              <div class="set-seg mpx-sizeseg" id="mpx-tour-leadin" role="radiogroup" aria-label="Round lead-in">
+                <button data-lead="5000" type="button" class="active">5s</button>
+                <button data-lead="10000" type="button">10s</button>
+                <button data-lead="15000" type="button">15s</button>
+              </div>
             </div>
-          </div>
-          <!-- build100q (#172): COMBAT is now a per-TOURNAMENT host setting (was a confusing global lobby toggle).
-               Host-only; locks once the bracket goes live. Rides the snapshot to entrants + a promoted heir. -->
-          <div class="mpx-sizerow" id="mpx-tour-combatrow" hidden>
-            <span class="mpx-sizelbl">COMBAT</span>
-            <div class="set-seg mpx-sizeseg" id="mpx-tour-combat" role="radiogroup" aria-label="Combat for this tournament">
-              <button data-combat="off" type="button" class="active">Off · score race</button>
-              <button data-combat="on" type="button">On · shock the rival</button>
+            <!-- build66: WAGER — BONUS SPARKS only (non-cashable) by owner decision. Host-only (toggled in enterTourRoom). -->
+            <div class="mxrow" id="mpx-tour-stakerow">
+              <span class="mxr-lab">STAKES</span>
+              <div class="set-seg mpx-sizeseg" id="mpx-tour-stakes" role="radiogroup" aria-label="Tournament stakes">
+                <button data-stakes="free" type="button" class="active">Free</button>
+                <button data-stakes="pool" type="button">Prize Pool</button>
+                <button data-stakes="sidebet" type="button">Side-bet</button>
+              </div>
             </div>
-          </div>
-          <!-- build66: WAGER — the host sets the bracket's STAKES. Free / an entry-fee PRIZE POOL (winner takes the pot) /
-               a parimutuel SIDE-BET (correct pickers split). Runs on BONUS SPARKS only (non-cashable in-game points) by
-               owner decision — there is NO real-money path. Host-only (toggled in enterTourRoom). -->
-          <div class="mpx-sizerow" id="mpx-tour-stakerow">
-            <span class="mpx-sizelbl">STAKES</span>
-            <div class="set-seg mpx-sizeseg" id="mpx-tour-stakes" role="radiogroup" aria-label="Tournament stakes">
-              <button data-stakes="free" type="button" class="active">Free</button>
-              <button data-stakes="pool" type="button">Prize Pool</button>
-              <button data-stakes="sidebet" type="button">Side-bet</button>
+            <div class="mxrow" id="mpx-tour-buyinrow" hidden>
+              <span class="mxr-lab" id="mpx-tour-buyinlbl">BUY-IN</span>
+              <div class="mpx-buyin-wrap">
+                <input type="number" id="mpx-tour-buyin" min="1" max="100000" step="1" value="50" inputmode="numeric" aria-label="Buy-in amount in Bonus Sparks" />
+                <span class="mpx-buyin-cur"><svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg> Bonus Sparks</span>
+              </div>
             </div>
-          </div>
-          <div class="mpx-sizerow" id="mpx-tour-buyinrow" hidden>
-            <span class="mpx-sizelbl" id="mpx-tour-buyinlbl">BUY-IN</span>
-            <div class="mpx-buyin-wrap">
-              <input type="number" id="mpx-tour-buyin" min="1" max="100000" step="1" value="50" inputmode="numeric" aria-label="Buy-in amount in Bonus Sparks" />
-              <span class="mpx-buyin-cur"><svg class="spk-glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"/></svg> Bonus Sparks</span>
+            <!-- build100q (#172): COMBAT is a per-TOURNAMENT host setting; locks once the bracket goes live. -->
+            <div class="mxrow" id="mpx-tour-combatrow" hidden>
+              <span class="mxr-lab">COMBAT</span>
+              <div class="set-seg mpx-sizeseg" id="mpx-tour-combat" role="radiogroup" aria-label="Combat for this tournament">
+                <button data-combat="off" type="button" class="active">Off · score race</button>
+                <button data-combat="on" type="button">On · shock the rival</button>
+              </div>
             </div>
           </div>
           <div class="mpx-tour-stakehint" id="mpx-tour-stakehint" hidden></div>
           <div class="mpx-tour-pot" id="mpx-tour-pot" hidden></div>
-          <button class="mpx-tour-bet" id="mpx-tour-bet" type="button" hidden>🎲 PLACE YOUR BET</button>
+          <button class="mpx-tour-bet" id="mpx-tour-bet" type="button" hidden>PLACE YOUR BET</button>
           <!-- build66: side-bet WHO-WINS picker (parimutuel) — each entrant stakes the buy-in on who they think wins; correct pickers split the pot -->
           <div class="mpx-bet-overlay" id="mpx-bet-overlay" hidden role="dialog" aria-modal="true" aria-label="Place your side-bet">
             <div class="mpx-bet-card">
-              <div class="mpx-bet-title">🎲 Who takes the crown?</div>
+              <div class="mpx-bet-title">Who takes the crown?</div>
               <div class="mpx-bet-sub">Stake <b id="mpx-bet-amt">—</b> on your pick — correct pickers split the pot. Bets lock at round 1.</div>
               <div class="mpx-bet-list" id="mpx-bet-list"></div>
               <button class="mpx-bet-cancel" id="mpx-bet-cancel" type="button">Cancel</button>
             </div>
           </div>
-          <div class="mpx-tour-trackrow">
-            <span class="mpx-pick-art" id="mpx-tour-art">♪</span>
-            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-tour-t">Rolling a track…</span><span class="mpx-pick-a" id="mpx-tour-a">—</span></span>
-            <button class="rh-refresh" id="mpx-tour-search-toggle" type="button" hidden>SEARCH</button>
-            <button class="rh-refresh" id="mpx-tour-roll" type="button" hidden>REROLL</button>
-          </div>
-          <!-- build11: full library picker for the bracket (host) — search the whole catalog -->
-          <div class="mpx-picker" id="mpx-tour-picker" hidden>
-            <input class="mpx-search" id="mpx-tour-q" type="text" aria-label="Search the library by title or artist" placeholder="Search the library — title or artist…" autocomplete="off" spellcheck="false" />
-            <div class="mpx-results" id="mpx-tour-results"></div>
-          </div>
-          <!-- build100q #173: host-curated per-round SONG list — search above to ADD; rounds rotate through these (empty = a random song each round) -->
-          <div class="mpx-tour-envhead" id="mpx-tour-songhead" hidden>SONGS — search above to add; rounds rotate through them (empty = random each round)</div>
-          <div class="env-row mpx-tour-envrow" id="mpx-tour-songrow"></div>
-          <!-- build11: the host picks the LEVEL the bracket is fought on -->
-          <div class="mpx-tour-envhead" id="mpx-tour-envhead" hidden>STAGES — pick one or more; rounds rotate through them</div>
-          <div class="env-row mpx-tour-envrow" id="mpx-tour-env" role="radiogroup" aria-label="Tournament stage"></div>
-          <div class="mpx-diff set-seg" id="mpx-tdiff" style="margin-top:8px;">
-            <button data-diff="easy" title="Easy">Drift</button>
-            <button data-diff="medium" class="active" title="Medium">Pulse</button>
-            <button data-diff="hard" title="Hard">Fracture</button>
+          <!-- pkg1.2: MUSIC & STAGE fieldset — track row, curated song/stage sub-labels (ids + hidden wiring intact), difficulty last -->
+          <div class="mxc">
+            <div class="mxh">MUSIC &amp; STAGE</div>
+            <div class="mpx-tour-trackrow">
+              <span class="mpx-pick-art" id="mpx-tour-art">♪</span>
+              <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-tour-t">Rolling a track…</span><span class="mpx-pick-a" id="mpx-tour-a">—</span></span>
+              <button class="rh-refresh" id="mpx-tour-search-toggle" type="button" hidden>SEARCH</button>
+              <button class="rh-refresh" id="mpx-tour-roll" type="button" hidden>REROLL</button>
+            </div>
+            <!-- build11: full library picker for the bracket (host) — search the whole catalog -->
+            <div class="mpx-picker" id="mpx-tour-picker" hidden>
+              <input class="mpx-search" id="mpx-tour-q" type="text" aria-label="Search the library by title or artist" placeholder="Search the library — title or artist…" autocomplete="off" spellcheck="false" />
+              <div class="mpx-results" id="mpx-tour-results"></div>
+            </div>
+            <!-- build100q #173: host-curated per-round SONG list — search above to ADD; rounds rotate through these (empty = a random song each round) -->
+            <div class="mxsub" id="mpx-tour-songhead" hidden>SONGS — search above to add; rounds rotate through them (empty = random each round)</div>
+            <div class="env-row mpx-tour-envrow" id="mpx-tour-songrow"></div>
+            <!-- build11: the host picks the LEVEL the bracket is fought on -->
+            <div class="mxsub" id="mpx-tour-envhead" hidden>STAGES — pick one or more; rounds rotate through them</div>
+            <div class="env-row mpx-tour-envrow" id="mpx-tour-env" role="radiogroup" aria-label="Tournament stage"></div>
+            <div class="mpx-diff set-seg" id="mpx-tdiff" style="margin-top:8px;">
+              <button data-diff="easy" title="Easy">Drift</button>
+              <button data-diff="medium" class="active" title="Medium">Pulse</button>
+              <button data-diff="hard" title="Hard">Fracture</button>
+            </div>
           </div>
           <div class="mpx-readyrow" style="margin-top:10px;">
-            <button class="ghost-btn primary" id="mpx-tour-start" disabled hidden>START BRACKET</button>
+            <div class="mxbtnrow"><!-- pkg1.2: START (the one crimson act) + INVITE side by side -->
+              <button class="ghost-btn primary" id="mpx-tour-start" disabled hidden>START BRACKET</button>
+              <button class="rh-refresh" id="mpx-tour-invite" type="button">COPY INVITE LINK</button>
+            </div>
             <div class="mpx-readystate" id="mpx-tour-state">Waiting for players — 3 to start, up to 10.</div>
           </div>
           <div class="mpx-devbar" id="mpx-tour-dev" hidden>
@@ -4949,7 +5113,6 @@
               <button class="rh-refresh" id="mpx-dev-spectate" type="button" aria-pressed="false">AUTO-RUN: OFF</button>
             </div>
           </div>
-          <button class="rh-refresh" id="mpx-tour-invite" type="button" style="margin-top:10px;">COPY INVITE LINK</button>
         </div>
         <div id="mpx-tour-live" hidden>
           <div class="mpx-tour-round" id="mpx-tour-round">ROUND 1</div>
@@ -4973,7 +5136,7 @@
           <video class="tc-clip" id="mpx-tour-champ-clip" muted loop playsinline preload="none" poster="assets/mp/champion-hero.png"></video>
           <div class="tc-veil"></div>
           <div class="tc-body">
-            <div class="tc-crown">👑</div>
+            <div class="tc-crown"><svg viewBox="0 0 24 24" fill="none" stroke="#ffd98c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;filter:drop-shadow(0 0 6px rgba(224,169,63,0.7));" aria-hidden="true"><path d="M3 17.5h18"></path><path d="M4 17.5 2.8 8.6l5 3.4L12 5.6l4.2 6.4 5-3.4-1.2 8.9z"></path></svg></div>
             <div class="tc-name" id="mpx-tour-champ-name">—</div>
             <div class="tc-sub" id="mpx-tour-champ-sub">BRACKET CHAMPION</div>
             <div class="tc-score" id="mpx-tour-champ-score" hidden></div>
@@ -4994,89 +5157,115 @@
         </div>
       </div>
 
-      <!-- STEP: MATCH-SETUP (lock song, ready check) -->
+      <!-- STEP: MATCH-SETUP (lock song, ready check) — pkg1.4: FACE-OFF / SETUP / COMMIT zones.
+           Zero JS here: every id paintShowRoom/endSpectate/enterRoomWaiting mutates still exists; only
+           classes/parents changed. #mpx-dot-opp takes raw textContent writes, so its avatar is a SIBLING
+           (state ring driven via :has() on the cell — Chrome-only game, :has is safe). -->
       <div class="mpx-step mpx-step-setup" hidden>
-        <div class="mpx-roomctx" id="mpx-roomctx" hidden style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 2px 12px;padding:8px 12px;border-radius:11px;background:rgba(255,122,74,0.08);border:1px solid rgba(255,122,74,0.3);">
-          <span style="font-family:'Chakra Petch',sans-serif;font-size:12px;color:#ffb695;"><b id="mpx-roomctx-name">Room</b> <span id="mpx-roomctx-priv" style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;opacity:.8;"></span></span>
-          <span id="mpx-roomctx-spec" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;color:#c9a25a;"></span>
-          <button class="rh-refresh" id="mpx-room-close" type="button" style="margin-left:auto;">CLOSE ROOM</button>
+        <!-- META — slim room context line (labels painted in enterRoomWaiting; close = ember text-link) -->
+        <div class="mpx-roomctx" id="mpx-roomctx" hidden>
+          <span class="mpx-roomctx-l"><b id="mpx-roomctx-name">Room</b> <span id="mpx-roomctx-priv"></span></span>
+          <span class="mpx-roomctx-spec" id="mpx-roomctx-spec"></span>
+          <button class="mpx-roomctx-close" id="mpx-room-close" type="button">CLOSE ROOM</button>
         </div>
-        <!-- build102s (Phase-2 C1): LIVE SHOW room chrome — hidden unless room.show (multiplayer.js paintShowRoom drives it) -->
-        <div class="mpx-show-banner" id="mpx-show-banner" hidden>
-          <img class="msb-art" id="msb-art" alt="" src="assets/atom.png" />
-          <div class="msb-txt">
-            <span class="msb-badge">● LIVE SHOW</span>
-            <span class="msb-title" id="msb-title">—</span>
-            <span class="msb-artist" id="msb-artist">—</span>
+        <!-- ZONE 1 — FACE-OFF theater -->
+        <div class="mxc mpx-faceoff">
+          <!-- build102s (Phase-2 C1): LIVE SHOW banner — hidden unless room.show (paintShowRoom); crowns the card -->
+          <div class="mpx-show-banner" id="mpx-show-banner" hidden>
+            <img class="msb-art" id="msb-art" alt="" src="assets/atom.png" />
+            <div class="msb-txt">
+              <span class="msb-badge">● LIVE SHOW</span>
+              <span class="msb-title" id="msb-title">—</span>
+              <span class="msb-artist" id="msb-artist">—</span>
+            </div>
+            <span class="msb-diff" id="msb-diff">PULSE</span>
           </div>
-          <span class="msb-diff" id="msb-diff">PULSE</span>
+          <div class="mpx-fo-row">
+            <div class="mpx-fo-cell you">
+              <span class="mpx-fo-av" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.4" r="3.6"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg></span>
+              <span class="mpx-fo-name you" id="mpx-dot-you">YOU</span>
+            </div>
+            <div class="mpx-fo-vs">VS</div>
+            <div class="mpx-fo-cell opp">
+              <span class="mpx-fo-av" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.4" r="3.6"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg></span>
+              <span class="mpx-fo-name opp" id="mpx-dot-opp" data-state="waiting">WAITING…</span>
+              <!-- build102s/102y: challenger-seat chrome — moved INTO the opponent cell; JS visibility logic untouched -->
+              <div class="mpx-show-seat" id="mpx-show-seat" hidden>
+                <div class="mpx-show-seat-empty" id="mpx-show-seat-empty">ARTIST SEAT — <b>open</b></div>
+                <div class="mpx-show-pend" id="mpx-show-pend" hidden>
+                  <span class="msp-txt" id="mpx-show-pend-txt">Someone wants the challenger seat</span>
+                  <span class="msp-btns">
+                    <button id="mpx-show-accept" type="button">✓ ACCEPT</button>
+                    <button id="mpx-show-decline" type="button">✕ DECLINE</button>
+                  </span>
+                </div>
+                <div class="mpx-show-invite-row" id="mpx-show-invite-row" hidden>
+                  <button class="mpx-show-invite-btn" id="mpx-show-invite" type="button">CALL IN THE ARTIST</button>
+                  <span class="mpx-show-invite-state" id="mpx-show-invite-state" hidden></span>
+                  <button class="mpx-show-nudge" id="mpx-show-nudge" type="button" hidden>NUDGE AGAIN</button>
+                </div>
+                <!-- build102y step5: SWAP IN THE ARTIST (host, gold) + TAKE THE STAGE / WITHDRAW (spectator) — painted in paintShowRoom -->
+                <button class="mpx-show-swap" id="mpx-show-swap" type="button" hidden>SWAP IN THE ARTIST</button>
+                <div class="mpx-show-take-row" id="mpx-show-take-row" hidden>
+                  <button class="mpx-show-take-btn" id="mpx-show-take" type="button">TAKE THE STAGE</button>
+                  <span class="mpx-show-takeq" id="mpx-show-takeq"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- build60: explicit, updating waiting status + build102y BEAT THAT (painted in endSpectate) -->
+          <div class="mpx-waitstatus" id="mpx-waitstatus" hidden>Waiting for an opponent…</div>
+          <button class="ghost-btn mpx-beat-room" id="mpx-beat-room" hidden>BEAT THAT</button>
         </div>
-        <div class="mpx-show-seat" id="mpx-show-seat" hidden>
-          <div class="mpx-show-seat-empty" id="mpx-show-seat-empty">🎸 ARTIST SEAT — <b>open</b></div>
-          <div class="mpx-show-pend" id="mpx-show-pend" hidden>
-            <span class="msp-txt" id="mpx-show-pend-txt">Someone wants the challenger seat</span>
-            <span class="msp-btns">
-              <button id="mpx-show-accept" type="button">✓ ACCEPT</button>
-              <button id="mpx-show-decline" type="button">✕ DECLINE</button>
-            </span>
+        <!-- ZONE 2 — SETUP fieldset: TRACK / DIFFICULTY / STAGE (+ OPPONENT row while a seat is open) -->
+        <div class="mxc mpx-songpick">
+          <div class="mxh">SETUP</div>
+          <div class="mxrow">
+            <span class="mxr-lab">TRACK</span>
+            <button class="mpx-pick" id="mpx-pick" aria-label="Choose a track">
+              <span class="mpx-pick-art" id="mpx-pick-art">♪</span>
+              <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-pick-t">Host picks a track</span><span class="mpx-pick-a" id="mpx-pick-a">—</span></span>
+              <span class="mpx-pick-chev" id="mpx-pick-chev">›</span>
+            </button>
           </div>
-          <div class="mpx-show-invite-row" id="mpx-show-invite-row" hidden>
-            <button class="mpx-show-invite-btn" id="mpx-show-invite" type="button">📣 CALL IN THE ARTIST</button>
-            <span class="mpx-show-invite-state" id="mpx-show-invite-state" hidden></span>
-            <button class="mpx-show-nudge" id="mpx-show-nudge" type="button" hidden>NUDGE AGAIN</button>
-          </div>
-          <!-- build102y step5: SWAP IN THE ARTIST (host, gold) + TAKE THE STAGE / WITHDRAW (spectator) — painted in paintShowRoom -->
-          <button class="mpx-show-swap" id="mpx-show-swap" type="button" hidden>👑 SWAP IN THE ARTIST</button>
-          <div class="mpx-show-take-row" id="mpx-show-take-row" hidden>
-            <button class="mpx-show-take-btn" id="mpx-show-take" type="button">🎸 TAKE THE STAGE</button>
-            <span class="mpx-show-takeq" id="mpx-show-takeq"></span>
-          </div>
-        </div>
-        <div class="mpx-vsbar">
-          <span class="mpx-dot you" id="mpx-dot-you">YOU</span>
-          <span class="mpx-vs">VS</span>
-          <span class="mpx-dot opp" id="mpx-dot-opp" data-state="waiting">WAITING…</span>
-        </div>
-        <!-- build60: explicit, updating waiting status + a never-stuck path (invite a friend / add a CPU) -->
-        <div class="mpx-waitstatus" id="mpx-waitstatus" hidden>Waiting for an opponent…</div>
-        <!-- build102y step6: BEAT THAT on the waiting card — painted in endSpectate (post-run spectator funnel) -->
-        <button class="ghost-btn" id="mpx-beat-room" style="margin:8px auto 0;display:block;" hidden>🎯 BEAT THAT</button>
-        <div class="mpx-invitebar" id="mpx-invitebar" hidden>
-          <div class="mpx-invite-code-row" id="mpx-invite-code-row" hidden>
-            <span class="mpx-invite-lbl">ROOM CODE</span>
-            <span class="mpx-invite-code" id="mpx-invite-code">----</span>
-          </div>
-          <div class="mpx-invite-lbl" style="margin:4px 0 6px; opacity:.82">MATCH TYPE — CHOOSE YOUR OPPONENT</div>
-          <div class="mpx-invite-btns">
-            <button class="rh-refresh" id="mpx-invite-friend" type="button">👤 VS PLAYER — INVITE</button>
-            <button class="rh-refresh" id="mpx-add-cpu" type="button">🤖 VS CPU — PLAY NOW</button>
-          </div>
-        </div>
-        <div class="mpx-songpick">
-          <div class="mpx-pick-head">TRACK</div>
-          <button class="mpx-pick" id="mpx-pick" aria-label="Choose a track">
-            <span class="mpx-pick-art" id="mpx-pick-art">♪</span>
-            <span class="mpx-pick-txt"><span class="mpx-pick-t" id="mpx-pick-t">Host picks a track</span><span class="mpx-pick-a" id="mpx-pick-a">—</span></span>
-            <span class="mpx-pick-chev" id="mpx-pick-chev">›</span>
-          </button>
-          <div class="mpx-diff set-seg" id="mpx-diff">
-            <button data-diff="easy" title="Easy">Drift</button>
-            <button data-diff="medium" class="active" title="Medium">Pulse</button>
-            <button data-diff="hard" title="Hard">Fracture</button>
-          </div>
-          <!-- v262: room STAGE picker — host browses + chooses a level/environment to play the match in (Arena + owned finished levels) -->
-          <div class="mpx-pick-head" style="margin-top:14px;">STAGE</div>
-          <div class="mpx-stage-row" id="mpx-stage-row" role="radiogroup" aria-label="Match stage"></div>
           <div class="mpx-picker" id="mpx-picker" hidden>
             <input class="mpx-search" id="mpx-search" type="text" aria-label="Search the library by title or artist" placeholder="Search a track…" autocomplete="off" spellcheck="false" />
             <div class="mpx-results" id="mpx-results"></div>
           </div>
+          <div class="mxrow">
+            <span class="mxr-lab">DIFFICULTY</span>
+            <div class="mpx-diff set-seg" id="mpx-diff">
+              <button data-diff="easy" title="Easy">Drift</button>
+              <button data-diff="medium" class="active" title="Medium">Pulse</button>
+              <button data-diff="hard" title="Hard">Fracture</button>
+            </div>
+          </div>
+          <!-- v262: room STAGE picker — host browses + chooses a level/environment (Arena + owned finished levels) -->
+          <div class="mxrow">
+            <span class="mxr-lab">STAGE</span>
+            <div class="mpx-stage-row" id="mpx-stage-row" role="radiogroup" aria-label="Match stage"></div>
+          </div>
+          <!-- build60 invite bar → pkg1.4 OPPONENT row; existing #mpx-invitebar hidden wiring already scopes it to an open seat -->
+          <div class="mxrow mpx-invitebar" id="mpx-invitebar" hidden>
+            <span class="mxr-lab">OPPONENT</span>
+            <div class="mpx-invite-wrap">
+              <div class="mpx-invite-code-row" id="mpx-invite-code-row" hidden>
+                <span class="mpx-invite-lbl">ROOM CODE</span>
+                <span class="mpx-invite-code" id="mpx-invite-code">----</span>
+              </div>
+              <div class="mpx-invite-btns">
+                <button class="rh-refresh" id="mpx-invite-friend" type="button">VS PLAYER — INVITE</button>
+                <button class="rh-refresh" id="mpx-add-cpu" type="button">VS CPU — PLAY NOW</button>
+              </div>
+            </div>
+          </div>
         </div>
+        <!-- ZONE 3 — COMMIT -->
         <div class="mpx-readyrow">
           <button class="ghost-btn primary mpx-ready" id="mpx-ready" disabled>READY</button>
           <div class="mpx-readystate" id="mpx-readystate">Host: pick a track to begin.</div>
         </div>
-        <button class="ghost-btn" id="mpx-leave-setup" style="margin-top:14px;">BACK TO LOBBY</button>
+        <button class="ghost-btn mpx-leave-link" id="mpx-leave-setup">BACK TO LOBBY</button>
         <div class="mpx-banner" id="mpx-setup-msg" hidden></div>
       </div>
 
@@ -5086,7 +5275,9 @@
         <p class="mp-sub">Syncing both decks…</p>
       </div>
 
-      <!-- STEP: WINNER -->
+      <!-- STEP: WINNER — pkg1.1 verdict theater: ONE hero action row · quiet share chips · text-link exits.
+           All seven buttons are the SAME elements moved into three rows; showWinner/_renderSpecVerdict still
+           drive per-role visibility by id — whichever primary survives IS the hero. -->
       <div class="mpx-step mpx-step-winner" hidden>
         <div class="mpx-verdict" id="mpx-verdict">YOU WIN</div>
         <div class="mpx-scorecard">
@@ -5095,24 +5286,30 @@
             <div class="mpx-sc-score" id="mpx-sc-you">0</div>
             <div class="mpx-sc-meta" id="mpx-sc-you-meta">—</div>
           </div>
-          <div class="mpx-sc-vs">VS</div>
+          <div class="mpx-sc-mid">
+            <div class="mpx-sc-vs">VS</div>
+            <!-- build102y step3: lifetime head-to-head + REVENGE? chip (painted in showWinner) — now a gold pill between the plates -->
+            <div class="mpx-h2h" id="mpx-h2h" hidden></div>
+          </div>
           <div class="mpx-sc opp">
             <div class="mpx-sc-who" id="mpx-sc-opp-who">OPPONENT</div>
             <div class="mpx-sc-score" id="mpx-sc-opp">0</div>
             <div class="mpx-sc-meta" id="mpx-sc-opp-meta">—</div>
           </div>
         </div>
-        <!-- build102y step3: lifetime head-to-head + REVENGE? chip (painted in showWinner) -->
-        <div class="mpx-h2h" id="mpx-h2h" hidden></div>
-        <div class="pause-actions" style="margin-top:18px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <div class="mpx-win-primary">
           <button class="ghost-btn primary" id="mpx-rematch">REMATCH</button>
           <!-- build102y step1: instant requeue — visibility painted in showWinner (hidden in show rooms) -->
-          <button class="ghost-btn" id="mpx-next-rival" hidden>NEXT RIVAL ⚡</button>
-          <!-- build102y step2: share + battle link — labels/visibility painted in showWinner (loser gets RUN IT BACK) -->
-          <button class="ghost-btn" id="mpx-share-w" hidden>📸 SHARE THE W</button>
-          <button class="ghost-btn" id="mpx-copy-battle" hidden>🔗 COPY BATTLE LINK</button>
+          <button class="ghost-btn" id="mpx-next-rival" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"></path></svg>NEXT RIVAL</button>
           <!-- build102y step6: BEAT THAT — SPECTATOR verdict only (painted in _renderSpecVerdict, hidden by showWinner) -->
-          <button class="ghost-btn" id="mpx-beat-that" hidden>🎯 BEAT THAT</button>
+          <button class="ghost-btn" id="mpx-beat-that" hidden>BEAT THAT</button>
+        </div>
+        <div class="mpx-win-share">
+          <!-- build102y step2: share + battle link — labels painted into .lbl by showWinner (loser gets RUN IT BACK) -->
+          <button class="ghost-btn" id="mpx-share-w" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"></rect><circle cx="12" cy="13" r="3.6"></circle><path d="M9 7l1.6-2.6h2.8L15 7"></path></svg><span class="lbl">SHARE THE W</span></button>
+          <button class="ghost-btn" id="mpx-copy-battle" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 13.5a4.4 4.4 0 0 0 6.2 0l2.5-2.5a4.4 4.4 0 0 0-6.2-6.2l-1.2 1.2"></path><path d="M13.5 10.5a4.4 4.4 0 0 0-6.2 0l-2.5 2.5a4.4 4.4 0 0 0 6.2 6.2l1.2-1.2"></path></svg><span class="lbl">COPY BATTLE LINK</span></button>
+        </div>
+        <div class="mpx-win-exit">
           <button class="ghost-btn" id="mpx-backlobby">BACK TO LOBBY</button>
           <button class="ghost-btn" id="mpx-leave-win">LEAVE</button>
         </div>

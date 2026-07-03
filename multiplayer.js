@@ -375,7 +375,7 @@
     try { localStorage.setItem('rr_mp_combat', combatOn ? '1' : '0'); } catch (e) {}
     paintCombatToggle();
     // build69: this is your DEFAULT when YOU host (quick-match) + the prefill for the Room dialog — NOT a lobby-wide switch.
-    banner('mpx-lobby-msg', combatOn ? '⚡ Combat default ON — when YOU host a match your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. Nobody can flip combat for the whole lobby.' : 'Combat default OFF — pure score race when you host. Pick Combat per room when you create one.');
+    banner('mpx-lobby-msg', combatOn ? 'Combat default ON — when YOU host a match your combo streaks SHOCK the rival (~2s stun). Set it per room when you open one. Nobody can flip combat for the whole lobby.' : 'Combat default OFF — pure score race when you host. Pick Combat per room when you create one.');
   }
   function myPresence(inMatch) {
     return { id: ME.id, name: ME.name, avatar: ME.avatar, at: JOINED_AT, inMatch: !!inMatch,
@@ -1464,10 +1464,26 @@
     showWinner();
   }
   var _lastVerdict = null;   // build102y step2: stashed verdict for the SHARE/COPY click handlers (read synchronously inside the user gesture)
+  // pkg1.1: 600ms ease-out-cubic score count-up for the YOU plate (mirrors the game.js results reveal pattern).
+  // One-shot rAF, cancelled on re-entry; reduce-motion writes the final value immediately.
+  var _cuRaf = 0;
+  function countUpScore(el, target) {
+    if (!el) return;
+    if (_cuRaf) { cancelAnimationFrame(_cuRaf); _cuRaf = 0; }
+    target = Number(target) || 0;
+    if (document.documentElement.classList.contains('rr-reduce-motion')) { el.textContent = target.toLocaleString(); return; }
+    var t0 = performance.now(), dur = 600;
+    (function tick(now) {
+      var p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.floor(target * e).toLocaleString();
+      if (p < 1) _cuRaf = requestAnimationFrame(tick);
+      else { _cuRaf = 0; el.textContent = target.toLocaleString(); }
+    })(t0);
+  }
   function showWinner() {
     var me = myFinal || { score: 0, acc: 0, combo: 0 };
     var op = oppFinal;
-    set('mpx-sc-you', Number(me.score || 0).toLocaleString());
+    countUpScore($('mpx-sc-you'), me.score || 0);   // pkg1.1: was a static set() — the reveal now counts up
     set('mpx-sc-you-meta', (me.acc != null ? me.acc + '% · ' : '') + (me.combo || 0) + 'x' + (me.grade ? ' · ' + me.grade : ''));
     set('mpx-sc-opp-who', (op && op.name) ? op.name.slice(0, 14) : (oppMeta && oppMeta.name ? oppMeta.name.slice(0, 14) : 'OPPONENT'));
     if (op) {
@@ -1483,6 +1499,10 @@
     else if (me.score < op.score) win = false;
     else draw = true;
     if (v) { v.className = 'mpx-verdict ' + (draw ? 'draw' : win ? 'win' : 'lose'); v.textContent = draw ? 'DRAW' : win ? 'YOU WIN' : 'YOU LOSE'; }
+    // pkg1.1: the plates wear the outcome too — gold-glow winner, dimmed loser (classes reset every verdict)
+    var _scY = document.querySelector('.mpx-step-winner .mpx-sc.you'), _scO = document.querySelector('.mpx-step-winner .mpx-sc.opp');
+    if (_scY) { _scY.classList.remove('win', 'lose'); if (!draw) _scY.classList.add(win ? 'win' : 'lose'); }
+    if (_scO) { _scO.classList.remove('win', 'lose'); if (!draw && op && !oppLeft) _scO.classList.add(win ? 'lose' : 'win'); }
     // v254: record the RANKED result (1v1 HUMAN matches only — CPU warm-ups never count). A forfeit (rival left) is a W with 0 pts.
     if (!_rankRecorded && !spectating && !(oppMeta && oppMeta.bot)) {   // v258: a SPECTATOR's myFinal defaults to {score:0} → would record a phantom LOSS on their own ladder; gate it out
       _rankRecorded = true;
@@ -1500,9 +1520,9 @@
     // never priv (qm matched rooms are priv:true), never show, and only while the room is still open.
     _lastVerdict = { win: win, draw: draw, me: me, op: op, oppName: (op && op.name) || (oppMeta && oppMeta.name) || 'Rival' };
     var _sw = $('mpx-share-w');
-    if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); _sw.textContent = draw ? '📸 SHARE THE DRAW' : (win ? '📸 SHARE THE W' : '📸 RUN IT BACK'); }
+    if (_sw) { _sw.hidden = !!spectating || !(window.RhythmShare && window.RhythmShare.shareScore); (_sw.querySelector('.lbl') || _sw).textContent = draw ? 'SHARE THE DRAW' : (win ? 'SHARE THE W' : 'RUN IT BACK'); }   // pkg1: label writes target .lbl (the 14px camera SVG survives repaints); emoji retired
     var _cb = $('mpx-copy-battle');
-    if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; _cb.textContent = '🔗 COPY BATTLE LINK'; _cb.classList.remove('copied'); }
+    if (_cb) { _cb.hidden = !!spectating || !room.id || !!room.priv || !!room.show; (_cb.querySelector('.lbl') || _cb).textContent = 'COPY BATTLE LINK'; _cb.classList.remove('copied'); }
     { var _btw = $('mpx-beat-that'); if (_btw) _btw.hidden = true; }   // build102y step6: BEAT THAT is the SPECTATOR verdict's button — a player's own verdict never shows it
     // build102y step3: lifetime head-to-head under the scorecard — read AFTER the record above so this game
     // is already in the book (the "flip"). Trailing = a REVENGE? nudge. esc() on the stored name (peer-supplied).
@@ -1569,6 +1589,7 @@
 
   // ===================== BUILD8: QUICK-MATCH =====================
   function toggleQuickMatch() {
+    if (_qm && _qm.on) return;   // pkg1.3: the server queue owns the hero while SEARCHING — the fused pill's own click is the cancel
     if (!supa || !lobbyCh) { banner('mpx-lobby-msg', 'Sign in to play online — quick-match needs a connection.'); return; }
     QM.looking = !QM.looking; QM.t = Date.now();
     paintQuickBtn(); reannounce();
@@ -1594,6 +1615,7 @@
   function paintQuickBtn() {
     var b = $('mpx-act-quick'); if (!b) return;
     b.setAttribute('aria-busy', QM.looking ? 'true' : 'false');
+    b.classList.toggle('searching', QM.looking || !!(_qm && _qm.on));   // pkg1.3: the hero itself pulses while ANY search runs (presence QM or server queue)
     // build99h: hero CTA now uses .mpx-hero-title / .mpx-hero-sub (fall back to legacy .a-t/.a-d if present)
     var t = b.querySelector('.mpx-hero-title') || b.querySelector('.a-t');
     var d = b.querySelector('.mpx-hero-sub') || b.querySelector('.a-d');
@@ -1634,10 +1656,11 @@
   function paintQmPill(state) {
     var b = $('mpx-qm-pill'); if (!b) return;
     b.classList.remove('searching', 'matched');
-    if (state === 'searching') { b.classList.add('searching'); b.textContent = '🎯 SEARCHING… tap to cancel'; }
-    else if (state === 'matched') { b.classList.add('matched'); b.textContent = '🎯 MATCHED!'; }
-    else b.textContent = '🎯 FIND ME A MATCH';
+    if (state === 'searching') { b.classList.add('searching'); b.textContent = 'SEARCHING… TAP TO CANCEL'; }
+    else if (state === 'matched') { b.classList.add('matched'); b.textContent = 'MATCHED!'; }
+    else b.textContent = 'FIND ME A MATCH';
     b.setAttribute('aria-pressed', state === 'searching' ? 'true' : 'false');
+    var h = $('mpx-act-quick'); if (h) h.classList.toggle('searching', state === 'searching' || !!(QM && QM.looking));   // pkg1.3: the fused hero pulses while the server queue searches
   }
   function qmStartTimers() {
     if (_qm.pollT) clearInterval(_qm.pollT);
@@ -1721,7 +1744,7 @@
     open();   // raise the MP screen if needed (activation joins the lobby)
     _qm.on = true;
     paintQmPill('searching');
-    banner('mpx-lobby-msg', '🎯 Looking for an opponent…');
+    banner('mpx-lobby-msg', 'Looking for an opponent…');
     qmPost();
     qmStartTimers();
     return true;
@@ -1755,7 +1778,7 @@
           return;
         }
         if (_qmHostFallback()) return;   // v413: pairing record expired mid-accept — open the room from the URL fallback
-        banner('mpx-lobby-msg', '🎯 Not searching right now — tap FIND ME A MATCH to start.');
+        banner('mpx-lobby-msg', 'Not searching right now — tap FIND ME A MATCH to start.');
       }).catch(function (e) {
         if (_qmHostFallback()) return;   // v413: even on a status error, an ACCEPT with a known room should land IN the room
         var msg = String((e && e.message) || '');
@@ -1982,7 +2005,7 @@
     var nmEl = $('mpx-roomctx-name'); if (nmEl) nmEl.textContent = room.name || 'Room';
     var pv = $('mpx-roomctx-priv'); if (pv) pv.textContent = room.priv ? '· PRIVATE' : '· PUBLIC';
     var closeBtn = $('mpx-room-close');
-    if (closeBtn) closeBtn.textContent = room.isHost ? 'CLOSE ROOM' : 'LEAVE ROOM';
+    if (closeBtn) closeBtn.textContent = room.show ? (room.isHost ? 'END THE SHOW' : 'LEAVE THE SHOW') : (room.isHost ? 'CLOSE ROOM' : 'LEAVE ROOM');   // pkg1.4: show rooms say what the ember link really does (the ▸ is CSS)
     // build60: surface the invite bar + room code so a host can pull a friend in; the host also gets "Add a CPU".
     var bar = $('mpx-invitebar'), codeRow = $('mpx-invite-code-row'), codeEl = $('mpx-invite-code'), addCpu = $('mpx-add-cpu');
     // build102s: in a SHOW room the generic opponent bar is hidden — the challenger seat is host-granted (seat
@@ -2018,7 +2041,7 @@
       else if (room.isHost) { ws.textContent = 'You\'re hosting — waiting for 1 player. Share the code, or add a CPU to start now.'; }
       else { ws.textContent = 'Waiting for the host to start…'; }
       // build100f (relatability): remind both players combat is on while they wait, so the mid-song freeze is expected.
-      if (room.combat) ws.textContent += ' ⚡ Combat ON — a combo streak shocks the rival ~2s.';
+      if (room.combat) ws.textContent += ' Combat ON — a combo streak shocks the rival ~2s.';
       if (room.show) {   // build102s: show-room copy replaces the stock strings (song locked, host never blocked)
         var seatedId = room.isHost ? room.p2 : (room._snapP2 || null);
         if (room.isHost) ws.textContent = room.p2 ? '⚔ Challenger seated — START runs the head-to-head.' : 'LIVE SHOW — START plays it solo; the artist can join between runs.';
@@ -2196,6 +2219,7 @@
     var ids = Object.keys(roomsDir);
     var tids = Object.keys(toursDir);
     var empty = $('mpx-rooms-empty'); if (empty) empty.hidden = (ids.length + tids.length) !== 0;
+    var cnt = $('mpx-rooms-count'); if (cnt) cnt.textContent = (ids.length + tids.length) ? (ids.length + ' room' + (ids.length === 1 ? '' : 's') + ' open · ' + tids.length + ' bracket' + (tids.length === 1 ? '' : 's') + ' filling') : '';   // pkg1.2: browse count line
     // build9: tournament cards lead the list (gold spark; join gated on open + seats)
     var tourCards = tids.map(function (tid) {
       var r = toursDir[tid], live = r.state === 'live' || r.state === 'done', full = (r.count || 1) >= (r.max || 10);
@@ -2228,7 +2252,7 @@
         '<span class="mpx-rc-sub"><span class="mpx-rc-tag pub">PUBLIC</span>' +
           // build100f (relatability): disclose COMBAT on the room card so a joiner knows BEFORE joining that a combo can
           // freeze them ~2s mid-song (previously the only cue was the post-hoc "RIVAL SHOCKED YOU" veil — read as a bug).
-          (r.combat ? '<span class="mpx-rc-tag" style="background:rgba(255,31,46,0.18);color:#ff6b78;margin-left:4px;" title="Combat ON — a combo streak shocks the rival for ~2s">⚡ COMBAT</span>' : '') +
+          (r.combat ? '<span class="mpx-rc-tag" style="background:rgba(255,31,46,0.18);color:#ff6b78;margin-left:4px;" title="Combat ON — a combo streak shocks the rival for ~2s">COMBAT</span>' : '') +
           ' host ' + esc((r.hostName || 'host')) + ' · <span class="mpx-rc-count">' + (r.count || 1) + '/' + (r.max || 2) + '</span></span></span>' +
         '<span class="mpx-rc-act">' +
           '<button class="mpx-rc-join" data-join="' + esc(rid) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button>' +
@@ -2531,7 +2555,7 @@
     if (_bt) {
       var _showBt = !!(sel && sel.audioUrl && _lastShowFinal.score > 0);
       _bt.hidden = !_showBt;
-      if (_showBt) _bt.textContent = '🎯 BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+      if (_showBt) _bt.textContent = 'BEAT THAT — ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
     }
     // build102y review fix E: a WATCHER's neutral verdict must never carry the PLAYER verdict controls left
     // visible by a previous duel's showWinner — SHARE THE W would share the stale _lastVerdict (wrong song,
@@ -2598,7 +2622,7 @@
       if (_bb) {
         var _showBb = !!(room.show && _lastShowFinal && _lastShowFinal.score > 0 && sel && sel.audioUrl);
         _bb.hidden = !_showBb;
-        if (_showBb) _bb.textContent = '🎯 BEAT THAT — play it vs ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
+        if (_showBb) _bb.textContent = 'BEAT THAT — play it vs ' + _lastShowFinal.name + '\'s ' + _lastShowFinal.score.toLocaleString();
       }
     } else { step('lobby'); }
   }
@@ -2624,7 +2648,7 @@
       '<div class="mss-decks"><canvas id="mss-deck1"></canvas><canvas id="mss-deck2"></canvas></div>' +
       '<div class="mss-sync" id="mss-sync"><span class="mss-sync-dot"></span>&nbsp;SYNCING — locking to the live run…</div>' +
       '<div class="mss-verdict" id="mss-verdict" hidden></div>' +
-      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden>🎸 TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
+      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden>TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
     document.body.appendChild(st);
     _specStage = st;
     _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, 'HOST');
@@ -2860,9 +2884,9 @@
     var seatedId = room.isHost ? room.p2 : (room._snapP2 || null);
     var p2m = seatedId && room.members[seatedId];
     if (emp) {
-      if (seatedId) emp.innerHTML = '🎸 <b>' + esc((p2m && p2m.name) || room._p2Name || 'Challenger') + '</b> is seated' + (seatedId === room.submitterId ? ' — the artist is in!' : '');
-      else if (room.isHost && room.submitterName) emp.innerHTML = '🎸 ARTIST SEAT — <b>waiting for ' + esc(room.submitterName) + '…</b>';
-      else emp.innerHTML = '🎸 ARTIST SEAT — <b>open</b>';
+      if (seatedId) emp.innerHTML = '<b>' + esc((p2m && p2m.name) || room._p2Name || 'Challenger') + '</b> is seated' + (seatedId === room.submitterId ? ' — the artist is in!' : '');
+      else if (room.isHost && room.submitterName) emp.innerHTML = 'ARTIST SEAT — <b>waiting for ' + esc(room.submitterName) + '…</b>';
+      else emp.innerHTML = 'ARTIST SEAT — <b>open</b>';
       emp.hidden = false;
     }
     if (pend) {
@@ -2889,7 +2913,7 @@
       takeRow.hidden = !showTake;
       if (showTake) {
         var wanting = room.seat !== 'spec';
-        if (takeBtn) takeBtn.textContent = wanting ? '↩ WITHDRAW' : '🎸 TAKE THE STAGE';
+        if (takeBtn) takeBtn.textContent = wanting ? '↩ WITHDRAW' : 'TAKE THE STAGE';
         var pos = 0;
         try { var _ids = room._snapPendIds || []; var _ix = _ids.indexOf(ME.id); if (_ix >= 0) pos = _ix + 1; } catch (e) {}
         if (takeq) takeq.textContent = wanting
@@ -2905,7 +2929,7 @@
       if (invBtn) {
         invBtn.hidden = !!room.invited;
         invBtn.disabled = !!_inviteBusy;
-        invBtn.textContent = _inviteBusy ? '📣 CALLING…' : ('📣 CALL IN THE ARTIST' + (room.submitterName ? ' — ' + String(room.submitterName).slice(0, 14) : ''));
+        invBtn.textContent = _inviteBusy ? 'CALLING…' : ('CALL IN THE ARTIST' + (room.submitterName ? ' — ' + String(room.submitterName).slice(0, 14) : ''));
       }
       if (nudge) nudge.hidden = !(room.invited && _inviteAt && (Date.now() - _inviteAt > 60000) && !room.p2 && !_inviteRenotified);
     }
@@ -2932,7 +2956,7 @@
     room.p2 = room.submitterId; room.pendingChal = null;
     room._p2At = Date.now();   // build102y review fix B: freshness stamp (see the onRoomPeers wedge heal)
     advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
-    banner('mpx-setup-msg', '👑 ' + ((room.submitterName || 'The artist')) + ' takes the seat' + (matchLive ? ' — lands for the NEXT run.' : ' — START runs the versus.'));
+    banner('mpx-setup-msg', ((room.submitterName || 'The artist')) + ' takes the seat' + (matchLive ? ' — lands for the NEXT run.' : ' — START runs the versus.'));
   }
   // build102y step5: TAKE THE STAGE / WITHDRAW — a spectator raises (or lowers) their hand by flipping their
   // OWN presence seat ('spec' ↔ 'p2'); joinRoomChannel's getMeta closure reads room.seat live, so the next
@@ -2956,7 +2980,7 @@
     if (!tk.hidden) {
       var wanting = room.seat !== 'spec';
       var pos = 0; try { var ids = room._snapPendIds || []; var ix = ids.indexOf(ME.id); if (ix >= 0) pos = ix + 1; } catch (e) {}
-      tk.textContent = wanting ? ('↩ IN LINE' + (pos ? ' #' + pos : '') + ' — WITHDRAW') : '🎸 TAKE THE STAGE';
+      tk.textContent = wanting ? ('↩ IN LINE' + (pos ? ' #' + pos : '') + ' — WITHDRAW') : 'TAKE THE STAGE';
     }
   }
   // ---- CALL IN THE ARTIST → RhythmCatalog.showInvite → POST /show/invite (token stays in catalog.js; never on the wire here)
@@ -4086,7 +4110,7 @@
     else _csub = 'BRACKET CHAMPION';
     set('mpx-tour-champ-sub', _csub);
     if (tour.stakes === 'sidebet' && p.id !== ME.id && _wagerWon > 0) {
-      try { (window.RhythmGame && window.RhythmGame.showToast) ? window.RhythmGame.showToast('🎲 You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!', 'good') : banner('mpx-tour-msg', '🎲 You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!'); } catch (e) {}
+      try { (window.RhythmGame && window.RhythmGame.showToast) ? window.RhythmGame.showToast('You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!', 'good') : banner('mpx-tour-msg', 'You backed the winner — won ' + _wagerWon + ' ◆ Bonus Sparks!'); } catch (e) {}
     }
     // award-clip backdrop (muted ambient loop) + the champ's banked final
     var clip = $('mpx-tour-champ-clip');
@@ -4193,7 +4217,7 @@
     var potEl = $('mpx-tour-pot');
     if (potEl) {
       if (!staked) potEl.hidden = true;
-      else { potEl.hidden = false; var picon = tour.stakes === 'sidebet' ? '🎲' : '💰';
+      else { potEl.hidden = false; var picon = '◆';   // pkg1 emoji sweep: spark diamond for both stake kinds
         potEl.innerHTML = picon + ' POT <b>' + (tour.pot || 0) + ' &#9670;</b> &nbsp;·&nbsp; ' + (tour.buyIn || 0) + ' &#9670; ' + (tour.stakes === 'sidebet' ? 'bet' : 'buy-in') + ' &nbsp;·&nbsp; ' + paidN + '/' + n + ' in'; }
     }
     // build66: side-bet — every entrant (host included) places ONE bet via the picker before round 1; show the prompt until they have.
@@ -4201,7 +4225,7 @@
     if (betBtn) {
       var showBet = (tour.stakes === 'sidebet') && tour.state === 'open' && !_betPlaced();
       betBtn.hidden = !showBet;
-      if (showBet) betBtn.textContent = '🎲 PLACE YOUR BET — ' + (tour.buyIn || 0) + ' ◆';
+      if (showBet) betBtn.textContent = 'PLACE YOUR BET — ' + (tour.buyIn || 0) + ' ◆';
     }
     try { paintStakeRow(); } catch (e) {}
     if (tour.state === 'live') {
@@ -4643,7 +4667,7 @@
     var code = roomCode(room.id), link = roomInviteLink(room.id);
     var share = 'Join my Reactive Rhythm room — code ' + code + ': ' + link;
     var btn = $('mpx-invite-friend');
-    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — SEND IT' : '👤 VS PLAYER — INVITE'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '👤 VS PLAYER — INVITE'; }, 2600); }
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — SEND IT' : 'VS PLAYER — INVITE'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = 'VS PLAYER — INVITE'; }, 2600); }
     try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a friend:', share); }); }
     catch (e) { window.prompt('Copy this — send it to a friend:', share); }
   });
@@ -4700,7 +4724,7 @@
     if (!room.id || room.priv || room.show) return;
     var btn = $('mpx-copy-battle');
     var share = 'Think you can take me? Battle me in Reactive Rhythm: ' + roomInviteLink(room.id);
-    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — CALL THEM OUT' : '🔗 COPY BATTLE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = '🔗 COPY BATTLE LINK'; }, 2600); }
+    function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); var L = btn.querySelector('.lbl') || btn; L.textContent = ok ? '✓ COPIED — CALL THEM OUT' : 'COPY BATTLE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); L.textContent = 'COPY BATTLE LINK'; }, 2600); }
     try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a rival:', share); }); }
     catch (e) { window.prompt('Copy this — send it to a rival:', share); }
   });
@@ -4821,6 +4845,7 @@
     tour.stakes = b.getAttribute('data-stakes') || 'free'; tour.currency = 'bonus';
     if (tour.stakes === 'free') { tour.potId = null; tour.pot = 0; tour.buyIn = 0; }   // build100q: Free clears the buy-in too, so no stale bet amount lingers (was: pot zeroed but buyIn kept → "Free" + a phantom 50 bet)
     else { tour.buyIn = Math.max(1, Math.min(_wagerMax(), parseInt(($('mpx-tour-buyin') || {}).value, 10) || DEFAULT_BUYIN)); _wagerEnsurePool(); _wagerDeclined[tour.id] = false; try { setTimeout(_wagerMaybePay, 400); } catch (e) {} }   // host commits to its own buy-in too; re-selecting a mode re-prompts
+    try { var _brs = $('mpx-tour-buyinrow'); if (_brs) _brs.classList.toggle('staked', tour.stakes !== 'free'); } catch (e) {}   // pkg1.2: gold accent on the armed buy-in row
     paintStakeRow(); paintTourRoom(); broadcastSnapshot(); advertiseTour();
   });
   wire('mpx-tour-buyin', 'input', function () {
