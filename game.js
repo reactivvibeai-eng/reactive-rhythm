@@ -110,6 +110,10 @@
   let player = null;         // current Player instance
   let beats = [];            // raw chart [{t, strength}]
   let notes = [];            // derived [{time, lane, strength, judged, hit}]
+  let _injectedNotes = null; // build114: AUTHORITATIVE MP CHART — when set, beginPlay() skips buildNotes() and
+                              // uses this array verbatim (rehydrated full note objects, not the stripped spectator
+                              // shape). ALWAYS consumed + cleared by beginPlay() so it can never leak into the next
+                              // run (solo, MP, or otherwise) — see startAt()/beginPlay() below.
   let songDuration = 0;
   let rafId = null;
   let state = 'menu';
@@ -2244,6 +2248,45 @@
     return { notes: out, duration: buf.duration, buffer: buf };   // notes are plain copies, already time-sorted by buildNotes
   }
 
+  // build114: AUTHORITATIVE MP CHART — the HOST-side pre-chart seam. Sibling of chartUrlForSpectate (same fetch →
+  // decode → analyzeChart → buildNotes pipeline, same snapshot-and-swap discipline, same busy-guard) but returns the
+  // FULL scoring-ready note shape (strength/chord/chordId/chordLead/chordLanes/open/hopo — everything handleHit/holds/
+  // render() actually read), not the stripped display-only shape chartUrlForSpectate hands to the spectator deck.
+  // multiplayer.js's resolveAndStart calls this ONCE on the host, broadcasts the result, and both seats inject it via
+  // RhythmGame.startAt(prov,{notes}) — so host + guest score off the byte-identical chart instead of two independent
+  // decodeAudioData()+analyzeChart() runs that can silently diverge across browsers/OS (the MP note-gap root cause).
+  // Per spec: chartUrlForSpectate itself is NOT touched — this is an additive sibling, not a modification.
+  // Also satisfies the "MP is never a scripted campaign boss" fix: _levelCtx is force-cleared here exactly as
+  // chartUrlForSpectate already does, so _bossStage (buildNotes' Hard-easing flag) can never read true off of it.
+  async function chartUrlAuthoritative(url, diff) {
+    if (player != null || state === 'playing' || state === 'paused') throw new Error('engine busy — cannot chart for MP mid-run');
+    let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
+    if (!buf) {
+      const arr = await fetchAudio(url, { mode: 'cors' });
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }
+      lastDecoded = { url: url, buf: buf };
+    }
+    const analyzed = await analyzeChart(buf);
+    if (player != null || state === 'playing' || state === 'paused') throw new Error('engine became busy during the MP chart decode');
+    const snap = { beats: beats, notes: notes, difficulty: difficulty, ctx: _levelCtx, mods: _levelMods, stats: window.__rrChartStats, peak: window.__rrPeakNps };
+    let out = [];
+    try {
+      beats = analyzed || [];
+      if (DIFF_STEP[diff]) difficulty = diff;          // TRANSIENT override — restored below, never persisted
+      _levelCtx = null; _levelMods = null;             // build114 (spec item 3): force _bossStage=false — MP is never a scripted campaign boss encounter
+      buildNotes();
+      out = notes.map(n => ({ time: n.time, lane: n.lane, type: n.type, hold: n.hold || 0, strength: n.strength || 1,
+        chord: !!n.chord, chordId: n.chord ? n.chordId : undefined, chordLead: n.chord ? !!n.chordLead : undefined,
+        chordLanes: n.chordLanes ? n.chordLanes.slice() : null, open: !!n.open, hopo: !!n.hopo }));
+    } finally {
+      beats = snap.beats; notes = snap.notes; difficulty = snap.difficulty;
+      _levelCtx = snap.ctx; _levelMods = snap.mods;
+      try { window.__rrChartStats = snap.stats; window.__rrPeakNps = snap.peak; } catch (e) {}
+    }
+    return { notes: out, duration: buf.duration, buffer: buf };
+  }
+
   // build66 (launch-audit, predicted-bug): OfflineAudioContext webkit fallback. Older iOS Safari (<14.1) + some in-app WebViews
   // expose ONLY webkitOfflineAudioContext — without this alias BOTH in-browser charters threw on the bare global, so EVERY live
   // track failed with "Could not start this track". (analyzeMusical's catch already falls back to a synthetic grid on total absence.)
@@ -2763,9 +2806,23 @@
     beats = session.beats || [];
     songDuration = session.duration || 0;
     player = session.player;
-    if (!beats.length) throw new Error('This track could not be charted — try another');   // build72: player-facing (was the dev string "No beats in chart" shown verbatim in the launch-fail toast)
+    // build114: AUTHORITATIVE MP CHART — if startAt() staged an injected note array (host-broadcast chart),
+    // consume it INSTEAD of buildNotes()/beats so host + guest play the identical chart (was: each seat's own
+    // decodeAudioData/analyzeChart, which can silently diverge across browsers/OS — the MP note-gap root cause).
+    // beats-emptiness is only a hard failure on the LOCAL-CHART path — an injected chart stands on its own.
+    if (!_injectedNotes && !beats.length) throw new Error('This track could not be charted — try another');   // build72: player-facing (was the dev string "No beats in chart" shown verbatim in the launch-fail toast)
 
-    buildNotes();
+    // SNAPSHOT-AND-SWAP (mirrors chartUrlForSpectate's try/finally pattern): consuming _injectedNotes must NEVER
+    // leak into a later run that bypasses this seam. _injectedNotes itself is cleared unconditionally right here
+    // (single-use per launch) so a stale value can't survive into the NEXT beginPlay() no matter how this one ends.
+    const _useInjected = !!(_injectedNotes && _injectedNotes.length);
+    const _injSnapshot = _injectedNotes;
+    _injectedNotes = null;   // one-shot: consumed now, cleared immediately — can't leak forward even on throw
+    if (_useInjected) {
+      notes = _injSnapshot;   // already fully-rehydrated note objects (time/lane/type/hold/chord/.../judged/hit) — see multiplayer.js resolveAndStart
+    } else {
+      buildNotes();
+    }
     resetScoring();
 
     // update HUD meta
@@ -7574,6 +7631,7 @@
     getInputStatus: () => ({ midi: midiInputs.slice(), gamepads: gamepadList(), midiSupported: !!navigator.requestMIDIAccess }),
     __buffered: (url, meta) => bufferedProvider(url, meta),   // MP tight-sync seam (deferred provider)
     chartUrl: (url, diff) => chartUrlForSpectate(url, diff),  // build102t: live-show spectator chart seam (no run started; transient difficulty)
+    chartUrlFull: (url, diff) => chartUrlAuthoritative(url, diff),  // build114: MP host-side authoritative-chart seam (full scoring-ready note shape) — see multiplayer.js resolveAndStart
     getLaneColors: () => LANE_COLORS.map(c => c.rgb),         // build102t: per-lane note colors for engine-less deck renderers (spectator decks)
   });
 
@@ -7640,7 +7698,15 @@
     opts = opts || {};
     if (opts.difficulty) { try { window.RhythmGame.setDifficulty(opts.difficulty); } catch (e) {} }
     var delay = Math.max(0, (opts.atMs || Date.now()) - Date.now());
-    setTimeout(function () { try { getAC().resume(); } catch (e) {} try { play(prov); } catch (e) {} }, delay);
+    // build114: AUTHORITATIVE MP CHART seam. If the caller supplies opts.notes (a pre-built, rehydrated note
+    // array — see multiplayer.js resolveAndStart), beginPlay() skips its own analyzeChart/buildNotes and uses
+    // this array verbatim so host + guest play the IDENTICAL chart (kills cross-device decoder-drift gaps).
+    // Absent (every existing caller) → _injectedNotes stays null → byte-identical to the pre-existing path.
+    var _notes = (opts.notes && opts.notes.length) ? opts.notes : null;
+    setTimeout(function () {
+      try { getAC().resume(); } catch (e) {}
+      try { _injectedNotes = _notes; play(prov); } catch (e) { _injectedNotes = null; }
+    }, delay);
   };
   if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
   if (!window.RhythmGame.getMusicAnalyser) window.RhythmGame.getMusicAnalyser = function () { return musicAnalyser; };   // build66: live FFT tap (frequency + waveform) for procbg.js reactive backdrops

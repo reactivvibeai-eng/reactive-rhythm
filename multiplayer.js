@@ -85,6 +85,14 @@
   var meReady = false, oppReady = false;
   var roomOppReady = false;   // playtest-3 (Bug D): the opponent's readiness during the ROOM-waiting stage (before the match channel exists). Match-channel readiness stays in oppReady.
   var matchLive = false, finishedLocal = false;
+  // build114: AUTHORITATIVE MP CHART — the guest's inbox for the host's broadcast note array (see resolveAndStart /
+  // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
+  // consumed by a later one. Cleared the instant it's consumed (one-shot, same discipline as game.js's _injectedNotes).
+  var _pendingChart = null;   // { key: 'trackId|difficulty', notes: [...] } | null
+  function onChart(p) {
+    if (!p || !p.key || !p.notes || !p.notes.length) return;
+    _pendingChart = { key: p.key, notes: p.notes };
+  }
   var myFinal = null, oppFinal = null;
   var lastOppTick = null;
   var lastOppState = null;        // versus P2: latest opponent render frame (ghost deck source)
@@ -648,6 +656,7 @@
     matchCh.on('broadcast', { event: 'round' }, function (m) { if (m && m.payload && m.payload.rid) _serverRoundId = m.payload.rid; });   // build100i: peer adopts the host's server round uuid for /mp/round/settle
     matchCh.on('broadcast', { event: 'rematch' }, function () { resetForRematch(); });
     matchCh.on('broadcast', { event: 'shock' }, function (m) { onShock(m.payload); });   // v254: P-vs-P combat — the rival's combo zapped you
+    matchCh.on('broadcast', { event: 'chart' }, function (m) { onChart(m.payload); });   // build114: AUTHORITATIVE MP CHART — host broadcasts its buildNotes() output so both seats play the identical chart (kills cross-device decoder-drift note-gaps)
     matchCh.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         matchSP.start();
@@ -1443,6 +1452,49 @@
     }, delay + 80);
   }
 
+  // build114: AUTHORITATIVE MP CHART — rehydrate a broadcast (or freshly-built) note list back into the FULL note-object
+  // shape the real scoring engine needs (buildNotes()'s own shape: time/lane/strength/type/hold/chord/chordId/chordLead/
+  // chordLanes/open/hopo + fresh judged:false/hit:null/spin per launch). The wire format is deliberately compact
+  // ({t,l,ty,h,ch,cl,cid,cld,op,hp,s}) to keep the broadcast payload small; this is the ONLY place that expands it back
+  // out, on BOTH the host (so host + guest run the literal same rehydration code) and the guest.
+  function _rehydrateChart(wire) {
+    var out = new Array(wire.length);
+    for (var i = 0; i < wire.length; i++) {
+      var w = wire[i];
+      out[i] = {
+        time: w.t, lane: w.l, type: w.ty, hold: w.h || 0, strength: (typeof w.s === 'number') ? w.s : 1,
+        spin: 0, judged: false, hit: null, _pulsed: false,
+        chord: !!w.ch, chordId: w.ch ? w.cid : undefined, chordLead: w.ch ? !!w.cld : undefined,
+        chordLanes: (w.ch && w.cl) ? w.cl.slice() : undefined,
+        open: !!w.op, hopo: !!w.hp
+      };
+    }
+    return out;
+  }
+  // build114: the HOST's own launch uses this instead of a dehydrate→rehydrate round-trip through the wire format —
+  // same field set _rehydrateChart produces (time/lane/type/hold/strength/chord/.../open/hopo), just filling in the
+  // fresh per-launch scoring state (spin/judged/hit/_pulsed) directly off chartUrlFull()'s already-full note shape.
+  function _freshenChart(notes) {
+    var out = new Array(notes.length);
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i];
+      out[i] = Object.assign({}, n, { spin: 0, judged: false, hit: null, _pulsed: false });
+    }
+    return out;
+  }
+  // build114: compact serialization of window.RhythmGame.chartUrlFull()'s returned note list (the host's
+  // freshly-built authoritative chart) into the wire shape _rehydrateChart expects. Symmetric with it by construction.
+  function _dehydrateChart(notes) {
+    var out = new Array(notes.length);
+    for (var i = 0; i < notes.length; i++) {
+      var n = notes[i];
+      out[i] = { t: n.time, l: n.lane, ty: n.type, h: n.hold || 0, s: n.strength || 1 };
+      if (n.chord) { out[i].ch = 1; out[i].cid = n.chordId; out[i].cld = n.chordLead ? 1 : 0; out[i].cl = n.chordLanes ? n.chordLanes.slice() : null; }
+      if (n.open) out[i].op = 1;
+      if (n.hopo) out[i].hp = 1;
+    }
+    return out;
+  }
   // Resolve a chart provider for `sel` and schedule the synced start via the public
   // RhythmGame.startAt(provider,{...}). Branch logic mirrors RhythmCatalog.launchTrack:
   //   server chart → liveProvider(id); else audio_url → __buffered/playUrl; else demo.
@@ -1483,7 +1535,51 @@
     } catch (e) { console.error('[mp] provider resolve failed', e); }
 
     if (prov) {
-      window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty });
+      // build114: AUTHORITATIVE MP CHART. Only the in-browser-decode path (url + __buffered, just resolved above)
+      // is where host/guest can silently diverge (decodeAudioData is a per-browser/OS decoder) — the server-chart
+      // and demo branches are already identical by construction, so they're untouched (prov unchanged, notes:null,
+      // byte-identical to before this build). Only engaged when a real 1v1/room match channel is live (matchCh +
+      // matchRole) — a tournament round (matchCh null mid-bracket, see startMatchChannel) falls through to the
+      // pre-existing per-seat local-chart path unchanged; NOT fixed by this pass (see multiplayer.js top-of-file
+      // notes / CHANGELOG for the follow-up).
+      var chartKey = (url && matchCh) ? (String(t && t.id) + '|' + String(sel.difficulty)) : null;
+      if (chartKey && matchRole === 'host') {
+        // HOST: build the chart ONCE via the real pipeline, broadcast it, then launch off the SAME array (so the
+        // host never re-derives — it plays exactly what it broadcast). If charting fails for any reason, fall back
+        // to the plain provider (host's own run must never be blocked by the broadcast seam).
+        window.RhythmGame.chartUrlFull(url, sel.difficulty).then(function (chart) {
+          try {
+            var wire = _dehydrateChart(chart.notes);
+            matchCh.send({ type: 'broadcast', event: 'chart', payload: { key: chartKey, notes: wire } });
+          } catch (e) { console.error('[mp] chart broadcast failed', e); }
+          try {
+            window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty, notes: _freshenChart(chart.notes) });
+          } catch (e) { console.error('[mp] host authoritative-chart launch failed — falling back to local chart', e); window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty }); }
+        }).catch(function (e) {
+          console.error('[mp] host pre-chart failed — falling back to local per-seat chart', e);
+          window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty });
+        });
+      } else if (chartKey && matchRole === 'guest') {
+        // GUEST: wait (briefly, bounded well inside the lead-in) for the host's broadcast keyed to this exact
+        // track+difficulty. A stale/prior-round entry can never match (the key includes both). If it doesn't
+        // arrive in time — slow network, host on an older build, etc. — degrade to the PRE-EXISTING local-chart
+        // path so the round can never be blocked from starting; the gap bug simply isn't fixed for that one round.
+        var _waitStart = Date.now(), _waitMs = Math.max(500, Math.min(3500, atMs - Date.now() - 300));
+        (function pollForChart() {
+          if (_pendingChart && _pendingChart.key === chartKey) {
+            var got = _pendingChart; _pendingChart = null;   // one-shot consume — can't leak into a later round
+            window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty, notes: _rehydrateChart(got.notes) });
+            return;
+          }
+          if (Date.now() - _waitStart >= _waitMs) {
+            window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty });   // degrade gracefully — never block the round
+            return;
+          }
+          setTimeout(pollForChart, 100);
+        })();
+      } else {
+        window.RhythmGame.startAt(prov, { atMs: atMs, difficulty: sel.difficulty });
+      }
     } else {
       // Fallback (in-browser-charted track, no __buffered seam): set difficulty + fire the public launchTrack at the
       // synced timestamp. Judgment stays 100% local (fairness unaffected — only the comparative bar).
@@ -1866,6 +1962,7 @@
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
+    _pendingChart = null;   // build114: a rematch of the SAME track+difficulty reuses the identical chartKey — drop any stale prior-round broadcast so a race can't let the guest consume last round's chart instead of waiting for the fresh one
 
     // FULLY tear down the prior split-screen so the rematch's beginMatch→mountVsHud re-seeds clean.
     // Without this, .vs-mode + #vs-seam linger → mountVsHud's idempotent guard skips the re-init and
@@ -1900,6 +1997,7 @@
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false;
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
+    _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
     _serverRoundId = null; _roundStartFired = false;   // build100i: drop the server round so the next match opens a fresh one
     _showAtMs = 0; _specShowSolo = false; _soloRun = false;   // build102s: show-run flags die with the match (review fix 8: a torn-down show start must never leave _soloRun armed for a later unrelated song end)
     try { if (window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(false); } catch (e) {}   // build102u: auto-pause back to normal for everything after a show run (no-op if never suppressed)
