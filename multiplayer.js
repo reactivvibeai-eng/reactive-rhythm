@@ -2434,6 +2434,7 @@
   function updateBrowseCount() {
     var n = openRoomCount();
     var el = $('mpx-act-browse-n'); if (el) el.textContent = n ? ('(' + n + ')') : '';
+    var el2 = $('mpx-act-browse-top-n'); if (el2) el2.textContent = n ? ('(' + n + ')') : '';   // build108 s3c: mirror the count onto the promoted top-level quick-link
     renderLiveNow();   // build61: keep the lobby LIVE NOW surface in sync with the directory (single update point)
   }
 
@@ -3001,7 +3002,7 @@
       '<div class="mss-decks"><canvas id="mss-deck1"></canvas><canvas id="mss-deck2"></canvas></div>' +
       '<div class="mss-sync" id="mss-sync"><span class="mss-sync-dot"></span>&nbsp;SYNCING — locking to the live run…</div>' +
       '<div class="mss-verdict" id="mss-verdict" hidden></div>' +
-      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden>TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';
+      '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden title="Request the challenger seat in this live show">TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';   // build108 s3d: same clarifying title as mpx-show-take
     document.body.appendChild(st);
     _specStage = st;
     _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, 'HOST');
@@ -3266,7 +3267,7 @@
       takeRow.hidden = !showTake;
       if (showTake) {
         var wanting = room.seat !== 'spec';
-        if (takeBtn) takeBtn.textContent = wanting ? '↩ WITHDRAW' : 'TAKE THE STAGE';
+        if (takeBtn) { takeBtn.textContent = wanting ? '↩ WITHDRAW' : 'TAKE THE STAGE'; takeBtn.title = wanting ? 'Give up your place in line for the challenger seat' : 'Request the challenger seat in this live show'; }   // build108 s3d
         var pos = 0;
         try { var _ids = room._snapPendIds || []; var _ix = _ids.indexOf(ME.id); if (_ix >= 0) pos = _ix + 1; } catch (e) {}
         if (takeq) takeq.textContent = wanting
@@ -3334,6 +3335,7 @@
       var wanting = room.seat !== 'spec';
       var pos = 0; try { var ids = room._snapPendIds || []; var ix = ids.indexOf(ME.id); if (ix >= 0) pos = ix + 1; } catch (e) {}
       tk.textContent = wanting ? ('↩ IN LINE' + (pos ? ' #' + pos : '') + ' — WITHDRAW') : 'TAKE THE STAGE';
+      tk.title = wanting ? 'Give up your place in line for the challenger seat' : 'Request the challenger seat in this live show';   // build108 s3d
     }
   }
   // ---- CALL IN THE ARTIST → RhythmCatalog.showInvite → POST /show/invite (token stays in catalog.js; never on the wire here)
@@ -5022,6 +5024,10 @@
   // build99h: TIER-2 "Local versus" → hand off to the parallel couch-coop engine (RhythmCouch)
   wire('mpx-act-local', 'click', function () { try { if (window.RhythmCouch && window.RhythmCouch.open) window.RhythmCouch.open(); } catch (e) {} });
   wire('mpx-act-browse', 'click', function () { gotoRooms('browse'); });
+  // build108 s3c: the two promoted top-level quick-links — identical handlers to their drawer twins (mpx-act-browse /
+  // mpx-act-tour) so "More ways to play" isn't the only door into Browse rooms / Host a tournament anymore.
+  wire('mpx-act-browse-top', 'click', function () { gotoRooms('browse'); });
+  wire('mpx-act-tour-top', 'click', function () { gotoRooms('tour-create'); });
   // build61: LIVE NOW empty-state CTA → straight into the host-a-tournament form (also un-collapses friends so the path is visible)
   wire('mpx-livenow-host', 'click', function () { try { toggleFriends(true); } catch (e) {} gotoRooms('tour-create'); });
   // build8: rooms step

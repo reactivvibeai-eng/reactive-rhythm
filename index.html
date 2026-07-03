@@ -3930,6 +3930,15 @@
   .mpx-win-exit .ghost-btn { background: none; border: none; box-shadow: none; padding: 4px 8px; font-size: 11px; color: #9c918e;
     text-decoration: underline dotted rgba(238,230,226,0.35); }
   .mpx-win-exit .ghost-btn:hover { color: #eee6e2; background: none; }
+  /* build108 s3e (owner playtest-3: "wants a clear button to return to the lobby when a match ends"): BACK TO LOBBY
+     existed and was correctly labeled, but the shared .mpx-win-exit treatment above (no border/background, 11px,
+     dotted-underline) reads as a barely-visible afterthought link — easy to miss next to the crimson REMATCH hero.
+     Step it up to a real secondary button (still clearly LESS prominent than REMATCH, which stays the one hero
+     action) while LEAVE stays the quiet text-link exit it was designed as. */
+  .mpx-win-exit .ghost-btn#mpx-backlobby { background: rgba(255,255,255,0.05); border: 1px solid var(--mx-line, rgba(218,215,210,0.22));
+    color: #e4dbd6; text-decoration: none; padding: 10px 18px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+    border-radius: 999px; }
+  .mpx-win-exit .ghost-btn#mpx-backlobby:hover { color: #fff; border-color: rgba(218,215,210,0.45); background: rgba(255,255,255,0.09); }
 
   /* ===== pkg1.4: MATCH-SETUP zones — FACE-OFF / SETUP / COMMIT ===== */
   .mpx-step-setup { gap: var(--mx5, 24px); }
@@ -4112,6 +4121,13 @@
   .mpx-act-cpu-min:hover { border-color: rgba(218,215,210,0.5); color: var(--ink, #f3eceb); }
   .mpx-act-cpu-min .mac-ico { font-size: 14px; display: inline-flex; }
   .mpx-act-cpu-min .mac-ico svg { width: 16px; height: 16px; }   /* visual-overhaul: SVG icon replaces off-brand emoji */
+  /* build108 s3c: the two "More ways to play" quick-links surfaced into the main lobby flow — a side-by-side pair
+     using the same slim dashed-pill treatment as .mpx-act-cpu-min so they read as secondary, not competing with
+     the TIER 1/2 hero actions above. Wraps to a single column on the narrowest phones (mpx-tile already does the
+     same 1-col fallback pattern in this file's mobile section). */
+  .mpx-quicklinks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 0; }
+  .mpx-quicklinks .mpx-act-cpu-min { margin: 0; }
+  .mpx-quicklinks .mpx-act-cpu-min span#mpx-act-browse-top-n { color: var(--gold, #e0a93f); margin-left: 2px; }
   /* build102x: server-matchmaking pill (PHASE3) — OFF / SEARCHING (pulse) / MATCHED. Brand chrome + crimson only. */
   .mpx-qm-pill { display: flex; align-items: center; justify-content: center; width: 100%; margin: 6px 0 0;
     padding: 9px 12px; cursor: pointer; border-radius: 999px; border: 1px solid rgba(218,215,210,0.30); background: transparent;
@@ -4989,6 +5005,21 @@
           <span class="mac-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"></rect><path d="M12 4.5V8M12 4.5a1.4 1.4 0 1 0 0-.05"></path><circle cx="9" cy="13" r="1.2"></circle><circle cx="15" cy="13" r="1.2"></circle><path d="M2.5 12v3M21.5 12v3"></path></svg></span>Practice vs CPU — warm up, no waiting
         </button>
 
+        <!-- build108 s3c (owner playtest-3: "More ways to play" features too hidden — make them accessible): surface
+             the two named headline items (Browse rooms, Host a tournament) directly in the main lobby flow instead of
+             leaving them ONLY inside the collapsed drawer below. Same slim secondary-row treatment as the CPU practice
+             button above; fires the SAME handlers as the drawer's mpx-act-browse/mpx-act-tour (wired in multiplayer.js)
+             so there's exactly one code path, just two doors into it. The drawer stays for the rest (LIVE NOW list,
+             the fuller descriptions) — this isn't a duplicate menu, just the two most-wanted actions promoted up. -->
+        <div class="mpx-quicklinks">
+          <button class="mpx-act-cpu-min" id="mpx-act-browse-top" type="button">
+            <span class="mac-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg></span>Browse rooms <span id="mpx-act-browse-top-n"></span>
+          </button>
+          <button class="mpx-act-cpu-min" id="mpx-act-tour-top" type="button">
+            <span class="mac-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>Host a tournament
+          </button>
+        </div>
+
         <!-- build105 PHASE-3: ONLINE NOW — everyone on ReactivVibe right now (site + in-game presence), each row a
              direct BATTLE CALL into a private room (owner mandate: "pick and choose any people on the website").
              Painted/refreshed by multiplayer.js (lobby-step activation + 45s while showing); hidden entirely when
@@ -5327,7 +5358,11 @@
                 <!-- build102y step5: SWAP IN THE ARTIST (host, gold) + TAKE THE STAGE / WITHDRAW (spectator) — painted in paintShowRoom -->
                 <button class="mpx-show-swap" id="mpx-show-swap" type="button" hidden>SWAP IN THE ARTIST</button>
                 <div class="mpx-show-take-row" id="mpx-show-take-row" hidden>
-                  <button class="mpx-show-take-btn" id="mpx-show-take" type="button">TAKE THE STAGE</button>
+                  <!-- build108 s3d (owner playtest-3: "TAKE THE STAGE confuses even the owner"): the button was already
+                       gated to only show when the seat is genuinely open/actionable (see paintRoomWaiting), and the
+                       adjacent sublabel already explains what happens next — but the button ITSELF had no tooltip, so
+                       its purpose wasn't obvious on a glance/hover. A plain-language title makes the action explicit. -->
+                  <button class="mpx-show-take-btn" id="mpx-show-take" type="button" title="Request the challenger seat in this live show">TAKE THE STAGE</button>
                   <span class="mpx-show-takeq" id="mpx-show-takeq"></span>
                 </div>
               </div>
