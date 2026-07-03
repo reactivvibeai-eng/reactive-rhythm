@@ -1669,16 +1669,72 @@
   #game.vs-mode #vs-lead > i { position: absolute; left: 0; right: 0; height: 0; border-radius: 5px; }
   #game.vs-mode #vs-lead > b { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 11px; height: 11px; border-radius: 50%; background: var(--chrome); box-shadow: 0 0 10px rgba(224,169,63,0.6), 0 0 4px #000; }
   /* build100q (#tug-of-war): a horizontal TOP bar — at a glance, who's pulling ahead. Hidden outside vs-mode. */
+  /* ===== pkg2: VS TUG-OF-WAR — "The Frontier" (center-origin battlefront) =====
+     JS owns per-frame motion (spring in renderVsHud). The per-frame width/left CSS transitions are DELETED
+     (they stacked lag on the spring — contract 2.0 rule 2); only class-triggered animation lives here.
+     #vs-tug = UNCLIPPED wrapper (diamond knot/chips/sparks overhang); .vs-tug-track clips the fills.
+     Ornament hierarchy: OD surge > endgame pulse > streak breathe — an 18px strip never runs three loops. */
   #vs-tug { display: none; }
-  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 12px; z-index: 47; pointer-events: none; background: rgba(10,6,6,0.55); border-bottom: 1px solid rgba(0,0,0,0.5); overflow: hidden; }
-  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(90deg, rgba(255,31,46,0.18), var(--crimson)); transition: width 0.12s linear; }
-  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(270deg, rgba(224,169,63,0.18), var(--gold)); transition: width 0.12s linear; }
-  #game.vs-mode #vs-tug-knot { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 4px; transform: translateX(-50%); background: var(--chrome); border-radius: 3px; box-shadow: 0 0 8px rgba(218,215,210,0.7), 0 0 3px #000; transition: left 0.12s linear; }
-  #game.vs-mode #vs-tug-knot.you-lead { background: var(--gold); box-shadow: 0 0 12px rgba(224,169,63,0.85), 0 0 3px #000; }
-  #game.vs-mode #vs-tug-knot.opp-lead { background: var(--crimson); box-shadow: 0 0 12px rgba(255,31,46,0.85), 0 0 3px #000; }
-  #game.vs-mode .vs-tug-lab { position: absolute; top: 13px; font-family: 'Chakra Petch', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.8; text-shadow: 0 1px 4px #000; z-index: 47; pointer-events: none; }
-  #game.vs-mode .vs-tug-lab.opp { left: 8px; color: var(--crimson); }
-  #game.vs-mode .vs-tug-lab.you { right: 8px; color: var(--gold); }
+  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 18px; z-index: 47; pointer-events: none; }
+  #game.vs-mode .vs-tug-track { position: absolute; inset: 0; background: rgba(10,6,6,0.55); border-bottom: 1px solid rgba(0,0,0,0.5); overflow: hidden; }
+  /* fills — the HOTTEST pixel is the contact point (the frontier), fading back to each pole */
+  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(270deg, var(--crimson) 0%, rgba(255,31,46,0.14) 100%); }
+  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(90deg, var(--gold) 0%, rgba(224,169,63,0.12) 100%); }
+  /* the always-visible "even" datum */
+  #game.vs-mode #vs-tug-notch { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; transform: translateX(-50%); background: var(--chrome, #dad7d2); opacity: 0.65; }
+  /* chrome DIAMOND knot (clip-path eats box-shadow → the glow rides drop-shadow) + 3px core */
+  #game.vs-mode #vs-tug-knot { position: absolute; left: 50%; top: 50%; width: 10px; height: 24px; transform: translate(-50%,-50%);
+    background: var(--chrome, #dad7d2); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    filter: drop-shadow(0 0 7px rgba(218,215,210,0.8)); }
+  #game.vs-mode #vs-tug-knot > i { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; transform: translate(-50%,-50%); border-radius: 50%; background: #140a0a; }
+  #game.vs-mode #vs-tug-knot.you-lead { background: var(--gold); filter: drop-shadow(0 0 8px rgba(224,169,63,0.9)); }
+  #game.vs-mode #vs-tug-knot.opp-lead { background: var(--crimson); filter: drop-shadow(0 0 8px rgba(255,31,46,0.9)); }
+  /* player chips at the poles */
+  #game.vs-mode .vs-tug-chip { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box;
+    background: #140a0a; display: grid; place-items: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; z-index: 1; }
+  #game.vs-mode .vs-tug-chip.opp { left: 4px; border: 2px solid rgba(255,31,46,0.8); color: #ff8d96; }
+  #game.vs-mode .vs-tug-chip.you { right: 4px; border: 2px solid rgba(224,169,63,0.8); color: #ffd98c; font-size: 8px; letter-spacing: 0.04em; }
+  /* labels ride INSIDE the bar now */
+  #game.vs-mode .vs-tug-lab { position: absolute; top: 50%; transform: translateY(-50%); font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.9; text-shadow: 0 1px 4px #000; pointer-events: none; }
+  #game.vs-mode .vs-tug-lab.opp { left: 32px; color: #ffb3b8; }
+  #game.vs-mode .vs-tug-lab.you { right: 32px; color: #ffe3ae; }
+  /* under-glow tide — leader-colored wash bleeding down from the bar */
+  #game.vs-mode #vs-tug::after { content: ''; position: absolute; top: 100%; height: 26px; left: 0; right: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(224,169,63,0.14), transparent); opacity: 0.5; }
+  #game.vs-mode #vs-tug.opp-tide::after { background: linear-gradient(180deg, rgba(255,31,46,0.14), transparent); }
+  /* spark canvas (2.4) — only mounted when !fxLite */
+  #game.vs-mode #vs-tug-fx { position: absolute; top: 0; left: 0; width: 100%; height: 44px; z-index: 48; pointer-events: none; }
+  /* shudder on a heavy single impulse (≥0.28) */
+  @keyframes vs-tug-jolt { 0% { transform: translateY(0); } 30% { transform: translateY(1.5px); } 60% { transform: translateY(-1px); } 100% { transform: translateY(0); } }
+  #game.vs-mode #vs-tug.jolt { animation: vs-tug-jolt 110ms ease-out; }
+  /* 2.3 endgame heat — class-triggered (allowed). A blowout stays calm — that's the design. */
+  #game.vs-mode #vs-tug.endgame { height: 22px; transition: height 180ms ease-out; }
+  #game.vs-mode #vs-tug.endgame #vs-tug-you { background: linear-gradient(90deg, #ffd98a 0%, var(--gold) 35%, rgba(224,169,63,0.15) 100%); }
+  #game.vs-mode #vs-tug.endgame #vs-tug-opp { background: linear-gradient(270deg, #ff8a4a 0%, var(--crimson) 35%, rgba(255,31,46,0.15) 100%); }
+  @keyframes vs-knot-pulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); filter: drop-shadow(0 0 7px rgba(218,215,210,0.8)); } 50% { transform: translate(-50%,-50%) scale(1.25); filter: drop-shadow(0 0 13px rgba(255,235,200,0.95)); } }
+  #game.vs-mode #vs-tug.endgame #vs-tug-knot { animation: vs-knot-pulse 833ms ease-in-out infinite; }
+  #game.vs-mode #vs-tug.photo #vs-tug-knot { animation-duration: 416ms; }
+  #game.vs-mode #vs-tug.photo #vs-tug-notch { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); opacity: 1; }
+  #game.vs-mode #vs-tug.endgame::after { opacity: 1; }
+  /* 2.4 moments — streak breathe (combo ≥10); suppressed while that fill is in OD (hierarchy) */
+  @keyframes vs-tug-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.45); } }
+  #game.vs-mode #vs-tug-you.streak, #game.vs-mode #vs-tug-opp.streak { animation: vs-tug-breathe 1.1s ease-in-out infinite; }
+  #game.vs-mode #vs-tug-you.od, #game.vs-mode #vs-tug-opp.od { animation: none; }
+  /* OD sheen sweep on the surging fill — skipped on fxLite (.lite is set at mount) */
+  @keyframes vs-tug-sheen { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  #game.vs-mode #vs-tug-you.od::after, #game.vs-mode #vs-tug-opp.od::after { content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,217,138,0.55), transparent); background-size: 200% 100%;
+    animation: vs-tug-sheen 700ms linear infinite; }
+  #game.vs-mode #vs-tug.lite #vs-tug-you.od::after, #game.vs-mode #vs-tug.lite #vs-tug-opp.od::after { content: none; }
+  #game.vs-mode #vs-tug:has(#vs-tug-you.od) #vs-tug-knot { filter: drop-shadow(0 0 18px rgba(224,169,63,0.95)); }
+  #game.vs-mode #vs-tug:has(#vs-tug-opp.od) #vs-tug-knot { filter: drop-shadow(0 0 18px rgba(255,31,46,0.95)); }
+  /* lead-flip crack — one-shot white-hot; declared LAST so it overrides the endgame pulse (equal specificity) */
+  @keyframes vs-knot-flip { 0% { background: #fff; filter: drop-shadow(0 0 16px rgba(255,255,255,0.95)); } 100% { background: var(--chrome, #dad7d2); } }
+  #game.vs-mode #vs-tug #vs-tug-knot.flip { animation: vs-knot-flip 240ms ease-out; }
+  /* reduce-motion backstop (contract rule 4): slow-lerp position + color state only — pseudo-elements included
+     (the OD sheen lives on ::after; the global 0.001ms-duration rule at the top of the sheet also covers it) */
+  html.rr-reduce-motion #vs-tug, html.rr-reduce-motion #vs-tug::after,
+  html.rr-reduce-motion #vs-tug *, html.rr-reduce-motion #vs-tug *::before, html.rr-reduce-motion #vs-tug *::after { animation: none !important; transition: none !important; }
   #game.vs-mode #vs-you-score { display: flex; flex-direction: column; align-items: flex-end; position: absolute; top: 14px; left: auto; right: 14px; z-index: 45; line-height: 1; pointer-events: none; }   /* YOUR deck = right half → your score hugs the RIGHT outer edge (clear of the runway) */
   #game.vs-mode #vs-opp-score { display: flex; flex-direction: column; align-items: flex-start; position: absolute; top: 14px; left: 14px; right: auto; z-index: 45; line-height: 1; pointer-events: none; }   /* opponent on the LEFT outer edge */
   #game.vs-mode .vs-lab { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.24em; margin-bottom: 2px; }

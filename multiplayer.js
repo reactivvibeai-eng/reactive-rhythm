@@ -903,6 +903,13 @@
   // ---- versus split-screen HUD (P3): "The Crimson Meridian" ----
   var _myRf = null, _oppEase = null, _leadEase = 0, _vsScoreDisp = 0, _lastDeltaSign = 0, _lastOda = false;
   var _npcRaf = 0, _npcLastEv = 0;   // dev NPC 1v1: the synthetic-opponent drive loop
+  // pkg2 "THE FRONTIER" tug-bar module state — spring (position/velocity), impulse accumulators, heat/flip
+  // flags, gates and the 24-slot spark pool. ALL reset in mountVsHud (contract rule 8: the DOM is rebuilt
+  // per match, the vars are not). Gates (_tugLite/_tugRM) are read ONCE per mount (contract rule 4).
+  var _tugX = 0, _tugV = 0, _prevMyScore = 0, _prevOppSc = 0, _oppImp = 0, _tugLastT = 0;
+  var _tugLite = false, _tugRM = false, _wasEnd = false, _wasPhoto = false, _tugSign = 0, _tugFlipAt = 0, _tugAriaAt = 0;
+  var _tugFxCtx = null, _tugFxDirty = false;
+  var _tugSpk = []; (function () { for (var i = 0; i < 24; i++) _tugSpk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); })();
   // versus P4: opponent ghost-highway renderer state — pre-allocated sparkle pool (zero per-frame alloc)
   var _gCtx = null;
   var _spk = []; (function () { for (var i = 0; i < 48; i++) _spk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); })();
@@ -935,14 +942,26 @@
     var delta = _vsEl('div', 'vs-delta'); delta.textContent = 'EVEN'; seam.appendChild(delta);
     var lead = _vsEl('div', 'vs-lead'); lead.appendChild(_vsEl('i')); lead.appendChild(_vsEl('b')); seam.appendChild(lead);
     game.appendChild(seam);
-    // build100q (#tug-of-war): a horizontal TOP bar showing who's winning at a glance — the "rope knot" slides toward
-    // the leader's side; each half fills with that player's color. Driven by the same eased score-lead as the seam puck.
+    // build100q (#tug-of-war) → pkg2 "THE FRONTIER": center-origin battlefront. The wrapper is UNCLIPPED
+    // (diamond knot / pole chips / spark canvas overhang the 18px strip); .vs-tug-track clips the two fills
+    // (never un-clip the fills — contract). Spring physics drive it per-frame in renderVsHud.
+    _tugLite = false; try { _tugLite = !!(window.RhythmGame.getSettings && window.RhythmGame.getSettings().fxLite); } catch (e) {}
+    _tugRM = document.documentElement.classList.contains('rr-reduce-motion');
     var tug = _vsEl('div', 'vs-tug');
-    var tOpp = _vsEl('div', 'vs-tug-opp'); tug.appendChild(tOpp);
-    var tYou = _vsEl('div', 'vs-tug-you'); tug.appendChild(tYou);
-    var tKnot = _vsEl('div', 'vs-tug-knot'); tug.appendChild(tKnot);
+    if (_tugLite) tug.classList.add('lite');                    // CSS gate: no OD sheen on lite
+    tug.setAttribute('role', 'img');                            // a11y snapshot (throttled label; NO aria-live)
+    tug.setAttribute('aria-label', 'Versus score bar: even');
+    var tTrack = _vsEl('div', null, 'vs-tug-track');
+    var tOpp = _vsEl('div', 'vs-tug-opp'); tTrack.appendChild(tOpp);
+    var tYou = _vsEl('div', 'vs-tug-you'); tTrack.appendChild(tYou);
+    tug.appendChild(tTrack);
+    tug.appendChild(_vsEl('div', 'vs-tug-notch'));              // the always-visible "even" datum
+    var tKnot = _vsEl('div', 'vs-tug-knot'); tKnot.appendChild(_vsEl('i')); tug.appendChild(tKnot);
     var tlO = _vsEl('span', null, 'vs-tug-lab opp'); tlO.textContent = (oppMeta && oppMeta.name ? oppMeta.name.slice(0, 12) : 'OPPONENT'); tug.appendChild(tlO);
     var tlY = _vsEl('span', null, 'vs-tug-lab you'); tlY.textContent = 'YOU'; tug.appendChild(tlY);
+    var chO = _vsEl('span', null, 'vs-tug-chip opp'); chO.textContent = (oppMeta && oppMeta.bot) ? 'AI' : String((oppMeta && oppMeta.name) || 'R').slice(0, 1).toUpperCase(); tug.appendChild(chO);
+    var chY = _vsEl('span', null, 'vs-tug-chip you'); chY.textContent = 'YOU'; tug.appendChild(chY);
+    if (!_tugLite) tug.appendChild(_vsEl('canvas', 'vs-tug-fx'));   // spark canvas NOT mounted at all on fxLite (contract)
     game.appendChild(tug);
     // your score plate + OD bar (into .game-center)
     var center = game.querySelector('.game-center');
@@ -957,6 +976,10 @@
     }
     _myRf = null; _oppEase = { sc: 0, cb: 0, od: 0, mu: 1, st: 1, pr: 0 }; _leadEase = 0; _vsScoreDisp = 0; _lastDeltaSign = 0; _lastOda = false;
     _gCtx = null; for (var _i = 0; _i < _spk.length; _i++) _spk[_i].on = false;   // ghost: re-grab the context, clear the pool
+    // pkg2 (contract rule 8): the tug module state dies with every mount
+    _tugX = 0; _tugV = 0; _prevMyScore = 0; _prevOppSc = 0; _oppImp = 0; _tugLastT = 0;
+    _wasEnd = false; _wasPhoto = false; _tugSign = 0; _tugFlipAt = 0; _tugAriaAt = 0;
+    _tugFxCtx = null; _tugFxDirty = false; for (var _s2 = 0; _s2 < _tugSpk.length; _s2++) _tugSpk[_s2].on = false;
     for (var _l = 0; _l < 6; _l++) { _gFlash[_l] = 0; _gFlashCr[_l] = false; } _gPrevCombo = 0; _gMissWin = 0;   // reset the rival-deck flash state
     try { document.documentElement.classList.add('rr-vs'); } catch (e) {}   // hide the level's single-deck reactive fate-cards + mechanic prop (they break on a half-deck)
     try { if (window.RhythmGame.setVsMode) window.RhythmGame.setVsMode(true); } catch (e) {}   // engine: fit the guitar to deck HEIGHT (runway)
@@ -1033,13 +1056,113 @@
         _lastDeltaSign = sign; delta.style.opacity = frozen ? '0.65' : '1';
       }
     }
-    // build100q (#tug-of-war): horizontal top bar — knot at P% from the OPP (left) side. You ahead (_leadEase>0) → P
-    // shrinks → your gold (right) half grows; opp ahead → P grows → their crimson (left) half grows. 50% = even.
-    var tugP = Math.max(4, Math.min(96, 50 - _leadEase * 44));
-    var tOpp = $('vs-tug-opp'), tYou = $('vs-tug-you'), tKnot = $('vs-tug-knot');
-    if (tOpp) tOpp.style.width = tugP + '%';
-    if (tYou) tYou.style.width = (100 - tugP) + '%';
-    if (tKnot) { tKnot.style.left = tugP + '%'; tKnot.classList.toggle('you-lead', _leadEase > 0.04); tKnot.classList.toggle('opp-lead', _leadEase < -0.04); }
+    // ===== pkg2 "THE FRONTIER": spring-driven tug bar (replaces the _leadEase-fed knot). JS owns all
+    // per-frame motion (contract 2.0 rule 2); the vertical seam fill/puck branch above is UNTOUCHED (rule 7).
+    var tug = $('vs-tug');
+    if (tug) {
+      var nowT = performance.now();
+      var dtT = _tugLastT ? Math.min(0.05, (nowT - _tugLastT) / 1000) : 0.016; _tugLastT = nowT;
+      // honest target — the SAME normalized score-lead the seam uses; 0 while either stream is pre-start.
+      var lvT = (myP < 0.03 || opP < 0.03) ? 0 : Math.max(-1, Math.min(1, (stt.score - _oppEase.sc) / (Math.max(stt.score, _oppEase.sc, 1) * 0.5)));
+      if (_tugRM) {                                       // reduce-motion: plain slow lerp — no impulses, no jolt
+        _tugX += (lvT - _tugX) * 0.08; _tugV = 0;
+        _prevMyScore = stt.score; _prevOppSc = (os && typeof os.sc === 'number') ? os.sc : _prevOppSc;
+      } else if (frozen) {
+        _tugV = 0;                                        // frozen-stream honesty: kill the spring, hold position
+      } else {
+        _tugV += (lvT - _tugX) * 46 * dtT;                // spring K = 46/s² toward the honest target
+        _tugV *= Math.pow(0.0025, dtT);                   // ≈0.86 damping @60fps → settles ~450ms, one small overshoot
+        var dsMe = stt.score - _prevMyScore; _prevMyScore = stt.score;
+        if (dsMe > 0) { var kMe = Math.min(0.55, dsMe / 2600); _tugV += kMe * 1.4; if (kMe >= 0.28) _tugJolt(tug); }   // your hits SHOVE the front (presentation only — rest position never lies)
+        var oScT = (os && typeof os.sc === 'number') ? os.sc : _prevOppSc;
+        var dsOp = oScT - _prevOppSc; _prevOppSc = oScT;
+        if (dsOp > 0) { var kOp = Math.min(0.55, dsOp / 2600); _oppImp += kOp; if (kOp >= 0.28) _tugJolt(tug); }      // rival packets land ~13/s → accumulate…
+        var kB = _oppImp * Math.min(1, dtT * 9); _tugV -= kB * 1.4; _oppImp -= kB;                                    // …and bleed in as counter-shoves
+        _tugX += _tugV * dtT;
+      }
+      if (_tugX > 1) { _tugX = 1; _tugV = 0; } else if (_tugX < -1) { _tugX = -1; _tugV = 0; }
+      tug.style.opacity = frozen ? '0.55' : '';
+      var tugP = Math.max(4, Math.min(96, 50 - _tugX * 44));
+      var tOpp = $('vs-tug-opp'), tYou = $('vs-tug-you'), tKnot = $('vs-tug-knot');
+      if (tOpp) tOpp.style.width = tugP + '%';
+      if (tYou) tYou.style.width = (100 - tugP) + '%';
+      if (tKnot) { tKnot.style.left = tugP + '%'; tKnot.classList.toggle('you-lead', _tugX > 0.04); tKnot.classList.toggle('opp-lead', _tugX < -0.04); }
+      tug.classList.toggle('you-tide', _tugX > 0.04);     // under-glow tide follows the leader
+      tug.classList.toggle('opp-tide', _tugX < -0.04);
+      // 2.3 endgame heat — honest photo-finish escalation; a blowout stays calm BY DESIGN (no class churn: _wasEnd/_wasPhoto)
+      var endgT = Math.max(myP, _oppEase.pr) >= 0.9;
+      if (endgT !== _wasEnd) { _wasEnd = endgT; tug.classList.toggle('endgame', endgT); }
+      var photoT = endgT && Math.abs(_tugX) < 0.15;
+      if (photoT !== _wasPhoto) { _wasPhoto = photoT; tug.classList.toggle('photo', photoT); }
+      // 2.4 lead-flip crack — ±0.03 hysteresis + 700ms cooldown (a single 2.2 overshoot can't fire a spurious crack)
+      var sgnT = _tugX > 0.03 ? 1 : _tugX < -0.03 ? -1 : 0;
+      if (sgnT !== 0 && _tugSign !== 0 && sgnT !== _tugSign && nowT - _tugFlipAt > 700) {
+        _tugFlipAt = nowT;
+        if (!_tugRM) {                                    // reduce-motion flip = the instant you-lead/opp-lead color swap above
+          if (!_tugLite) _tugSpawnFlip(tugP, sgnT);
+          if (tKnot) { tKnot.classList.remove('flip'); void tKnot.offsetWidth; tKnot.classList.add('flip'); setTimeout(function () { var k = $('vs-tug-knot'); if (k) k.classList.remove('flip'); }, 260); }
+        }
+      }
+      if (sgnT !== 0) _tugSign = sgnT;
+      // 2.4 streak breathe (combo ≥10) + OD surge — hierarchy (OD > endgame > streak) is enforced in CSS
+      if (tYou) { tYou.classList.toggle('streak', !_tugRM && (stt.combo | 0) >= 10); tYou.classList.toggle('od', !!(myRf && myRf.oda)); }
+      if (tOpp) { tOpp.classList.toggle('streak', !_tugRM && Math.round(_oppEase.cb) >= 10); tOpp.classList.toggle('od', !!(os && os.oda)); }
+      // a11y snapshot — role=img label refreshed ≤1/s (contract rule 6; no aria-live)
+      if (nowT - _tugAriaAt > 1000) {
+        _tugAriaAt = nowT;
+        var dAr = Math.round(stt.score - _oppEase.sc);
+        tug.setAttribute('aria-label', 'Versus score bar: ' + (dAr > 150 ? 'you lead by ' + dAr.toLocaleString() : dAr < -150 ? 'Rival leads by ' + Math.abs(dAr).toLocaleString() : 'even'));
+      }
+      if (!_tugLite && !_tugRM) _tugFxTick(dtT * 1000);   // pooled sparks — sleeps completely (zero ctx work) at zero live sparks
+    }
+  }
+  // pkg2 helpers — jolt shudder, lead-flip spark burst, pooled spark tick (24 slots, canvas ONLY for sparks)
+  function _tugJolt(tug) {
+    if (_tugRM || !tug || tug._joltT) return;
+    tug.classList.add('jolt');
+    tug._joltT = setTimeout(function () { tug._joltT = 0; tug.classList.remove('jolt'); }, 110);
+  }
+  function _tugSpawnFlip(tugP, dir) {
+    var cv = $('vs-tug-fx'); if (!cv) return;
+    var w = cv.clientWidth || 0; if (!w) return;
+    if (cv.width !== w) { cv.width = w; cv.height = 44; }
+    var x0 = tugP / 100 * w, n = 0;
+    for (var i = 0; i < _tugSpk.length && n < 10; i++) {
+      var P = _tugSpk[i]; if (P.on) continue;
+      P.on = true; n++;
+      P.x = x0; P.y = 9 + Math.random() * 6;
+      var sp = 40 + Math.random() * 120;
+      P.vx = (Math.random() < 0.72 ? dir : -dir) * sp;    // biased toward the NEW leader's pole
+      P.vy = -(30 + Math.random() * 60);
+      P.max = P.life = 200 + Math.random() * 120;
+      P.cr = dir < 0;                                     // crimson when the rival takes the front, gold when you do
+    }
+    _tugFxDirty = true;
+  }
+  function _tugFxTick(dtMs) {
+    var cv = $('vs-tug-fx'); if (!cv) return;
+    var live = 0, i, P;
+    for (i = 0; i < _tugSpk.length; i++) if (_tugSpk[i].on) live++;
+    if (!live) {                                          // SLEEP: at zero sparks skip ALL ctx work (one final wipe, then nothing)
+      if (_tugFxDirty && _tugFxCtx) { _tugFxCtx.clearRect(0, 0, cv.width, cv.height); _tugFxDirty = false; }
+      return;
+    }
+    if (!_tugFxCtx) { _tugFxCtx = cv.getContext('2d'); if (!_tugFxCtx) return; }
+    var w = cv.clientWidth || 0; if (w && cv.width !== w) { cv.width = w; cv.height = 44; }
+    var ctx = _tugFxCtx, dt = dtMs / 1000;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.globalCompositeOperation = 'lighter';
+    for (i = 0; i < _tugSpk.length; i++) {
+      P = _tugSpk[i]; if (!P.on) continue;
+      P.life -= dtMs;
+      if (P.life <= 0 || P.y > 42) { P.on = false; continue; }
+      P.vy += 380 * dt; P.x += P.vx * dt; P.y += P.vy * dt;
+      ctx.globalAlpha = Math.max(0, P.life / P.max);
+      ctx.fillStyle = P.cr ? '#ff5a64' : '#ffd98a';
+      ctx.fillRect(P.x | 0, P.y | 0, 2, 2);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    _tugFxDirty = true;
   }
 
   // P4: paint the opponent ghost highway — dim chrome strings (re-based from getLaneFrame's page coords into
