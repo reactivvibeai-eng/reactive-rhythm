@@ -2290,6 +2290,16 @@
       stage: _bbStage,
       specN: room.show ? (_specNCache || 0) : 0 } });
   }
+  // build111 s3: the exact non-host leave path (extracted from the mpx-room-close click handler so a host
+  // mod-kick can trigger the SAME leave a manual "LEAVE ROOM" click already does — one code path, two triggers).
+  function leaveGuestRoom() {
+    var _wasShow = !!room.show;
+    leaveRoomChannel();
+    room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
+    spectating = false;
+    if (_wasShow) { try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {} }
+    reannounce(); backToLobby();
+  }
   function closeRoom(silent) {
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
     _ghostRunActive = false;   // build102y review fix C: no room, nothing to park (inert var write for normal MP)
@@ -2335,6 +2345,21 @@
     ch.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });   // build64: the room host's live track/stage/difficulty picks reach the joiner in the waiting room
     ch.on('broadcast', { event: 'room-ready' }, function (m) { onRoomReady(m.payload); });   // playtest-3 fix (Bug D): the room-stage READY handshake (no match channel yet)
     ch.on('broadcast', { event: 'show-snap' }, function (m) { onShowSnap(m.payload); });   // build102s: live-show heartbeat (inert for normal rooms — only a show host ever emits it)
+    // build111 s3: HOST MUTE/KICK — pure broadcast, client-enforced (matches this codebase's existing
+    // client-trusted-scoring precedent, not a new weaker boundary). Verify payload.byHost matches the known
+    // room host id (room.p1) before honoring, to at least block casual (non-malicious) spoofing — a modified
+    // client can still ignore this entirely, which is the honest limitation of a broadcast-only control.
+    ch.on('broadcast', { event: 'mod-kick' }, function (m) {
+      var p = m && m.payload; if (!p || !p.id || p.byHost !== room.p1) return;
+      if (p.id !== ME.id) return;   // not for me
+      try { sessionStorage.setItem('rr_kick_' + room.id, String(Date.now() + 120000)); } catch (e) {}   // ~2 min rejoin cooldown, honored on room-join
+      try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Removed by host', 'error'); } catch (e) {}
+      leaveGuestRoom();
+    });
+    ch.on('broadcast', { event: 'mod-mute' }, function (m) {
+      var p = m && m.payload; if (!p || !p.id || p.byHost !== room.p1) return;
+      try { if (window.RhythmChat && window.RhythmChat.applyModMute) window.RhythmChat.applyModMute(p.id, p.kind, !!p.on); } catch (e) {}
+    });
     ch.subscribe(function (status) {
       if (status === 'SUBSCRIBED') {
         roomSP.start();
@@ -2431,6 +2456,13 @@
   // ---- guest: join a listed room (as duelist or spectator) ----
   function joinRoom(rid, asSpec) {
     if (!supa || !lobbyCh) return;
+    // build111 s3: honor a still-active kick cooldown for THIS room (rr_kick_<rid>, ~2 min, set by the mod-kick
+    // handler). Soft deterrent only — a modified client / cleared storage can bypass it, same honest limitation
+    // as the kick itself.
+    try {
+      var _koUntil = +(sessionStorage.getItem('rr_kick_' + rid) || 0);
+      if (_koUntil && Date.now() < _koUntil) { banner('mpx-rooms-msg', 'You were removed from that room — try again in a bit.'); return; }
+    } catch (e) {}
     var meta = roomsDir[rid]; if (!meta) { banner('mpx-rooms-msg', 'That room just closed.'); return; }
     if (_qm.on) qmStop(true);   // v405 review fix: joining a room cancels a live matchmaking search (mirror of openRoomWithId)
     if (!meta.show) clearShowRoom();   // playtest-3 fix (Bug C): joining a NORMAL room clears any stale rr_showroom key (host-only persistence — harmless to clear as a guest); a real show-room join keeps it untouched.
@@ -2501,11 +2533,19 @@
     // build102t: past the softPresence ≤10-peer design the roster is no longer authoritative — a show paints '10+'
     var sc = $('mpx-roomctx-spec'); if (sc) sc.textContent = specCount ? (((room.show && specCount > 10) ? '10+' : specCount) + ' watching') : '';
     var opp = room.isHost ? (room.p2 && room.members[room.p2]) : (room.members[room.p1]);
+    var oppId = room.isHost ? room.p2 : room.p1;
     var dot = $('mpx-dot-opp');
     if (dot) {
       if (opp) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp.name || 'OPPONENT').slice(0, 12); }
       else { dot.setAttribute('data-state', 'waiting'); dot.textContent = spectating ? 'WATCHING' : 'WAITING…'; }
     }
+    // build111 s3: host mute/kick kebab on the opponent cell (room is 1v1 — the "roster row" is this one cell).
+    // chat.js owns the kebab UI; we just hand it the current opponent identity + whether I'm the host each repaint.
+    try {
+      if (window.RhythmChat && window.RhythmChat.paintModKebab && dot) {
+        window.RhythmChat.paintModKebab(dot, { isHost: room.isHost, oppId: opp ? oppId : null, oppName: opp && opp.name, roomCh: room.ch, meId: ME.id, hostId: room.p1 });
+      }
+    } catch (e) {}
     // build60: explicit, updating waiting status (announces arrivals so the wait never reads as frozen).
     var ws = $('mpx-waitstatus');
     if (ws) {
@@ -5202,7 +5242,7 @@
   wire('mpx-room-priv', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });
   wire('mpx-room-combat', 'click', function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (x) { x.classList.toggle('active', x === b); }); });   // build69: segmented combat select for the room (read at openRoom into room.combat)
   // build8: room context (inside setup) — host closes / guest leaves
-  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else { var _wasShow = !!room.show; leaveRoomChannel(); room = { id: null, name: null, priv: false, combat: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null }; spectating = false; if (_wasShow) { try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {} } reannounce(); backToLobby(); } });   // review fix 1/5: a guest leaving a SHOW drops the review audio (build102z p1.5: + the video backdrop); the stale back-label restores at the next enterSetup
+  wire('mpx-room-close', 'click', function () { if (room.isHost) closeRoom(); else leaveGuestRoom(); });   // review fix 1/5: a guest leaving a SHOW drops the review audio (build102z p1.5: + the video backdrop); the stale back-label restores at the next enterSetup. build111 s3: guest-leave path extracted to leaveGuestRoom() so mod-kick can reuse it verbatim
   // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
   wire('mpx-invite-friend', 'click', function () {
     if (!room.id) return;

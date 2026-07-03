@@ -306,7 +306,7 @@
     opts = opts || {};
     var els = ensureLobbyDom();
     lobby.ch = ch; lobby.meId = me && me.id; lobby.meName = me && me.name;
-    lobby.hostIdFn = opts.hostIdFn || null; lobby.onReport = opts.onReport !== false; lobby.isMutedFn = opts.isMutedFn || function () { return false; };
+    lobby.hostIdFn = opts.hostIdFn || null; lobby.onReport = opts.onReport !== false; lobby.isMutedFn = opts.isMutedFn || isMuted;
     lobby.bucket = makeBucket();
     els.wrap.hidden = false;
     try {
@@ -388,7 +388,7 @@
     var els = ensureRoomDom(mountEl);
     room.ch = ch; room.meId = me && me.id; room.meName = me && me.name;
     room.hostId = opts.hostId || null; room.roomId = opts.roomId || null;
-    room.onReport = opts.onReport !== false; room.isMutedFn = opts.isMutedFn || function () { return false; };
+    room.onReport = opts.onReport !== false; room.isMutedFn = opts.isMutedFn || isMuted;
     room.bucket = makeBucket();
     els.wrap.hidden = false;
     renderRoomList();
@@ -412,6 +412,93 @@
     if (room.els) { room.els.wrap.hidden = true; room.els.list.innerHTML = ''; room.els.wrap.remove(); room.els = null; room.mountEl = null; }
   }
 
+  // =========================================================================
+  // build111 s3: HOST MUTE/KICK — kebab UI + mute-state tracking.
+  //   Kick itself is wired entirely in multiplayer.js (it's a leave-path
+  //   trigger, not a chat concern) — this module owns the KEBAB BUTTON + MENU
+  //   (host-only, painted next to the opponent name) and the MUTE state (which
+  //   chat rows to hide). Session-scoped only, matches the codebase's existing
+  //   client-trusted-broadcast model: cosmetic, not enforcement.
+  // =========================================================================
+  var mutedIds = {};   // { [peerId]: { text: bool } } — session-scoped, cleared on full page reload
+  var reportCounts = {};   // { [targetId]: n } — session-scoped 3-reports circuit breaker (see recordReportForCircuitBreaker)
+
+  function isMuted(id) { return !!(mutedIds[id] && mutedIds[id].text); }
+  function applyModMute(id, kind, on) {
+    if (!id || kind !== 'text') return;   // voice was explicitly out of scope for this build — only 'text' kind exists
+    mutedIds[id] = mutedIds[id] || {};
+    mutedIds[id].text = !!on;
+    // re-render both surfaces so the mute takes effect immediately for everyone honoring it (including the muted peer's own client)
+    try { renderLobbyList(); } catch (e) {}
+    try { renderRoomList(); } catch (e) {}
+  }
+
+  var _kebabState = null;   // { anchorEl, opts } — the single live kebab (room is 1v1, so at most one target at a time)
+  function closeKebabMenu() { var m = document.getElementById('rrc-kmenu-live'); if (m) m.remove(); }
+  document.addEventListener('click', function (e) {
+    var live = document.getElementById('rrc-kmenu-live');
+    if (live && !live.contains(e.target) && e.target.id !== 'rrc-kebab-btn') closeKebabMenu();
+  });
+
+  // paintModKebab(anchorEl, {isHost, oppId, oppName, roomCh, meId, hostId}) — called from multiplayer.js's
+  // paintRoomWaiting() every repaint; mounts/unmounts a kebab button next to `anchorEl` (the #mpx-dot-opp span).
+  function paintModKebab(anchorEl, opts) {
+    if (!anchorEl || !anchorEl.parentNode) return;
+    var existing = anchorEl.parentNode.querySelector('.rrc-kebab-wrap');
+    if (!opts.isHost || !opts.oppId) { if (existing) existing.remove(); closeKebabMenu(); return; }
+    injectCss();
+    var wrapEl = existing;
+    if (!wrapEl) {
+      wrapEl = document.createElement('span');
+      wrapEl.className = 'rrc-kebab-wrap';
+      wrapEl.innerHTML = '<button class="rrc-kebab" id="rrc-kebab-btn" type="button" aria-label="Moderation menu" aria-haspopup="true">⋮</button>';
+      anchorEl.parentNode.insertBefore(wrapEl, anchorEl.nextSibling);
+      wrapEl.querySelector('#rrc-kebab-btn').addEventListener('click', function (e) {
+        e.stopPropagation();
+        var already = document.getElementById('rrc-kmenu-live');
+        closeKebabMenu();
+        if (already) return;   // toggle off
+        openKebabMenu(wrapEl, _kebabState.opts);
+      });
+    }
+    _kebabState = { anchorEl: anchorEl, opts: opts };
+  }
+
+  function openKebabMenu(wrapEl, opts) {
+    var muted = isMuted(opts.oppId);
+    var menu = document.createElement('div');
+    menu.className = 'rrc-kmenu'; menu.id = 'rrc-kmenu-live';
+    menu.innerHTML =
+      '<button type="button" data-act="mute">' + (muted ? 'Unmute chat' : 'Mute chat') + '</button>' +
+      '<button type="button" class="danger" data-act="kick">Kick from room</button>';
+    wrapEl.appendChild(menu);
+    menu.querySelector('[data-act="mute"]').addEventListener('click', function () {
+      var nowOn = !isMuted(opts.oppId);
+      applyModMute(opts.oppId, 'text', nowOn);
+      try { if (opts.roomCh) opts.roomCh.send({ type: 'broadcast', event: 'mod-mute', payload: { id: opts.oppId, kind: 'text', on: nowOn, byHost: opts.hostId } }); } catch (e) {}
+      localToast(nowOn ? ((opts.oppName || 'Player') + ' muted') : ((opts.oppName || 'Player') + ' unmuted'));
+      closeKebabMenu();
+    });
+    menu.querySelector('[data-act="kick"]').addEventListener('click', function () {
+      try { if (opts.roomCh) opts.roomCh.send({ type: 'broadcast', event: 'mod-kick', payload: { id: opts.oppId, byHost: opts.hostId, at: Date.now() } }); } catch (e) {}
+      localToast((opts.oppName || 'Player') + ' removed');
+      closeKebabMenu();
+    });
+  }
+
+  // 3-reports-in-a-session circuit breaker: called from the report-submit flow (build111 s4) for whichever
+  // room the report targeted. Session-scoped, client-side, never touches the target's account — cannot be
+  // weaponized into a permanent ban via report-brigading; it just auto-hides a pile-on target's chat locally
+  // until the host manually unmutes via the kebab.
+  function recordReportForCircuitBreaker(targetId) {
+    if (!targetId) return;
+    reportCounts[targetId] = (reportCounts[targetId] || 0) + 1;
+    if (reportCounts[targetId] >= 3 && !isMuted(targetId)) {
+      applyModMute(targetId, 'text', true);
+      localToast('Auto-muted after multiple reports this session');
+    }
+  }
+
   window.RhythmChat = {
     filterChatText: filterChatText,
     filterDisplayName: filterDisplayName,
@@ -422,6 +509,10 @@
     mountRoomChat: mountRoomChat,
     teardownRoomChat: teardownRoomChat,
     hideRoomChat: hideRoomChat,
-    roomSystemLine: roomSystemLine
+    roomSystemLine: roomSystemLine,
+    paintModKebab: paintModKebab,
+    applyModMute: applyModMute,
+    isMuted: isMuted,
+    recordReportForCircuitBreaker: recordReportForCircuitBreaker
   };
 })();
