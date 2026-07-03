@@ -78,10 +78,15 @@
   function timingProf() { return TIMING_PROFILES[timingFeel] || TIMING_PROFILES.classic; }
 
   // Scoring: base per-hit is LOW; the combo multiplier + Overdrive scale it up, HARD-CAPPED at MAX_MULT (=4) total
-  // (v258: clamped at all 3 mult sites — the 'tight' profile's comboCap:5 + overdrive could otherwise reach 6×). Max per
-  // NON-HOLD note = 375*4 = 1500. HOLD notes ALSO pay a sustain bonus up to HOLD_TOTAL*4 (=880) ON TOP of the head, so the
-  // real ceiling is notes_total*1500 + (#holds)*HOLD_TOTAL*4 — any future server enforcement must budget the hold bonus,
-  // NOT a flat 1500/note. (The bonus is identical for every player on the same chart, so it stays fair/leaderboard-safe.)
+  // (v258: clamped at all 3 mult sites — the 'tight' profile's comboCap:5 + overdrive could otherwise reach 6×).
+  // ---- SCORE CEILING (build104 / CHART_VERSION 2 scoring epoch — any server enforcement must budget ALL of these;
+  // every term is chart-fixed, identical for all players on the same chart → leaderboard-safe):
+  //   base:       notes_total × 375 × 4 (=1500/note; chord partners are notes in notes_total)
+  //   holds:      + Σ over holds of holdTotalFor(hold) × 4, where holdTotalFor = 140 + 110·min(1, tail/1.2)
+  //               (i.e. 560..1000 per hold ON TOP of its head — duration-scaled, no longer flat 220×4)
+  //   accents:    + accents × 0.5 × 375 × 4 (=750/accent; PERFECT-judged accents pay 1.5× base — s8)
+  //   full chord: + Σ over chords of 0.3 × (chord_lanes × 375 × 4) (all-lanes-down bonus, 1.3× the chord — s7)
+  // The old flat "notes_total*1500 + holds*880" formula is CHART_VERSION 1 era — do not enforce it against v2 scores.
   const JUDGE = {
     perfect: { name: 'PERFECT', color: '#dad7d2', score: 375, accW: 1.00 },
     great:   { name: 'GREAT',   color: '#e0a93f', score: 250, accW: 0.85 },
@@ -114,7 +119,10 @@
   let holdNote = Array(LANE_COUNT).fill(null);  // the sustain note currently being held in this lane
   let holdScored = Array(LANE_COUNT).fill(0);   // fraction [0..1] of the active sustain already paid out
   let holdSparkT = Array(LANE_COUNT).fill(0);   // spark-emit throttle while sustaining
-  const HOLD_TOTAL = 220;                       // total sustain payout for a fully-held note (× live multiplier)
+  // build104 s6c: duration-scaled sustain payout — the flat 220 made LONG sustains the worst points-per-second
+  // in the game. A hold's total sustain pool now scales with its tail: 140 + 110·min(1, tail/1.2) = 140..250
+  // (× live multiplier, like all score). Chart-fixed per note → identical for every player → leaderboard-safe.
+  function holdTotalFor(hn) { return 140 + 110 * Math.min(1, ((hn && hn.hold) || 0) / 1.2); }
   let overdrive = 0;                            // 0..1 meter
   let odActive = false;                         // overdrive mode engaged (x2 payoff)
   let odTimer = 0;                              // seconds of overdrive remaining
@@ -1164,6 +1172,15 @@
     const span = Math.min(LANE_SPAN[difficulty] || LANE_COUNT, LANE_COUNT);   // never exceed lane count (5-string safe)
     const laneBase = Math.floor((LANE_COUNT - span) / 2);                          // centered active window
     const inSpan = (l) => laneBase + ((((l - laneBase) % span) + span) % span);    // wrap any index into the active set
+    // build104 s5: PING-PONG reflection — walk an out-of-span index back the way it came (…2,3,4,3,2…) instead of
+    // the modulo wrap's 4→0 leap. Used by the stair/zipper shapes so a sweep off the top string DESCENDS like a
+    // real run instead of teleporting across the neck.
+    const reflect = (l) => {
+      const s1 = span - 1;
+      if (s1 <= 0) return laneBase;
+      const m = (((l - laneBase) % (2 * s1)) + 2 * s1) % (2 * s1);
+      return laneBase + (m <= s1 ? m : 2 * s1 - m);
+    };
     // MUSICAL mode (build57) needs centroid-tagged onsets from analyzeMusical; if a fallback produced
     // plain (centroid-less) onsets, degrade to the classic placer so a track is never left unplayable.
     const musical = (chartMode === 'musical') && beats.length && (typeof beats[0].centroid === 'number');
@@ -1395,24 +1412,35 @@
         return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (seed % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false };
       });
     }
-    // derive HOLD notes from gaps: a beat followed by a long-enough pause becomes a
-    // sustain. Be generous and SPACE them out so they actually show up regularly
-    // (still ONE scored note — the head is the hit — so notes_total / anti-cheat
-    // is unchanged). Tail is capped to the gap so it never reaches the next note.
+    // derive HOLD notes: a note the song actually SUSTAINS (measured ring) — or a long-enough pause —
+    // becomes a hold (still ONE scored note; the head is the hit, so notes_total is unchanged).
+    // build104 s6a: the tail is bounded by the next note IN THE SAME LANE, not the next note anywhere —
+    // a held key only blocks its own string. The old any-lane gate starved DENSE charts of sustains
+    // (Hard measured FEWER holds than Medium, 44 vs 66); with per-lane clearance the ratio rights itself.
+    // build104 s6b: tail cap 1.6→3.5s (the analyzer now measures rings to 4s) so a real long note reads
+    // as one. Ergonomics guard: a >2s tail with 3+ notes falling under it must sit on an EDGE lane
+    // (0/1/top) so the pinned finger doesn't fence the hand off mid-neck. The s5 sanitizer audits
+    // conflicts introduced by LATER passes (chords/fillers) against every hold span.
     let lastHold = -99;
     for (let i = 0; i < notes.length; i++) {
-      const nx = notes[i + 1];
-      const gap = nx ? (nx.time - notes[i].time) : 99;
-      const sus = notes[i]._sustain || 0;   // build58 charter-v2: measured audio sustain (the dominant band actually rang on)
-      // prefer a REAL sustained note (the song actually held there) when there's room; else the classic gap heuristic.
-      const isSustain = sus > 0.35 ? (gap > sus * 0.7) : (gap > 0.5);
-      if (notes[i].type !== 'star' && isSustain && (i - lastHold) >= 5) {
-        const want = sus > 0.35 ? sus : gap * 0.62;
-        // build66 (launch-audit P1): keep the sustain tail clear of the next onset by one hit-window so a held key can still
-        // re-press the next same-lane note. If there isn't room for a minimum playable hold, leave it a tap (no overrun).
+      const cur = notes[i];
+      if (cur.type === 'star') continue;
+      let sameGap = 99;
+      for (let j = i + 1; j < notes.length; j++) { if (notes[j].lane === cur.lane) { sameGap = notes[j].time - cur.time; break; } }
+      const sus = cur._sustain || 0;   // build58 charter-v2: measured audio sustain (the dominant band actually rang on)
+      const isSustain = sus > 0.35 ? (sameGap > sus * 0.7) : (sameGap > 0.5);
+      if (isSustain && (i - lastHold) >= 5) {
+        const want = sus > 0.35 ? sus : sameGap * 0.62;
+        // build66 (launch-audit P1): keep the sustain tail clear of the next same-lane note by one
+        // hit-window so a held key can still re-press it. No room for a playable hold → stay a tap.
         const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03;
-        const tail = Math.min(want, gap - clear, 1.6);
-        if (tail >= 0.30) { notes[i].type = 'hold'; notes[i].hold = tail; lastHold = i; }
+        let tail = Math.min(want, sameGap - clear, 3.5);
+        if (tail > 2 && cur.lane > laneBase + 1 && cur.lane < laneBase + span - 1) {
+          let under = 0;
+          for (let j = i + 1; j < notes.length && notes[j].time < cur.time + tail; j++) under++;
+          if (under >= 3) tail = 2;   // busy passage + mid-neck lane → keep the pin short
+        }
+        if (tail >= 0.30) { cur.type = 'hold'; cur.hold = Math.round(tail * 1000) / 1000; lastHold = i; }
       }
     }
     // ---- CHORDS: a second simultaneous note in another lane (press two keys at once) ----
@@ -1556,9 +1584,9 @@
           for (let k = i; k <= j; k++) {
             const r = k - i;
             let lane;
-            if (shape === 0)      lane = inSpan(notes[i].lane + r);
-            else if (shape === 1) lane = inSpan(notes[i].lane - r);
-            else                  lane = inSpan(notes[i].lane + (r % 2 ? r : -r));
+            if (shape === 0)      lane = reflect(notes[i].lane + r);   // build104 s5: reflection, not wrap — no cross-neck leaps mid-run
+            else if (shape === 1) lane = reflect(notes[i].lane - r);
+            else                  lane = reflect(notes[i].lane + (r % 2 ? r : -r));
             notes[k].lane = lane;
             notes[k]._pat = shape;
           }
@@ -1654,6 +1682,85 @@
         }
       }
       if (guard.length) { notes.push(...guard); notes.sort((a, b) => a.time - b.time); fillers.push(...guard); }   // fillers[] feeds __rrChartStats.fillers for verification
+    }
+    // ============================================================================================
+    // build104 s5: POST-INSERT SANITIZER — the last word on playability. Every pass above (charter,
+    // trills, stairs, holds, chords, fillers, guards) can be individually correct and still COMPOSE
+    // into an unplayable moment; this single final pass enforces the physical limits once, after ALL
+    // inserts. Lane/hold mutations only — times never change, so the time-sorted invariant holds.
+    // Runs BEFORE the mirror (a pure lane flip preserves every property enforced here).
+    // ============================================================================================
+    {
+      const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+      // (a) FINAL JUMP CLAMP: between consecutive scored notes closer than 0.35s the hand can't leap
+      // more than the difficulty's own clamp (the charter enforced this only on its own output — stair
+      // wraps / fillers / re-lanes could still compose a cross-neck leap). Chords are the intentional
+      // exception (a multi-lane spread at ONE instant is the mechanic; partners follow their lead).
+      // Holds anchor the hand but are never moved (their lane carries the measured sustain + clearance).
+      let prevN = null;
+      for (const n of notes) {
+        if (n.type === 'bomb') continue;
+        if (n.chord) { if (n.chordLead) prevN = n; continue; }
+        if (prevN) {
+          const dt = n.time - prevN.time;
+          if (dt > 0.005 && dt < 0.35) {
+            const dl = n.lane - prevN.lane;
+            if (Math.abs(dl) > maxJump && n.type !== 'hold') {
+              n.lane = Math.max(laneBase, Math.min(laneBase + span - 1, prevN.lane + (dl > 0 ? maxJump : -maxJump)));
+            }
+          }
+        }
+        prevN = n;
+      }
+      // (b) TIME-AWARE JACK CAP: a same-lane hammer run is a real GH idiom at a walkable pace, torture at
+      // speed. Runs whose gaps stay ≥0.30s may reach 5 (Easy 3); any FASTER run caps at 3 and the excess
+      // converts to adjacent-lane ALTERNATION (the authentic GH trill conversion). This also closes the
+      // filler/guard leak — both used to copy the previous lane, silently extending runs past the
+      // charter's own same-lane guard.
+      {
+        const movable = [];
+        for (const n of notes) if (n.type !== 'bomb' && !n.chord) movable.push(n);
+        let i = 0;
+        while (i < movable.length) {
+          let j = i;
+          while (j + 1 < movable.length && movable[j + 1].lane === movable[i].lane) j++;
+          const runLen = j - i + 1;
+          if (runLen > 3) {
+            let fast = false;
+            for (let k = i + 1; k <= j; k++) if ((movable[k].time - movable[k - 1].time) < 0.30) { fast = true; break; }
+            const cap = fast ? 3 : (difficulty === 'easy' ? 3 : 5);
+            if (runLen > cap) {
+              const baseL = movable[i].lane;
+              let alt = baseL + 1 <= laneBase + span - 1 ? baseL + 1 : baseL - 1;
+              alt = Math.max(laneBase, Math.min(laneBase + span - 1, alt));
+              for (let k = i + cap; k <= j; k++) {
+                if (movable[k].type === 'hold') continue;            // a measured sustain stays on its string
+                if (((k - (i + cap)) % 2) === 0) movable[k].lane = alt;   // alt, base, alt, … — a trill, not a wall
+              }
+            }
+          }
+          i = j + 1;
+        }
+      }
+      // (c) HOLD-SPAN AUDIT: after every insert/move above, no SCORED note may sit on a hold's lane inside
+      // its sustain (+ the re-press clearance) — a correctly-held key physically can't strike it. Truncate
+      // the tail to clear the intruder; a tail below the 0.30s playable minimum demotes back to a tap.
+      {
+        const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03;
+        for (const h of notes) {
+          if (h.type !== 'hold') continue;
+          let lim = Infinity;
+          for (const n of notes) {
+            if (n === h || n.type === 'bomb') continue;
+            if (n.lane === h.lane && n.time > h.time + 0.02 && n.time < h.time + h.hold + clear && n.time < lim) lim = n.time;
+          }
+          if (lim < Infinity) {
+            const tail = lim - clear - h.time;
+            if (tail >= 0.30) h.hold = Math.round(Math.min(h.hold, tail) * 1000) / 1000;
+            else { h.type = 'tap'; h.hold = 0; }
+          }
+        }
+      }
     }
     // build36: per-level MIRROR mod — flip every note onto the opposite lane. Done LAST (after all
     // inserts + the final sort); a lane remap doesn't change time order. Input/render lane mapping is
@@ -1762,7 +1869,7 @@
             if (h.type !== 'hold') continue;
             for (const n of notes) {
               if (n === h || n.type === 'bomb') continue;
-              if (n.lane === h.lane && n.time > h.time + 0.02 && n.time < h.time + h.hold + clear) c++;
+              if (n.lane === h.lane && n.time > h.time + 0.02 && n.time < h.time + h.hold + clear - 1e-6) c++;
             }
           }
           return c;
@@ -2138,7 +2245,7 @@
           const centroid = Math.max(0, Math.min(1, (cl - logMin) / (logMax - logMin)));
           const hotBands = []; if (maxr > 1e-5) for (let b = 0; b < NB; b++) if (rise[b] >= 0.45 * maxr) hotBands.push(b);   // bands that co-fired → a real stacked-frequency CHORD moment
           let domB = 0, domV = -1; for (let b = 0; b < NB; b++) if (env[b][f] > domV) { domV = env[b][f]; domB = b; }            // dominant band → measure its sustain for true HOLD detection
-          let sus = 0; const sthr = domV * 0.5, smax = f + Math.round(1.8 / secPerF);
+          let sus = 0; const sthr = domV * 0.5, smax = f + Math.round(4.0 / secPerF);   // build104 s6b: measure sustains to 4s (was 1.8 — long rings were invisible to the charter)
           for (let g = f + 1; g < nF && g < smax; g++) { if (env[domB][g] >= sthr) sus = (g - f) * secPerF; else break; }
           let eTot = 0; for (let b = 0; b < NB; b++) eTot += env[b][f];                                                          // local energy → section-aware density
           res.push({ t: Math.round((f * hop / sr) * 1000) / 1000, strength: Math.round(Math.min(3, nov[f] / (mean + 1e-4)) * 100) / 100, centroid: centroid, hotBands: hotBands, sustain: Math.round(sus * 100) / 100, energy: eTot });
@@ -3062,7 +3169,7 @@
   function completeHold(lane) {
     const hn = holdNote[lane]; if (!hn) return;
     const rem = Math.max(0, 1 - holdScored[lane]);
-    if (rem > 0.001) score += rem * HOLD_TOTAL * curMult();
+    if (rem > 0.001) score += rem * holdTotalFor(hn) * curMult();
     holdScored[lane] = 1; holdNote[lane] = null;
     laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
     spawnHitParticles(lane, 'great');
@@ -3071,21 +3178,29 @@
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
     updateHUD();
   }
-  // let go before the tail — TIGHT now: holding the home stretch (>= GRACE) still completes it,
-  // but dropping earlier is a real miss of the sustain (combo break + a dead, dimming beam) so
-  // you genuinely have to hold it down, not just tap the head.
+  // let go before the tail — build104 s6d: THREE release bands (a binary cliff at 0.75 made a 74% hold feel
+  // identical to a 5% head-tap; the middle band keeps the streak alive without paying the completion):
+  //   ≥0.75 (GRACE)  → forgiven: completes like a clean hold (unchanged).
+  //   0.45–0.75      → SLIP: you clearly rode most of it — banked sustain stays (monotone with hold time),
+  //                    combo/stability survive, but no completion payout; soft cue (dim beam, no squelch).
+  //   <0.45          → genuine drop: combo break + dead beam + squelch (unchanged).
   function endHoldEarly(lane) {
     const hn = holdNote[lane]; if (!hn) return;
     const GRACE = 0.75;                 // held at least this far → the release is forgiven (tail grace)
+    const SLIP = 0.45;                  // held most of it → keep the streak, forfeit the rest of the payout
     holdNote[lane] = null;
     if (holdScored[lane] >= GRACE) {    // home stretch → count it as a clean hold
       const rem = Math.max(0, 1 - holdScored[lane]);
-      if (rem > 0.001) score += rem * HOLD_TOTAL * curMult();
+      if (rem > 0.001) score += rem * holdTotalFor(hn) * curMult();
       holdScored[lane] = 1;
       laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
       spawnHitParticles(lane, 'great');
       flashJudgment('HOLD!', '#e0a93f');
       if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    } else if (holdScored[lane] >= SLIP) {   // SLIP band — soft landing, no combo break, no squelch, no stability hit
+      hn.dropped = true;                // the remaining beam dims (render's 'resolving' state)
+      lanePluckT[lane] = 9;             // the string settles
+      flashJudgment('SLIP', '#dad7d2');
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
       combo = 0; comboTierCur = 0;
@@ -3129,6 +3244,7 @@
       // is not viable in a throttled tab).
       seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
       beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
+      notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0 })),   // build104 s5/6 diag (strip at freeze)
       endRun: () => { if (state === 'playing') { endGame(); return true; } return state; },
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
@@ -4565,7 +4681,7 @@
       const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
       if (performance.now() < _mpStunUntil) { holdScored[i] = frac; continue; }   // v258: MP combat stun — advance the sustain marker WITHOUT paying out (no score banked while shocked, and no refund-lump when the stun ends)
       const gain = frac - holdScored[i];
-      if (gain > 0) { score += gain * HOLD_TOTAL * curMult(); holdScored[i] = frac; sustaining = true; }
+      if (gain > 0) { score += gain * holdTotalFor(hn) * curMult(); holdScored[i] = frac; sustaining = true; }
       // keep the lane alive: string keeps ringing, catcher glows, sparks trickle up
       lanePluckT[i] = Math.min(lanePluckT[i], 0.06);
       laneHitPulse[i] = Math.max(laneHitPulse[i], 0.35);
@@ -7190,11 +7306,16 @@
       for (let i = 0; i < LANE_COUNT; i++) {
         const h = P.holdNote[i]; if (!h) continue;
         const hn = h.note, end = hn.time + hn.hold;
-        if (jt >= end) { const rem = 1 - P.holdScored[i]; if (rem > 0) P.score += rem * HOLD_TOTAL * _p2Mult(); P.holdNote[i] = null; P.holdScored[i] = 0; continue; }
-        if (!P.laneDown[i]) { P.holdNote[i] = null; P.holdScored[i] = 0; continue; }   // let go early → drop the sustain
+        if (jt >= end) { const rem = 1 - P.holdScored[i]; if (rem > 0) P.score += rem * holdTotalFor(hn) * _p2Mult(); P.holdNote[i] = null; P.holdScored[i] = 0; continue; }
+        if (!P.laneDown[i]) {   // build104 s6c/d mirror: duration-scaled payout + graded release — ≥0.75 completes, 0.45–0.75 keeps combo + banked, <0.45 breaks P2's combo (matches P1's bands)
+          const f = P.holdScored[i];
+          if (f >= 0.75) { const rem = 1 - f; if (rem > 0) P.score += rem * holdTotalFor(hn) * _p2Mult(); }
+          else if (f < 0.45) { P.combo = 0; }
+          P.holdNote[i] = null; P.holdScored[i] = 0; continue;
+        }
         const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
         const gain = frac - P.holdScored[i];
-        if (gain > 0) { P.score += gain * HOLD_TOTAL * _p2Mult(); P.holdScored[i] = frac; }
+        if (gain > 0) { P.score += gain * holdTotalFor(hn) * _p2Mult(); P.holdScored[i] = frac; }
       }
       // P2 MISS pass: a note that passed P2's window unjudged-for-P2 breaks P2's combo (bombs dodged = safe).
       // build104 s1a mirror: scored taps get the same +60ms miss-DECLARATION grace as P1's sweep (bombs + hold
