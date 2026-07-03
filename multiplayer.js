@@ -315,6 +315,9 @@
         localStorage.setItem('rr_mp_rivals', JSON.stringify(RV));
       }
     } catch (e) {}
+    // build110: RETENTION SYSTEM hook — participation (not victory) counts toward the MP daily/weekly
+    // goal + XP, per spec §1.1/§5 (a losing streak in MP must never block a play-streak).
+    try { if (window.RhythmGoals) window.RhythmGoals.recordMpComplete(result, info); } catch (e) {}
     return r;
   }
   var _lastStunAt = 0;
