@@ -70,8 +70,10 @@
   var DAILY_LEVELS = 3, DAILY_MP = 3;
   var WEEKLY_LEVELS = 15, WEEKLY_MP = 10;
 
-  // ---- XP curve (spec §1.4): Level N requires floor(80 * N^1.35) cumulative XP ----
-  function xpForLevel(n) { return Math.floor(80 * Math.pow(n, 1.35)); }
+  // ---- XP curve (spec §1.4): Level N requires floor(80 * N^1.35) cumulative XP, for N>=2 —
+  // per the spec's worked examples (L2=80, L5≈640, L10≈1950, L20≈5500, L30≈9900). Level 1 is the
+  // free starting level (0 XP required) — there is no "L1 requirement" in the design.
+  function xpForLevel(n) { return n <= 1 ? 0 : Math.floor(80 * Math.pow(n, 1.35)); }
   function levelForXp(xp) {
     var lvl = 1;
     while (xpForLevel(lvl + 1) <= xp) lvl++;

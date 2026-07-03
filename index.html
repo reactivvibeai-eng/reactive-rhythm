@@ -3764,6 +3764,52 @@
     text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
   .mh-status-cont::before { content: '▶'; color: var(--crimson); font-size: 8px; }
   .mh-status-cont[hidden], .mh-status-spark[hidden] { display: none; }
+  /* build110 Phase 4: "you're back today" hero card — daily/weekly goal + XP progress. Same gold-chip
+     family as .mh-hero-chip/.is-continue; warm darks (R>=G>=B), no purple/blue. */
+  .mh-goalscard {
+    position: relative; width: 100%; margin: 0 0 14px; padding: 14px 40px 14px 16px;
+    display: flex; align-items: center; gap: 14px;
+    border-radius: 16px; border: 1px solid rgba(224,169,63,0.4);
+    background: linear-gradient(135deg, rgba(40,16,20,0.55), rgba(16,7,9,0.75));
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4), 0 0 22px rgba(224,169,63,0.12);
+  }
+  .mh-goalscard[hidden] { display: none; }
+  .mgc-dismiss {
+    position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--ink-dim);
+    font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .mgc-dismiss:hover { color: var(--ink); border-color: var(--ta, var(--crimson)); }
+  .mgc-flame { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-width: 54px; gap: 2px; }
+  .mgc-flame-ico { font-size: 26px; filter: drop-shadow(0 0 10px rgba(255,122,74,0.6)); }
+  .mgc-flame-n { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; color: #f4d488;
+    text-shadow: 0 0 10px rgba(224,169,63,0.5); }
+  .mgc-body { flex: 1 1 auto; min-width: 0; }
+  .mgc-row { display: flex; flex-wrap: wrap; gap: 14px 22px; }
+  .mgc-goal { display: flex; flex-direction: column; gap: 3px; }
+  .mgc-goal-l { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
+  .mgc-dots { display: inline-flex; gap: 5px; }
+  .mgc-dots .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(224,169,63,0.5);
+    background: transparent; }
+  .mgc-dots .dot.on { background: linear-gradient(180deg, #f4cf6a, #d89b2c); box-shadow: 0 0 8px rgba(224,169,63,0.6); border-color: transparent; }
+  .mgc-complete-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mgc-complete-txt { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12.5px;
+    letter-spacing: 0.04em; color: #f4d488; text-transform: uppercase; }
+  .mgc-complete-xp { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: var(--crimson); }
+  .mgc-xprow { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .mgc-xp-cap { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
+  .mgc-xp-track { flex: 1 1 auto; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--line); overflow: hidden; min-width: 60px; }
+  .mgc-xp-fill { display: block; height: 100%; width: 0%; border-radius: 4px;
+    background: linear-gradient(90deg, #c98a2c, #f4cf6a); box-shadow: 0 0 8px rgba(224,169,63,0.5);
+    transition: width 0.5s cubic-bezier(.2,1,.3,1); }
+  @media (max-width: 600px) {
+    .mh-goalscard { flex-direction: column; align-items: flex-start; padding: 14px 34px 14px 14px; }
+    .mgc-flame { flex-direction: row; min-width: 0; }
+  }
   /* build99L: Skip promoted from a faint text link to a ghost-button (pill/border/hover glow) */
   .mh-skip { margin-top: 18px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -4960,6 +5006,36 @@
         </span>
         <span class="mh-status-spark" id="mh-status-spark" hidden></span>
         <span class="mh-status-cont" id="mh-status-cont" hidden></span>
+      </div>
+      <!-- build110 Phase 4: "you're back today" retention hero card — daily/weekly goal progress + XP bar.
+           Painted by paintGoalsCard() (called from showHub() alongside paintDailyRift()). Dismissible per
+           session only (sessionStorage, never a permanent nag — spec §5). Hidden until painted with data. -->
+      <div class="mh-goalscard" id="mh-goalscard" hidden>
+        <button class="mgc-dismiss" id="mgc-dismiss" type="button" aria-label="Dismiss">×</button>
+        <div class="mgc-flame" id="mgc-flame" aria-hidden="true">
+          <span class="mgc-flame-ico">🔥</span>
+          <span class="mgc-flame-n" id="mgc-flame-n">0</span>
+        </div>
+        <div class="mgc-body">
+          <div class="mgc-row" id="mgc-goals-row">
+            <div class="mgc-goal">
+              <span class="mgc-goal-l">LEVELS TODAY</span>
+              <span class="mgc-dots" id="mgc-dots-levels"></span>
+            </div>
+            <div class="mgc-goal">
+              <span class="mgc-goal-l">MULTIPLAYER TODAY</span>
+              <span class="mgc-dots" id="mgc-dots-mp"></span>
+            </div>
+          </div>
+          <div class="mgc-row mgc-complete-row" id="mgc-complete-row" hidden>
+            <span class="mgc-complete-txt">DAILY GOAL COMPLETE — see you tomorrow</span>
+            <span class="mgc-complete-xp" id="mgc-complete-xp"></span>
+          </div>
+          <div class="mgc-xprow">
+            <span class="mgc-xp-cap" id="mgc-xp-cap">XP TO LEVEL 2: 0 / 80</span>
+            <span class="mgc-xp-track"><span class="mgc-xp-fill" id="mgc-xp-fill"></span></span>
+          </div>
+        </div>
       </div>
       <div class="mh-grid" id="mh-grid">
         <button class="mh-tile primary mh-hero" id="mh-campaign" type="button">
@@ -10644,6 +10720,7 @@
     hub.classList.add('active');
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
     try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
+    try { paintGoalsCard(); } catch (e) {}    // build110: "you're back today" XP/streak/goals hero card (render-only; never throws)
     try { rollHubQuip(); } catch (e) {}       // build99V: random easter-egg quip under the subtitle
     try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
   }
@@ -10853,6 +10930,69 @@
   function paintDailyRift() { try { if (window.__rrPaintDailyRift) window.__rrPaintDailyRift(); } catch (e) {} }
 
   // ===========================================================================
+  // build110 Phase 4: "you're back today" start-menu hero card — daily/weekly goal progress + XP bar.
+  // Reads window.RhythmGoals (pure ledger, goals.js). Render-only; dismissible per SESSION via
+  // sessionStorage (never localStorage — spec §2.1: reappears fresh next boot, never a permanent nag).
+  // ===========================================================================
+  function paintGoalsCard() {
+    var card = $('mh-goalscard'); if (!card) return;
+    var RG = window.RhythmGoals; if (!RG) { card.hidden = true; return; }
+    var dismissed = false; try { dismissed = sessionStorage.getItem('rr_goals_card_dismissed') === '1'; } catch (e) {}
+    if (dismissed) { card.hidden = true; return; }
+    var st = RG.state();
+    var g = st.goals, s = st.streak;
+    // only show once the player has SOME history — a brand-new guest with zero runs doesn't need a
+    // goals nag on their very first visit (mirrors paintHubStatus's `returning` gate).
+    var returning = false;
+    try { returning = !!localStorage.getItem('rr_career') || !!localStorage.getItem('rr_scores'); } catch (e) {}
+    if (!returning) { card.hidden = true; return; }
+    card.hidden = false;
+
+    var flameN = $('mgc-flame-n'); if (flameN) flameN.textContent = String(s.count || 0);
+    var flameIco = $('mgc-flame');
+    if (flameIco) {
+      // visual tiers mirror the COMBO_TIERS escalating-ladder grammar (spec §1.3) — cosmetic label only.
+      var days = s.count || 0, tier = 'SPARK';
+      if (days >= 60) tier = 'UNDYING'; else if (days >= 30) tier = 'INFERNO'; else if (days >= 14) tier = 'WILDFIRE';
+      else if (days >= 7) tier = 'BONFIRE'; else if (days >= 3) tier = 'KINDLING';
+      flameIco.setAttribute('title', tier + ' · ' + days + '-day streak');
+    }
+
+    var levelsDone = (g.levels || 0) >= RG.DAILY_LEVELS, mpDone = (g.mp || 0) >= RG.DAILY_MP;
+    var goalsRow = $('mgc-goals-row'), completeRow = $('mgc-complete-row');
+    if (g.claimedDaily) {
+      if (goalsRow) goalsRow.hidden = true;
+      if (completeRow) completeRow.hidden = false;
+      var cxp = $('mgc-complete-xp'); if (cxp) cxp.textContent = '+50 XP claimed';
+    } else {
+      if (goalsRow) goalsRow.hidden = false;
+      if (completeRow) completeRow.hidden = true;
+      function dots(id, have, want) {
+        var el = $(id); if (!el) return;
+        var out = '';
+        for (var i = 0; i < want; i++) out += '<span class="dot' + (i < have ? ' on' : '') + '"></span>';
+        el.innerHTML = out;
+        el.parentNode.querySelector('.mgc-goal-l').textContent = el.parentNode.querySelector('.mgc-goal-l').textContent.split(' (')[0] + ' (' + Math.min(have, want) + '/' + want + ')';
+      }
+      dots('mgc-dots-levels', g.levels || 0, RG.DAILY_LEVELS);
+      dots('mgc-dots-mp', g.mp || 0, RG.DAILY_MP);
+    }
+
+    var prog = RG.xpProgress();
+    var cap = $('mgc-xp-cap'), fill = $('mgc-xp-fill');
+    if (cap) cap.textContent = 'XP TO LEVEL ' + (prog.level + 1) + ': ' + prog.into + ' / ' + prog.span;
+    if (fill) fill.style.width = Math.max(0, Math.min(100, Math.round(prog.into / prog.span * 100))) + '%';
+  }
+  window.__rrPaintGoalsCard = paintGoalsCard;   // dev hook parity with __rrPaintDailyRift
+  (function () {
+    var dismiss = $('mgc-dismiss'); if (!dismiss) return;
+    dismiss.addEventListener('click', function () {
+      try { sessionStorage.setItem('rr_goals_card_dismissed', '1'); } catch (e) {}
+      var card = $('mh-goalscard'); if (card) card.hidden = true;
+    });
+  })();
+
+  // ===========================================================================
   // build110 Phase 3: LEVEL-UP + STREAK-MILESTONE celebration toast.
   // goals.js is a pure ledger (no DOM) — it dispatches document CustomEvents ('rr-levelup',
   // 'rr-streak-milestone', 'rr-streak-freeze-used') and this listens + paints. Dynamically-created
@@ -10893,10 +11033,13 @@
     });
     document.addEventListener('rr-daily-goal-complete', function () {
       try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Daily Goal complete — +50 XP', 'success'); } catch (e) {}
+      try { paintGoalsCard(); } catch (e) {}
     });
     document.addEventListener('rr-weekly-goal-complete', function () {
       try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Weekly Goal complete — +200 XP', 'success'); } catch (e) {}
+      try { paintGoalsCard(); } catch (e) {}
     });
+    document.addEventListener('rr-levelup', function () { try { paintGoalsCard(); } catch (e) {} });
   })();
 
   var mb = $('menu-back'); if (mb) mb.addEventListener('click', showHub);
