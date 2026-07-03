@@ -24,6 +24,40 @@
   var _state = {};
   var _audioDbg = {};
   var _fed = false, _fedCombo = 80, _fedTier = 2;
+  // ══ pkg3.0(F) LEGIBILITY CONTRACT — every Tier-I renderer obeys: ONE SIGNAL, ONE JOB ══
+  //   bass   = motion SPEED          · mid  = structure INTENSITY   · treble = sparkle/DETAIL
+  //   beat   = ONE discrete event    · combo = SLOW state (earned-motion floor + tier ignition/sun)
+  //   OD     = white-hot override
+  //   Budget: ≤1200 path ops/frame desktop, ≤450 lite. The _soft watchdog below is the enforcement.
+  //   Frames open with an OPAQUE #000 clear — no translucent trail fills; tails are DRAWN per object.
+  //   'lighter' glows allowed, always over true black. 1px strokes pixel-snap via (x|0)+0.5.
+  //   Renderers overscan −0.04·_w … 1.04·_w so the camera tilt/zoom never reveals an edge.
+  // ══ pkg3.0(D) CAMERA RIG — breathe/kick zoom + slow tilt + LFO drift; identity under reduce-motion ══
+  var CAM = { z: 1, tilt: 0, dx: 0, dy: 0 };
+  function _updateCam(dt, st) {
+    if (_reduce()) { CAM.z = 1; CAM.tilt = 0; CAM.dx = 0; CAM.dy = 0; return; }
+    var breathe = Math.sin(_t * 0.45) * 0.006;
+    CAM.z = clamp(1 + breathe + _kick * 0.03 + (st.od || 0) * 0.012, 1, 1.05);
+    CAM.tilt = clamp(Math.sin(_t * 0.07) * 0.010 + (bassN - 0.5) * 0.006, -0.024, 0.024);
+    CAM.dx = Math.sin(_t * 0.05) * 0.012 * _w;    // slow LFO drifts (±1.2% / ±0.8% of frame)
+    CAM.dy = Math.cos(_t * 0.037) * 0.008 * _h;
+  }
+  // pkg3.1 shared combo CUTAWAY state (drama earned at tier-up; dim on break) + hoisted miss envelope
+  var _prevTier = 0, _cut = 0, _hold = 0, _missK = 0, _prevComboSt = 0;
+  // the level's tier-up shockwave: two strokes — main ring + inner echo. p = 1-_cut (0→1 across 600ms).
+  function _shockRing(p, hue, cx0, cy0) {
+    var cx = cx0 != null ? cx0 : _w * 0.5, cy = cy0 != null ? cy0 : _h * 0.5;
+    var maxR = Math.sqrt(_w * _w + _h * _h) * 0.5;
+    var e = 1 - Math.pow(1 - p, 3), r = maxR * (0.15 + 0.85 * e);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = _hsl(hue, 92, 64, 0.85 * (1 - p)); ctx.lineWidth = (14 * (1 - p) + 2) * _dpr;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = _hsl(hue, 92, 64, 0.34 * (1 - p));
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.92, 0, 6.2832); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // pkg3.1 earned-motion floor — combo 0 is near-still (LAW-compliant); full speed from combo 25
+  function _motionFloor(st) { return 0.25 + 0.75 * clamp((st.combo || 0) / 25, 0, 1); }
 
   function $(id) { return document.getElementById(id); }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
@@ -59,7 +93,7 @@
     var W = cv.clientWidth || (cv.parentElement ? cv.parentElement.clientWidth : 0) || window.innerWidth;
     var H = cv.clientHeight || (cv.parentElement ? cv.parentElement.clientHeight : 0) || window.innerHeight;
     W = Math.max(2, Math.round(W)); H = Math.max(2, Math.round(H));
-    _dpr = _lite() ? 1 : Math.min(1.1, window.devicePixelRatio || 1);   // a soft backdrop doesn't need full DPR; capping at 1.1 cuts ~23% of the pixel/overdraw cost (perf)
+    _dpr = _lite() ? 1 : Math.min(1.5, window.devicePixelRatio || 1);   // pkg3.0(A) CRISP: 1.5 cap (was 1.1) — cost paid back by deleting the per-frame cv.style.filter blur (3.0 C)
     cv.width = Math.round(W * _dpr); cv.height = Math.round(H * _dpr);
     // NO inline cv.style.width/height — an inline px size (measured before #game-bg was laid out) was the "black box in the middle" bug.
     _w = cv.width; _h = cv.height; _state.dirty = true; _state.vig = null;
@@ -99,8 +133,9 @@
     var targetHue = [0, 8, 20, 36, 44, 50][tier];
     var odRaw = 0; try { if (s) odRaw = (s.overdrive != null ? s.overdrive : (s.starPower != null ? s.starPower : s.od)) || 0; } catch (e) {}
     if (odRaw > 1) odRaw /= 100; od = lerp(od, clamp(odRaw, 0, 1), 0.12);
-    var ramp = clamp(combo / 200, 0, 1); ramp *= ramp;
-    comboGlow = lerp(comboGlow, clamp(ramp + od * 0.5, 0, 1), 0.06);
+    // pkg3.1: comboGlow re-tuned STEPPED-then-eased on the tier ladder — the between-tier base is stable, so a
+    // tier-up (and its cutaway) reads as the event (the old continuous combo/200 ramp made tier-ups invisible).
+    comboGlow = lerp(comboGlow, clamp(clamp(tier / 5, 0, 1) + od * 0.5, 0, 1), 0.06);
     comboHue = lerp(comboHue, targetHue + od * 8, 0.06);
     return { combo: combo, playing: playing, tier: tier, od: od };
   }
@@ -229,32 +264,27 @@
     ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
   }
 
-  // ───────────────────────── EMBER (Ember Drift) — REBUILT build74 (owner direction) ─────────────────
-  //  A warm fire/smoke field that FILLS the whole frame (no lit-center "box"): rising embers + sparks + soft
-  //  SMOKE puffs, BEAT-driven eruptions + smoke poofs, a MISS scatters + darkens the field, COMBO brightens +
-  //  adds a dreamy bloom-BLUR (GPU css filter), and a periodic FILTER MODE cycles the whole look (palette + tone)
-  //  through the song. Pure-black base, full-bleed, edge-to-edge warm ground-glow. Stays warm (crimson→amber→gold).
+  // ───────────────────────── EMBER (Ember Drift) — pkg3.2 FIRESTORM DRIVE (in-place rewrite; key stays 'ember') ──
+  //  Radial OUTFLOW from a vanishing point (the starfield z-illusion, bass = the accelerator): three planes
+  //  FAR/MID/NEAR drawn back-to-front over an OPAQUE #000 clear — motion is DRAWN (per-object streaks), never
+  //  smeared (3.0 contract; the per-frame cv.style.filter blur + EMBER_MODES css-tone cycling are DELETED).
+  //  Beat = ONE eruption AT the VP; tier-up cutaway = shockwave + the palette MODE advance (earned, not a timer).
   var EMBER_MODES = [
-    { pal:{ base:0,  span:46 }, sat:1.00, con:1.00, bri:1.00, smoke:0.16, spark:0.22 },  // 0 Ember — crimson→amber
-    { pal:{ base:22, span:30 }, sat:1.20, con:1.00, bri:1.07, smoke:0.10, spark:0.34 },  // 1 Gold Rush — amber→gold, sparkly
-    { pal:{ base:0,  span:18 }, sat:0.92, con:1.16, bri:0.92, smoke:0.34, spark:0.10 },  // 2 Smolder — deep crimson, smoky
-    { pal:{ base:6,  span:52 }, sat:1.30, con:1.06, bri:1.12, smoke:0.10, spark:0.40 }   // 3 Inferno — hot, dense sparks
+    { pal: { base: 0,  span: 46 }, smoke: 0.12, spark: 0.22 },   // 0 Ember — crimson→amber
+    { pal: { base: 22, span: 30 }, smoke: 0.08, spark: 0.34 },   // 1 Gold Rush — amber→gold, sparkly
+    { pal: { base: 0,  span: 18 }, smoke: 0.12, spark: 0.10 },   // 2 Smolder — deep crimson, smoky
+    { pal: { base: 6,  span: 52 }, smoke: 0.06, spark: 0.40 }    // 3 Inferno — hot, dense sparks
   ];
-  function _newEmber(w, h, burst, mix) {
-    mix = mix || EMBER_MODES[0];
-    var r = Math.random(), kind = r < mix.smoke ? 2 : r < (mix.smoke + mix.spark) ? 1 : 0;   // 2 smoke · 1 spark · 0 ember
-    var e = { x: Math.random() * w, y: h * (0.70 + Math.random() * 0.34),   // FULL-WIDTH spawn (kills the central-column box), low-ish
-      vx: (Math.random() - 0.5) * 30, vy: 0, life: 0, maxlife: 1, z: Math.pow(Math.random(), 1.3),
-      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 1.6, kind: kind, sz0: 2, sway: 8 + Math.random() * 22 };
-    if (kind === 2) { e.maxlife = 1.8 + Math.random() * 2.6; e.sz0 = 30 + Math.random() * 52; e.vy = -(34 + Math.random() * 56); e.z = 0.25 + Math.random() * 0.5; }   // SMOKE — big, soft, slow
-    else if (kind === 1) { e.maxlife = 0.5 + Math.random() * 1.0; e.sz0 = 1.0 + Math.random() * 1.8; e.vy = -(260 + Math.random() * 380); }   // SPARK — fast hot dot
-    else { e.maxlife = 1.1 + Math.random() * 2.2; e.sz0 = 1.6 + Math.random() * 3.0; e.vy = -(120 + Math.random() * 210); }   // EMBER — glowing rising mote
-    if (burst) {   // beat eruption / explosion — fast upward + outward, short, bright
-      e.x = burst.x + (Math.random() - 0.5) * w * 0.12; e.y = burst.y;
-      var ang = -Math.PI / 2 + (Math.random() - 0.5) * 1.7, s = (160 + beatPunch * 520);
-      e.vx = Math.cos(ang) * s; e.vy = Math.sin(ang) * s; e.z = 0.5 + Math.random() * 0.5;
-      e.maxlife = kind === 2 ? (0.9 + Math.random() * 1.1) : (0.4 + Math.random() * 0.8);
-    }
+  var _FS_FLOW = [0.25, 0.6, 1.6];   // FAR / MID / NEAR outflow rates
+  // (re)seed an ember NEAR the VP (radius 0.05–0.25·h). layer: 0 far · 1 mid · 2 near. burst = outward speed px/s.
+  function _fsSpawn(e, layer, mix, burst) {
+    var ang = Math.random() * 6.2832, r0 = (0.05 + Math.random() * 0.20) * _h;
+    e.x = _w * 0.5 + Math.cos(ang) * r0; e.y = _h * 0.58 + Math.sin(ang) * r0;
+    e.vx = burst ? Math.cos(ang) * burst : 0; e.vy = burst ? Math.sin(ang) * burst : 0;
+    e.life = 0; e.maxlife = 2.2 + Math.random() * 3.2; e.z = Math.random(); e.gold = false;
+    var r = Math.random();
+    e.kind = layer === 1 ? (r < mix.smoke ? 2 : r < mix.smoke + mix.spark ? 1 : 0) : 0;   // smoke/spark live on MID only
+    e.px1 = e.px2 = e.x; e.py1 = e.py2 = e.y;   // NEAR streak memory (drawn tails)
     return e;
   }
   // a cached warm radial GLOW sprite — drawImage'd per particle for cheap volumetric fullness (the pro way to make a sparse field read as a busy STORM)
@@ -276,77 +306,303 @@
   }
   function drawEmber(dt, st) {
     var w = _w, h = _h, lite = _lite(), reduce = _reduce();
-    // ── FILTER-MODE cycle — the whole LOOK (palette + css tone + particle mix) rotates through the song ──
-    if (_state.fmode == null) { _state.fmode = 0; _state.fmix = { sat: 1, con: 1, bri: 1, base: 0, span: 46, smoke: 0.16, spark: 0.22 }; _state.fcd = 16; _state.missT = 0; _state.prevCombo = st.combo || 0; }
-    _state.fcd -= dt;
-    if ((((_secPulse > 0.6) && _state.fcd <= 0) || _state.fcd <= -20) && !reduce) { _state.fmode = (_state.fmode + 1) % EMBER_MODES.length; _state.fcd = 16; }   // advance on a section change (with a floor cooldown) or after ~16-36s
-    var Mo = EMBER_MODES[_state.fmode], fx = _state.fmix, kf = Math.min(1, dt * 0.9);   // EASE the mode change — never a hard jump
-    fx.sat = lerp(fx.sat, Mo.sat, kf); fx.con = lerp(fx.con, Mo.con, kf); fx.bri = lerp(fx.bri, Mo.bri, kf);
+    var VPX = w * 0.5, VPY = h * 0.58, mf = _motionFloor(st), missK = st.missK || 0, calm = 1 - missK * 0.4;
+    // ── seed / reseed (level switch sets _state.dirty — the _state.dirty reset pattern) ──
+    var S = _state.fs;
+    if (!S || _state.dirty) {
+      _state.dirty = false; _state.fmode = 0; _state.bcd = 0; _state.cutFired = 0;
+      _state.fmix = { base: EMBER_MODES[0].pal.base, span: EMBER_MODES[0].pal.span, smoke: EMBER_MODES[0].smoke, spark: EMBER_MODES[0].spark };
+      var nF = lite ? 70 : 140, nM = lite ? 60 : 120, nN = lite ? 10 : 40, si, e0;
+      S = _state.fs = { far: [], mid: [], near: [] };
+      for (si = 0; si < nF; si++) { e0 = _fsSpawn({}, 0, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.far.push(e0); }
+      for (si = 0; si < nM; si++) { e0 = _fsSpawn({}, 1, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.mid.push(e0); }
+      for (si = 0; si < nN; si++) { e0 = _fsSpawn({}, 2, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.px1 = e0.px2 = e0.x; e0.py1 = e0.py2 = e0.y; S.near.push(e0); }
+    }
+    // ── palette-mode advance is EARNED: fires once per tier-up cutaway (never a timer). Eased, never a hard jump. ──
+    if ((st.hold > 0 || st.cut > 0.9) && !_state.cutFired) {
+      _state.cutFired = 1;
+      _state.fmode = (_state.fmode + 1) % EMBER_MODES.length;
+      var gb = lite ? 0 : 40;                                    // 40 gold MID embers burst radially with the shockwave
+      for (var gq = 0; gq < gb; gq++) { var ge = S.mid[(gq * 3) % S.mid.length]; _fsSpawn(ge, 1, _state.fmix, 160 + Math.random() * 240); ge.gold = true; ge.kind = 0; }
+    }
+    if (st.cut <= 0 && st.hold <= 0) _state.cutFired = 0;
+    var Mo = EMBER_MODES[_state.fmode], fx = _state.fmix, kf = Math.min(1, dt * 0.9);
     fx.base = lerp(fx.base, Mo.pal.base, kf); fx.span = lerp(fx.span, Mo.pal.span, kf);
     fx.smoke = lerp(fx.smoke, Mo.smoke, kf); fx.spark = lerp(fx.spark, Mo.spark, kf);
     var pal = { base: fx.base, span: fx.span };
-    // ── MISS → dissipate: a broken combo scatters + darkens the field ──
-    var combo = st.combo || 0;
-    if (combo < _state.prevCombo - 2) _state.missT = 1;
-    _state.prevCombo = combo; _state.missT = Math.max(0, _state.missT - dt * 0.9);
-    var missK = _state.missT, calm = 1 - missK * 0.7;
-    // ── COMBO → brightness + dreamy BLUR (GPU css filter) + the eased filter-mode tone. Cleared in set() on level switch ──
-    try { if (cv) cv.style.filter = lite ? '' : ('blur(' + (reduce ? 0 : (comboGlow * 2.4 + missK * 1.4)).toFixed(2) + 'px) saturate(' + (fx.sat * (1 - missK * 0.35)).toFixed(2) + ') contrast(' + fx.con.toFixed(2) + ') brightness(' + (fx.bri * calm).toFixed(2) + ')'); } catch (e) {}
-    var P = _state.p;
-    if (!P || _state.dirty) { var N = lite ? 240 : 440; P = _state.p = []; for (var i = 0; i < N; i++) { var e0 = _newEmber(w, h, null, fx); e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; P.push(e0); } if (!lite) P.sort(function (a, b) { return a.z - b.z; }); _state.dirty = false; _state.bcd = 0; _state.erupted = 0; }
-    // pure-black trail — empties decay to TRUE black (no warm rectangle vs the black gutters)
+    // ── 3.0(B) OPAQUE clear (overscanned for the camera) — tails are drawn, never smeared ──
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = 'rgba(0,0,0,' + (0.26 + 0.10 * beat) + ')'; ctx.fillRect(0, 0, w, h);   // stronger clear → DARK baseline so embers POP + the dark↔bright reactivity reads (was a too-uniform warm wash)
+    ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
     ctx.globalCompositeOperation = 'lighter';
-    // EDGE-TO-EDGE warm ground glow — fills the lower frame FULL WIDTH (no lit-box vs black-edge contrast = the owner's "box"); kept SUBTLE so it's atmosphere, not a wash
-    if (!lite) {
-      var gr0 = _hslToRgb(_warmHue(0.3, pal, 0), 82, 40);
-      var gG = ctx.createLinearGradient(0, h, 0, h * 0.28);
-      gG.addColorStop(0, 'rgba(' + gr0[0] + ',' + gr0[1] + ',' + gr0[2] + ',' + ((0.05 + bass * 0.16 + comboGlow * 0.12) * calm) + ')');
-      gG.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gG; ctx.fillRect(0, 0, w, h);
-    }
-    // BEAT eruption — embers + a smoke poof burst up at a random spot across the floor (a visible "explosion to the beat")
+    // ground glow — bottom-anchored, subtle (alpha 0.04 + bass·0.12)
+    var gr0 = _hslToRgb(_warmHue(0.3, pal, 0), 82, 40);
+    var gG = ctx.createLinearGradient(0, h, 0, h * 0.5);
+    gG.addColorStop(0, 'rgba(' + gr0[0] + ',' + gr0[1] + ',' + gr0[2] + ',' + ((0.04 + bass * 0.12) * calm) + ')');
+    gG.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gG; ctx.fillRect(-w * 0.04, h * 0.5, w * 1.08, h * 0.54);
+    // ROAD — two sagging polylines from the bottom corners to the VP (the drive)
+    ctx.strokeStyle = _hsl(20, 50, 14 + bassN * 8, 0.5); ctx.lineWidth = 2 * _dpr; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-w * 0.04, h * 1.04); ctx.quadraticCurveTo(w * 0.24, h * 0.88, VPX, VPY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w * 1.04, h * 1.04); ctx.quadraticCurveTo(w * 0.76, h * 0.88, VPX, VPY); ctx.stroke();
+    // ── beat ERUPTION fires AT the VP (one discrete event per beat; 0.10s cooldown) ──
     _state.bcd -= dt;
     if (beatPunch > 0.28 && missK < 0.5 && _state.bcd <= 0) {
       _state.bcd = 0.10;
-      var bx = w * (0.10 + Math.random() * 0.80), by = h * (0.80 + Math.random() * 0.12), bn = lite ? 14 : 30, s0 = (Math.random() * P.length) | 0;
-      for (var q = 0; q < bn; q++) { var qi = (s0 + q) % P.length; P[qi] = _newEmber(w, h, { x: bx, y: by }, fx); }
+      var bn = lite ? 12 : 26, b0 = (Math.random() * S.mid.length) | 0;
+      for (var q = 0; q < bn; q++) _fsSpawn(S.mid[(b0 + q) % S.mid.length], 1, fx, 120 + beatPunch * 420);
     }
-    if (_secPulse > 0.9 && !_state.erupted) { _state.erupted = 1; var bn2 = lite ? 26 : 54; for (var z = 0; z < bn2; z++) { var zi = (z * 7) % P.length; P[zi] = _newEmber(w, h, { x: w * (0.2 + Math.random() * 0.6), y: h * 0.9 }, fx); } }
-    if (_secPulse < 0.3) _state.erupted = 0;
-    var spr = _emberGlow(), smk = lite ? null : _smokeSprite(), riseE = (0.6 + bass * 0.9 + _energy * 0.4), swayK = 0.4 + bassN * 1.1 + beat * 0.7;
-    for (var k = 0; k < P.length; k++) {
-      var e = P[k], depth = 0.55 + e.z * 1.0;
-      e.x += (e.vx + Math.sin(e.y * 0.012 + _t * 0.9 + e.rot) * e.sway * swayK) * dt * depth;   // gentle sinuous rise (NOT a chaotic curl field → no "random lines")
-      e.y += e.vy * dt * riseE * depth * (missK > 0 ? 1 + missK * 0.6 : 1);                      // a miss makes them scatter up faster
-      e.vx += (Math.random() - 0.5) * 6 * (e.kind === 1 ? 2 : 1);
-      e.rot += e.vr * dt; e.life += dt;
-      if (e.life >= e.maxlife || e.y < -40) { P[k] = _newEmber(w, h, null, fx); continue; }
-      if (e.x < -30) e.x = w + 24; else if (e.x > w + 30) e.x = -24;
-      var lt = e.life / e.maxlife, envb = Math.sin(lt * 3.14159);   // grow → peak → dim
-      if (e.kind === 2) {   // SMOKE — big soft warm puff, expands + rises, fills the black space
-        var ssz = e.sz0 * (0.6 + lt * 1.8) * _dpr, sa = envb * (0.05 + bass * 0.06 + comboGlow * 0.05) * calm;
-        if (smk && sa > 0.005) { ctx.globalAlpha = clamp(sa, 0, 0.4); ctx.drawImage(smk, e.x - ssz, e.y - ssz, ssz * 2, ssz * 2); ctx.globalAlpha = 1; }
-        continue;
-      }
-      var bright = envb * (0.45 + level * 0.65 + beatPunch * 0.6) * (0.6 + comboGlow * 0.7) * calm;
-      if (bright < 0.015) continue;
-      var grow = 0.7 + lt * 0.7, sz = e.sz0 * _dpr * grow * (1 + beatPunch * 0.4 * e.z);
-      var yn = clamp(1 - e.y / h, 0, 1), heat = clamp((1 - yn) * 0.5 + bassN * 0.4 + beatPunch * 0.5 + comboGlow * 0.3 + 0.15, 0, 1);   // THERMAL — hot near the floor → crimson at the rising tips
-      var hue = _warmHue(heat, pal, 0), sat = _heatS(heat), lcol = clamp(_heatL(heat, 42) + envb * 8, 38, 99);
-      var a = clamp(bright * (0.4 + e.z * 0.7), 0, 1), col = _hsl(hue, sat, lcol, a);
-      if (spr) { var gd = sz * (4.0 + e.z * 2.0); ctx.globalAlpha = clamp(a * 0.55, 0, 1); ctx.drawImage(spr, e.x - gd * 0.5, e.y - gd * 0.5, gd, gd); ctx.globalAlpha = 1; }   // cheap volumetric glow halo (dialed back so embers read as POINTS of fire, not a wash)
-      if (e.z < 0.32 && bright < 0.5) continue;   // PERF: far/dim particles are glow-only
-      if (e.kind === 1) {   // spark — hot dot + a cross glint at peak
-        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(e.x, e.y, sz * 0.55, 0, 6.2832); ctx.fill();
-        if (!lite && bright > 0.5) { ctx.strokeStyle = _hsl(hue, 70, 93, a * 0.7); ctx.lineWidth = _dpr; var gl2 = sz * 2.0; ctx.beginPath(); ctx.moveTo(e.x - gl2, e.y); ctx.lineTo(e.x + gl2, e.y); ctx.moveTo(e.x, e.y - gl2); ctx.lineTo(e.x, e.y + gl2); ctx.stroke(); }
-      } else {   // ember — a SHORT rising streak (a few px tail, not a long "line") + a hot head
-        ctx.strokeStyle = col; ctx.lineWidth = sz * 0.85; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - e.vx * dt * 2.4, e.y - e.vy * dt * 2.4); ctx.stroke();
-        ctx.fillStyle = _hsl(hue, sat, Math.min(98, lcol + 16), a); ctx.beginPath(); ctx.arc(e.x, e.y, sz * 0.5, 0, 6.2832); ctx.fill();
+    var spr = _emberGlow(), smk = lite ? null : _smokeSprite();
+    var frozen = st.hold > 0;                                    // held breath: freeze phase accumulators, draw last state
+    var flowE = (0.25 + bassN * 1.1 + (st.od || 0) * 0.5) * mf;
+    // ── the three planes, back to front. Per-axis update: outward velocity grows with distance from the VP. ──
+    for (var L = 0; L < 3; L++) {
+      var arr = L === 0 ? S.far : L === 1 ? S.mid : S.near;
+      var flow = reduce ? 0 : _FS_FLOW[L] * flowE;
+      for (var k = 0; k < arr.length; k++) {
+        var e = arr[k];
+        if (!frozen) {
+          if (L === 2) { e.px2 = e.px1; e.py2 = e.py1; e.px1 = e.x; e.py1 = e.y; }   // streak memory (drawn tail)
+          var fk = flow * dt;
+          e.x += (e.x - VPX) * fk + e.vx * dt + missK * w * 0.25 * dt * e.z;         // miss = lateral wind (3.1)
+          e.y += (e.y - VPY) * fk + e.vy * dt + (reduce ? -14 * dt : 0);             // reduce-motion: embers drift up in place
+          e.vx *= Math.pow(0.18, dt); e.vy *= Math.pow(0.18, dt);                    // burst velocity decays
+          e.life += dt;
+          if (e.life > e.maxlife || e.x < -w * 0.05 || e.x > w * 1.05 || e.y < -h * 0.05 || e.y > h * 1.05) {
+            _fsSpawn(e, L, fx); continue;
+          }
+        }
+        var lt = e.life / e.maxlife, envb = Math.min(1, lt * 6) * (1 - Math.max(0, lt - 0.8) * 5);   // quick in, late out
+        var heat = clamp(0.2 + bassN * 0.4 + beatPunch * 0.4 + comboGlow * 0.3, 0, 1);
+        var hue = e.gold ? 45 : _warmHue(heat, pal, 0);
+        if (L === 0) {                                           // FAR — one arc fill each
+          ctx.fillStyle = _hsl(hue, 80, 40 + bassN * 14, 0.3 * envb * calm);
+          ctx.beginPath(); ctx.arc(e.x, e.y, 1.4 * _dpr, 0, 6.2832); ctx.fill();
+        } else if (L === 1) {                                    // MID — sprite glow + core dot (smoke = soft puff)
+          if (e.kind === 2) {
+            var sa = Math.min(0.28, envb * (0.10 + bass * 0.14)) * calm;
+            if (smk && sa > 0.01) { ctx.globalAlpha = sa; var ssz = (26 + e.z * 30) * _dpr; ctx.drawImage(smk, e.x - ssz, e.y - ssz, ssz * 2, ssz * 2); ctx.globalAlpha = 1; }
+            continue;
+          }
+          var a1 = clamp(envb * (0.35 + level * 0.5 + beatPunch * 0.4) * calm, 0, 1);
+          if (a1 < 0.02) continue;
+          if (spr && !lite) { var gd = (6 + e.z * 10) * _dpr; ctx.globalAlpha = a1 * 0.6; ctx.drawImage(spr, e.x - gd * 0.5, e.y - gd * 0.5, gd, gd); ctx.globalAlpha = 1; }
+          ctx.fillStyle = _hsl(hue, _heatS(heat), e.kind === 1 ? 88 : _heatL(heat, 48), a1);
+          ctx.beginPath(); ctx.arc(e.x, e.y, (e.kind === 1 ? 1.1 : 1.7) * _dpr, 0, 6.2832); ctx.fill();
+        } else {                                                 // NEAR — drawn 3-segment streak + hot head (lite: flat dot)
+          var a2 = clamp(envb * (0.5 + level * 0.5) * calm, 0, 1);
+          if (a2 < 0.02) continue;
+          if (lite) { ctx.fillStyle = _hsl(hue, 90, 80, a2); ctx.beginPath(); ctx.arc(e.x, e.y, 2 * _dpr, 0, 6.2832); ctx.fill(); continue; }
+          ctx.strokeStyle = _hsl(hue, 92, 70 + e.z * 25, a2); ctx.lineWidth = (2.5 + e.z * 2) * _dpr; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(e.px2, e.py2); ctx.lineTo(e.px1, e.py1); ctx.lineTo(e.x, e.y); ctx.stroke();
+          ctx.fillStyle = _hsl(hue, 85, 95, a2);
+          ctx.beginPath(); ctx.arc(e.x, e.y, (1.6 + e.z * 1.4) * _dpr, 0, 6.2832); ctx.fill();
+        }
       }
     }
+    // ── tier-up CUTAWAY: the shockwave at the VP (fxLite: no ring; reduce-motion: st.cut is already 0) ──
+    if (st.cut > 0 && !lite) _shockRing(1 - st.cut, 40, VPX, VPY);
     ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ───────────────────────── WEAVE (Steady Hands) — pkg3.3 THE WEAVE (new Tier-I renderer) ─────────────
+  //  A loom of horizontal strings in perspective — LOW band = BOTTOM string (inverted _spec read). Strings
+  //  RING (350ms release — never strobe); combo IGNITES the loom bottom-up (the scene IS the progression
+  //  bar); a beat plucks a traveling light down the hottest string; a gold hand-blade SWEEPS on sections.
+  //  Opaque clear; motion drawn, never smeared. Fixes the two-levels-share-one-kaleido content bug.
+  function _bladeSprite() {
+    if (_state.blade) return _state.blade;
+    var s = document.createElement('canvas'); s.width = 300; s.height = 80;
+    var c = s.getContext('2d'), g = c.createLinearGradient(0, 0, 300, 0);
+    g.addColorStop(0, 'rgba(255,220,140,0)'); g.addColorStop(0.5, 'rgba(255,226,150,0.55)'); g.addColorStop(1, 'rgba(255,240,200,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 300, 80);
+    _state.blade = s; return s;
+  }
+  function drawWeave(dt, st) {
+    var w = _w, h = _h, lite = _lite(), reduce = _reduce();
+    var NS = lite ? 7 : 11, SEG = lite ? 20 : 40, mf = _motionFloor(st), missK = st.missK || 0;
+    var W = _state.wv;
+    if (!W || _state.dirty || W.NS !== NS) {
+      _state.dirty = false;
+      W = _state.wv = { NS: NS, S: [], pulses: [], pi: 0, sweep: -1, sweepCd: 0, swept: 0, dust: [] };
+      for (var i0 = 0; i0 < NS; i0++) W.S.push({ amp: 0 });
+      for (var p0 = 0; p0 < 3; p0++) W.pulses.push({ on: false, i: 0, x: 0 });                  // max 3 concurrent (ring buffer)
+      if (!lite) for (var d0 = 0; d0 < 40; d0++) W.dust.push({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01 });
+    }
+    var frozen = st.hold > 0;                                       // held breath: freeze phase accumulators
+    var sp = _spec(NS);
+    // attack/release per string — LOW = BOTTOM (string i reads band NS-1-i); miss drops the release to 0.12s (the loom goes quiet)
+    var rel = missK > 0.02 ? 0.12 : 0.35, hotI = 0, hotV = -1;
+    for (var i2 = 0; i2 < NS; i2++) {
+      var Sst = W.S[i2], v = sp[NS - 1 - i2] || 0;
+      if (!frozen) Sst.amp = Math.max(Sst.amp * Math.pow(0.5, dt / rel), Math.min(1.4, v * v * 1.6));
+      if (Sst.amp > hotV) { hotV = Sst.amp; hotI = i2; }
+    }
+    var strum = st.cut > 0 ? st.cut : 0;                            // cutaway STRUM: whole loom slams bright, fades with st.cut
+    if (!reduce && !frozen && beatPunch > 0.3) {                    // pluck — brightest-band string, ~0.45s crossing
+      var pl = W.pulses[W.pi]; if (!pl.on) { pl.on = true; pl.i = hotI; pl.x = 0; W.pi = (W.pi + 1) % W.pulses.length; }
+    }
+    W.sweepCd -= dt;                                                // hand-sweep — sections/heavy beats, 2.5s cooldown
+    if (!reduce && W.sweep < 0 && W.sweepCd <= 0 && (_secPulse > 0.8 || beatPunch > 0.55)) { W.sweep = 0; W.sweepCd = 2.5; W.swept = 0; }
+    if (st.cut > 0.9 && W.sweep < 0) { W.sweep = 0; W.swept = 0; }  // cutaway = a full-frame strum-blade run too
+    // 3.0(B) opaque clear (overscanned for the camera)
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
+    ctx.globalCompositeOperation = 'lighter';
+    var litFrom = NS - Math.round(clamp(st.tier, 0, 5) / 5 * NS);   // combo ignition bottom-up: lit if i >= litFrom
+    if (missK > 0.02) litFrom = Math.min(NS, litFrom + 1);          // display-only: the loom loses a string while dim
+    var glow = _emberGlow();
+    for (var si = 0; si < NS; si++) {
+      var Ss = W.S[si], amp = Math.min(1.4, Math.max(Ss.amp, strum * 1.0));
+      var yB = h * (0.14 + 0.76 * Math.pow((si + 1) / NS, 1.25));
+      var lit = si >= litFrom;
+      var alpha = (lit ? 0.33 : 0.18) + amp * 0.25 + strum * 0.3;
+      var lightC = 55 + amp * 35 + (lit ? 12 : 0) + strum * 24;     // strum drives lightness → 90+
+      for (var pass = lite ? 1 : 0; pass < 2; pass++) {             // glow pass (lighter) + pixel-snapped core; lite = core only
+        ctx.beginPath();
+        for (var g2 = 0; g2 <= SEG; g2++) {
+          var xx = -w * 0.04 + (w * 1.08) * (g2 / SEG), xf = xx / w;
+          var wave = Math.sin(xf * 3.14159 * (2 + si % 3)) * Math.sin(_t * (9 + si)) * amp * h * 0.012;
+          var bow = reduce ? 0 : Math.sin(xf * 3.14159) * h * 0.03 * Math.sin(_t * 0.45 + si * 0.3) * mf;   // breathing-cylinder bow rides the motion floor
+          var yy = yB + wave + bow;
+          if (pass === 1) yy = (yy | 0) + 0.5;                      // 3.0(E) pixel-snap the 1.6px core
+          if (g2 === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+        }
+        if (pass === 0) { ctx.strokeStyle = _hsl(38, 80, 60, clamp(0.05 + amp * 0.25, 0, 0.5)); ctx.lineWidth = (5 + amp * 8) * _dpr; }
+        else { ctx.strokeStyle = _hsl(40, 72, clamp(lightC, 30, 96), clamp(alpha, 0, 1)); ctx.lineWidth = 1.6 * _dpr; }
+        ctx.stroke();
+      }
+    }
+    for (var pu = 0; pu < W.pulses.length; pu++) {                  // traveling plucks (reduce-motion: stationary node flash)
+      var P2 = W.pulses[pu]; if (!P2.on) continue;
+      if (!frozen) P2.x += dt * 2.2;
+      if (P2.x >= 1) { P2.on = false; continue; }
+      var py0 = h * (0.14 + 0.76 * Math.pow((P2.i + 1) / NS, 1.25));
+      var pxx = reduce ? w * 0.5 : (-w * 0.04 + w * 1.08 * P2.x);
+      var pa = Math.sin(P2.x * 3.14159);
+      if (glow && !lite) { var pgd = 26 * _dpr; ctx.globalAlpha = 0.5 * pa; ctx.drawImage(glow, pxx - pgd / 2, py0 - pgd / 2, pgd, pgd); ctx.globalAlpha = 1; }
+      ctx.fillStyle = _hsl(44, 90, 92, 0.8 * pa); ctx.beginPath(); ctx.arc(pxx, py0, 2.5 * _dpr, 0, 6.2832); ctx.fill();
+    }
+    if (W.sweep >= 0) {                                             // the gold hand-blade — 320ms crossing at 18°
+      if (!frozen) W.sweep += dt / 0.32;
+      if (W.sweep >= 1) W.sweep = -1;
+      else {
+        var bx = -w * 0.1 + (w * 1.2) * W.sweep;
+        ctx.save(); ctx.translate(bx, h * 0.5); ctx.rotate(-18 * Math.PI / 180);
+        if (lite) { ctx.fillStyle = 'rgba(255,226,150,0.25)'; ctx.fillRect(-16 * _dpr, -h * 0.6, 32 * _dpr, h * 1.2); }   // flat-gradient-ish band on lite
+        else { ctx.globalAlpha = 0.75; ctx.drawImage(_bladeSprite(), -150, -h * 0.6, 300, h * 1.2); ctx.globalAlpha = 1; }
+        ctx.restore();
+        var crossed = Math.min(NS - 1, Math.floor(W.sweep * NS));   // kick each crossed string's amp +0.5
+        while (W.swept <= crossed) { W.S[W.swept].amp = Math.min(1.4, W.S[W.swept].amp + 0.5); W.swept++; }
+      }
+    }
+    if (!lite) {                                                    // dust — 40 slow 1px motes
+      ctx.fillStyle = _hsl(40, 40, 80, clamp(0.1 + trebleN * 0.2, 0, 0.35));
+      for (var dm = 0; dm < W.dust.length; dm++) {
+        var Dd = W.dust[dm];
+        if (!frozen && !reduce) { Dd.y -= Dd.v * dt * mf * 8; if (Dd.y < 0) { Dd.y = 1; Dd.x = Math.random(); } }
+        ctx.fillRect(((Dd.x * w) | 0) + 0.5, ((Dd.y * h) | 0) + 0.5, _dpr, _dpr);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ───────────────────────── DAWN (First Light) — pkg3.4 DAWN BREAK (new Tier-I renderer; the showcase) ──
+  //  THE SUN IS THE COMBO METER: below the horizon at tier 0 → blazing gold disc at tier 5. Stars twinkle on
+  //  treble and DISSOLVE with elevation (the player killed the night). A one-point-perspective fretboard
+  //  scrolls toward the horizon (bass = speed) — the constant low z-flight + the 3.0 beat z-pump is the vertigo.
+  function _raySprite() {
+    if (_state.ray) return _state.ray;
+    var s = document.createElement('canvas'); s.width = s.height = 256;
+    var c = s.getContext('2d');
+    var g = c.createRadialGradient(128, 256, 0, 128, 256, 256);
+    g.addColorStop(0, 'rgba(255,236,190,0.85)'); g.addColorStop(1, 'rgba(255,236,190,0)');
+    var half = Math.tan(7 * Math.PI / 180) * 256;                   // ONE cached 14°-clip wedge (11 fanned draws/frame)
+    c.beginPath(); c.moveTo(128, 256); c.lineTo(128 - half, 0); c.lineTo(128 + half, 0); c.closePath();
+    c.clip(); c.fillStyle = g; c.fillRect(0, 0, 256, 256);
+    _state.ray = s; return s;
+  }
+  function drawDawn(dt, st) {
+    var w = _w, h = _h, lite = _lite(), reduce = _reduce();
+    var HY = h * 0.62, cx = w * 0.5, mf = _motionFloor(st), missK = st.missK || 0;
+    var D = _state.dw;
+    if (!D || _state.dirty) {
+      _state.dirty = false;
+      D = _state.dw = { elev: 0, sky: null, skyElev: -1, stars: [], scroll: 0, flash: 0 };
+      for (var i0 = 0; i0 < 70; i0++) D.stars.push({ x: Math.random(), y: Math.random() * 0.55, tw: Math.random() * 6.28 });   // precomputed, top 55%
+    }
+    var frozen = st.hold > 0;
+    // the sun eases toward the tier; the cutaway overshoots +0.2 and eases back — the sun JUMPS a notch
+    var elevT = clamp(clamp(st.tier, 0, 5) / 5 + (st.cut > 0 ? 0.2 * st.cut : 0), 0, 1.2);
+    if (!frozen) D.elev += (elevT - D.elev) * Math.min(1, dt * 1.5);
+    var elev = clamp(D.elev * (1 - missK * 0.15), 0, 1.2);          // miss: the sky cools
+    var sunY = HY + h * 0.10 - elev * h * 0.22;
+    if (!D.sky || Math.abs(elev - D.skyElev) > 0.03) {              // sky gradient CACHED — rebuilt only on real elevation moves
+      D.skyElev = elev;
+      var g0 = ctx.createLinearGradient(0, -h * 0.06, 0, HY);
+      g0.addColorStop(0, '#000');                                   // black → warm dark → horizon amber (all warm hues)
+      g0.addColorStop(0.55, _hsl(8 + elev * 14, 50 + elev * 20, 4 + elev * 9, 1));
+      g0.addColorStop(1, _hsl(20 + elev * 16, 70, 8 + elev * 24, 1));
+      D.sky = g0;
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);   // 3.0(B) opaque clear
+    ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06); ctx.clip();   // sun/sky clipped → the sun rises BEHIND the horizon
+    ctx.fillStyle = D.sky; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06);
+    if (!lite) {                                                    // stars — treble twinkles them, elevation dissolves them
+      for (var s2 = 0; s2 < D.stars.length; s2++) {
+        var S3 = D.stars[s2];
+        var sa = (0.25 + 0.35 * Math.sin(_t * 2 + S3.tw)) * trebleN * (1 - Math.min(1, elev));
+        if (sa < 0.02) continue;
+        ctx.fillStyle = 'rgba(255,240,220,' + sa.toFixed(3) + ')';
+        ctx.fillRect(((S3.x * w) | 0) + 0.5, ((S3.y * h) | 0) + 0.5, _dpr, _dpr);
+      }
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    if (!lite) {                                                    // god-rays — 11 fanned draws of the one cached wedge
+      var ray = _raySprite();
+      var ra = clamp(0.10 + midN * 0.25 + (st.od || 0) * 0.3, 0, 0.7);
+      var sweepOff = (st.od || 0) > 0.3 ? Math.sin(_t * 0.5) * 0.2 : 0;   // OD adds a slow sweep
+      var rw = 64 * _dpr, rh = h * 0.42 * (0.5 + midN * 0.9);
+      for (var rk = 0; rk < 11; rk++) {
+        var angR = ((rk - 5) * 12) * Math.PI / 180 + sweepOff;      // −90°±60° fan (0 = straight up)
+        ctx.save(); ctx.translate(cx, sunY); ctx.rotate(angR); ctx.globalAlpha = ra;
+        ctx.drawImage(ray, -rw / 2, -rh, rw, rh); ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+    var glow = _emberGlow();                                        // the sun — glow sprite + crisp core
+    var sd = h * (0.18 + Math.min(1, elev) * 0.16 + bassN * 0.03);
+    if (glow) { ctx.globalAlpha = clamp(0.55 + elev * 0.4, 0, 1); ctx.drawImage(glow, cx - sd, sunY - sd, sd * 2, sd * 2); ctx.globalAlpha = 1; }
+    if (!lite && elev > 0.02) { ctx.fillStyle = _hsl(38, 100, 88, 1); ctx.beginPath(); ctx.arc(cx, sunY, h * 0.035 * Math.min(1, elev), 0, 6.2832); ctx.fill(); }
+    ctx.restore();                                                  // sky clip off (restore also resets gco)
+    ctx.globalCompositeOperation = 'lighter';
+    // GROUND — the endless one-point-perspective fretboard (bass = scroll speed × the earned-motion floor)
+    if (!frozen && !reduce) D.scroll += dt * (0.05 + bassN * 0.22 + (st.od || 0) * 0.1) * mf;
+    if (!frozen) D.flash = beatPunch > 0.4 ? 1 : D.flash * 0.85;    // beat: the fret line nearest p=0.85 flares gold
+    var FL = lite ? 12 : 22, nearestI = -1, nearestD = 9, f, p;
+    for (f = 0; f < FL; f++) { p = ((f / FL + D.scroll) % 1 + 1) % 1; var dd = Math.abs(p - 0.85); if (dd < nearestD) { nearestD = dd; nearestI = f; } }
+    for (f = 0; f < FL; f++) {
+      p = ((f / FL + D.scroll) % 1 + 1) % 1;
+      var fy = ((HY + (h - HY) * p * p) | 0) + 0.5;                 // 3.0(E) pixel-snap
+      var halfW = (w * 0.56) * p + w * 0.02;
+      var isNear = f === nearestI && D.flash > 0.05;
+      ctx.strokeStyle = isNear ? _hsl(44, 90, clamp(30 + p * 20 + D.flash * 40, 0, 95), 0.5 + D.flash * 0.4)
+                               : _hsl(24, 60, 30 + p * 20, 0.30 + p * 0.28);
+      ctx.lineWidth = (0.8 + p * 2.4) * _dpr;
+      ctx.beginPath(); ctx.moveTo(cx - halfW, fy); ctx.lineTo(cx + halfW, fy); ctx.stroke();
+    }
+    for (var r2 = 0; r2 < 6; r2++) {                                // six string-rails fanning to the bottom corners
+      var rt = r2 / 5, ex = -w * 0.04 + (w * 1.08) * rt;
+      ctx.strokeStyle = _hsl(30, 60, 40, 0.15 + bassN * 0.2); ctx.lineWidth = 1.2 * _dpr;
+      ctx.beginPath(); ctx.moveTo(cx, HY); ctx.lineTo(ex, h * 1.04); ctx.stroke();
+    }
+    if (st.cut > 0 && !lite) {                                      // cutaway — a light band sweeps from HY to both edges
+      var ce = 1 - Math.pow(1 - (1 - st.cut), 3), bh = (3 + 30 * st.cut) * _dpr;
+      var bandU = HY - (HY + h * 0.06) * ce, bandD = HY + (h * 1.04 - HY) * ce;
+      ctx.fillStyle = _hsl(46, 95, 80, 0.5 * st.cut);
+      ctx.fillRect(-w * 0.04, bandU - bh / 2, w * 1.08, bh);
+      ctx.fillRect(-w * 0.04, bandD - bh / 2, w * 1.08, bh);
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   // ───────────────────────── KALEIDOSCOPE (First Light / Steady Hands) — N-fold MIRROR symmetry built from glowing particles that MORPHS its geometry through the song ──
@@ -440,9 +696,14 @@
     ctx.lineCap = 'butt'; ctx.globalCompositeOperation = 'source-over';
   }
 
-  var RENDERERS = { warp: drawWarp, fractal: drawWarp, waveform: drawWaveform, ember: drawEmber,   // warp/waveform kept registered (future use); the Easy levels now use the kaleidoscope
-    kaleido: function (dt, st) { return drawKaleido(dt, st, 0); }, kaleido2: function (dt, st) { return drawKaleido(dt, st, 1); } };
+  var RENDERERS = { warp: drawWarp, fractal: drawWarp, waveform: drawWaveform, ember: drawEmber,   // warp/waveform/kaleido* stay REGISTERED (legacy levels may reference them) but are demoted from Tier-I
+    kaleido: function (dt, st) { return drawKaleido(dt, st, 0); }, kaleido2: function (dt, st) { return drawKaleido(dt, st, 1); },
+    weave: drawWeave, dawn: drawDawn };   // pkg3 Tier-I: dawn (First Light) · weave (Steady Hands) · ember rewritten in-place (Ember Drift)
 
+  // pkg3.0: renderers that obey the CRISP contract (opaque clear, drawn tails) ride the camera; the legacy
+  // trail-fill renderers (warp/waveform/kaleido — registered-but-unused for Tier-I) must NOT be transformed:
+  // a rotating/zooming camera under a translucent trail fill double-images the whole frame.
+  var CRISP = { ember: 1, weave: 1, dawn: 1 };
   function _drawOnce(dt) {
     _t += dt;
     var st;
@@ -452,10 +713,33 @@
     _secFast = lerp(_secFast, level, 0.22); _secSlow = lerp(_secSlow, level, 0.015); _secPulse *= 0.90;
     if (Math.abs(_secFast - _secSlow) > 0.18 && (_t - _lastSection) > 5.5 && beatPunch > 0.42) { _lastSection = _t; _spinDir *= -1; _secPulse = 1; }   // a real section change → flip the spin + fire a one-shot pulse
     if (beatPunch > _kick) _kick = beatPunch; else _kick *= 0.80;   // fast-attack beat env → instant pump that snaps back
+    // pkg3.1 CUTAWAY state machine (runs in BOTH fed + live paths so _feed can drive it):
+    // tier-UP at combo≥25 → 90ms held breath (_hold) then a 600ms shockwave (_cut 1→0); tier DROP kills it.
+    var tierNow = st.tier | 0, comboNow = st.combo | 0;
+    if (tierNow > _prevTier && comboNow >= 25) { _cut = 1; _hold = 0.09; }
+    else if (tierNow < _prevTier) { _cut = 0; _hold = 0; }
+    _prevTier = tierNow;
+    if (comboNow < _prevComboSt - 2) _missK = 1;                    // hoisted from ember (3.1): every renderer dims on a break
+    _prevComboSt = comboNow;
+    _missK = Math.max(0, _missK - dt / 1.5);
+    if (_hold > 0) _hold = Math.max(0, _hold - dt);                 // held breath FIRST…
+    else if (_cut > 0) _cut = Math.max(0, _cut - dt / 0.6);         // …then the 600ms wave
+    st.cut = _reduce() ? 0 : _cut;                                  // reduce-motion: no ring (state change still lands, just uneventfully)
+    st.hold = _hold; st.missK = _missK;
+    var crisp = !!CRISP[_type];
+    if (crisp) {
+      _updateCam(dt, st);
+      // one setTransform: rotate(tilt)+scale(z) about the frame center, plus the LFO drift
+      var cosT = Math.cos(CAM.tilt) * CAM.z, sinT = Math.sin(CAM.tilt) * CAM.z;
+      ctx.setTransform(cosT, sinT, -sinT, cosT,
+        _w * 0.5 - (cosT * _w * 0.5 - sinT * _h * 0.5) + CAM.dx,
+        _h * 0.5 - (sinT * _w * 0.5 + cosT * _h * 0.5) + CAM.dy);
+    }
     (RENDERERS[_type] || drawWaveform)(dt, st);
+    if (crisp) ctx.setTransform(1, 0, 0, 1, 0, 0);                  // camera off before the vignette/punch overlays
     if (!_reduce()) _punch(st);
     _vignette();
-    _audioDbg = { bass: bass, mid: mid, treble: treble, bassN: bassN, level: level, beat: beat, beatPunch: beatPunch, od: od, comboHue: comboHue, comboGlow: comboGlow, combo: st.combo, tier: st.tier, spinDir: _spinDir, secPulse: _secPulse, kick: _kick };
+    _audioDbg = { bass: bass, mid: mid, treble: treble, bassN: bassN, level: level, beat: beat, beatPunch: beatPunch, od: od, comboHue: comboHue, comboGlow: comboGlow, combo: st.combo, tier: st.tier, spinDir: _spinDir, secPulse: _secPulse, kick: _kick, cut: st.cut, hold: st.hold, missK: st.missK, camZ: CAM.z, camTilt: CAM.tilt };
   }
   function _frame(now) {
     _raf = 0;
@@ -480,6 +764,7 @@
       bass = mid = treble = level = beat = beatPunch = 0; bassN = midN = trebleN = 0; comboHue = 0; comboGlow = 0; od = 0;
       _spinDir = 1; _secFast = 0; _secSlow = 0; _secPulse = 0; _lastSection = -99; _kick = 0;   // fresh section/spin state per level (don't inherit the previous level's direction or a stale cooldown)
       _fluxMean = 0; _fluxVar = 1; _lastBeat = 0; _prevFreq = null; _mx = { b: 0.15, m: 0.15, t: 0.15 };
+      _prevTier = 0; _cut = 0; _hold = 0; _missK = 0; _prevComboSt = 0; CAM.z = 1; CAM.tilt = 0; CAM.dx = 0; CAM.dy = 0;   // pkg3.1: fresh cutaway/camera per level
       // toggle the solid-black backdrop base on the ROOT element — tied to the canvas being active, so EVERY path that
       // activates a reactive backdrop gets it (kills the warm-gradient + scrim "lines and blocks" the owner can't stand).
       try { document.documentElement.classList[type ? 'add' : 'remove']('rr-procbg-on'); } catch (e) {}
