@@ -2149,7 +2149,7 @@
       var key = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SUPABASE_KEY) || '';
       if (!base || !key) { _notifOK = false; return null; }
       var tk = await getToken(); if (!tk) return null;                    // signed out → try again later (not a hard fail)
-      var since = new Date(Date.now() - 120000).toISOString();           // fresh calls only (<2min)
+      var since = new Date(Date.now() - 180000).toISOString();           // build113 fix: widened 2min->3min so a call sent while the receiver was mid-song (missed by the 30s poll cadence) still surfaces on return to menus
       var r = await fetch(base.replace(/\/$/, '') + '/rest/v1/notifications?select=*&type=eq.live_match_invite&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=3',
         { headers: { apikey: key, Authorization: 'Bearer ' + tk } });
       if (!r.ok) { if (_notifOK === null) _notifOK = false; return null; }

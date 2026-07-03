@@ -2084,6 +2084,10 @@
   function _inMenus() { var g = $('game'), ld = $('loading'); return !((g && g.classList.contains('active')) || (ld && ld.classList.contains('active'))); }
   function _ringStart() { if (_ringT) return; _ringT = setInterval(_ringPoll, 30000); setTimeout(_ringPoll, 5000); }
   function _ringPoll() {
+    // build113 fix: self-heal — if _ringUp is stuck true but #mpx-ring isn't actually in the DOM (e.g. some other
+    // teardown wiped it out from under us), the old code returned here FOREVER and no future call could ever ring
+    // again ("stuck alarm" / "call won't go through"). Detect the desync and dismiss instead of permanently blocking.
+    if (_ringUp && !document.getElementById('mpx-ring')) { _dismissRing(); }
     if (_ringUp || !ME.signedIn || !_inMenus()) return;
     if (!(window.RhythmCatalog && window.RhythmCatalog.notifRecent)) return;
     window.RhythmCatalog.notifRecent().then(function (rows) {
@@ -2095,9 +2099,19 @@
         if (nrow.read === true || nrow.is_read === true || nrow.read_at) continue;   // honor whichever unread shape exists
         var d = nrow.data || nrow.payload || nrow.meta || {};
         if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+        // build113 fix: explicit client-side TARGET guard — defense-in-depth even if backend RLS on
+        // `notifications` is missing/misconfigured (root cause of "rings everyone" + "sender hears it").
+        // Field name is UNCONFIRMED (Lovable is confirming recipient_id vs target_user_id vs user_id) — check
+        // every plausible field and FAIL OPEN (don't skip) only when NONE of them are present on the row, so a
+        // legit call isn't silently dropped while the backend field name is still being nailed down.
+        var _recip = d.target_user_id || d.to_id || d.recipient_id || d.user_id || (nrow && (nrow.user_id || nrow.recipient_id)) || null;
+        if (_recip != null && String(_recip) !== String(ME.id)) continue;   // addressed to someone else — skip
         var rid = d.room_id || d.room || null;
         if (!rid) { var mm = null; try { mm = JSON.stringify(nrow).match(/mproom=([a-z0-9]+)/i); } catch (e) {} if (mm) rid = mm[1]; }
         if (!rid) continue;                                        // schema doesn't carry a joinable room → skip (never a dead ACCEPT)
+        var ridKey = 'r:' + String(rid).replace(/[^a-z0-9]/gi, '');
+        if (_ringSeen[ridKey]) continue;                           // build113 fix: dedupe by ROOM too, not just notif id —
+        _ringSeen[ridKey] = 1;                                     // stops a retried /challenge (new nid, same room) from re-ringing
         var from = d.from_name || d.caller_name || d.sender_name || nrow.title || 'A rival';
         _showRing(String(from).slice(0, 22), String(rid).replace(/[^a-z0-9]/gi, ''));
         break;
@@ -2115,6 +2129,8 @@
     var dec = document.createElement('button'); dec.type = 'button'; dec.className = 'mr-decline'; dec.textContent = 'Decline';
     btns.appendChild(acc); btns.appendChild(dec); card.appendChild(btns);
     document.body.appendChild(card);
+    try { if (_ringAudio) { _ringAudio.pause(); _ringAudio.src = ''; } } catch (e) {}   // build113 fix: belt-and-suspenders —
+    _ringAudio = null;                                              // never orphan a prior Audio object on any reentry path
     try {                                                          // ring tone — looped at 0.85, muted players stay silent
       if (!(window.RhythmGame && window.RhythmGame.isMuted && window.RhythmGame.isMuted())) {
         _ringAudio = new Audio('assets/battle-call.mp3'); _ringAudio.loop = true; _ringAudio.volume = 0.85;
@@ -2150,7 +2166,16 @@
   // over live gameplay for up to 45s. Watch #game/#loading for the 'active' class (mirrors the syncActive observer
   // pattern) and dismiss the moment either goes live.
   try {
-    var _rgObsCb = function () { if (_ringUp && !_inMenus()) _dismissRing(); };
+    var _rgWasInMenus = _inMenus();
+    var _rgObsCb = function () {
+      if (_ringUp && !_inMenus()) _dismissRing();
+      // build113 fix: on the !inMenus -> inMenus transition (song ended / player backed out to menus), poll
+      // immediately instead of waiting up to 30s for the next interval tick — otherwise a call sent while the
+      // receiver was mid-song could sit unseen for up to 30s after they're back and able to see it.
+      var _nowInMenus = _inMenus();
+      if (_nowInMenus && !_rgWasInMenus) { try { _ringPoll(); } catch (e) {} }
+      _rgWasInMenus = _nowInMenus;
+    };
     [$('game'), $('loading')].forEach(function (el) { if (el) new MutationObserver(_rgObsCb).observe(el, { attributes: true, attributeFilter: ['class'] }); });
   } catch (e) {}
 
