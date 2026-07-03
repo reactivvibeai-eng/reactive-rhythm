@@ -77,8 +77,13 @@
       if (!access_token || !refresh_token) return false;   // need both for setSession
 
       try {
-        await supa.auth.setSession({ access_token: access_token, refresh_token: refresh_token });
-        return true;
+        var _r = await supa.auth.setSession({ access_token: access_token, refresh_token: refresh_token });
+        // build115 review diagnostic: supabase-js SHOULD auto-recover a same-origin/default-storageKey session, so
+        // this manual adopt is belt-and-suspenders — but the live "shows guest" symptom means the boot-time session
+        // read is somehow missing it. Log ONE line so a real signed-in-on-site playtest reveals whether adopt actually
+        // ran + whether setSession accepted the token (a rejected refresh_token resolves with .error, not a throw).
+        console.info('[rr-auth] adopted site session from localStorage', (_r && _r.error) ? ('(rejected: ' + _r.error.message + ')') : '(ok)');
+        return !(_r && _r.error);
       } catch (e) { console.warn('rr: site-session adopt failed', e); return false; }
     } catch (e) { return false; }   // never let a bad token block boot
   }
