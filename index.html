@@ -3402,18 +3402,6 @@
     background: linear-gradient(180deg, rgba(10,7,6,0.66) 0%, rgba(10,7,6,0.16) 20%, transparent 44%, rgba(10,7,6,0.58) 72%, rgba(10,7,6,0.94) 100%);
   }
   .icon-btn.muted { border-color: var(--crimson); color: var(--crimson); }
-  .start-embers { position: absolute; inset: 0; z-index: 4; }
-  .start-embers span {
-    position: absolute; bottom: -12px;
-    width: 4px; height: 4px; border-radius: 50%;
-    background: #ff1f2e; box-shadow: 0 0 8px #ff1f2e;
-    opacity: 0; animation: ember linear infinite;
-  }
-  @keyframes ember {
-    0% { opacity: 0; transform: translateY(0) scale(1); }
-    12% { opacity: 0.9; }
-    100% { opacity: 0; transform: translateY(-94vh) scale(0.2); }
-  }
 
   .start-fore {
     position: absolute; inset: 0; z-index: 2;
@@ -5046,7 +5034,6 @@
       <canvas class="start-ignite" id="start-ignite" aria-hidden="true"></canvas>
       <div class="start-ignite-flash" id="start-ignite-flash" aria-hidden="true"></div>
       <div class="start-grade" aria-hidden="true"></div>
-      <div class="start-embers" id="start-embers"></div>
       <div class="start-scrim"></div>
     </div>
     <div class="start-fore">
@@ -10472,21 +10459,12 @@
     }
   } catch (e) {}
 
-  // generate rising ember particles
-  var host = document.getElementById('start-embers');
-  if (host) {
-    for (var i = 0; i < 9; i++) {
-      var e = document.createElement('span');
-      var dur = 3.5 + Math.random() * 4;
-      e.style.left = (Math.random() * 100) + '%';
-      e.style.animationDuration = dur + 's';
-      e.style.animationDelay = (-Math.random() * dur) + 's';
-      var sz = 2 + Math.random() * 4;
-      e.style.width = sz + 'px'; e.style.height = sz + 'px';
-      if (Math.random() < 0.3) { e.style.background = '#e0a93f'; e.style.boxShadow = '0 0 8px #e0a93f'; }
-      host.appendChild(e);
-    }
-  }
+  // build117 p2 (playtest-4 spec: start-embers): the old DOM `#start-embers` span-particle field was
+  // deleted — it was a THIRD, uncoordinated warm-particle system (flat dots, DOM+CSS animation) layered
+  // on top of the canvas-drawn `.start-flames` field and the `ember-rise` UiFx burst below, none of
+  // which shared a palette ramp or motion curve. Consolidated down to the one refined flame canvas
+  // (see spawnFlame()/flameLoop() below) which now carries a proper 3-stop heat gradient + flame-lick
+  // silhouette instead of flat dots.
 
   // ---- SUPERNOVA / STAR IGNITION (procedural canvas, crimson/ember/chrome) ----
   // Plays once on first paint of #start, then settles into the rising-flame field below.
@@ -10634,24 +10612,51 @@
   // dev flag: ?intro=replay re-runs the ignition (test-only — strip with other ?flags before launch)
   try { if (/[?&]intro=replay/.test(location.search)) RhythmIntro.replay(); } catch (e) {}
 
-  // animated crimson flames rising behind the mascot
+  // build117 p2 (playtest-4 spec: start-embers): animated crimson flames rising behind the mascot —
+  // REFINED (not removed) to actually read as fire instead of soft drifting circles. Reuses patterns
+  // already proven elsewhere in this file: the supernova's sparkColor() heat-ramp / 'lighter' composite
+  // (RhythmIntro, above) and procbg.js's ember renderer. Changes vs. the old flat 2-stop blob:
+  //   1) 3-stop heat gradient (white-hot core → ember → crimson tail) driven by age `k`, not just alpha —
+  //      particles visibly COOL as they rise instead of only fading.
+  //   2) ellipse() squash (ry ≈ 0.6·rx) + radius taper near end-of-life → a flame-lick silhouette, not a dot.
+  //   3) horizontal shear that grows with `k` (vx drift scales by 1+k) → wisps narrow into a taper near
+  //      the top, matching real flame motion.
+  // Perf/behavior unchanged: same hard cap + 2/frame throttle. NEW: gated by reduce-motion/fxLite (CLAUDE.md
+  // convention for anything motion/particle) — draws a single calm static ember bed instead of animating.
   var fcv = document.getElementById('start-flames');
   var flamesRunning = false;
   if (fcv) {
     var fctx = fcv.getContext('2d');
     var fdpr = Math.min(2, window.devicePixelRatio || 1);
     var parts = [];
+    function fReduce() {
+      try {
+        if (document.documentElement.classList.contains('rr-reduce-motion')) return true;
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+        var fs = window.RhythmGame && window.RhythmGame.getSettings && window.RhythmGame.getSettings();
+        if (fs && (fs.reduceMotion || fs.fxLite)) return true;
+      } catch (e) {}
+      return false;
+    }
+    // fsize() resets the canvas drawing buffer (which WIPES any already-drawn bitmap, canvas-standard
+    // behavior) — so any static (reduced-motion) frame must be RE-drawn after every fsize() call, not
+    // just drawn once up front, or the resize timers below blank it out with nothing to repaint.
     function fsize() {
       var r = fcv.getBoundingClientRect();
       fcv.width = Math.max(1, Math.floor(r.width * fdpr));
       fcv.height = Math.max(1, Math.floor(r.height * fdpr));
+      if (fReduce()) staticEmberBed();
     }
-    fsize();
-    window.addEventListener('resize', fsize);
-    window.addEventListener('load', fsize);
-    // timer fallbacks in case layout wasn't resolved at parse time (and timers
-    // fire even if requestAnimationFrame is throttled)
-    setTimeout(fsize, 60); setTimeout(fsize, 250); setTimeout(fsize, 700);
+    // 3-stop heat gradient by age `k` (0=freshly spawned/hottest, 1=about to die/coolest) — mirrors
+    // RhythmIntro's sparkColor() heat-ramp grammar: white-hot core → ember → crimson tail.
+    function heatStops(k, a) {
+      var hot = Math.max(0, 1 - k * 1.15);   // cools faster than it fades
+      return {
+        core: 'rgba(' + Math.round(255) + ',' + Math.round(255 - 60 * (1 - hot)) + ',' + Math.round(235 - 160 * (1 - hot)) + ',' + (a * 0.9) + ')',
+        mid:  'rgba(255,' + Math.round(60 + 62 * hot) + ',' + Math.round(40 + 34 * hot) + ',' + (a * 0.75) + ')',
+        tail: 'rgba(' + Math.round(163 + 92 * hot) + ',' + Math.round(6 + 25 * hot) + ',' + Math.round(15 + 17 * hot) + ',0)'
+      };
+    }
     function spawnFlame() {
       var W = fcv.width, H = fcv.height, pick = Math.random(), cxf;
       if (pick < 0.52) cxf = 0.5 + (Math.random() - 0.5) * 0.52;            // center column (behind character)
@@ -10664,6 +10669,21 @@
         r: (16 + Math.random() * 30) * fdpr, seed: Math.random() * 6.28
       });
     }
+    function staticEmberBed() {   // reduced-motion: one calm draw, no rAF loop (called BY fsize(), never calls it — avoids mutual recursion)
+      var W = fcv.width, H = fcv.height;
+      fctx.clearRect(0, 0, W, H);
+      fctx.globalCompositeOperation = 'lighter';
+      var spots = [0.28, 0.5, 0.72];
+      for (var i = 0; i < spots.length; i++) {
+        var x = spots[i] * W, y = H * 0.93, rad = 44 * fdpr;
+        var g = fctx.createRadialGradient(x, y, 0, x, y, rad);
+        g.addColorStop(0, 'rgba(255,210,190,0.32)');
+        g.addColorStop(0.4, 'rgba(255,122,74,0.22)');
+        g.addColorStop(1, 'rgba(163,6,15,0)');
+        fctx.fillStyle = g; fctx.beginPath(); fctx.arc(x, y, rad, 0, 6.2832); fctx.fill();
+      }
+      fctx.globalCompositeOperation = 'source-over';
+    }
     var fLast = performance.now(), fraf = 0;
     function flameLoop(now) {
       if (!flamesRunning) return;
@@ -10674,7 +10694,8 @@
       var bw = Math.max(1, Math.floor(br.width * fdpr)), bh = Math.max(1, Math.floor(br.height * fdpr));
       if (fcv.width !== bw || fcv.height !== bh) { fcv.width = bw; fcv.height = bh; }
       var dt = Math.min(0.05, (now - fLast) / 1000); fLast = now;
-      if (parts.length < 110) { for (var s = 0; s < 2; s++) spawnFlame(); }   /* throttle: 2/frame + a hard cap (was 3/frame uncapped → ~290 steady) — perf on the 30/60fps target */
+      var cap = 110;
+      if (parts.length < cap) { for (var s = 0; s < 2; s++) spawnFlame(); }   /* throttle: 2/frame + a hard cap (was 3/frame uncapped → ~290 steady) — perf on the 30/60fps target */
       fctx.clearRect(0, 0, fcv.width, fcv.height);
       fctx.globalCompositeOperation = 'lighter';
       for (var i = parts.length - 1; i >= 0; i--) {
@@ -10682,22 +10703,37 @@
         if (p.age >= p.life) { parts.splice(i, 1); continue; }
         var k = p.age / p.life;
         p.y += p.vy * (1 + k * 0.7);
-        p.x += p.vx + Math.sin(now / 300 + p.seed) * 0.7 * fdpr;
-        var rad = p.r * (0.6 + k * 1.0);
-        var a = (1 - k) * 0.45;
-        var g = fctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rad);
-        g.addColorStop(0, 'rgba(255,96,64,' + a + ')');
-        g.addColorStop(0.4, 'rgba(214,28,32,' + (a * 0.7) + ')');
-        g.addColorStop(1, 'rgba(120,8,14,0)');
+        // horizontal shear grows with age — wisps narrow/drift into a taper near the top (real flame motion)
+        p.x += p.vx * (1 + k * 1.6) + Math.sin(now / 300 + p.seed) * 0.7 * fdpr;
+        var a = (1 - k) * 0.5;
+        // radius TAPERS near end-of-life instead of only fading alpha — flame-lick silhouette
+        var growK = Math.min(1, k / 0.35);                 // quick bloom in the first ~35% of life
+        var shrinkK = k > 0.55 ? (k - 0.55) / 0.45 : 0;     // then taper away over the back half
+        var rad = p.r * (0.55 + growK * 0.85) * (1 - shrinkK * 0.7);
+        var rx = rad, ry = rad * 0.6;                        // squash vertically — ellipse, not a circle
+        var hs = heatStops(k, a);
+        var g = fctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rx);
+        g.addColorStop(0, hs.core);
+        g.addColorStop(0.42, hs.mid);
+        g.addColorStop(1, hs.tail);
         fctx.fillStyle = g;
-        fctx.beginPath(); fctx.arc(p.x, p.y, rad, 0, 6.2832); fctx.fill();
+        fctx.beginPath(); fctx.ellipse(p.x, p.y, rx, ry, 0, 0, 6.2832); fctx.fill();
       }
       fctx.globalCompositeOperation = 'source-over';
       if (parts.length > 150) parts.splice(0, parts.length - 150);
     }
-    flamesRunning = true;
-    fLast = performance.now();
-    fraf = requestAnimationFrame(flameLoop);
+    fsize();   // first size (and, if reduced, first static draw) — runs AFTER staticEmberBed/flameLoop are defined (hoisted anyway, but kept in reading order)
+    window.addEventListener('resize', fsize);
+    window.addEventListener('load', fsize);
+    // timer fallbacks in case layout wasn't resolved at parse time (and timers fire even if
+    // requestAnimationFrame is throttled) — each re-runs fsize(), which re-draws the static bed
+    // when reduced so the resize buffer-reset never leaves the canvas blank.
+    setTimeout(fsize, 60); setTimeout(fsize, 250); setTimeout(fsize, 700);
+    if (!fReduce()) {
+      flamesRunning = true;
+      fLast = performance.now();
+      fraf = requestAnimationFrame(flameLoop);
+    }
   }
 
   var dismissed = false;
@@ -10954,17 +10990,10 @@
     state: function () { return { loaded: !!p, active: p ? p.active.length : -1, canvas: !!cv }; },
     draw: function () { if (p && cx) { cx.clearRect(0, 0, innerWidth, innerHeight); return p.draw(cx, performance.now()); } return -1; }
   }; } catch (e) {}
-  // ---- TITLE AMBIENCE: two slow ember columns rising behind the lockup (cleared on ENTER) ----
-  try {
-    var st = document.getElementById('start');
-    if (st && st.classList.contains('active') && !reduce()) {
-      setTimeout(function () {
-        if (!st.classList.contains('active')) return;
-        burst('ember-rise', innerWidth * 0.22, innerHeight * 0.84, 1.5, 0.4, true);
-        burst('ember-rise', innerWidth * 0.78, innerHeight * 0.86, 1.7, 0.35, true);
-      }, 900);
-    }
-  } catch (e) {}
+  // build117 p2 (playtest-4 spec: start-embers): TITLE AMBIENCE ember-rise burst removed — it was a
+  // SECOND independent particle system (yet another palette/motion language) firing 900ms after load
+  // right as the CTA pill is trying to draw the eye, duplicating what the refined .start-flames canvas
+  // already does continuously. Cutting it removes a jank/CPU spike at a moment that should read calm.
   // ---- BUTTON-PRESS bursts (delegated): each key UI target answers with its own effect; the big
   // navigation moments also get a soft low thump from the shockwave clip. ----
   var MAP = [
