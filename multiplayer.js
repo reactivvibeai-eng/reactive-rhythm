@@ -438,6 +438,7 @@
     teardownMatch();
     try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {}
     lobbyCh = null; lobbySP = null; lobby = {};
+    try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {}   // build111 s2: channel teardown clears the ring buffer — a later rejoin never leaks stale lobby chat
     // hand back to the hub so the back-stack stays consistent.
     try {
       if (window.RhythmHub && window.RhythmHub.show) { window.RhythmHub.show(); return; }
@@ -461,6 +462,9 @@
     if (lobbyCh) { renderRoster(); return; }     // already in
     lobbyCh = supa.channel('rr-lobby', { config: { broadcast: { self: false } } });
     lobbySP = softPresence(lobbyCh, function () { return myPresence(matchLive || !!matchCh); }, function (all) { lobby = all; onLobbySync(); });
+    // build111 s2: lobby TEXT CHAT rides this same channel (new 'chat-msg' broadcast event, no new channel).
+    // chat.js owns the drawer UI + ring buffer + rate limit; we just hand it the channel + our identity.
+    try { if (window.RhythmChat && window.RhythmChat.mountLobbyChat) window.RhythmChat.mountLobbyChat(lobbyCh, { id: ME.id, name: ME.name }, { onReport: true }); } catch (e) {}
     // challenge handshake rides the lobby channel (targeted by toId)
     lobbyCh.on('broadcast', { event: 'challenge' }, function (m) { onChallenge(m.payload); });
     lobbyCh.on('broadcast', { event: 'challenge-ans' }, function (m) { onChallengeAns(m.payload); });
@@ -2315,6 +2319,18 @@
     var ch = supa.channel('rr-room-' + rid, { config: { broadcast: { self: false } } });
     room.ch = ch;
     roomSP = softPresence(ch, function () { return { id: ME.id, name: ME.name, avatar: ME.avatar, seat: room.seat, at: Date.now() }; }, onRoomPeers);
+    // build111 s2: room TEXT CHAT — same channel, new 'chat-msg' broadcast event. teardownRoomChat() runs first
+    // inside mountRoomChat (a fresh join/rejoin never leaks a prior room's ring buffer). Panel mounts into the
+    // waiting-room step, right after #mpx-roomctx; hidden the instant room-start fires (see onRoomStart).
+    // Spectators get chat too (room.p1 is always the host's id, seeded at room creation/join — safe pre-seat).
+    try {
+      if (window.RhythmChat && window.RhythmChat.mountRoomChat) {
+        var _rcxEl = $('mpx-roomctx');
+        var _mountEl = _rcxEl && _rcxEl.parentNode;
+        if (_mountEl) _mountEl._rrcAnchor = _rcxEl;   // chat.js inserts its panel directly after #mpx-roomctx, not at the end of the setup step
+        window.RhythmChat.mountRoomChat(ch, { id: ME.id, name: ME.name }, _mountEl, { hostId: room.p1, roomId: room.id, onReport: true });
+      }
+    } catch (e) {}
     ch.on('broadcast', { event: 'room-start' }, function (m) { onRoomStart(m.payload); });
     ch.on('broadcast', { event: 'song' }, function (m) { onSong(m.payload); });   // build64: the room host's live track/stage/difficulty picks reach the joiner in the waiting room
     ch.on('broadcast', { event: 'room-ready' }, function (m) { onRoomReady(m.payload); });   // playtest-3 fix (Bug D): the room-stage READY handshake (no match channel yet)
@@ -2339,7 +2355,7 @@
       }
     });
   }
-  function leaveRoomChannel() { try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; }
+  function leaveRoomChannel() { try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -2392,6 +2408,7 @@
   }
   function onRoomStart(p) {
     if (!p || !p.mid) return;
+    try { if (window.RhythmChat && window.RhythmChat.hideRoomChat) window.RhythmChat.hideRoomChat(); } catch (e) {}   // build111 s2: match/live view has no chat — hide (not teardown) the panel the instant a real room-start fires
     // build102y review fix C: a live BEAT THAT ghost run parks ALL room-start handling — spectateMatch would
     // mount the dual-deck stage + second audio over the live run, and a hand-raised ghost-runner accepted
     // mid-solo-run must not be match-started either. The onShowSnap heartbeat re-offers the run (mid rides
@@ -5520,7 +5537,7 @@
   // The hub's #mp-back / Esc already route to RhythmHub.show(). During a LIVE match the
   // active screen is #game (engine), so they can't fire mid-song. We additionally guard
   // #mp-back so leaving from a WINNER/SETUP step tears the match channel down cleanly.
-  wire('mp-back', 'click', function () { try { _cancelShowOpen(); if (room.id && room.show) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too
+  wire('mp-back', 'click', function () { try { _cancelShowOpen(); if (room.id && room.show) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too; build111 s2: lobby chat ring buffer clears too
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
@@ -5538,7 +5555,7 @@
       activeNow = false;
       try { qmStop(true); } catch (e) {}   // build102x: NEVER keep the matchmaking poll running behind a hidden MP screen; also clears my queue row ({on:false}). No-op unless searching (matched pairs already stopped it).
       try { _onlineStop(); } catch (e) {}   // v415 review fix: the ONLINE NOW poll is MP-screen-scoped like qmStop — clear it on ANY deactivate (hub-nav away while on the lobby step never hit step()'s stop), for full interval-lifecycle symmetry.
-      if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; }
+      if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} }
     }
   }
   try {
