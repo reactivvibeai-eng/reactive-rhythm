@@ -29,8 +29,63 @@
       }));
     } catch (e) { console.warn('supabase init failed', e); }
   }
+
+  // build115 p1 (playtest-4 auth-handshake fix): the SITE (reactivvibeai.com) and the GAME are served same-origin
+  // from the SAME Supabase project (confirmed: site's src/integrations/supabase/client.ts uses plain localStorage,
+  // default storageKey, project ref bxiejoktoknybpraxebm — byte-identical to CFG.SUPABASE_URL). So a signed-in site
+  // session is ALREADY sitting in localStorage under 'sb-bxiejoktoknybpraxebm-auth-token' when /game loads — but
+  // supabase-js does NOT auto-adopt an externally-written localStorage blob into its in-memory client on its own
+  // in every load order/timing; this helper explicitly reads it and calls setSession() so getUser()/getToken()/
+  // onAuthChange all agree with what the site already knows. Runs ONCE at boot, before refreshAdmin()/first getUser().
+  // Idempotent: setSession() on an already-current session just re-confirms it (onAuthStateChange fires but our
+  // listeners are no-ops/idempotent themselves — no loop). Guarded end-to-end: a malformed/missing token must
+  // never throw and never block boot.
+  var _adoptedSiteSession = false;
+  async function _adoptSiteSession() {
+    if (_adoptedSiteSession) return false;   // idempotent — only try once per page load
+    _adoptedSiteSession = true;
+    if (!supa) return false;
+    try {
+      // already has a live in-memory session? nothing to adopt.
+      try {
+        var cur = await supa.auth.getSession();
+        if (cur && cur.data && cur.data.session && cur.data.session.access_token) return false;
+      } catch (e) {}
+
+      var raw = null;
+      // (a) exact key derived from CFG.SUPABASE_URL's project ref
+      try {
+        var m = (CFG.SUPABASE_URL || '').match(/https?:\/\/([a-z0-9]+)\.supabase/i);
+        if (m) raw = window.localStorage.getItem('sb-' + m[1] + '-auth-token');
+      } catch (e) {}
+      // (a-robust) fall back: scan for ANY sb-*-auth-token key (covers a ref mismatch/legacy key)
+      if (!raw) {
+        try {
+          for (var i = 0; i < window.localStorage.length; i++) {
+            var k = window.localStorage.key(i);
+            if (k && /^sb-.*-auth-token$/.test(k)) { var v = window.localStorage.getItem(k); if (v) { raw = v; break; } }
+          }
+        } catch (e) {}
+      }
+      if (!raw) return false;
+
+      var parsed = null;
+      try { parsed = JSON.parse(raw); } catch (e) { return false; }   // malformed JSON — bail quietly
+      if (!parsed) return false;
+      var access_token = parsed.access_token || (parsed.currentSession && parsed.currentSession.access_token);
+      var refresh_token = parsed.refresh_token || (parsed.currentSession && parsed.currentSession.refresh_token);
+      if (!access_token || !refresh_token) return false;   // need both for setSession
+
+      try {
+        await supa.auth.setSession({ access_token: access_token, refresh_token: refresh_token });
+        return true;
+      } catch (e) { console.warn('rr: site-session adopt failed', e); return false; }
+    } catch (e) { return false; }   // never let a bad token block boot
+  }
+
   async function getToken() {
     if (!supa) return null;
+    try { await _adoptSiteSession(); } catch (e) {}   // build115 p1: adopt the site's localStorage session before the first real read
     try {
       const { data } = await supa.auth.getSession();
       return data && data.session ? data.session.access_token : null;
@@ -47,6 +102,7 @@
     // /me hiccup → a logged-in owner showed as a GUEST when /me had a CORS issue or didn't recognize the token. No local
     // session → genuinely logged out. (The server still validates the JWT on every authed call — this is just identity.)
     if (!supa) return null;
+    try { await _adoptSiteSession(); } catch (e) {}   // build115 p1: adopt the site's localStorage session before the first real read
     let su = null;
     try { const { data } = await supa.auth.getSession(); su = data && data.session && data.session.user; } catch (e) {}
     if (!su) return null;   // no local session → logged out
@@ -1839,6 +1895,7 @@
     submitReport,   // build111 s4: user-reporting stub (queues to localStorage rr_reports_queue until the backend table lands)
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,
+    adoptSiteSession: _adoptSiteSession,   // build115 p1: single source of truth for "adopt the site's shared localStorage session" — the sign-in gate (index.html) routes through this instead of duplicating key-matching logic
     // BONUS SPARKS — platform-only soft currency (gameplay earn loop; NOT cashable). SWAP-SEAM in catalog.js.
     getBonusSparks, awardBonusSparks, spendBonusSparks, bonusBuy, getBonusOwns,
     // store / entitlements (LIVE: GET /store, GET /entitlements, POST /sparks/spend)
