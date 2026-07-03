@@ -1814,7 +1814,10 @@
     opts = opts || {};
     if (!API_BASE) return { rows: [] };
     try {
-      const rows = lbRows(await api('/leaderboard/global?limit=' + (opts.limit || 20)));
+      // build115 p2: thread an optional difficulty filter through to the global board — mirrors fetchLeaderboard's
+      // querystring pattern. Backward-compatible: omitted/empty difficulty = '' (server should treat as "all").
+      const qs = '?limit=' + (opts.limit || 20) + '&difficulty=' + encodeURIComponent(opts.difficulty || '');
+      const rows = lbRows(await api('/leaderboard/global' + qs));
       return { rows, youName: await _myName() };
     } catch (e) { return { rows: [] }; }
   }

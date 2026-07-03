@@ -977,6 +977,8 @@
   .lbd-pick-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-pick-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-pick-chev { font-size: 22px; color: var(--ink-dim); flex: none; }
+  .lbd-diff-row { width: 100%; display: flex; justify-content: center; }
+  .lbd-diff-row[hidden] { display: none; }
   .lbd-diff { align-self: center; }
   .lbd-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
@@ -6260,13 +6262,17 @@
         <button class="lbd-tab" data-tab="mp" role="tab" aria-selected="false">Multiplayer</button>
       </div>
 
-      <!-- per-song header (track name + difficulty filter); hidden on Global tab -->
+      <!-- per-song header (track picker); Song tab only -->
       <div class="lbd-songbar" id="lbd-songbar" hidden>
         <button class="lbd-pick" id="lbd-pick" aria-label="Choose a track">
           <span class="lbd-pick-art" id="lbd-pick-art">♪</span>
           <span class="lbd-pick-txt"><span class="lbd-pick-t" id="lbd-pick-t">Choose a track</span><span class="lbd-pick-a" id="lbd-pick-a">tap to pick</span></span>
           <span class="lbd-pick-chev">›</span>
         </button>
+      </div>
+      <!-- build115 p2: difficulty filter now shown on Global + By-Song (was By-Song-only, and never actually
+           filtered Global) — hidden on Level/MP where difficulty doesn't apply. -->
+      <div class="lbd-diff-row" id="lbd-diff-row">
         <div class="lbd-diff set-seg" id="lbd-diff">
           <button data-diff="" class="active">All</button>
           <button data-diff="easy">Easy</button>
@@ -7031,6 +7037,12 @@
   // game runs its own supabase-js with the default storageKey). If the site uses HttpOnly cookies, the session must be
   // mirrored to localStorage (or REQUIRE_SIGNIN=false) — see LOVABLE_MASTER_PROMPT §0.5 #2.
   var REQUIRE_SIGNIN = (cfg.REQUIRE_SIGNIN !== false);
+  // build115 p1: this raw-localStorage scan is a presence CHECK only (runs before supabase-js/catalog.js exist on a
+  // cold load, so it can't call into the catalog's supa client yet) — it decides whether to show/hide the gate overlay.
+  // It is intentionally the SAME key-matching logic as catalog.js's _adoptSiteSession (exact ref key, then any
+  // sb-*-auth-token). Once catalog.js has loaded, _nudgeCatalogAdopt() below additionally makes the shared `supa`
+  // client itself adopt the session (setSession), so getUser()/getToken()/onAuthChange inside catalog.js agree —
+  // without that, the gate could reveal the game while catalog.js still independently reports "guest".
   function _anySession() {
     try { var t = token(); if (t) return t; } catch (e) {}   // exact key from SUPABASE_URL
     try { for (var i = 0; i < localStorage.length; i++) {     // robust: ANY sb-*-auth-token (covers a ref/key mismatch)
@@ -7039,15 +7051,18 @@
     } } catch (e) {}
     return null;
   }
+  function _nudgeCatalogAdopt() {   // best-effort; catalog.js may not have loaded yet — fails silently either way
+    try { if (window.RhythmCatalog && window.RhythmCatalog.adoptSiteSession) window.RhythmCatalog.adoptSiteSession(); } catch (e) {}
+  }
   if (isLocal || !REQUIRE_SIGNIN) { try { gate.classList.add('hidden'); gate.style.display = 'none'; } catch (e) {} return; }
-  if (_anySession()) { reveal(); return; }                   // already signed in → straight into the game
+  if (_anySession()) { reveal(); _nudgeCatalogAdopt(); return; }   // already signed in → straight into the game
   // not signed in → present the SIGN-IN gate + auto-detect when they sign in (focus / cross-tab storage / poll)
   try {
     gate.style.display = ''; gate.classList.remove('hidden'); gate.setAttribute('data-state', 'signin');
     var _k = gate.querySelector('.bg-kicker'); if (_k) _k.textContent = 'Sign in to play';
     var _s = gate.querySelector('.bg-sub'); if (_s) _s.textContent = 'Reactive Rhythm saves every run, score, and rank to your ReactivVibe account. Sign in to step on stage.';
   } catch (e) {}
-  var _recheck = function () { if (_anySession()) { reveal(); return true; } return false; };
+  var _recheck = function () { if (_anySession()) { reveal(); _nudgeCatalogAdopt(); return true; } return false; };
   try { window.addEventListener('focus', _recheck); } catch (e) {}
   try { window.addEventListener('storage', function (ev) { if (!ev || !ev.key || /-auth-token$/.test(ev.key)) _recheck(); }); } catch (e) {}
   var _pollT = setInterval(function () { if (_recheck()) { try { clearInterval(_pollT); } catch (e) {} } }, 1500);
@@ -9288,14 +9303,15 @@
   var DORMANT = 'Live rankings switch on <b>when accounts connect</b>. For now this shows your local progress.';
 
   // ---- GLOBAL board: live aggregate if backend offers it, else local career row ----
+  // build115 p2: threads the difficulty filter (was previously ignored on this tab entirely).
   function renderGlobal() {
     var board = $('lbd-board'), empty = $('lbd-empty');
-    var head = '<div class="lb-head">All-time · Top players</div>';
+    var head = '<div class="lb-head">All-time · Top players' + (diff ? ' · ' + esc(diff) : '') + '</div>';
     var c = (RC() && RC().getCareer) ? RC().getCareer() : null;
     var fetchG = RC() && RC().fetchGlobalLeaderboard;
     if (fetchG) {
       board.innerHTML = head + '<div class="lbd-empty">Loading…</div>'; empty.hidden = true;
-      Promise.resolve(fetchG({ limit: 20 })).then(function (res) {
+      Promise.resolve(fetchG({ limit: 20, difficulty: diff })).then(function (res) {
         if (tab !== 'global') return;
         if (res && res.rows && res.rows.length) {
           banner(null);
@@ -9318,7 +9334,12 @@
       var r = scores[key]; if (!r || !r.score) return;
       var sep = key.lastIndexOf('|'); if (sep < 0) return;
       var id = key.slice(0, sep), d = key.slice(sep + 1), t = byId[id];
-      rows.push({ id: id, title: (t && t.title) || 'Unknown track', cover: (t && (t.artwork_url || t.cover || t.cover_url || t.art || t.artUrl)) || '', score: r.score, accuracy: r.accuracy, difficulty: d, grade: r.grade });   // build65 FIX: catalog tracks expose art as artwork_url (the old aliases never matched → share card always showed the placeholder)
+      // build115 p2 FIX: title used to fall back to the literal string 'Unknown track' — that string is TRUTHY, so it
+      // defeated every downstream `song || fallback` guard (share.js's own leaderboard fallback included) and leaked
+      // the words "Unknown track" straight onto a shared scorecard. Leave it '' (falsy) when the catalog hasn't
+      // resolved the id yet (e.g. leaderboard opened before the paged catalog fetch finishes) — every consumer here
+      // already does its own `|| 'Untitled'`/`|| fallback` at render time.
+      rows.push({ id: id, title: (t && t.title) || '', cover: (t && (t.artwork_url || t.cover || t.cover_url || t.art || t.artUrl)) || '', score: r.score, accuracy: r.accuracy, difficulty: d, grade: r.grade });   // build65 FIX: catalog tracks expose art as artwork_url (the old aliases never matched → share card always showed the placeholder)
     });
     rows.sort(function (a, b) { return b.score - a.score; });
     return rows;
@@ -9331,45 +9352,28 @@
       '<span class="lb-acc">' + (acc != null ? (acc * 100).toFixed(1) + '%' : '—') + '</span>' +
     '</div>';
   }
-  // build99L: a SEEDED aspirational global ladder so the default Global tab is never a dead empty board.
-  // Five "house" players with grade badges; the local player is pinned in (real best score → ranked among
-  // them; no runs yet → a #— "play a song to claim your spot" row). Marked a preview (banner) since the
-  // real world ranking goes live when accounts connect.
-  var GLOBAL_SEED = [
-    { name: 'VEX',       score: 1284500, acc: 0.991, grade: 'S' },
-    { name: 'KUNNING',   score:  962300, acc: 0.974, grade: 'S' },
-    { name: 'RYO-9',     score:  741800, acc: 0.958, grade: 'A' },
-    { name: 'NIGHT-OWL', score:  503600, acc: 0.933, grade: 'A' },
-    { name: 'ECH0',      score:  318900, acc: 0.901, grade: 'B' }
-  ];
+  // build115 p2: REMOVED the hard-baked "house player" NPC seed (VEX/KUNNING/RYO-9/NIGHT-OWL/ECH0) — it rendered in
+  // the exact same podium/row component as real players (medals, crowns, grade badges) with only a small easy-to-miss
+  // "preview" pill distinguishing it, and playtesters mistook it for real people. The local/dormant Global board is now
+  // an HONEST view: your own local runs (filtered by the difficulty toggle, same as By-Song), or a real empty/CTA state
+  // when you have none — never fake competitors.
   function renderGlobalLocal(c) {
     var board = $('lbd-board'), empty = $('lbd-empty');
     setYouRow(null);   // local/dormant board carries no real world rank
-    banner('<b>Preview ladder — beat these.</b> Global rankings go live when accounts connect; for now this seeds aspirational targets next to your best.');
-    var runs = localRuns();
-    var best = runs.length ? runs[0] : null;
-    // build100q: the YOU row must NOT be injected into the seed sort and handed a numeric "#N global rank" — that's a
-    // FAKE rank (no cross-account data exists yet), and two testers with comparable local bests sorted into the same
-    // slot among the 5 house scores → both saw an identical "#4 global". Render the house seeds as aspirational targets
-    // (ranked #1–#5, clearly "preview"), and pin the player's own row SEPARATELY as an UNRANKED local-best line. No one
-    // gets a fake global number; the real ladder (server rows) replaces this whole block the moment Lovable returns data.
-    var pool = GLOBAL_SEED.map(function (s, i) { return { rank: i + 1, name: s.name, score: s.score, acc: s.acc, grade: s.grade, you: false }; });
-    empty.hidden = true;
-    var head = '<div class="lb-head">All-time · Top players <span class="lb-head-tag">preview</span></div>';
-    var html = boardHtml(head, pool);
-    if (best) {
-      // pinned, UN-ranked YOU row — your local best, NOT a claimed global rank
-      html += '<div class="lb-row you lb-you-claim"><span class="lb-rank">#—</span>' +
-        '<span class="lb-name">YOU <span class="lb-sub">· ' + esc(best.title || 'your local best') + '</span></span>' +
-        '<span class="lb-gradecol">' + gradeBadge(best.grade) + '</span><span class="lb-score">' + fmt(best.score) + '</span>' +
-        '<span class="lb-acc">' + (best.accuracy != null ? (best.accuracy * 100).toFixed(1) + '%' : '—') + '</span></div>';
-    } else {
-      // no run yet → a pinned, un-ranked YOU row inviting the first play
-      html += '<div class="lb-row you lb-you-claim"><span class="lb-rank">#—</span>' +
-        '<span class="lb-name">YOU <span class="lb-sub">· play a song to claim your spot</span></span>' +
-        '<span class="lb-gradecol"></span><span class="lb-score">—</span><span class="lb-acc">—</span></div>';
+    banner(DORMANT);
+    var runs = localRuns().filter(function (r) { return !diff || r.difficulty === diff; });
+    if (!runs.length) {
+      board.innerHTML = '';
+      showEmpty(diff ? 'No ' + diff + ' scores yet — finish a run and you\'ll appear here.' : 'No scores yet — finish a run and you\'ll appear here.');
+      return;
     }
-    board.innerHTML = html;
+    empty.hidden = true;
+    var head = '<div class="lb-head">Your best runs' + (diff ? ' · ' + esc(diff) : '') + '</div>';
+    // your own local runs, ranked against each other (real data, real order) — top run marked as "you" for styling
+    var items = runs.slice(0, 20).map(function (r, i) {
+      return { rank: i + 1, name: 'YOU', sub: r.title || 'Untitled', score: r.score, acc: r.accuracy, grade: r.grade, you: i === 0 };
+    });
+    board.innerHTML = boardHtml(head, items);
   }
 
   // ---- BY-SONG board: live per-track if backend offers it, else local best ----
@@ -9473,17 +9477,11 @@
         '<div><b>' + (r.streak > 0 ? '🔥' + r.streak : (r.streak < 0 ? String(r.streak) : '—')) + '</b><span>STREAK</span></div>' +
         '<div><b>' + r.best + '</b><span>BEST&nbsp;RP</span></div>' +
       '</div></div>';
-    // build100q: same fix as the global tab — don't inject YOU into the seed sort and hand it a fake "#N global rank"
-    // (no cross-account MP ladder exists yet; two testers collided on an identical number). House seeds rank #1–#5 as
-    // aspirational preview; YOU pins below as an UN-ranked local-record row. Real rows replace this once Lovable ships
-    // GET /mp/leaderboard.
-    var seed = [{ n: 'VEX', p: 1460 }, { n: 'KUNNING', p: 840 }, { n: 'RYO-9', p: 520 }, { n: 'NIGHT-OWL', p: 300 }, { n: 'ECH0', p: 150 }];
-    var ladder = '<div class="lb-head" style="margin-top:18px">Top players · preview ladder (global goes live when accounts connect)</div>' +
-      seed.map(function (e, i) {
-        return '<div class="lb-row mp"><span class="lb-rank">#' + (i + 1) + '</span>' +
-          '<span class="lb-name">' + esc(e.n) + '</span>' +
-          '<span class="lb-score">' + e.p + ' RP</span></div>';
-      }).join('') +
+    // build115 p2: REMOVED the hard-baked "house player" NPC seed (VEX/KUNNING/RYO-9/NIGHT-OWL/ECH0) — same fix as
+    // the Global tab. It rendered as if it were a real global ladder (medals/ranks) with no visible distinction from
+    // real players. GET /mp/leaderboard doesn't exist server-side yet, so honestly there is no global MP ladder to
+    // show — just YOUR real record (already computed above from RhythmMP.getRank()). No fake competitors.
+    var ladder = '<div class="lb-head" style="margin-top:18px">Your record</div>' +
       '<div class="lb-row mp you"><span class="lb-rank">#—</span>' +
         '<span class="lb-name">YOU <span class="lb-sub">your record · ' + r.wins + 'W-' + r.losses + 'L</span></span>' +
         '<span class="lb-score">' + r.points + ' RP</span></div>';
@@ -9507,6 +9505,8 @@
   }
   function render() {
     $('lbd-songbar').hidden = (tab !== 'song');
+    // build115 p2: difficulty filter is real on Global + By-Song now; Level/MP don't have a difficulty axis.
+    var diffRow = $('lbd-diff-row'); if (diffRow) diffRow.hidden = (tab === 'level' || tab === 'mp');
     if (tab === 'global') renderGlobal(); else if (tab === 'level') renderLevels(); else if (tab === 'mp') renderMp(); else renderSong();
   }
 
@@ -9566,12 +9566,12 @@
       render();
     });
   });
-  // difficulty seg
+  // difficulty seg — build115 p2: now segments Global (client-side filter) in addition to By-Song (server querystring)
   [].forEach.call($('lbd-diff').children, function (b) {
     b.addEventListener('click', function () {
       diff = b.getAttribute('data-diff') || '';
       [].forEach.call($('lbd-diff').children, function (x) { x.classList.toggle('active', x === b); });
-      if (tab === 'song') render();
+      if (tab === 'song' || tab === 'global') render();
     });
   });
   // picker
