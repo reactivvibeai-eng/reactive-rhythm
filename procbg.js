@@ -32,6 +32,15 @@
   //   Frames open with an OPAQUE #000 clear — no translucent trail fills; tails are DRAWN per object.
   //   'lighter' glows allowed, always over true black. 1px strokes pixel-snap via (x|0)+0.5.
   //   Renderers overscan −0.04·_w … 1.04·_w so the camera tilt/zoom never reveals an edge.
+  // ══ pt4 VFX-LEVELS DENSITY PASS — _soft now guards ALL THREE Tier-I renderers, not just kaleido's EQ ring ══
+  //   dawn:  god-rays loop (11 drawImage/frame) skipped under _soft; stars/stars2 unaffected (cheap fillRect).
+  //   weave: dust-mote loop (≤90 fillRect/frame) AND the sub-harmonic string layer both skipped under _soft (sub-harmonic is weave's heaviest new add); main strings unaffected.
+  //   ember: FAR/MID per-FRAME draw ceiling halved under _soft (_densCap) — takes effect the instant _soft trips, NOT gated on a reseed (which never re-fires mid-session).
+  //   New population (dawn stars2 ≤80, weave sub-harmonic strings ≤NS-1, ember FAR 140→220) stays inside the
+  //   desktop budget above BECAUSE each new layer reuses a cheap primitive (1 fillRect / 1 stroke / 1 arc-fill)
+  //   and array length is fixed at reseed — verify any FUTURE add against this same rule before merging.
+  //   DENSITY (not just intensity) now scales per-frame via an activeFrac cutoff derived from bassN/trebleN —
+  //   this SKIPS DRAWS on low-index array members when audio is quiet, it never .push/.splice (no per-frame alloc).
   // ══ pkg3.0(D) CAMERA RIG — breathe/kick zoom + slow tilt + LFO drift; identity under reduce-motion ══
   var CAM = { z: 1, tilt: 0, dx: 0, dy: 0 };
   function _updateCam(dt, st) {
@@ -312,7 +321,10 @@
     if (!S || _state.dirty) {
       _state.dirty = false; _state.fmode = 0; _state.bcd = 0; _state.cutFired = 0;
       _state.fmix = { base: EMBER_MODES[0].pal.base, span: EMBER_MODES[0].pal.span, smoke: EMBER_MODES[0].smoke, spark: EMBER_MODES[0].spark };
-      var nF = lite ? 70 : 140, nM = lite ? 60 : 120, nN = lite ? 10 : 40, si, e0;
+      // pt4: FAR 140→220 desktop (cheapest draw — 1 arc().fill() each, see L~378) — reads as a full "storm" at negligible cost.
+      // pt4 PERF GUARD: array stays full-sized here; _soft relief is applied per-FRAME as a draw cap (see _densCap below), NOT at reseed —
+      //   _soft flips mid-session and never re-dirties _state, so a reseed-time halving would never fire for a machine that slows down while already in ember.
+      var nF = lite ? 70 : 220, nM = lite ? 60 : 120, nN = lite ? 10 : 40, si, e0;
       S = _state.fs = { far: [], mid: [], near: [] };
       for (si = 0; si < nF; si++) { e0 = _fsSpawn({}, 0, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.far.push(e0); }
       for (si = 0; si < nM; si++) { e0 = _fsSpawn({}, 1, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.mid.push(e0); }
@@ -354,8 +366,14 @@
     var frozen = st.hold > 0;                                    // held breath: freeze phase accumulators, draw last state
     var flowE = (0.25 + bassN * 1.1 + (st.od || 0) * 0.5) * mf;
     // ── the three planes, back to front. Per-axis update: outward velocity grows with distance from the VP. ──
+    // pt4: DENSITY scales with live audio, not just intensity — activeFrac (FAR/MID only; NEAR streaks stay full so the drive always reads) derives from bassN (existing normalized input).
+    // pt4: base floor 0.62 (was 0.5) keeps the resting field visibly FULL (Backdrop-LAW: base reads stable; audio only ADDS the top ~38%) — also answers the "feels empty" note directly.
+    // pt4 PERF: _densCap halves the per-FRAME FAR/MID draw ceiling under the _soft watchdog — relief now fires the instant a machine slows, independent of the reseed timing.
+    var _densCap = _soft ? 0.5 : 1;
+    var farActive = S.far.length * (0.62 + 0.38 * bassN) * _densCap, midActive = S.mid.length * (0.62 + 0.38 * bassN) * _densCap;
     for (var L = 0; L < 3; L++) {
       var arr = L === 0 ? S.far : L === 1 ? S.mid : S.near;
+      var activeCap = L === 0 ? farActive : L === 1 ? midActive : arr.length;
       var flow = reduce ? 0 : _FS_FLOW[L] * flowE;
       for (var k = 0; k < arr.length; k++) {
         var e = arr[k];
@@ -370,6 +388,7 @@
             _fsSpawn(e, L, fx); continue;
           }
         }
+        if (k > activeCap) continue;                              // pt4: below-threshold members of FAR/MID still simulate (so they're phase-ready when it gets loud) but skip the draw — this IS the density scaling
         var lt = e.life / e.maxlife, envb = Math.min(1, lt * 6) * (1 - Math.max(0, lt - 0.8) * 5);   // quick in, late out
         var heat = clamp(0.2 + bassN * 0.4 + beatPunch * 0.4 + comboGlow * 0.3, 0, 1);
         var hue = e.gold ? 45 : _warmHue(heat, pal, 0);
@@ -425,7 +444,7 @@
       W = _state.wv = { NS: NS, S: [], pulses: [], pi: 0, sweep: -1, sweepCd: 0, swept: 0, dust: [] };
       for (var i0 = 0; i0 < NS; i0++) W.S.push({ amp: 0 });
       for (var p0 = 0; p0 < 3; p0++) W.pulses.push({ on: false, i: 0, x: 0 });                  // max 3 concurrent (ring buffer)
-      if (!lite) for (var d0 = 0; d0 < 40; d0++) W.dust.push({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01 });
+      if (!lite) for (var d0 = 0; d0 < 90; d0++) W.dust.push({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01 });   // pt4: 40→90 — fills empty negative space between strings
     }
     var frozen = st.hold > 0;                                       // held breath: freeze phase accumulators
     var sp = _spec(NS);
@@ -471,6 +490,24 @@
         ctx.stroke();
       }
     }
+    if (!lite && !_soft) {                                          // pt4: SUB-HARMONIC string layer at half-opacity between the main strings — reuses the yB formula offset by 0.5 index (visually doubles density, no new logic)
+      // pt4 PERF: coarse SHSEG (half of SEG) keeps weave under the ~1200 path-op contract — main strings already cost 11×2×41≈900 lineTo; a full-SEG sub-harmonic would tip it over. Half-res is invisible on a half-opacity background string. Also gated by !_soft so the watchdog can shed this layer under load.
+      var SHSEG = SEG >> 1;
+      for (var sh = 0; sh < NS - 1; sh++) {
+        var ampA = W.S[sh].amp, ampB = W.S[sh + 1].amp, ampH = Math.min(1.4, Math.max((ampA + ampB) * 0.5, strum * 0.7));
+        var yBh = h * (0.14 + 0.76 * Math.pow((sh + 1.5) / NS, 1.25));
+        var alphaH = ((ampH > 0.02) ? 0.09 : 0.05) + ampH * 0.14 + strum * 0.16;   // half of the main-string alpha budget
+        ctx.beginPath();
+        for (var g3 = 0; g3 <= SHSEG; g3++) {
+          var xxh = -w * 0.04 + (w * 1.08) * (g3 / SHSEG), xfh = xxh / w;
+          var waveh = Math.sin(xfh * 3.14159 * (2 + sh % 3)) * Math.sin(_t * (7 + sh)) * ampH * h * 0.010;
+          var yyh = (yBh + waveh) | 0; yyh += 0.5;
+          if (g3 === 0) ctx.moveTo(xxh, yyh); else ctx.lineTo(xxh, yyh);
+        }
+        ctx.strokeStyle = _hsl(40, 60, clamp(48 + ampH * 30, 30, 88), clamp(alphaH, 0, 0.5)); ctx.lineWidth = 1 * _dpr;
+        ctx.stroke();
+      }
+    }
     for (var pu = 0; pu < W.pulses.length; pu++) {                  // traveling plucks (reduce-motion: stationary node flash)
       var P2 = W.pulses[pu]; if (!P2.on) continue;
       if (!frozen) P2.x += dt * 2.2;
@@ -494,14 +531,18 @@
         while (W.swept <= crossed) { W.S[W.swept].amp = Math.min(1.4, W.S[W.swept].amp + 0.5); W.swept++; }
       }
     }
-    if (!lite) {                                                    // dust — 40 slow 1px motes
+    if (!lite && !_soft) {                                          // dust — 90 slow 1px motes; pt4: _soft watchdog drops this loop first (dust is decorative, cheapest to cut)
+      // pt4: DENSITY scales with treble — base floor 0.6 keeps the field visibly full at rest (Backdrop-LAW), audio adds the top ~40% (reuses trebleN, no new plumbing)
+      var dustActive = W.dust.length * (0.6 + 0.4 * trebleN);
       ctx.fillStyle = _hsl(40, 40, 80, clamp(0.1 + trebleN * 0.2, 0, 0.35));
       for (var dm = 0; dm < W.dust.length; dm++) {
+        if (dm > dustActive) break;
         var Dd = W.dust[dm];
         if (!frozen && !reduce) { Dd.y -= Dd.v * dt * mf * 8; if (Dd.y < 0) { Dd.y = 1; Dd.x = Math.random(); } }
         ctx.fillRect(((Dd.x * w) | 0) + 0.5, ((Dd.y * h) | 0) + 0.5, _dpr, _dpr);
       }
     }
+    if (st.cut > 0 && !lite) _shockRing(1 - st.cut, 40, w * 0.5, h * 0.5);   // pt4: restore combo/OD tier-up shockwave into weave's cutaway (matches ember/dawn payoff for consistency)
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -526,8 +567,10 @@
     var D = _state.dw;
     if (!D || _state.dirty) {
       _state.dirty = false;
-      D = _state.dw = { elev: 0, sky: null, skyElev: -1, stars: [], scroll: 0, flash: 0 };
-      for (var i0 = 0; i0 < 70; i0++) D.stars.push({ x: Math.random(), y: Math.random() * 0.55, tw: Math.random() * 6.28 });   // precomputed, top 55%
+      D = _state.dw = { elev: 0, sky: null, skyElev: -1, stars: [], stars2: [], scroll: 0, flash: 0 };
+      var nSt = lite ? 70 : 140;   // pt4: 70→140 desktop — fills the empty upper sky (LEGIBILITY CONTRACT budget, see RENDERERS note)
+      for (var i0 = 0; i0 < nSt; i0++) D.stars.push({ x: Math.random(), y: Math.random() * 0.55, tw: Math.random() * 6.28 });   // precomputed, top 55%
+      if (!lite) { var nSt2 = 80; for (var i1 = 0; i1 < nSt2; i1++) D.stars2.push({ x: Math.random(), y: Math.random() * 0.5, tw: Math.random() * 6.28, d: 0.4 + Math.random() * 0.4 }); }   // pt4: dimmer PARALLAX second layer, bassN-scrolled
     }
     var frozen = st.hold > 0;
     // the sun eases toward the tier; the cutaway overshoots +0.2 and eases back — the sun JUMPS a notch
@@ -548,16 +591,33 @@
     ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06); ctx.clip();   // sun/sky clipped → the sun rises BEHIND the horizon
     ctx.fillStyle = D.sky; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06);
     if (!lite) {                                                    // stars — treble twinkles them, elevation dissolves them
+      // pt4: DENSITY scales with live audio, not just per-star twinkle intensity — quiet passages show fewer stars lit,
+      // loud passages fill the sky. activeFrac reuses trebleN (existing normalized input, no new plumbing).
+      var starActive = D.stars.length * (0.68 + 0.32 * trebleN);     // pt4: floor 0.68 — the sky reads full at rest; treble adds the top ~32% (Backdrop-LAW)
       for (var s2 = 0; s2 < D.stars.length; s2++) {
+        if (s2 > starActive) break;                                 // array is stable-ordered (spawn order is already effectively random) — no per-frame allocation, just an early cutoff
         var S3 = D.stars[s2];
         var sa = (0.25 + 0.35 * Math.sin(_t * 2 + S3.tw)) * trebleN * (1 - Math.min(1, elev));
         if (sa < 0.02) continue;
         ctx.fillStyle = 'rgba(255,240,220,' + sa.toFixed(3) + ')';
         ctx.fillRect(((S3.x * w) | 0) + 0.5, ((S3.y * h) | 0) + 0.5, _dpr, _dpr);
       }
+      if (D.stars2.length) {                                        // pt4: dimmer PARALLAX second starfield, scroll tied to bassN (mirrors curtain() parallax pattern)
+        var par = reduce ? 0 : _t * (0.004 + bassN * 0.02);         // a11y: freeze the lateral scroll under reduce-motion (main stars have NO positional motion — only alpha twinkle — so the parallax layer must match, not introduce new drift)
+        var star2Active = D.stars2.length * (0.6 + 0.4 * bassN);     // pt4: floor 0.6 (dimmer parallax layer can thin a touch more than the main field)
+        for (var s3 = 0; s3 < D.stars2.length; s3++) {
+          if (s3 > star2Active) break;
+          var S4 = D.stars2[s3];
+          var sx = (((S4.x + par * S4.d) % 1 + 1) % 1);
+          var sa2 = (0.10 + 0.14 * Math.sin(_t * 1.3 + S4.tw)) * (0.4 + trebleN * 0.6) * (1 - Math.min(1, elev)) * S4.d;
+          if (sa2 < 0.015) continue;
+          ctx.fillStyle = 'rgba(255,232,206,' + sa2.toFixed(3) + ')';
+          ctx.fillRect(((sx * w) | 0) + 0.5, ((S4.y * h) | 0) + 0.5, _dpr, _dpr);
+        }
+      }
     }
     ctx.globalCompositeOperation = 'lighter';
-    if (!lite) {                                                    // god-rays — 11 fanned draws of the one cached wedge
+    if (!lite && !_soft) {                                          // god-rays — 11 fanned draws of the one cached wedge; pt4: _soft watchdog drops this first (heaviest add here, 11 drawImage/frame)
       var ray = _raySprite();
       var ra = clamp(0.10 + midN * 0.25 + (st.od || 0) * 0.3, 0, 0.7);
       var sweepOff = (st.od || 0) > 0.3 ? Math.sin(_t * 0.5) * 0.2 : 0;   // OD adds a slow sweep
