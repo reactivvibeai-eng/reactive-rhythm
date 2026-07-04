@@ -41,6 +41,21 @@
   //   and array length is fixed at reseed — verify any FUTURE add against this same rule before merging.
   //   DENSITY (not just intensity) now scales per-frame via an activeFrac cutoff derived from bassN/trebleN —
   //   this SKIPS DRAWS on low-index array members when audio is quiet, it never .push/.splice (no per-frame alloc).
+  // ══ build127 DEPTH+COMPOSITION PASS — fill the empty frame with FG/MG/BG layers + PLACE (owner: "lackluster, empty room") ══
+  //   All new pools are allocated ONLY at the _state.dirty reseed (Float32Array / fixed-length arrays); the render
+  //   loop NEVER .push/new — it walks fixed pools with index cutoffs. Every new hue is warm (crimson/amber/gold/warm-grey).
+  //   dawn:  + 4 sky BANDS (4 fillRect), + AURORA ribbons (≤3×24 lineTo, dropped under _soft), + horizon LIGHTS
+  //          (≤40 fillRect pool), + sun ATMOSPHERE halo (1 drawImage), + 2 parallax RIDGE silhouettes (16+26-pt pools,
+  //          2 filled polylines). Ribbons+god-rays shed first under _soft; ridges/bands/lights are cheap and stay.
+  //   weave: + woven-texture HAZE backdrop (3 drawImage, !lite), + NW≤18 vertical WARP threads (near pass always;
+  //          FAR dim pass + intersection NODES (cap 60/24) dropped under _soft), forming a real crossing LOOM.
+  //          NEAR warp ≈ 18×11 lineTo ≈ 200 ops; nodes cap-limited — the ~1200 desktop path budget still holds.
+  //   ember: + AMBIENT forge-glow wash (1 radial fill), + forge COAL bed (≤46 glow+ellipse pool, the SOURCE),
+  //          + layered HEAT-HAZE columns (≤7 drawImage smoke, dropped under _soft — heaviest ember add). Particle
+  //          planes unchanged. Coal/ambient are cheap and always on; haze sheds under _soft.
+  //   LOOP-SEAMLESS at rest: bands/lights/coals/ridges have NO positional reset (only slow brightness breathe);
+  //   ribbons/haze/warp-sway use continuous sines or mod-1 rise with sin() fade at the ends → no pop at the wrap.
+  //   reduce-motion: ALL new parallax/drift/rise/sway frozen (ribbons, ridge parallax, warp sway, haze rise).
   // ══ pkg3.0(D) CAMERA RIG — breathe/kick zoom + slow tilt + LFO drift; identity under reduce-motion ══
   var CAM = { z: 1, tilt: 0, dx: 0, dy: 0 };
   function _updateCam(dt, st) {
@@ -325,10 +340,14 @@
       // pt4 PERF GUARD: array stays full-sized here; _soft relief is applied per-FRAME as a draw cap (see _densCap below), NOT at reseed —
       //   _soft flips mid-session and never re-dirties _state, so a reseed-time halving would never fire for a machine that slows down while already in ember.
       var nF = lite ? 70 : 220, nM = lite ? 60 : 120, nN = lite ? 10 : 40, si, e0;
-      S = _state.fs = { far: [], mid: [], near: [] };
+      S = _state.fs = { far: [], mid: [], near: [], coals: [], haze: [] };
       for (si = 0; si < nF; si++) { e0 = _fsSpawn({}, 0, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.far.push(e0); }
       for (si = 0; si < nM; si++) { e0 = _fsSpawn({}, 1, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.mid.push(e0); }
       for (si = 0; si < nN; si++) { e0 = _fsSpawn({}, 2, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.px1 = e0.px2 = e0.x; e0.py1 = e0.py2 = e0.y; S.near.push(e0); }
+      // build127: SOURCE + VOLUME PASS — new fixed pools (alloc ONLY here at reseed). A glowing forge COAL bed along
+      // the bottom gives the embers an origin; layered HAZE columns give the smoke real volume (not just dots).
+      var nC = lite ? 22 : 46; for (si = 0; si < nC; si++) S.coals.push({ x: Math.random(), w: 0.02 + Math.random() * 0.06, ph: Math.random() * 6.28, h0: 0.5 + Math.random() * 0.9 });   // xf, size, flicker phase, brightness
+      var nH = lite ? 3 : 7; for (si = 0; si < nH; si++) S.haze.push({ x: 0.08 + Math.random() * 0.84, rise: 0, sp: 0.10 + Math.random() * 0.14, sz: 0.5 + Math.random() * 0.7, ph: Math.random() * 6.28 });   // rising smoke columns
     }
     // ── palette-mode advance is EARNED: fires once per tier-up cutaway (never a timer). Eased, never a hard jump. ──
     if ((st.hold > 0 || st.cut > 0.9) && !_state.cutFired) {
@@ -342,19 +361,63 @@
     fx.base = lerp(fx.base, Mo.pal.base, kf); fx.span = lerp(fx.span, Mo.pal.span, kf);
     fx.smoke = lerp(fx.smoke, Mo.smoke, kf); fx.spark = lerp(fx.spark, Mo.spark, kf);
     var pal = { base: fx.base, span: fx.span };
+    var frozen = st.hold > 0;                                    // build127: hoisted ABOVE the new forge/haze layers (was declared lower) so held-breath freezes them too
+    var spr = _emberGlow(), smk = lite ? null : _smokeSprite();  // build127: hoisted ABOVE the coal bed so its glow sprite (coalSpr) is defined when the bed draws (var-hoisting made it undefined before)
     // ── 3.0(B) OPAQUE clear (overscanned for the camera) — tails are drawn, never smeared ──
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
     ctx.globalCompositeOperation = 'lighter';
+    // build127: AMBIENT FORGE-GLOW — a broad, soft warm wash rising from the bottom that fills the whole lower/mid
+    // frame so the scene reads as LIT BY A FORGE, not sparse dots on black. Calm at rest (base 0.05), bass adds heat.
+    // LOOP-SEAMLESS: it's a static gradient modulated only by slow audio envelopes, no motion/reset.
+    var amb = _hslToRgb(_warmHue(0.25, pal, 0), 78, 34);
+    var gA = ctx.createRadialGradient(w * 0.5, h * 1.02, h * 0.05, w * 0.5, h * 1.02, h * 0.95);
+    var ambA = (0.05 + bass * 0.10 + comboGlow * 0.06 + (st.od || 0) * 0.06) * calm;
+    gA.addColorStop(0, 'rgba(' + amb[0] + ',' + amb[1] + ',' + amb[2] + ',' + clamp(ambA * 2.4, 0, 0.7) + ')');
+    gA.addColorStop(0.5, 'rgba(' + amb[0] + ',' + amb[1] + ',' + amb[2] + ',' + clamp(ambA, 0, 0.4) + ')');
+    gA.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gA; ctx.fillRect(-w * 0.06, h * 0.28, w * 1.12, h * 0.78);
     // ground glow — bottom-anchored, subtle (alpha 0.04 + bass·0.12)
     var gr0 = _hslToRgb(_warmHue(0.3, pal, 0), 82, 40);
     var gG = ctx.createLinearGradient(0, h, 0, h * 0.5);
     gG.addColorStop(0, 'rgba(' + gr0[0] + ',' + gr0[1] + ',' + gr0[2] + ',' + ((0.04 + bass * 0.12) * calm) + ')');
     gG.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gG; ctx.fillRect(-w * 0.04, h * 0.5, w * 1.08, h * 0.54);
+    // build127: layered HEAT-HAZE / SMOKE VOLUME — a few big soft smoke columns rising from the forge, drawn as
+    // cached smoke puffs at column scale (VOLUME, not the dot-smoke of the MID plane). Rise loops smoothly (mod 1 →
+    // fade at top/bottom so there's no pop). Rise FROZEN under reduce-motion. Dropped under _soft (heaviest add here).
+    if (!lite && !_soft && S.haze && smk) {
+      var smkV = smk;                                             // reuse the hoisted smoke sprite (already cached)
+      for (var hz = 0; hz < S.haze.length; hz++) {
+        var HZ = S.haze[hz];
+        if (!frozen && !reduce) { HZ.rise += dt * HZ.sp * (0.6 + bassN * 0.8) * mf; if (HZ.rise > 1) HZ.rise -= 1; }
+        var hzY = h * (1.02 - HZ.rise * 0.95);                       // rises from just below bottom up past mid
+        var fade = Math.sin(HZ.rise * 3.14159);                      // 0 at ends, 1 mid → seamless loop, no pop
+        var hzA = (0.05 + bass * 0.06) * fade * calm; if (hzA < 0.012) continue;
+        var hzsz = (h * 0.16 * HZ.sz) * (0.7 + 0.6 * HZ.rise);       // widens as it rises (smoke expands)
+        var hzx = HZ.x * w + Math.sin(_t * 0.3 + HZ.ph) * w * 0.02;
+        ctx.globalAlpha = clamp(hzA, 0, 0.3); ctx.drawImage(smkV, hzx - hzsz, hzY - hzsz, hzsz * 2, hzsz * 2); ctx.globalAlpha = 1;
+      }
+    }
     // ROAD — two sagging polylines from the bottom corners to the VP (the drive)
     ctx.strokeStyle = _hsl(20, 50, 14 + bassN * 8, 0.5); ctx.lineWidth = 2 * _dpr; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(-w * 0.04, h * 1.04); ctx.quadraticCurveTo(w * 0.24, h * 0.88, VPX, VPY); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(w * 1.04, h * 1.04); ctx.quadraticCurveTo(w * 0.76, h * 0.88, VPX, VPY); ctx.stroke();
+    // build127: glowing forge COAL BED along the bottom — the SOURCE the embers rise from. Each coal is a warm glow
+    // sprite + hot core, flickering on its own phase (bass/beat drive the flare). Fixed positions (pool) → no motion
+    // reset → LOOP-SEAMLESS; only brightness breathes. This is the single biggest "give the embers an origin" win.
+    if (S.coals) {
+      var coalY = h * 0.965, coalSpr = spr;
+      for (var cb = 0; cb < S.coals.length; cb++) {
+        var CO = S.coals[cb];
+        var flick = 0.5 + 0.5 * Math.sin(_t * (2.0 + CO.h0) + CO.ph);
+        var cheat = clamp(0.25 + bassN * 0.4 + beatPunch * 0.35, 0, 1);
+        var ca = (0.22 + 0.4 * flick) * (0.5 + bass * 0.6) * CO.h0 * calm; if (ca < 0.03) continue;
+        var cx0 = CO.x * w, csz = CO.w * w * (0.8 + 0.4 * flick);
+        var chue = _warmHue(cheat, pal, 0);
+        if (coalSpr && !lite) { ctx.globalAlpha = clamp(ca * 0.7, 0, 0.8); ctx.drawImage(coalSpr, cx0 - csz, coalY - csz * 0.7, csz * 2, csz * 1.4); ctx.globalAlpha = 1; }
+        ctx.fillStyle = _hsl(chue, _heatS(cheat), _heatL(cheat, 46), clamp(ca, 0, 0.9));
+        ctx.beginPath(); ctx.ellipse ? ctx.ellipse(cx0, coalY, csz * 0.42, csz * 0.24, 0, 0, 6.2832) : ctx.arc(cx0, coalY, csz * 0.3, 0, 6.2832); ctx.fill();
+      }
+    }
     // ── beat ERUPTION fires AT the VP (one discrete event per beat; 0.10s cooldown) ──
     _state.bcd -= dt;
     if (beatPunch > 0.28 && missK < 0.5 && _state.bcd <= 0) {
@@ -362,8 +425,7 @@
       var bn = lite ? 12 : 26, b0 = (Math.random() * S.mid.length) | 0;
       for (var q = 0; q < bn; q++) _fsSpawn(S.mid[(b0 + q) % S.mid.length], 1, fx, 120 + beatPunch * 420);
     }
-    var spr = _emberGlow(), smk = lite ? null : _smokeSprite();
-    var frozen = st.hold > 0;                                    // held breath: freeze phase accumulators, draw last state
+    // (spr/smk/frozen already declared above the forge/haze layers)
     var flowE = (0.25 + bassN * 1.1 + (st.od || 0) * 0.5) * mf;
     // ── the three planes, back to front. Per-axis update: outward velocity grows with distance from the VP. ──
     // pt4: DENSITY scales with live audio, not just intensity — activeFrac (FAR/MID only; NEAR streaks stay full so the drive always reads) derives from bassN (existing normalized input).
@@ -440,14 +502,35 @@
     c.fillStyle = g; c.fillRect(0, 0, 300, 80);
     _state.blade = s; return s;
   }
+  // build127: a soft warm woven-texture HAZE sprite — drawn (source-over, low alpha) behind the loom so the strings
+  // read as threads on FABRIC, not lonely lines on black. Warm-grey/amber vertical-ish weave, cheap single drawImage.
+  function _weaveHaze() {
+    if (_state.whz) return _state.whz;
+    var s = document.createElement('canvas'); s.width = s.height = 128;
+    var c = s.getContext('2d');
+    var g = c.createRadialGradient(64, 64, 4, 64, 64, 78);
+    g.addColorStop(0, 'rgba(60,34,20,0.55)'); g.addColorStop(0.5, 'rgba(38,22,14,0.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 128, 128);
+    // faint warm cross-hatch to read as woven cloth (baked once — not per-frame)
+    c.globalAlpha = 0.10; c.strokeStyle = 'rgba(150,96,56,1)'; c.lineWidth = 1;
+    for (var hx = 8; hx < 128; hx += 12) { c.beginPath(); c.moveTo(hx, 0); c.lineTo(hx, 128); c.stroke(); }
+    for (var hy = 8; hy < 128; hy += 16) { c.beginPath(); c.moveTo(0, hy); c.lineTo(128, hy); c.stroke(); }
+    c.globalAlpha = 1;
+    _state.whz = s; return s;
+  }
   function drawWeave(dt, st) {
     var w = _w, h = _h, lite = _lite(), reduce = _reduce();
     var NS = lite ? 7 : 11, SEG = lite ? 20 : 40, mf = _motionFloor(st), missK = st.missK || 0;
+    var NW = lite ? 9 : 18;   // build127: WARP threads — near-vertical threads crossing the horizontal weft → a real LOOM
     var W = _state.wv;
     if (!W || _state.dirty || W.NS !== NS) {
       _state.dirty = false;
-      W = _state.wv = { NS: NS, S: [], pulses: [], pi: 0, sweep: -1, sweepCd: 0, swept: 0, dust: [] };
+      // build127: DEPTH+FABRIC PASS. New fixed pools (alloc ONLY here at reseed — never in the render loop): vertical
+      // WARP threads (xf base + sway phase) that cross the horizontal weft strings into a woven fabric, so the loom
+      // fills the frame instead of being a few lonely lines. Nodes are computed inline at draw (no pool needed).
+      W = _state.wv = { NS: NS, NW: NW, S: [], warp: [], pulses: [], pi: 0, sweep: -1, sweepCd: 0, swept: 0, dust: [] };
       for (var i0 = 0; i0 < NS; i0++) W.S.push({ amp: 0 });
+      for (var iw = 0; iw < NW; iw++) W.warp.push({ xf: (iw + 0.5) / NW, ph: Math.random() * 6.28, band: Math.random() });   // xf across the frame, own sway phase, own spectrum band for its shimmer
       for (var p0 = 0; p0 < 3; p0++) W.pulses.push({ on: false, i: 0, x: 0 });                  // max 3 concurrent (ring buffer)
       if (!lite) for (var d0 = 0; d0 < 90; d0++) W.dust.push({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01 });   // pt4: 40→90 — fills empty negative space between strings
     }
@@ -470,6 +553,16 @@
     // 3.0(B) opaque clear (overscanned for the camera)
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
+    // build127: woven-texture BACKDROP HAZE — 3 overlapping warm cloth patches (source-over, low alpha) behind the
+    // loom so the frame reads as fabric, not lonely lines on black. brightens gently with combo (the loom "warms up").
+    if (!lite) {
+      var haze = _weaveHaze(), hzA = 0.22 + comboGlow * 0.22 + level * 0.10;
+      ctx.globalAlpha = clamp(hzA, 0, 0.6);
+      ctx.drawImage(haze, w * 0.02, h * 0.10, w * 0.5, h * 0.82);
+      ctx.drawImage(haze, w * 0.30, h * 0.06, w * 0.55, h * 0.9);
+      ctx.drawImage(haze, w * 0.58, h * 0.12, w * 0.5, h * 0.8);
+      ctx.globalAlpha = 1;
+    }
     ctx.globalCompositeOperation = 'lighter';
     var litFrom = NS - Math.round(clamp(st.tier, 0, 5) / 5 * NS);   // combo ignition bottom-up: lit if i >= litFrom
     if (missK > 0.02) litFrom = Math.min(NS, litFrom + 1);          // display-only: the loom loses a string while dim
@@ -493,6 +586,65 @@
         if (pass === 0) { ctx.strokeStyle = _hsl(38, 80, 60, clamp(0.05 + amp * 0.25, 0, 0.5)); ctx.lineWidth = (5 + amp * 8) * _dpr; }
         else { ctx.strokeStyle = _hsl(40, 72, clamp(lightC, 30, 96), clamp(alpha, 0, 1)); ctx.lineWidth = 1.6 * _dpr; }
         ctx.stroke();
+      }
+    }
+    // build127: VERTICAL WARP THREADS — the weft (horizontal strings) now crosses a set of warp threads into a real
+    // woven LOOM. Each thread runs top→bottom with a subtle perspective FAN (converges toward center at the top,
+    // spreads at the bottom) + a gentle per-thread sway; a FAR dim pass + a near brighter pass give depth. Threads
+    // shimmer on their own spectrum band. Sway/fan FROZEN under reduce-motion. Cost: NW×2passes×~10 segs, capped.
+    var loomTop = h * 0.09, loomBot = h * 0.95, warpN = W.warp.length;
+    var WSEG = lite ? 6 : 10;
+    // FAR dim ghost warp pass (depth) — skipped under _soft
+    if (!lite && !_soft) {
+      for (var wf = 0; wf < warpN; wf++) {
+        var TWf = W.warp[wf], sprF = 0.16 + 0.68 * TWf.xf;           // far layer packed tighter (reads as "behind")
+        ctx.strokeStyle = _hsl(30, 40, 34 + comboGlow * 12, 0.05 + comboGlow * 0.06); ctx.lineWidth = 1 * _dpr;
+        ctx.beginPath();
+        for (var gf = 0; gf <= WSEG; gf++) {
+          var tf = gf / WSEG, yf = loomTop + (loomBot - loomTop) * tf;
+          var fanF = (sprF - 0.5) * (0.45 + 0.55 * tf);              // perspective: narrow at top, wide at bottom
+          var swF = reduce ? 0 : Math.sin(_t * 0.5 + TWf.ph + tf * 2.2) * w * 0.004 * mf;
+          var xf2 = w * (0.5 + fanF) + swF;
+          if (gf === 0) ctx.moveTo(xf2, yf); else ctx.lineTo(xf2, yf);
+        }
+        ctx.stroke();
+      }
+    }
+    // NEAR warp pass — brighter, thicker; shimmer on its band + combo ignition. This is the fabric the player sees.
+    var warpLit = comboGlow;
+    for (var wn = 0; wn < warpN; wn++) {
+      var TW = W.warp[wn], spr = 0.06 + 0.88 * TW.xf;                // near layer spans the full frame
+      var wv2 = sp[(TW.band * NS) | 0] || 0, wamp = Math.min(1.2, Math.max(wv2 * wv2 * 1.4, strum * 0.6));
+      var wAlpha = (0.10 + 0.10 * warpLit) + wamp * 0.22 + strum * 0.25;
+      var wLight = 44 + wamp * 34 + warpLit * 14 + strum * 22;
+      ctx.strokeStyle = _hsl(36, 66, clamp(wLight, 30, 92), clamp(wAlpha, 0, 0.9)); ctx.lineWidth = (1.2 + wamp * 1.6) * _dpr;
+      ctx.beginPath();
+      for (var gn = 0; gn <= WSEG; gn++) {
+        var tn = gn / WSEG, yn = loomTop + (loomBot - loomTop) * tn;
+        var fanN = (spr - 0.5) * (0.5 + 0.5 * tn);
+        var swN = reduce ? 0 : Math.sin(_t * (0.7 + wn * 0.03) + TW.ph + tn * 2.6) * w * 0.008 * wamp * mf;
+        var xn = w * (0.5 + fanN) + swN;
+        yn = (yn | 0) + 0.5;
+        if (gn === 0) ctx.moveTo(xn, yn); else ctx.lineTo(xn, yn);
+      }
+      ctx.stroke();
+    }
+    // build127: glowing INTERSECTION NODES at warp×weft crossings — pulse on beat/strum. Sampled on a coarse grid
+    // (every other warp × every other weft, capped) so it's a jewelled lattice without exploding the draw count.
+    if (!lite) {
+      var nodeGlow = _emberGlow(), nodePulse = clamp(beatPunch * 0.9 + strum * 0.8 + comboGlow * 0.3, 0, 1.3);
+      var wStep = warpN > 12 ? 2 : 1, sStep = NS > 8 ? 2 : 1, nodeCount = 0, nodeCap = _soft ? 24 : 60;
+      for (var nwi = 0; nwi < warpN && nodeCount < nodeCap; nwi += wStep) {
+        var NW2 = W.warp[nwi], nspr = 0.06 + 0.88 * NW2.xf;
+        for (var nsi = 0; nsi < NS && nodeCount < nodeCap; nsi += sStep) {
+          var nyB = h * (0.14 + 0.76 * Math.pow((nsi + 1) / NS, 1.25));
+          var ntn = clamp((nyB - loomTop) / (loomBot - loomTop), 0, 1);
+          var nfan = (nspr - 0.5) * (0.5 + 0.5 * ntn), nx = w * (0.5 + nfan);
+          var na = (0.14 + 0.5 * nodePulse) * (0.5 + 0.5 * (W.S[nsi].amp || 0)); if (na < 0.04) { nodeCount++; continue; }
+          if (nodeGlow && !_soft) { var ngd = (10 + nodePulse * 14) * _dpr; ctx.globalAlpha = clamp(na * 0.5, 0, 0.7); ctx.drawImage(nodeGlow, nx - ngd * 0.5, nyB - ngd * 0.5, ngd, ngd); ctx.globalAlpha = 1; }
+          ctx.fillStyle = _hsl(42, 88, 84, clamp(na, 0, 0.85)); ctx.beginPath(); ctx.arc(nx, nyB, (1.3 + nodePulse * 1.4) * _dpr, 0, 6.2832); ctx.fill();
+          nodeCount++;
+        }
       }
     }
     if (!lite && !_soft) {                                          // pt4: SUB-HARMONIC string layer at half-opacity between the main strings — reuses the yB formula offset by 0.5 index (visually doubles density, no new logic)
@@ -572,10 +724,23 @@
     var D = _state.dw;
     if (!D || _state.dirty) {
       _state.dirty = false;
-      D = _state.dw = { elev: 0, sky: null, skyElev: -1, stars: [], stars2: [], scroll: 0, flash: 0 };
+      // build127: DEPTH PASS — the empty upper sky was the worst offender. New fixed pools (allocated ONLY here at
+      // reseed, never in the render loop — the hard no-per-frame-alloc invariant): two parallax horizon RIDGE
+      // silhouettes (near+far skyline profiles → a sense of PLACE), high aurora RIBBONS, and distant horizon LIGHTS
+      // (city glints). Sky BANDS are drawn procedurally (no pool). All warm-only (crimson/amber/gold/warm-grey).
+      D = _state.dw = { elev: 0, sky: null, skyElev: -1, stars: [], stars2: [], scroll: 0, flash: 0, ridgeF: null, ridgeN: null, ribbons: [], lights: [] };
       var nSt = lite ? 70 : 140;   // pt4: 70→140 desktop — fills the empty upper sky (LEGIBILITY CONTRACT budget, see RENDERERS note)
       for (var i0 = 0; i0 < nSt; i0++) D.stars.push({ x: Math.random(), y: Math.random() * 0.55, tw: Math.random() * 6.28 });   // precomputed, top 55%
       if (!lite) { var nSt2 = 80; for (var i1 = 0; i1 < nSt2; i1++) D.stars2.push({ x: Math.random(), y: Math.random() * 0.5, tw: Math.random() * 6.28, d: 0.4 + Math.random() * 0.4 }); }   // pt4: dimmer PARALLAX second layer, bassN-scrolled
+      // RIDGE silhouettes — fixed normalized (x,y) profile points (0..1). Far = smooth low hills; near = jagged skyline
+      // (city strip). Drawn as filled dark-warm polygons parallax-shifted by bass. Point count fixed → no loop alloc.
+      var RF = 16, RN = 26; D.ridgeF = new Float32Array(RF); D.ridgeN = new Float32Array(RN);
+      for (var rf = 0; rf < RF; rf++) D.ridgeF[rf] = 0.30 + 0.55 * Math.abs(Math.sin(rf * 1.7 + 0.6)) * (0.6 + 0.4 * Math.random());   // rolling far hills (height frac of the ridge band)
+      for (var rn = 0; rn < RN; rn++) { var tall = Math.random(); D.ridgeN[rn] = (tall < 0.28 ? 0.55 + Math.random() * 0.45 : 0.12 + Math.random() * 0.32); }   // jagged skyline: some towers, mostly low
+      // AURORA ribbons — high warm light-bands, each a slow sine polyline. Fixed params; phase drifts (frozen on reduce).
+      if (!lite) { var nRib = 3; for (var rb = 0; rb < nRib; rb++) D.ribbons.push({ yc: 0.10 + rb * 0.12, amp: 0.03 + Math.random() * 0.04, k: 1.4 + rb * 0.7, sp: (0.05 + Math.random() * 0.06) * (rb % 2 ? -1 : 1), ph: Math.random() * 6.28, hue: 6 + rb * 10 }); }
+      // distant horizon LIGHTS — a row of tiny warm glints just under the horizon (city). Fixed x, twinkle on treble.
+      if (!lite) { var nLi = 40; for (var li = 0; li < nLi; li++) D.lights.push({ x: Math.random(), off: Math.random() * 0.018, tw: Math.random() * 6.28, s: 0.5 + Math.random() * 0.9 }); }
     }
     var frozen = st.hold > 0;
     // the sun eases toward the tier; the cutaway overshoots +0.2 and eases back — the sun JUMPS a notch
@@ -595,6 +760,18 @@
     ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);   // 3.0(B) opaque clear
     ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06); ctx.clip();   // sun/sky clipped → the sun rises BEHIND the horizon
     ctx.fillStyle = D.sky; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06);
+    // build127: atmospheric SKY BANDS — 4 stratified warm bands stacked toward the horizon so the sky reads as a
+    // living, layered dawn (not one flat fill). Alpha grows with elevation; hue warms band-by-band down to the horizon.
+    // Cheap: 4 fillRects, source-over. LOOP-SEAMLESS — no motion, purely elevation-driven (a slow state, not a strobe).
+    if (!lite) {
+      var bandTop = HY - h * 0.34, bandH = (HY - bandTop) / 4;
+      for (var bb = 0; bb < 4; bb++) {
+        var bf = bb / 3;                                            // 0=high, 1=at horizon
+        var bAlpha = (0.06 + 0.14 * bf) * (0.4 + 0.6 * clamp(elev, 0, 1));
+        ctx.fillStyle = _hsl(6 + bf * 22 + elev * 8, 62 + bf * 20, 8 + bf * 16 + elev * 10, bAlpha);
+        ctx.fillRect(-w * 0.06, bandTop + bb * bandH, w * 1.12, bandH + 1);
+      }
+    }
     if (!lite) {                                                    // stars — treble twinkles them, elevation dissolves them
       // pt4: DENSITY scales with live audio, not just per-star twinkle intensity — quiet passages show fewer stars lit,
       // loud passages fill the sky. activeFrac reuses trebleN (existing normalized input, no new plumbing).
@@ -622,6 +799,40 @@
       }
     }
     ctx.globalCompositeOperation = 'lighter';
+    // build127: AURORA RIBBONS — soft warm light-bands drifting high in the sky, filling the previously-dead upper
+    // third. Each is a smooth sine polyline (SEG-capped), additive at low alpha. Phase drift is FROZEN under
+    // reduce-motion (a11y) and under frozen (held-breath). LOOP-SEAMLESS: pure continuous sine, no reset pop.
+    // Perf: dropped entirely under _soft (like the god-rays); ≤3 ribbons × 24 segs ≤ 72 lineTo — inside budget.
+    if (!lite && !_soft && D.ribbons.length) {
+      var RSEG = 24, ribFade = 1 - Math.min(1, elev) * 0.4;         // ribbons soften as the sun rises (dawn burns them off)
+      for (var rbi = 0; rbi < D.ribbons.length; rbi++) {
+        var RB = D.ribbons[rbi];
+        var ph = (reduce || frozen) ? RB.ph : RB.ph + _t * RB.sp;   // drift frozen under reduce-motion / held-breath
+        var ra2 = (0.05 + 0.06 * midN + 0.05 * (st.od || 0)) * ribFade; if (ra2 < 0.015) continue;
+        ctx.strokeStyle = _hsl(RB.hue + comboHue * 0.2, 82, 60 + midN * 20, ra2);
+        ctx.lineWidth = (h * 0.018 * (0.7 + 0.6 * Math.min(1, midN * 1.5 + 0.3))) * (0.6 + 0.4 * RB.amp * 12);
+        ctx.beginPath();
+        for (var rg = 0; rg <= RSEG; rg++) {
+          var rx = -w * 0.06 + w * 1.12 * (rg / RSEG), rxf = rg / RSEG;
+          var ry = RB.yc * h + Math.sin(rxf * 6.2832 * RB.k + ph) * RB.amp * h + Math.sin(rxf * 3.1 - ph * 0.7) * RB.amp * h * 0.4;
+          if (rg === 0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+        }
+        ctx.stroke();
+      }
+    }
+    // build127: distant horizon LIGHTS — a row of tiny warm city glints hugging the horizon, twinkling on treble.
+    // Fixed x positions (pool), no motion → LOOP-SEAMLESS. Cheap 1px+glow fillRects. Fades as the sun rises.
+    if (!lite && D.lights.length) {
+      var liFade = clamp(1 - Math.min(1, elev) * 0.5, 0.3, 1), liY = HY - h * 0.006;
+      for (var lii = 0; lii < D.lights.length; lii++) {
+        var LI = D.lights[lii];
+        var la = (0.18 + 0.5 * (0.5 + 0.5 * Math.sin(_t * 1.6 + LI.tw)) * (0.4 + trebleN * 0.7)) * liFade * LI.s;
+        if (la < 0.03) continue;
+        var lx = ((LI.x * w) | 0) + 0.5, ly = ((liY - LI.off * h) | 0) + 0.5;
+        ctx.fillStyle = _hsl(34 + trebleN * 10, 92, 78, clamp(la, 0, 0.85));
+        ctx.fillRect(lx, ly, 1.4 * _dpr, 1.4 * _dpr);
+      }
+    }
     if (!lite && !_soft) {                                          // god-rays — 11 fanned draws of the one cached wedge; pt4: _soft watchdog drops this first (heaviest add here, 11 drawImage/frame)
       var ray = _raySprite();
       var ra = clamp(0.10 + midN * 0.25 + (st.od || 0) * 0.3, 0, 0.7);
@@ -636,9 +847,31 @@
     }
     var glow = _emberGlow();                                        // the sun — glow sprite + crisp core
     var sd = h * (0.18 + Math.min(1, elev) * 0.16 + bassN * 0.03);
+    // build127: volumetric ATMOSPHERE HALO — a wide, soft warm wash behind the sun so the disc reads as a glowing
+    // body embedded in air, not a flat sprite. One extra drawImage of the SAME cached glow at ~2× scale, low alpha.
+    if (glow) { var hd = sd * (2.0 + 0.5 * Math.min(1, elev)); ctx.globalAlpha = clamp(0.16 + elev * 0.22 + midN * 0.06, 0, 0.6); ctx.drawImage(glow, cx - hd, sunY - hd, hd * 2, hd * 2); ctx.globalAlpha = 1; }
     if (glow) { ctx.globalAlpha = clamp(0.55 + elev * 0.4, 0, 1); ctx.drawImage(glow, cx - sd, sunY - sd, sd * 2, sd * 2); ctx.globalAlpha = 1; }
     if (!lite && elev > 0.02) { ctx.fillStyle = _hsl(38, 100, 88, 1); ctx.beginPath(); ctx.arc(cx, sunY, h * 0.035 * Math.min(1, elev), 0, 6.2832); ctx.fill(); }
     ctx.restore();                                                  // sky clip off (restore also resets gco)
+    // build127: layered horizon RIDGE silhouettes — FAR rolling hills + NEAR jagged skyline, both drawn as solid
+    // dark-warm filled profiles just above the horizon. This gives the scene PLACE + parallax depth (they slide
+    // opposite the bass-driven star scroll). source-over solid so they read as true silhouettes (occlude the sky).
+    // Points are a fixed pool (no loop alloc). Parallax offset FROZEN under reduce-motion.
+    ctx.globalCompositeOperation = 'source-over';
+    if (D.ridgeF) {
+      var parF = reduce ? 0 : Math.sin(_t * 0.03) * 0.010 * w + (bassN - 0.5) * 0.006 * w;   // far ridge: gentle
+      var ridgeBand = h * 0.16, baseF = HY;                          // far ridge sits right on the horizon
+      ctx.fillStyle = _hsl(14, 42, 5 + elev * 4, 0.92);
+      ctx.beginPath(); ctx.moveTo(-w * 0.08, HY + h * 0.02);
+      for (var qf = 0; qf < D.ridgeF.length; qf++) { var fx = -w * 0.08 + (w * 1.16) * (qf / (D.ridgeF.length - 1)) + parF; ctx.lineTo(fx, baseF - D.ridgeF[qf] * ridgeBand); }
+      ctx.lineTo(w * 1.08, HY + h * 0.02); ctx.closePath(); ctx.fill();
+      var parN = reduce ? 0 : Math.sin(_t * 0.05 + 1.3) * 0.020 * w + (bassN - 0.5) * 0.014 * w;   // near skyline: stronger parallax
+      var skyBand = h * 0.24, baseN = HY + h * 0.012;
+      ctx.fillStyle = _hsl(10, 46, 3 + elev * 3, 0.97);
+      ctx.beginPath(); ctx.moveTo(-w * 0.08, HY + h * 0.03);
+      for (var qn = 0; qn < D.ridgeN.length; qn++) { var nx = -w * 0.08 + (w * 1.16) * (qn / (D.ridgeN.length - 1)) + parN; var ny = baseN - D.ridgeN[qn] * skyBand; ctx.lineTo(nx, ny); }
+      ctx.lineTo(w * 1.08, HY + h * 0.03); ctx.closePath(); ctx.fill();
+    }
     ctx.globalCompositeOperation = 'lighter';
     // GROUND — the endless one-point-perspective fretboard (bass = scroll speed × the earned-motion floor)
     if (!frozen && !reduce) D.scroll += dt * (0.05 + bassN * 0.22 + (st.od || 0) * 0.1) * mf;
