@@ -2838,6 +2838,8 @@
         else { _be.hidden = true; _be._best = 0; }
       }
     } catch (e) {}
+    // RIFT REPLAY: clear the replay ring at every run boundary so a clip only covers the current run (additive, guarded).
+    try { if (window.RhythmReplay) window.RhythmReplay.reset(); } catch (e) {}
   }
 
   let _playGen = 0;   // build57: launch-generation token — a newer beginPlay() invalidates older ones (see guards below)
@@ -3399,6 +3401,21 @@
     } catch (e) {}
     // build8c: celebratory burst over the card — confetti/fireworks (+ gradeup-flare when the badge lands)
     if (!results.failed) celebrateResults(accPct, grade);
+    // RIFT REPLAY: inject the branded "SHARE YOUR RIFT" button into the results screen (dedupes itself). It builds
+    // the shareable peak-combo clip from frames the tick sampled this run. Guarded + additive; a null ring degrades
+    // to a branded PNG still inside the module. Uses the in-scope run vars (tname/tartist/results/grade).
+    try {
+      if (window.RhythmReplay) {
+        var _rrHost = $('results');
+        if (_rrHost) window.RhythmReplay.offerOnResults(_rrHost, {
+          capture: {
+            song: tname || '',
+            artist: tartist || '',
+            endStats: { score: (results && results.score), combo: (results && results.max_combo), grade: grade }
+          }
+        });
+      }
+    } catch (e) {}
   }
 
   // ---------- PAUSE ----------
@@ -5150,6 +5167,10 @@
 
     if (state === 'paused') { render(dt, true); return; }
     if (state !== 'playing') return;
+    // RIFT REPLAY: sample the prior frame's gameplay canvas into the replay ring (fps-gated + cheap inside the
+    // module). One-frame-stale is imperceptible for a 12fps clip. try/catch-wrapped so a replay failure can NEVER
+    // break the hot loop; additive only — does not touch scoring/notes/timing/hit-detection.
+    if (window.RhythmReplay) { try { window.RhythmReplay.tick(); } catch (e) {} }
     if (!fxLite && !_qAutoDone) _qSample(_rawMs);   // build66: adaptive-quality sampler (only while actually playing)
 
     pollGamepad();              // poll at frame-top so a controller/guitar press is judged this frame
@@ -7841,6 +7862,17 @@
       grade: (function (p) { return p >= 95 ? 'S' : p >= 88 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D'; })(accFrac * 100)
     };
   };
+  // RIFT REPLAY wiring (additive, fully guarded — never touches scoring/chart/timing). getFrame hands the
+  // module the live gameplay canvas; getStats hands it the same live snapshot the HUD reads. Degrades to no-op
+  // if replay.js is absent or a callback throws. See replay.js (window.RhythmReplay) + CLAUDE.md.
+  // LOAD-ORDER: replay.js is included AFTER game.js in index.html, so window.RhythmReplay may not exist yet at
+  // parse time — init once now if it's ready, else retry on window.load (all scripts parsed by then). Both paths
+  // stay in this closure so `canvas` / getLiveStats remain reachable; idempotent (init() safe to call again).
+  var _rrReplayInit = function () {
+    try { if (window.RhythmReplay) window.RhythmReplay.init({ getFrame: function () { return canvas; }, getStats: function () { return window.RhythmGame.getLiveStats(); } }); } catch (e) {}
+  };
+  if (window.RhythmReplay) _rrReplayInit();
+  else { try { window.addEventListener('load', _rrReplayInit, { once: true }); } catch (e) {} }
   // versus split-screen (P2): a compact per-frame render snapshot + drained hit/miss events for the
   // opponent ghost deck. Additive + side-effect-free except it drains the hits buffer.
   window.RhythmGame.getRenderFrame = function () {
