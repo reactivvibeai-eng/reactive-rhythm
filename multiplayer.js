@@ -1076,8 +1076,10 @@
   // per match, the vars are not). Gates (_tugLite/_tugRM) are read ONCE per mount (contract rule 4).
   var _tugX = 0, _tugV = 0, _prevMyScore = 0, _prevOppSc = 0, _oppImp = 0, _tugLastT = 0;
   var _tugLite = false, _tugRM = false, _wasEnd = false, _wasPhoto = false, _tugSign = 0, _tugFlipAt = 0, _tugAriaAt = 0;
-  var _tugFxCtx = null, _tugFxDirty = false;
-  var _tugSpk = []; (function () { for (var i = 0; i < 24; i++) _tugSpk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); })();
+  var _tugFxCtx = null, _tugFxDirty = false, _tugClose = 0, _tugCoreT = 0;   // build128: _tugClose = eased closeness 0..1 (dead-heat=1), _tugCoreT = molten-core shimmer phase
+  // build128: FRICTION-FRONT spark pool grown 24→40. Each slot carries `hot` (white-hot core particle vs a
+  // colour-trailing ember) + `r` (radius) so the clash reads as molten sparks grinding off the seam, not flat pixels.
+  var _tugSpk = []; (function () { for (var i = 0; i < 40; i++) _tugSpk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false, hot: false, r: 1 }); })();
   // versus P4: opponent ghost-highway renderer state — pre-allocated sparkle pool (zero per-frame alloc)
   var _gCtx = null;
   var _spk = []; (function () { for (var i = 0; i < 48; i++) _spk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); })();
@@ -1162,7 +1164,7 @@
     // pkg2 (contract rule 8): the tug module state dies with every mount
     _tugX = 0; _tugV = 0; _prevMyScore = 0; _prevOppSc = 0; _oppImp = 0; _tugLastT = 0;
     _wasEnd = false; _wasPhoto = false; _tugSign = 0; _tugFlipAt = 0; _tugAriaAt = 0;
-    _tugFxCtx = null; _tugFxDirty = false; for (var _s2 = 0; _s2 < _tugSpk.length; _s2++) _tugSpk[_s2].on = false;
+    _tugFxCtx = null; _tugFxDirty = false; _tugClose = 0; _tugCoreT = 0; for (var _s2 = 0; _s2 < _tugSpk.length; _s2++) _tugSpk[_s2].on = false;
     for (var _l = 0; _l < 6; _l++) { _gFlash[_l] = 0; _gFlashCr[_l] = false; } _gPrevCombo = 0; _gMissWin = 0;   // reset the rival-deck flash state
     try { document.documentElement.classList.add('rr-vs'); } catch (e) {}   // hide the level's single-deck reactive fate-cards + mechanic prop (they break on a half-deck)
     try { if (window.RhythmGame.setVsMode) window.RhythmGame.setVsMode(true); } catch (e) {}   // engine: fit the guitar to deck HEIGHT (runway)
@@ -1317,80 +1319,135 @@
         var dAr = Math.round(stt.score - _oppEase.sc);
         tug.setAttribute('aria-label', 'Versus score bar: ' + (dAr > 150 ? 'you lead by ' + dAr.toLocaleString() : dAr < -150 ? 'Rival leads by ' + Math.abs(dAr).toLocaleString() : 'even'));
       }
+      // build128 (FRICTION FRONT): CLOSENESS is the master intensity — a dead-heat (seam near centre) grinds the
+      // hardest, a blowout stays calm BY DESIGN. closeness = 1-|lead|, but only while BOTH streams are actually
+      // playing (pre-start / frozen = no friction). Eased so it doesn't strobe on the spring's small overshoots.
+      var bothLive = myP >= 0.03 && opP >= 0.03 && !frozen;
+      var closeRaw = bothLive ? Math.max(0, 1 - Math.abs(_tugX)) : 0;
+      // sharpen: only a genuinely tight contest (|lead| < ~0.55) lights up — squares the low end so a runaway calms fast
+      closeRaw = closeRaw * closeRaw;
+      _tugClose += (closeRaw - _tugClose) * Math.min(1, dtT * 6);
       if (!_tugLite && !_tugRM) {                          // pooled sparks — sleeps completely (zero ctx work) at zero live sparks
-        // build118 p1: ambient clash sparks — continuous low-rate emitter gated on contest intensity (spring
-        // velocity), additive to the existing one-shot flip burst. Reuses the SAME pool/canvas — no new state.
-        var _clashInt = Math.min(1, Math.abs(_tugV) / 0.6);
-        if (_clashInt > 0.15 && Math.random() < _clashInt * 0.5) _tugSpawnClash(tugP);
-        _tugFxTick(dtT * 1000);
+        // Emission = closeness (the grind) + a velocity kicker (a sudden shove throws extra sparks). Dead heat can
+        // fire a burst per frame; a blowout emits nothing. Reuses the SAME pool/canvas — no per-frame allocation.
+        var _velKick = Math.min(1, Math.abs(_tugV) / 0.6);
+        var _emit = Math.min(1, _tugClose * 1.15 + _velKick * 0.35);
+        if (_emit > 0.06) {
+          var _spawns = _emit > 0.72 ? 2 : 1;               // hottest contests double-emit (still pool-capped in the spawner)
+          for (var _e = 0; _e < _spawns; _e++) if (Math.random() < _emit) _tugSpawnClash(tugP, _emit);
+        }
+        _tugCoreT += dtT;                                   // molten-core shimmer clock
+        _tugFxTick(dtT * 1000, tugP, _tugClose);
       }
     }
   }
-  // pkg2 helpers — jolt shudder, lead-flip spark burst, pooled spark tick (24 slots, canvas ONLY for sparks)
+  // pkg2 → build128 helpers — jolt shudder, lead-flip FLARE burst, friction-clash emitter, pooled spark+core tick
+  // (40 slots, canvas 54px tall, ONLY for the friction FX). Colour scheme: YOU=crimson (P.cr true), RIVAL=gold.
+  var TUG_FX_H = 54, TUG_SEAM_Y = 13;   // canvas height + the seam contact line the sparks grind off
   function _tugJolt(tug) {
     if (_tugRM || !tug || tug._joltT) return;
     tug.classList.add('jolt');
     tug._joltT = setTimeout(function () { tug._joltT = 0; tug.classList.remove('jolt'); }, 110);
   }
+  // lead-flip FLARE — a punchy detonation of hot sparks at the moment the front changes hands. Bigger + faster than
+  // the ambient grind. dir>0 = YOU took the front (crimson), dir<0 = rival took it (gold). Half the burst is white-hot
+  // core, half is the new leader's colour, biased toward the leader's pole (the shove "throws" debris that way).
   function _tugSpawnFlip(tugP, dir) {
     var cv = $('vs-tug-fx'); if (!cv) return;
     var w = cv.clientWidth || 0; if (!w) return;
-    if (cv.width !== w) { cv.width = w; cv.height = 44; }
+    if (cv.width !== w) { cv.width = w; cv.height = TUG_FX_H; }
     var x0 = tugP / 100 * w, n = 0;
-    for (var i = 0; i < _tugSpk.length && n < 16; i++) {  // build118 p1: 10→16 particles — a bigger, more satisfying shove burst
+    for (var i = 0; i < _tugSpk.length && n < 22; i++) {  // build128: 16→22 — a bigger, more satisfying flare
       var P = _tugSpk[i]; if (P.on) continue;
       P.on = true; n++;
-      P.x = x0; P.y = 9 + Math.random() * 6;
-      var sp = 40 + Math.random() * 120;
-      P.vx = (Math.random() < 0.72 ? dir : -dir) * sp;    // biased toward the NEW leader's pole
-      P.vy = -(30 + Math.random() * 60);
-      P.max = P.life = 200 + Math.random() * 120;
-      P.cr = dir < 0;                                     // crimson when the rival takes the front, gold when you do
+      P.x = x0 + (Math.random() * 4 - 2); P.y = TUG_SEAM_Y + (Math.random() * 6 - 3);
+      var sp = 55 + Math.random() * 150;
+      P.vx = (Math.random() < 0.74 ? dir : -dir) * sp;    // biased toward the NEW leader's pole
+      P.vy = -(45 + Math.random() * 85);
+      P.max = P.life = 230 + Math.random() * 150;
+      P.hot = (n % 2 === 0);                               // every other particle is a white-hot core
+      P.cr = dir > 0;                                     // crimson when YOU take the front, gold when the rival does
+      P.r = P.hot ? (1.4 + Math.random() * 1.1) : (1.0 + Math.random() * 1.0);
     }
     _tugFxDirty = true;
   }
-  // build118 p1: ambient clash-at-the-seam sparks — low-rate continuous emitter (0-1/frame, caller-gated on
-  // intensity) using the SAME pool as _tugSpawnFlip. Smaller vy spread than the flip burst (a "sizzle" not a
-  // "shove"), colored by the CURRENT leader sign (not a flip direction — there may be no flip in progress).
-  function _tugSpawnClash(tugP) {
+  // build128 friction-clash emitter — the continuous grind of the two fronts. Caller gates rate/count on CLOSENESS
+  // (dead heat = a burst per frame, blowout = nothing). `inten` (0..1) hots up the spark: tighter contests throw
+  // faster, whiter, larger sparks. Colour = the CURRENT leader (you=crimson, rival=gold); a dead-even seam mixes both.
+  function _tugSpawnClash(tugP, inten) {
     var cv = $('vs-tug-fx'); if (!cv) return;
     var w = cv.clientWidth || 0; if (!w) return;
-    if (cv.width !== w) { cv.width = w; cv.height = 44; }
+    if (cv.width !== w) { cv.width = w; cv.height = TUG_FX_H; }
+    inten = inten || 0.4;
     var x0 = tugP / 100 * w;
     for (var i = 0; i < _tugSpk.length; i++) {
       var P = _tugSpk[i]; if (P.on) continue;
       P.on = true;
-      P.x = x0 + (Math.random() * 6 - 3); P.y = 9 + Math.random() * 6;
-      var sp = 20 + Math.random() * 60;                    // narrower spread than a flip burst
+      P.x = x0 + (Math.random() * 8 - 4); P.y = TUG_SEAM_Y + (Math.random() * 6 - 3);
+      var sp = (24 + Math.random() * 70) * (0.7 + inten * 0.6);   // hotter contests throw faster
       P.vx = (Math.random() < 0.5 ? 1 : -1) * sp;
-      P.vy = -(16 + Math.random() * 30);
-      P.max = P.life = 120 + Math.random() * 80;           // shorter-lived — a sizzle, not a shower
-      P.cr = _tugSign < 0;                                 // colored by the CURRENT leader, not a flip dir
-      break;                                                // spawn exactly one slot per call (caller caps to ≤1/frame)
+      P.vy = -(20 + Math.random() * 42) * (0.8 + inten * 0.5);
+      P.max = P.life = 130 + Math.random() * 90;
+      P.hot = Math.random() < (0.28 + inten * 0.4);        // the closer the fight, the more white-hot cores
+      // colour by the current leader; when genuinely even (|sign| tiny) split 50/50 so both hues spark off the seam
+      P.cr = _tugSign > 0 ? true : _tugSign < 0 ? false : (Math.random() < 0.5);
+      P.r = P.hot ? (1.3 + Math.random() * 1.0) : (0.9 + Math.random() * 0.9);
+      break;                                                // spawn exactly one slot per call (caller loops for more)
     }
     _tugFxDirty = true;
   }
-  function _tugFxTick(dtMs) {
+  // pooled spark + molten-core tick. Draws (1) a glowing white-hot core blob at the seam whose size/alpha scale with
+  // closeness (the grinding contact point), then (2) every live spark as an additive glowing dot. ZERO per-frame alloc
+  // (reuses a cached radial-gradient sprite for the core). Sleeps fully when idle AND closeness is ~0.
+  var _tugCoreSprite = null;
+  function _tugCoreBlob() {   // build once: a 48px white→gold→transparent radial sprite blitted for the molten core
+    if (_tugCoreSprite) return _tugCoreSprite;
+    var s = document.createElement('canvas'); s.width = s.height = 48;
+    var c = s.getContext('2d'); if (!c) return null;
+    var g = c.createRadialGradient(24, 24, 0, 24, 24, 24);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,240,205,0.9)');
+    g.addColorStop(0.65, 'rgba(255,176,90,0.35)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+    c.fillStyle = g; c.fillRect(0, 0, 48, 48);
+    _tugCoreSprite = s; return s;
+  }
+  function _tugFxTick(dtMs, tugP, close) {
     var cv = $('vs-tug-fx'); if (!cv) return;
     var live = 0, i, P;
     for (i = 0; i < _tugSpk.length; i++) if (_tugSpk[i].on) live++;
-    if (!live) {                                          // SLEEP: at zero sparks skip ALL ctx work (one final wipe, then nothing)
+    var coreOn = (close || 0) > 0.05;
+    if (!live && !coreOn) {                               // SLEEP: no sparks AND no molten core → skip ALL ctx work
       if (_tugFxDirty && _tugFxCtx) { _tugFxCtx.clearRect(0, 0, cv.width, cv.height); _tugFxDirty = false; }
       return;
     }
     if (!_tugFxCtx) { _tugFxCtx = cv.getContext('2d'); if (!_tugFxCtx) return; }
-    var w = cv.clientWidth || 0; if (w && cv.width !== w) { cv.width = w; cv.height = 44; }
+    var w = cv.clientWidth || 0; if (w && cv.width !== w) { cv.width = w; cv.height = TUG_FX_H; }
     var ctx = _tugFxCtx, dt = dtMs / 1000;
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.globalCompositeOperation = 'lighter';
+    // (1) molten core at the seam — a glowing contact blob that breathes with closeness (the two forces grinding)
+    if (coreOn) {
+      var sprite = _tugCoreBlob();
+      if (sprite) {
+        var cx = tugP / 100 * cv.width;
+        var shim = 0.82 + 0.18 * Math.sin(_tugCoreT * 12);   // fast molten flicker
+        var sz = (14 + close * 26) * shim;                    // dead heat = big hot core; calm = small
+        ctx.globalAlpha = Math.min(1, close * 1.1) * 0.9;
+        ctx.drawImage(sprite, cx - sz, TUG_SEAM_Y - sz * 0.5, sz * 2, sz);
+      }
+    }
+    // (2) sparks
     for (i = 0; i < _tugSpk.length; i++) {
       P = _tugSpk[i]; if (!P.on) continue;
       P.life -= dtMs;
-      if (P.life <= 0 || P.y > 42) { P.on = false; continue; }
-      P.vy += 380 * dt; P.x += P.vx * dt; P.y += P.vy * dt;
-      ctx.globalAlpha = Math.max(0, P.life / P.max);
-      ctx.fillStyle = P.cr ? '#ff5a64' : '#ffd98a';
-      ctx.fillRect(P.x | 0, P.y | 0, 2, 2);
+      if (P.life <= 0 || P.y > TUG_FX_H - 2) { P.on = false; continue; }
+      P.vy += 400 * dt; P.x += P.vx * dt; P.y += P.vy * dt;
+      var lifeF = Math.max(0, P.life / P.max);
+      ctx.globalAlpha = lifeF;
+      // hot cores burn white→their tint as they cool; embers are the flat side colour
+      ctx.fillStyle = P.hot ? (lifeF > 0.55 ? '#fffdf6' : (P.cr ? '#ffb0b6' : '#ffe6a8'))
+                            : (P.cr ? '#ff5a64' : '#ffd98a');
+      var r = P.r * (0.6 + lifeF * 0.4);
+      ctx.beginPath(); ctx.arc(P.x, P.y, r, 0, 6.283); ctx.fill();
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     _tugFxDirty = true;

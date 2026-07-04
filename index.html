@@ -1789,48 +1789,62 @@
      #vs-tug = UNCLIPPED wrapper (diamond knot/chips/sparks overhang); .vs-tug-track clips the fills.
      Ornament hierarchy: OD surge > endgame pulse > streak breathe — an 18px strip never runs three loops. */
   #vs-tug { display: none; }
-  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 18px; z-index: 47; pointer-events: none; }
-  #game.vs-mode .vs-tug-track { position: absolute; inset: 0; background: rgba(10,6,6,0.55); border-bottom: 1px solid rgba(0,0,0,0.5); overflow: hidden; }
-  /* fills — the HOTTEST pixel is the contact point (the frontier), fading back to each pole */
-  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(270deg, var(--crimson) 0%, rgba(255,31,46,0.14) 100%); }
-  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%; background: linear-gradient(90deg, var(--gold) 0%, rgba(224,169,63,0.12) 100%); }
+  /* build128 (VS-bar redesign — "THE FRICTION FRONT"): taller/more prevalent 26px bar. YOU = CRIMSON/hot-red,
+     RIVAL = GOLD/amber (two saturated warm hues that visibly oppose). The wrapper carries a soft two-sided glow
+     so the whole bar reads hot. The molten white-hot clash lives at the moving seam (knot + spark canvas). */
+  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 26px; z-index: 47; pointer-events: none;
+    filter: drop-shadow(0 2px 10px rgba(0,0,0,0.55)); }
+  #game.vs-mode .vs-tug-track { position: absolute; inset: 0; background: rgba(10,6,6,0.6); border-bottom: 1px solid rgba(0,0,0,0.5);
+    overflow: hidden; box-shadow: inset 0 0 14px rgba(0,0,0,0.55); }
+  /* fills — each side glows its OWN colour, hottest at the contact point (the frontier), fading back to the pole.
+     YOU (right) = crimson; RIVAL/opp (left) = gold. box-shadow inset near the seam edge = the friction rim-light. */
+  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
+    background: linear-gradient(270deg, #ffe08a 0%, var(--gold) 34%, rgba(224,169,63,0.12) 100%);
+    box-shadow: inset -14px 0 20px -8px rgba(255,224,138,0.7); }
+  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%;
+    background: linear-gradient(90deg, #ff7b84 0%, var(--crimson) 34%, rgba(255,31,46,0.12) 100%);
+    box-shadow: inset 14px 0 20px -8px rgba(255,123,132,0.7); }
   /* the always-visible "even" datum */
-  #game.vs-mode #vs-tug-notch { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; transform: translateX(-50%); background: var(--chrome, #dad7d2); opacity: 0.65; }
-  /* chrome DIAMOND knot (clip-path eats box-shadow → the glow rides drop-shadow) + 3px core */
-  #game.vs-mode #vs-tug-knot { position: absolute; left: 50%; top: 50%; width: 10px; height: 24px; transform: translate(-50%,-50%);
-    background: var(--chrome, #dad7d2); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-    filter: drop-shadow(0 0 7px rgba(218,215,210,0.8)); }
-  #game.vs-mode #vs-tug-knot > i { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; transform: translate(-50%,-50%); border-radius: 50%; background: #140a0a; }
-  #game.vs-mode #vs-tug-knot.you-lead { background: var(--gold); filter: drop-shadow(0 0 8px rgba(224,169,63,0.9)); }
-  #game.vs-mode #vs-tug-knot.opp-lead { background: var(--crimson); filter: drop-shadow(0 0 8px rgba(255,31,46,0.9)); }
+  #game.vs-mode #vs-tug-notch { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; transform: translateX(-50%); background: var(--chrome, #dad7d2); opacity: 0.6; }
+  /* MOLTEN clash knot — white-hot core at the contact seam (the two forces grinding together). clip-path eats
+     box-shadow → the glow rides drop-shadow. Bigger than before (14×30) so the friction point really pops. */
+  #game.vs-mode #vs-tug-knot { position: absolute; left: 50%; top: 50%; width: 14px; height: 30px; transform: translate(-50%,-50%);
+    background: radial-gradient(circle at 50% 50%, #fff 0%, #ffe6b0 42%, #ffb060 100%); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    filter: drop-shadow(0 0 10px rgba(255,240,210,0.95)) drop-shadow(0 0 4px rgba(255,255,255,0.9)); }
+  #game.vs-mode #vs-tug-knot > i { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; transform: translate(-50%,-50%); border-radius: 50%; background: #fffdf6; box-shadow: 0 0 6px #fff; }
+  /* leader tints the molten core toward that side's colour, but keeps a white-hot centre (friction never goes cold) */
+  #game.vs-mode #vs-tug-knot.you-lead { background: radial-gradient(circle at 50% 50%, #fff 0%, #ffd0d4 46%, var(--crimson) 100%); filter: drop-shadow(0 0 12px rgba(255,31,46,0.95)) drop-shadow(0 0 4px rgba(255,255,255,0.85)); }
+  #game.vs-mode #vs-tug-knot.opp-lead { background: radial-gradient(circle at 50% 50%, #fff 0%, #ffe6b0 46%, var(--gold) 100%); filter: drop-shadow(0 0 12px rgba(224,169,63,0.95)) drop-shadow(0 0 4px rgba(255,255,255,0.85)); }
   /* player chips at the poles */
   #game.vs-mode .vs-tug-chip { position: absolute; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border-radius: 50%; box-sizing: border-box;
     background: #140a0a; display: grid; place-items: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; z-index: 1; }
-  #game.vs-mode .vs-tug-chip.opp { left: 4px; border: 2px solid rgba(255,31,46,0.8); color: #ff8d96; }
-  #game.vs-mode .vs-tug-chip.you { right: 4px; border: 2px solid rgba(224,169,63,0.8); color: #ffd98c; font-size: 8px; letter-spacing: 0.04em; }
-  /* labels ride INSIDE the bar now */
+  /* player chips at the poles — opp (left) = GOLD ring, you (right) = CRIMSON ring (matches the flipped fills) */
+  #game.vs-mode .vs-tug-chip.opp { left: 4px; border: 2px solid rgba(224,169,63,0.85); color: #ffd98c; }
+  #game.vs-mode .vs-tug-chip.you { right: 4px; border: 2px solid rgba(255,31,46,0.85); color: #ff9ea4; font-size: 8px; letter-spacing: 0.04em; }
+  /* labels ride INSIDE the bar now — colour-matched to each side */
   #game.vs-mode .vs-tug-lab { position: absolute; top: 50%; transform: translateY(-50%); font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.9; text-shadow: 0 1px 4px #000; pointer-events: none; }
-  #game.vs-mode .vs-tug-lab.opp { left: 32px; color: #ffb3b8; }
-  #game.vs-mode .vs-tug-lab.you { right: 32px; color: #ffe3ae; }
-  /* under-glow tide — leader-colored wash bleeding down from the bar */
-  #game.vs-mode #vs-tug::after { content: ''; position: absolute; top: 100%; height: 26px; left: 0; right: 0; pointer-events: none;
-    background: linear-gradient(180deg, rgba(224,169,63,0.14), transparent); opacity: 0.5; }
-  #game.vs-mode #vs-tug.opp-tide::after { background: linear-gradient(180deg, rgba(255,31,46,0.14), transparent); }
-  /* build118 p1: near-blowout heat — brighten the leading fill + deepen the under-glow when |lead| > 0.5. Pure CSS,
-     toggled alongside the existing you-tide/opp-tide class (no new JS state beyond the one class toggle). */
-  #game.vs-mode #vs-tug.hot::after { opacity: 0.85; filter: blur(0.5px); }
-  #game.vs-mode #vs-tug.hot.you-tide #vs-tug-you { filter: brightness(1.2); }
-  #game.vs-mode #vs-tug.hot.opp-tide #vs-tug-opp { filter: brightness(1.2); }
-  /* spark canvas (2.4) — only mounted when !fxLite */
-  #game.vs-mode #vs-tug-fx { position: absolute; top: 0; left: 0; width: 100%; height: 44px; z-index: 48; pointer-events: none; }
+  #game.vs-mode .vs-tug-lab.opp { left: 32px; color: #ffe3ae; }
+  #game.vs-mode .vs-tug-lab.you { right: 32px; color: #ffb3b8; }
+  /* under-glow tide — leader-colored wash bleeding down from the bar (YOU=crimson, opp=gold) */
+  #game.vs-mode #vs-tug::after { content: ''; position: absolute; top: 100%; height: 30px; left: 0; right: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255,31,46,0.16), transparent); opacity: 0.55; }
+  #game.vs-mode #vs-tug.opp-tide::after { background: linear-gradient(180deg, rgba(224,169,63,0.16), transparent); }
+  /* build118 p1 / build128: near-blowout heat — brighten the leading fill + deepen the under-glow when |lead| > 0.5.
+     Pure CSS, toggled alongside the existing you-tide/opp-tide class (no new JS state beyond the one class toggle). */
+  #game.vs-mode #vs-tug.hot::after { opacity: 0.9; filter: blur(0.5px); }
+  #game.vs-mode #vs-tug.hot.you-tide #vs-tug-you { filter: brightness(1.25) saturate(1.15); }
+  #game.vs-mode #vs-tug.hot.opp-tide #vs-tug-opp { filter: brightness(1.25) saturate(1.15); }
+  /* spark canvas (2.4 → build128): friction sparks + molten seam core — only mounted when !fxLite. Taller (54px)
+     to give the shower vertical room now the bar is 26px, and it sits ABOVE the bar (z 48) so sparks fly over it. */
+  #game.vs-mode #vs-tug-fx { position: absolute; top: 0; left: 0; width: 100%; height: 54px; z-index: 48; pointer-events: none; }
   /* shudder on a heavy single impulse (≥0.28) */
   @keyframes vs-tug-jolt { 0% { transform: translateY(0); } 30% { transform: translateY(1.5px); } 60% { transform: translateY(-1px); } 100% { transform: translateY(0); } }
   #game.vs-mode #vs-tug.jolt { animation: vs-tug-jolt 110ms ease-out; }
-  /* 2.3 endgame heat — class-triggered (allowed). A blowout stays calm — that's the design. */
-  #game.vs-mode #vs-tug.endgame { height: 22px; transition: height 180ms ease-out; }
-  #game.vs-mode #vs-tug.endgame #vs-tug-you { background: linear-gradient(90deg, #ffd98a 0%, var(--gold) 35%, rgba(224,169,63,0.15) 100%); }
-  #game.vs-mode #vs-tug.endgame #vs-tug-opp { background: linear-gradient(270deg, #ff8a4a 0%, var(--crimson) 35%, rgba(255,31,46,0.15) 100%); }
-  @keyframes vs-knot-pulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); filter: drop-shadow(0 0 7px rgba(218,215,210,0.8)); } 50% { transform: translate(-50%,-50%) scale(1.25); filter: drop-shadow(0 0 13px rgba(255,235,200,0.95)); } }
+  /* 2.3 endgame heat — class-triggered (allowed). A blowout stays calm — that's the design. YOU=crimson, opp=gold. */
+  #game.vs-mode #vs-tug.endgame { height: 30px; transition: height 180ms ease-out; }
+  #game.vs-mode #vs-tug.endgame #vs-tug-you { background: linear-gradient(90deg, #ff9ea4 0%, var(--crimson) 35%, rgba(255,31,46,0.15) 100%); }
+  #game.vs-mode #vs-tug.endgame #vs-tug-opp { background: linear-gradient(270deg, #ffe9b0 0%, var(--gold) 35%, rgba(224,169,63,0.15) 100%); }
+  @keyframes vs-knot-pulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); filter: drop-shadow(0 0 10px rgba(255,240,210,0.9)); } 50% { transform: translate(-50%,-50%) scale(1.28); filter: drop-shadow(0 0 18px rgba(255,245,220,0.98)); } }
   #game.vs-mode #vs-tug.endgame #vs-tug-knot { animation: vs-knot-pulse 833ms ease-in-out infinite; }
   #game.vs-mode #vs-tug.photo #vs-tug-knot { animation-duration: 416ms; }
   #game.vs-mode #vs-tug.photo #vs-tug-notch { background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.8); opacity: 1; }
@@ -1845,13 +1859,14 @@
     background: linear-gradient(90deg, transparent, rgba(255,217,138,0.55), transparent); background-size: 200% 100%;
     animation: vs-tug-sheen 700ms linear infinite; }
   #game.vs-mode #vs-tug.lite #vs-tug-you.od::after, #game.vs-mode #vs-tug.lite #vs-tug-opp.od::after { content: none; }
-  #game.vs-mode #vs-tug:has(#vs-tug-you.od) #vs-tug-knot { filter: drop-shadow(0 0 18px rgba(224,169,63,0.95)); }
-  #game.vs-mode #vs-tug:has(#vs-tug-opp.od) #vs-tug-knot { filter: drop-shadow(0 0 18px rgba(255,31,46,0.95)); }
-  /* lead-flip crack — one-shot white-hot; declared LAST so it overrides the endgame pulse (equal specificity).
-     build118 p1: JS always applies .flip + .shove together (same setTimeout block) — combine into ONE animation
-     shorthand on the paired selector so neither rule clobbers the other's `animation` property in the cascade. */
-  @keyframes vs-knot-flip { 0% { background: #fff; filter: drop-shadow(0 0 16px rgba(255,255,255,0.95)); } 100% { background: var(--chrome, #dad7d2); } }
-  @keyframes vs-knot-shove { 0% { transform: translate(-50%,-50%) scale(1.4, 0.7); } 100% { transform: translate(-50%,-50%) scale(1, 1); } }
+  #game.vs-mode #vs-tug:has(#vs-tug-you.od) #vs-tug-knot { filter: drop-shadow(0 0 20px rgba(255,31,46,0.95)) drop-shadow(0 0 6px rgba(255,255,255,0.85)); }
+  #game.vs-mode #vs-tug:has(#vs-tug-opp.od) #vs-tug-knot { filter: drop-shadow(0 0 20px rgba(224,169,63,0.95)) drop-shadow(0 0 6px rgba(255,255,255,0.85)); }
+  /* lead-flip FLARE — one-shot white-hot detonation at the seam; declared LAST so it overrides the endgame pulse
+     (equal specificity). build128: the flip is a punchy MOMENT — the molten core blows out to pure white with a
+     big bloom, then settles back to its molten gradient. build118 p1: JS always applies .flip + .shove together
+     (same setTimeout block) — combine into ONE animation shorthand so neither rule clobbers the other's `animation`. */
+  @keyframes vs-knot-flip { 0% { background: #fff; filter: drop-shadow(0 0 22px rgba(255,255,255,0.98)) drop-shadow(0 0 10px rgba(255,235,200,0.9)); } 100% { background: radial-gradient(circle at 50% 50%, #fff 0%, #ffe6b0 42%, #ffb060 100%); filter: drop-shadow(0 0 10px rgba(255,240,210,0.95)) drop-shadow(0 0 4px rgba(255,255,255,0.9)); } }
+  @keyframes vs-knot-shove { 0% { transform: translate(-50%,-50%) scale(1.55, 0.62); } 100% { transform: translate(-50%,-50%) scale(1, 1); } }
   #game.vs-mode #vs-tug #vs-tug-knot.flip { animation: vs-knot-flip 240ms ease-out; }
   #game.vs-mode #vs-tug #vs-tug-knot.flip.shove { animation: vs-knot-flip 240ms ease-out, vs-knot-shove 180ms ease-out; }
   /* reduce-motion backstop (contract rule 4): slow-lerp position + color state only — pseudo-elements included
@@ -1861,11 +1876,14 @@
   #game.vs-mode #vs-you-score { display: flex; flex-direction: column; align-items: flex-end; position: absolute; top: 14px; left: auto; right: 14px; z-index: 45; line-height: 1; pointer-events: none; }   /* YOUR deck = right half → your score hugs the RIGHT outer edge (clear of the runway) */
   #game.vs-mode #vs-opp-score { display: flex; flex-direction: column; align-items: flex-start; position: absolute; top: 14px; left: 14px; right: auto; z-index: 45; line-height: 1; pointer-events: none; }   /* opponent on the LEFT outer edge */
   #game.vs-mode .vs-lab { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.24em; margin-bottom: 2px; }
-  #game.vs-mode #vs-you-score .vs-lab { color: var(--gold); }
-  #game.vs-mode #vs-opp-score .vs-lab { color: var(--ink-dim); }
+  /* build128: labels colour-match their side (YOU=crimson, RIVAL=gold) so a glance reads who's who */
+  #game.vs-mode #vs-you-score .vs-lab { color: #ff8d96; }
+  #game.vs-mode #vs-opp-score .vs-lab { color: #f0c877; }
   #game.vs-mode .vs-val { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 30px; font-variant-numeric: tabular-nums; }
-  #game.vs-mode #vs-you-score .vs-val { color: var(--crimson); text-shadow: 0 0 14px rgba(255,31,46,0.4); }
-  #game.vs-mode #vs-opp-score .vs-val { color: var(--chrome); }
+  /* build128: each score number glows its OWN colour — crimson for YOU, gold for RIVAL — a stronger bloom than
+     before so the battling numbers pop and you read the lead at a glance. */
+  #game.vs-mode #vs-you-score .vs-val { color: var(--crimson); text-shadow: 0 0 16px rgba(255,31,46,0.65), 0 0 4px rgba(255,120,128,0.5); }
+  #game.vs-mode #vs-opp-score .vs-val { color: var(--gold); text-shadow: 0 0 16px rgba(224,169,63,0.6), 0 0 4px rgba(255,224,138,0.5); }
   #game.vs-mode #vs-you-score::before { content: ''; position: absolute; left: -10px; top: -8px; right: -18px; bottom: -10px; background: radial-gradient(120% 120% at 0% 0%, rgba(10,6,6,0.74), rgba(10,6,6,0) 72%); z-index: -1; }
   #game.vs-mode #vs-opp-score::before { content: ''; position: absolute; left: -18px; top: -8px; right: -10px; bottom: -10px; background: radial-gradient(120% 120% at 100% 0%, rgba(10,6,6,0.74), rgba(10,6,6,0) 72%); z-index: -1; }
   /* outer-edge pills: repurpose the single-player gauges in place */
@@ -1920,17 +1938,24 @@
 
   /* build42: GENERATED METAL GAUGE FRAMES — each live value renders INSIDE its frame asset; the engine's JS
      keeps driving the value/fill (no JS change). Opponent reuses the same frames, desaturated to chrome. */
+  /* build128 (score-fit): FIXED plate width (was min-width:172px content-box, which let a 7-digit comma score
+     GROW the plate to ~204px — the frame PNG stretched 18% wider than designed and the oversized plate crept
+     over the half-deck runway = the "bleeding off the UI component" the owner saw). Now a hard 200px BORDER-BOX
+     plate: the frame art renders at a constant size and can never stretch, and box-sizing:border-box means the
+     16px side padding lives INSIDE the 200px (168px inner window). container-type keeps cqi sizing the digits. */
   #game.vs-mode #vs-you-score, #game.vs-mode #vs-opp-score {
-    background: url("assets/mp/gauge-scoreplate.png") center / 100% 100% no-repeat; padding: 9px 16px 11px; min-width: 172px; align-items: center;
-    container-type: inline-size; }   /* QA fix: make the plate a container so the digits can auto-fit its width (see .vs-val clamp below) */
+    background: url("assets/mp/gauge-scoreplate.png") center / 100% 100% no-repeat; padding: 9px 16px 11px;
+    width: 200px; box-sizing: border-box; align-items: center;
+    container-type: inline-size; }   /* fixed border-box width → the number auto-fits the 168px inner window (see .vs-val clamp below) */
   #game.vs-mode #vs-you-score::before, #game.vs-mode #vs-opp-score::before { display: none; }   /* the frame replaces the radial scrim */
   #game.vs-mode #vs-you-score .vs-lab, #game.vs-mode #vs-opp-score .vs-lab { margin-bottom: 0; }
-  /* QA fix (score overflow): the number AUTO-FITS the plate window — a clamp() sized in cqi (container width)
-     scales the digits with the plate and can never spill past it (1–9 digit scores all fit, incl. a 7-digit
-     comma score like 9,070,070). tabular-nums keeps the width stable; nowrap + tight tracking; JS still
-     abbreviates ≥1M as a belt-and-suspenders. ~17cqi over a ~172px plate caps at ~28px and floors ~14px. */
+  /* build128 (score-fit): the number AUTO-FITS the fixed 168px inner window — clamp() sized in cqi (% of the
+     plate's inner width) scales the digits with the plate and can never spill past it. tabular-nums keeps the
+     width stable; nowrap + tight tracking + centered. MEASURED: the widest raw string ("1,850,000"/"9,999,999"
+     = 114px @ the 25.2px this resolves to over a 168px window) fits with ~54px to spare — never clipped. JS
+     still abbreviates ≥1M ("1.85M") as a belt-and-suspenders. 15cqi·168px = 25.2px (under the 28px cap). */
   #game.vs-mode #vs-you-score .vs-val, #game.vs-mode #vs-opp-score .vs-val {
-    font-size: clamp(14px, 17cqi, 28px); letter-spacing: -0.01em; white-space: nowrap;
+    font-size: clamp(15px, 15cqi, 28px); letter-spacing: -0.01em; white-space: nowrap; text-align: center;
     max-width: 100%; overflow: hidden; }
   #game.vs-mode #mult-gauge { width: 60px; height: 60px; padding: 0; border: none; background: url("assets/mp/gauge-dial-mult.png") center / contain no-repeat; display: grid; place-items: center; }
   #game.vs-mode #vs-opp-mult { width: 60px; height: 60px; padding: 0; border: none; background: url("assets/mp/gauge-dial-mult.png") center / contain no-repeat; display: grid; place-items: center; left: 18px; color: var(--chrome); }
@@ -1941,7 +1966,9 @@
   #game.vs-mode #vs-seam { width: 28px; left: calc(50% - 14px); background: url("assets/mp/gauge-seam-column.png") center / 100% 100% no-repeat; }
   #game.vs-mode #vs-seam::before, #game.vs-mode #vs-seam::after { display: none; }       /* the spine art replaces the gradient lines */
   #game.vs-mode #vs-prog { left: calc(50% - 1.5px); }                                     /* re-center the (now 3px) progress rail in the wider spine */
-  #game.vs-mode #vs-opp-deck #vs-opp-score, #game.vs-mode #vs-opp-deck #vs-opp-mult, #game.vs-mode #vs-opp-deck #vs-opp-combo { filter: saturate(0.12) brightness(1.1); }   /* opp frames read warm chrome */
+  /* build128: the opp SCORE plate is no longer desaturated — the rival number now reads GOLD to oppose YOUR crimson
+     (the head-to-head contrast the redesign is about). The secondary mult/combo pills stay chrome-desaturated. */
+  #game.vs-mode #vs-opp-deck #vs-opp-mult, #game.vs-mode #vs-opp-deck #vs-opp-combo { filter: saturate(0.12) brightness(1.1); }   /* opp secondary frames read warm chrome */
   /* tournaments stream only the light t-tick (score/combo/prog) — the rival's OD is never known, so a flat-empty
      bar would read as broken. Hide it in bracket duels (the .vs-tour class is added in onTourRound). */
   #game.vs-mode.vs-tour #vs-od-opp, #game.vs-mode.vs-tour #vs-opp-mult { display: none; }   /* tournaments stream only score/combo/prog — the rival OD + mult have no data, so hide them rather than show a frozen 1x */
