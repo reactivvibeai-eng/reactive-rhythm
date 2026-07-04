@@ -4310,14 +4310,17 @@
           const g = ac.createGain();
           g.gain.value = (heavy ? 1.1 : kind === 'perfect' ? 0.95 : kind === 'great' ? 0.8 : 0.62) * SFX_LEVEL;   // build104 s8: accent PERFECT chugs hotter
           src.connect(g); g.connect(ac.destination); src.start(now);
-          // build60 FEEL: PERFECT signature — a tiny bright top-end "tick" layered UNDER the chug so a dead-on hit
+          // build60 FEEL: PERFECT signature — a tiny top-end "tick" layered UNDER the chug so a dead-on hit
           // sounds crisper than a GREAT (non-verbal, on-brand). Very short + quiet + mixer-scaled; never on great/good.
+          // FIX 11 (P2): build129's tick (2100→1400Hz triangle) read too PIERCING/odd to the owner. Warm + soften it:
+          // a soft SINE (no bright harmonics) at a much lower ~820→560Hz, and cut the gain to ~40% of before. The
+          // crisper white-hot VISUAL flash for PERFECT is unchanged (that part's good). Still mute/mixer-gated.
           if (kind === 'perfect') {
             try {
               const to = ac.createOscillator(), tg = ac.createGain();
-              to.type = 'triangle'; to.frequency.setValueAtTime(2100, now); to.frequency.exponentialRampToValueAtTime(1400, now + 0.04);
+              to.type = 'sine'; to.frequency.setValueAtTime(820, now); to.frequency.exponentialRampToValueAtTime(560, now + 0.045);
               tg.gain.setValueAtTime(0.0001, now);
-              tg.gain.exponentialRampToValueAtTime(Math.min(0.10, SFX_LEVEL * 1.1), now + 0.004);
+              tg.gain.exponentialRampToValueAtTime(Math.min(0.04, SFX_LEVEL * 0.42), now + 0.005);
               tg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
               to.connect(tg); tg.connect(ac.destination); to.start(now); to.stop(now + 0.07);
             } catch (e) {}

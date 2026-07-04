@@ -126,7 +126,7 @@
   var _mySettingsSnapshot = null; // my REAL saved settings, captured right before a matched-settings transient override so teardownMatch can restore them
   var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
   var _lastOdActive = false;      // build100r: OD rising-edge tracker — activating Overdrive ("boost") fires a shock too
-  var SHOCK_COMBO_STEP = 15;      // build100r: combo milestones that SHOCK the rival. Was 30 — unreachable in a casual playtest (max combo ~10), so the rival was literally never zapped. 15 + the OD trigger make combat actually land.
+  var SHOCK_COMBO_STEP = 8;       // FIX 3a (P0): combo milestones that SHOCK the rival. Was 30 (never reached), then 15 (still rarely reached in a casual duel where combos stay under 15 → nothing zapped). 8 makes damage LAND in a normal match — the first crossing at combo 8 fires (_lastShockCombo starts 0, floor(8/8)*8=8 > 0). OD trigger + 4s receive cooldown unchanged.
   var _rankRecorded = false;      // guard: record each settled result exactly once (CPU warm-ups never record — oppMeta.bot)
   // build100i: server-authoritative round (Lovable /mp/round/{start,settle}). HOST opens a round at match start + gets a
   // uuid, broadcasts it ('round' event); both peers pass that uuid to /mp/round/settle at song end. All fail-open — the
@@ -797,8 +797,35 @@
   }
 
   // ---- song selection (host) ----
+  // FIX 1 (P0): the guest must be able to play the HOST's picked track even if its own catalog crawl hasn't populated
+  // that trackId yet (boot race) or its allTracks differs. We carry the picked track's own decodable (non-HLS)
+  // audio_url on the broadcast as `pickUrl` so the guest resolves the SAME song catalog-independently — mirroring the
+  // build126 single-player fix. This is a fresh catalog lookup at send-time, NEVER persisted onto `sel` (so it cannot
+  // collide with the show/review `sel.audioUrl` path or its stale-leak deletes) — a distinct field name that only the
+  // resolveAndStart trackId fallback reads. Show rooms carry sel.audioUrl and route to resolveShowStart — untouched.
+  function _pickUrlFor(trackId) {
+    try {
+      if (!trackId || trackId === 'demo') return null;
+      var RC = window.RhythmCatalog; if (!RC || !RC.allTracks) return null;
+      var t = RC.allTracks().filter(function (x) { return x.id === trackId; })[0];
+      if (!t) return null;
+      if (RC.isVideo && RC.isVideo(t)) return null;      // never carry a video URL — MP never charts video
+      if (RC.trackAudioUrl) return RC.trackAudioUrl(t);  // decodable non-HLS URL (null for HLS-only / mock rows)
+      var u = t.audio_url;
+      return (u && !/\.m3u8(\?|$)/i.test(String(u))) ? u : null;
+    } catch (e) { return null; }
+  }
+  // build a wire payload from `sel` plus the catalog-derived pickUrl (only when it's a real non-demo pick and NOT a
+  // show room — a show sel already carries its own audioUrl and takes the resolveShowStart path).
+  function _songPayload() {
+    if (room && room.show) return sel;                                  // show/review sel is authoritative as-is
+    if (!sel || !sel.trackId || sel.demo || sel.trackId === 'demo') return sel;
+    var u = _pickUrlFor(sel.trackId);
+    return u ? Object.assign({}, sel, { pickUrl: u }) : sel;
+  }
   function broadcastSong() { roomOppReady = false; meReady = false; try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {}   /* playtest-3 (Bug D): a track (re)pick un-readies BOTH sides so a stale guest-ready can't auto-start the new track */
-    if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: sel }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: sel }); }
+    var _pl = _songPayload();
+    if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: _pl }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: _pl }); }
   function onSong(p) {
     if (!p) return;
     sel = p; paintSelection();
@@ -903,12 +930,19 @@
       return;
     }
     var peerReady = matchCh ? oppReady : roomOppReady;   // playtest-3 (Bug D): room-stage peer readiness lives in roomOppReady
+    // FIX 5 (P1): plain, self-explanatory duel copy — no "call in the artist / wants to challenge / accept seat"
+    // language (that's show-room only, handled + returned above). A normal public room auto-seats the first joiner as
+    // p2 (onRoomPeers non-show branch) — the seating logic is untouched; only the copy changes so the seated state
+    // reads clearly. `amPicker()` is the HOST (picks the track); the other seat is the joiner (readies to start).
+    var _oppNm = null;
+    try { var _o = room.isHost ? (room.p2 && room.members[room.p2]) : (room.members[room.p1]); _oppNm = _o && _o.name; } catch (e) {}
     if (!sel.trackId) rs.textContent = amPicker() ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
-    else if (!oppHere) rs.textContent = 'Waiting for your opponent…';
+    else if (!oppHere) rs.textContent = amPicker() ? 'Waiting for a player to join — share the room code.' : 'Waiting for your opponent…';
     else if (meReady && !peerReady) rs.textContent = 'You\'re READY ✓ — waiting for the other player to ready up…';
     else if (!meReady && peerReady) rs.textContent = 'Your opponent is READY ✓ — tap READY to start.';
     else if (meReady && peerReady) rs.textContent = 'Both ready — starting…';
-    else rs.textContent = 'Tap READY when you\'re set.';
+    else if (amPicker()) rs.textContent = (_oppNm ? (_oppNm + ' joined') : 'Opponent joined') + ' — ⚔ tap READY to start the versus.';
+    else rs.textContent = 'You\'re in — hit READY.';
   }
   function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady);
     if (room.show && room.isHost) {   // build102s: the show host's button IS the start switch
@@ -998,9 +1032,9 @@
       matchMatched = (room.id && room.isHost) ? !!room.matched : false;   // matched is a per-ROOM setting only (parallels combat) — quick-match/challenge never force it
       var _hostRawSettings = null; try { _hostRawSettings = window.RhythmGame.getSettings(); } catch (e) {}
       var hostSettings = _hostRawSettings ? { scroll: _hostRawSettings.scroll, failMode: _hostRawSettings.failMode, chartMode: _hostRawSettings.chartMode } : null;
-      var startSel = sel;
+      var startSel = _songPayload();   // FIX 1 (P0): the start payload carries the picked track's pickUrl too, so the guest resolves the right song catalog-independently
       if (matchMatched) {
-        startSel = Object.assign({}, sel, { _matchedScroll: 1, _matchedFail: false, _matchedChart: 'musical' });   // canonical fair defaults — never the host's personal scroll/fail/chart
+        startSel = Object.assign({}, startSel, { _matchedScroll: 1, _matchedFail: false, _matchedChart: 'musical' });   // canonical fair defaults — never the host's personal scroll/fail/chart
         try { _mySettingsSnapshot = window.RhythmGame.getSettings(); window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
       }
       matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings } });
@@ -1195,6 +1229,18 @@
       var tag = _vsEl('span', null, 'vs-od-tag'); tag.textContent = 'SPACE'; yOd.appendChild(tag);
       center.appendChild(yOd);
     }
+    // FIX 7 (P1): TOP-CENTER now-playing chip. #hud-track lives in .hud-panel (display:none in vs-mode), so matches +
+    // tournaments showed no song title. Mount an independent chip on #game (the vs-mode hide rule can't touch it),
+    // populated from the active sel (1v1/room) or tour.sel (tournament round). Subtle so it never occludes the notes.
+    try {
+      var _np = document.getElementById('vs-nowplaying');
+      if (!_np) { _np = _vsEl('div', 'vs-nowplaying'); _np.appendChild(_vsEl('span', 'vs-np-title', 'vs-np-t')); _np.appendChild(_vsEl('span', 'vs-np-artist', 'vs-np-a')); game.appendChild(_np); }
+      var _npSel = (tour && tour.id && tour.sel) ? tour.sel : sel;   // tournament round → tour.sel; 1v1/room → sel
+      var _npt = $('vs-np-title'), _npa = $('vs-np-artist');
+      if (_npt) _npt.textContent = (_npSel && _npSel.title) || 'Now Playing';
+      if (_npa) _npa.textContent = (_npSel && _npSel.artist) || '';
+      _np.hidden = false;
+    } catch (e) {}
     _myRf = null; _oppEase = { sc: 0, cb: 0, od: 0, mu: 1, st: 1, pr: 0 }; _leadEase = 0; _vsScoreDisp = 0; _lastDeltaSign = 0; _lastOda = false;
     _gCtx = null; for (var _i = 0; _i < _spk.length; _i++) _spk[_i].on = false;   // ghost: re-grab the context, clear the pool
     _ggCv = null; _ggCtx = null; _ggKey = '';   // drop the cached warped-guitar composite so it rebuilds for this mount
@@ -1209,7 +1255,7 @@
   function unmountVsHud() {
     try { document.documentElement.classList.remove('rr-vs'); } catch (e) {}   // restore the level's reactive cards / mechanic for single-deck play
     try { if (window.RhythmGame.setVsMode) window.RhythmGame.setVsMode(false); } catch (e) {}   // restore full-deck cover-fit
-    ['vs-opp-deck', 'vs-seam', 'vs-tug', 'vs-you-score', 'vs-od-you', 'vs-intro-vs'].forEach(function (id) {
+    ['vs-opp-deck', 'vs-seam', 'vs-tug', 'vs-you-score', 'vs-od-you', 'vs-intro-vs', 'vs-nowplaying'].forEach(function (id) {   // FIX 7 (P1): tear down the now-playing chip too
       var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e);
     });
     var mg = $('mult-gauge'); if (mg) mg.classList.remove('boosted');
@@ -1773,6 +1819,14 @@
     var RC = window.RhythmCatalog;
     var t = (RC && RC.allTracks) ? RC.allTracks().filter(function (x) { return x.id === s.trackId; })[0] : null;
     if (t && RC && RC.isVideo && RC.isVideo(t)) t = null;   // defense-in-depth: never start a video in MP → falls to demo
+    // FIX 1 (P0): catalog MISS on a real non-demo trackId (boot race, or the guest's crawl hasn't reached this id yet)
+    // must NOT drop to the LUNAR WAVES demo — that's the "challenge plays the default song" bug. The host carried the
+    // picked track's decodable audio_url as s.pickUrl (see _songPayload); synthesize a minimal track record from it so
+    // the SAME in-browser __buffered path below resolves the RIGHT song, exactly like single-player playUrl. Guarded to
+    // real non-demo picks with a non-HLS pickUrl — a demo sel (s.demo) still falls to the demo provider as before.
+    if (!t && s && s.trackId && s.trackId !== 'demo' && !s.demo && s.pickUrl && !/\.m3u8(\?|$)/i.test(String(s.pickUrl))) {
+      t = { id: s.trackId, title: s.title, artist_credit_name: s.artist, artist_name: s.artist, artwork_url: s.art, audio_url: s.pickUrl, _synthFromPick: true };
+    }
     var prov = null;
     try {
       if (s.demo || !t) {
@@ -3043,7 +3097,28 @@
         else ws.textContent = room._snapLive ? 'Match in progress — you\'re in line for the NEXT run.' : 'LIVE SHOW — hang tight, the host will wave you in.';
       }
     }
+    try { paintRoomCombatToggle(); } catch (e) {}   // FIX 3b (P0): host-only in-room COMBAT toggle
     try { paintShowRoom(); } catch (e) {}   // build102s: show chrome (banner/seat/invite) — self-hides for normal rooms
+  }
+  // FIX 3b (P0): the in-room COMBAT toggle. Only meaningful to a HOST inside a real (non-show) room — a show room's
+  // combat is not a duel modifier, and a non-host can't change it. Reflects the live room.combat state.
+  function paintRoomCombatToggle() {
+    var row = $('mpx-room-combat-toggle-row'), btn = $('mpx-room-combat-toggle');
+    if (!row || !btn) return;
+    var showIt = !!(room.id && room.isHost && !room.show);
+    row.hidden = !showIt;
+    if (!showIt) return;
+    var on = !!room.combat;
+    btn.textContent = 'COMBAT: ' + (on ? 'ON' : 'OFF');
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-checked', on ? 'true' : 'false');
+  }
+  function toggleRoomCombat() {
+    if (!(room.id && room.isHost && !room.show)) return;   // host-only, real room only
+    room.combat = !room.combat;
+    try { advertiseRoom(); } catch (e) {}       // re-broadcast the room's combat state to peers/lobby
+    try { paintRoomCombatToggle(); } catch (e) {}
+    try { paintRoomWaiting(); } catch (e) {}    // keep the wait-status combat note in sync
   }
 
   // ---- room directory (browser) ----
@@ -4725,6 +4800,28 @@
     hostBeginRound(1, ids, hostResolveSong(1));   // build100q #173: round 1 = first curated song (falls back to tour.sel/random when the pool is empty)
   }
   function hostBeginRound(n, alive, sel) {
+    // FIX 2 (P0): DEFENSIVE terminal guard — never build a round from a lone/empty participant set. A forfeit, leaver,
+    // or host-migration can hand us an `alive` whose only survivor's player has already departed the roster; building
+    // pairs from that spawns an EMPTY round instead of crowning. Filter `alive` to present players; if <= 1 remain,
+    // crown the survivor (present first, else the raw alive[0]) and RETURN. Only triggers on the degenerate set — a
+    // real 2+ final is unaffected (present === alive, falls through to normal pairing/broadcast below).
+    var _aliveIn = (alive || []).slice();
+    var _present = _presentTourIds(_aliveIn);
+    if (_aliveIn.length <= 1 || _present.length <= 1) {
+      var _champ = _present[0] || _aliveIn[0];
+      if (_champ) { hostCrownChampion(_champ); return; }
+      // no participants at all → nothing to crown; bail without spawning an empty round
+      if (!_aliveIn.length) return;
+    }
+    // FIX 1 (P0): carry the round track's decodable audio_url as sel.pickUrl so every entrant plays the RIGHT song
+    // even if its own catalog crawl hasn't reached this trackId (tournament rounds chart per-seat locally). Non-demo
+    // real picks only; resolveAndStart's synthetic-track fallback reads pickUrl on a catalog miss. Show/env untouched.
+    try {
+      if (sel && sel.trackId && sel.trackId !== 'demo' && !sel.demo && !sel.pickUrl) {
+        var _pu = _pickUrlFor(sel.trackId);
+        if (_pu) sel = Object.assign({}, sel, { pickUrl: _pu });
+      }
+    } catch (e) {}
     var pb = buildPairs(alive);
     tour.ch.send({ type: 'broadcast', event: 't-round', payload: {
       n: n, alive: alive, pairs: pb.pairs, byes: pb.byes, sel: sel,
@@ -5009,8 +5106,43 @@
     broadcastSnapshot();   // build42: publish the settled pair so clients self-heal + a promoted host can resume
     if (Object.keys(tour.settled).length === tour.pairs.length) hostFinishRound(); else _bracketWaitBanner();   // build58: live "X / Y resolved"
   }
+  // FIX 2 (P0): a departed survivor (forfeit / leaver / host-migration) could leave a winner id whose player is GONE.
+  // Building a round from it spawns an EMPTY round instead of crowning the champion. This is the single crown path
+  // (mirrors the winners.length===1 branch in hostFinishRound) — a shared "CHAMPION DECIDED" beat then the reveal.
+  function hostCrownChampion(id) {
+    if (!id) return;
+    try { tour.ch.send({ type: 'broadcast', event: 't-result', payload: { n: tour.round, winners: [id], detail: [], byes: tour.byes || [] } }); } catch (e) {}
+    try { tour.ch.send({ type: 'broadcast', event: 't-finalverdict', payload: { id: id } }); } catch (e) {}
+    setTimeout(function () { try { tour.ch.send({ type: 'broadcast', event: 't-champ', payload: { id: id, name: tourName(id) } }); } catch (e) {} }, 2600);
+    try { broadcastSnapshot(); } catch (e) {}
+  }
+  // keep only ids whose player is still present in the tournament roster (or is the host). A departed player is
+  // deleted from tour.members (see softPresence bye / dropMember), so this collapses a stale survivor set.
+  function _presentTourIds(list) {
+    if (!list || !list.length) return [];
+    return list.filter(function (id) { return id && (id === tour.hostId || (tour.members && tour.members[id])); });
+  }
   function hostFinishRound() {
     var winners = tour.pairs.map(function (pr, i) { return tour.settled[i]; }).concat(tour.byes);
+    // FIX 2 (P0): a survivor who departed after settling would inflate winners past 1 and spawn an empty next round.
+    // Filter against the CURRENT roster; if that collapses to a lone survivor (or nobody present, but winners exist),
+    // crown instead of advancing. Never crown from thin air — only when a real winners entry survives the filter (or,
+    // if presence flapped everyone out, fall back to the first raw winner so we still crown rather than build empty).
+    var present = _presentTourIds(winners);
+    if (present.length <= 1 && winners.length >= 1) {
+      var champ = present[0] || winners[0];
+      // still publish the round result so every client's bracket reflects THIS round before the crown
+      var _rd = tour.pairs.map(function (pr, i) {
+        var fa = tour.finals[pr[0]] || { score: -1 }, fb = tour.finals[pr[1]] || { score: -1 };
+        return { a: pr[0], b: pr[1], as: fa.score, bs: fb.score, win: tour.settled[i] };
+      });
+      try { tour.ch.send({ type: 'broadcast', event: 't-result', payload: { n: tour.round, winners: [champ], detail: _rd, byes: tour.byes } }); } catch (e) {}
+      try { tour.ch.send({ type: 'broadcast', event: 't-finalverdict', payload: { id: champ } }); } catch (e) {}
+      setTimeout(function () { try { tour.ch.send({ type: 'broadcast', event: 't-champ', payload: { id: champ, name: tourName(champ) } }); } catch (e) {} }, 2600);
+      broadcastSnapshot();
+      return;
+    }
+    winners = present.length ? present : winners;   // advance with the present set (never a ghost survivor)
     var detail = tour.pairs.map(function (pr, i) {
       var fa = tour.finals[pr[0]] || { score: -1 }, fb = tour.finals[pr[1]] || { score: -1 };
       return { a: pr[0], b: pr[1], as: fa.score, bs: fb.score, win: tour.settled[i] };
@@ -5898,6 +6030,7 @@
   } catch (e) {}
   wire('mpx-rematch', 'click', function () { if (matchCh) matchCh.send({ type: 'broadcast', event: 'rematch', payload: {} }); resetForRematch(); });
   wire('mpx-ready', 'click', toggleReady);
+  wire('mpx-room-combat-toggle', 'click', toggleRoomCombat);   // FIX 3b (P0): host flips room.combat live
   wire('mpx-diff', 'click', function (e) {
     var b = e.target.closest('button'); if (!b || !amPicker()) return;
     sel.difficulty = b.getAttribute('data-diff');

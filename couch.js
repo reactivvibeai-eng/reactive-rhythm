@@ -206,33 +206,40 @@
   }
 
   // ---- split-screen layout: P2 deck (LEFT) + center seam, reusing the vs-mode grid + CSS ----
+  // build121 owner-playtest fix (P2 side blank): the polished split-screen CSS in index.html is keyed on the
+  // CANONICAL ids #vs-opp-deck / #vs-opp-hwy / #vs-seam / #vs-you-score (see multiplayer.js mountVsHud, which
+  // works). The old couch build RENAMED every structural element to couch-* → NONE of that CSS matched, so the
+  // P2 deck never got its grid cell (grid-column:1) and the P2 canvas never got width/height:100% (it stayed at
+  // the 300×150 canvas default), leaving P2's half blank — no guitar, no strings. We now build the split with
+  // the EXACT ids/classes MP uses so the deck lands in the left cell and the canvas fills it. Couch and MP never
+  // run at once (mutually-exclusive #game entry points) and unmountDeck strips these, so the shared ids are safe.
   function mountDeck() {
     var game = document.getElementById('game'); if (!game) return;
     game.classList.add('vs-mode');                 // the existing two-column split (#game.vs-mode in index.html)
     try { document.documentElement.classList.add('rr-vs'); } catch (e) {}   // hide single-deck level fate-cards/mechanic on the half-deck
-    if (document.getElementById('couch-deck')) return;   // idempotent
-    // P2 deck = LEFT grid cell. We reuse the MP vs ids/classes so the polished CSS applies for free.
-    var deck = _el('div', 'vs-opp-deck'); deck.id = 'couch-deck';
-    var cv = _el('canvas', 'vs-opp-hwy'); cv.id = 'couch-hwy2'; deck.appendChild(cv);
+    if (document.getElementById('vs-opp-deck')) return;   // idempotent
+    // P2 deck = LEFT grid cell. Canonical ids → the #game.vs-mode CSS (grid placement + inset:0 canvas) applies.
+    var deck = _el('div', 'vs-opp-deck');
+    var cv = _el('canvas', 'vs-opp-hwy'); deck.appendChild(cv);
     var sc = _el('div', 'vs-opp-score');
     var lab = _el('div', null, 'vs-lab'); lab.textContent = 'P2 · CONTROLLER'; sc.appendChild(lab);
-    var val = _el('div', 'couch-p2-val', 'vs-val'); val.textContent = '0'; sc.appendChild(val);
+    var val = _el('div', 'vs-opp-val', 'vs-val'); val.textContent = '0'; sc.appendChild(val);
     deck.appendChild(sc);
-    var mult = _el('div', 'couch-p2-mult', 'vs-opp-pill'); mult.textContent = '1x'; deck.appendChild(mult);
-    var cmb = _el('div', 'couch-p2-combo', 'vs-opp-pill'); cmb.textContent = '0x'; deck.appendChild(cmb);
-    var od = _el('div', 'couch-p2-od', 'vs-od'); od.appendChild(_el('i')); deck.appendChild(od);
+    var mult = _el('div', 'vs-opp-mult', 'vs-opp-pill'); mult.textContent = '1x'; deck.appendChild(mult);
+    var cmb = _el('div', 'vs-opp-combo', 'vs-opp-pill'); cmb.textContent = '0x'; deck.appendChild(cmb);
+    var od = _el('div', 'vs-od-opp', 'vs-od'); od.appendChild(_el('i')); deck.appendChild(od);
     game.appendChild(deck);
     // center seam: the live P1↔P2 delta
-    var seam = _el('div', 'vs-seam'); seam.id = 'couch-seam';
+    var seam = _el('div', 'vs-seam');
     seam.appendChild(_el('div', 'vs-prog'));
     var delta = _el('div', 'vs-delta'); delta.textContent = 'EVEN'; seam.appendChild(delta);
     game.appendChild(seam);
     // YOUR (P1) score plate into .game-center (the right deck is P1's real highway)
     var center = game.querySelector('.game-center');
-    if (center && !document.getElementById('couch-p1-score')) {
-      var ys = _el('div', 'vs-you-score'); ys.id = 'couch-p1-score';
+    if (center && !document.getElementById('vs-you-score')) {
+      var ys = _el('div', 'vs-you-score');
       var yl = _el('div', null, 'vs-lab'); yl.textContent = 'P1 · KEYBOARD'; ys.appendChild(yl);
-      var yv = _el('div', 'couch-p1-val', 'vs-val'); yv.textContent = '0'; ys.appendChild(yv);
+      var yv = _el('div', 'vs-you-val', 'vs-val'); yv.textContent = '0'; ys.appendChild(yv);
       center.appendChild(ys);
     }
   }
@@ -240,7 +247,7 @@
     var game = document.getElementById('game');
     if (game) game.classList.remove('vs-mode');
     try { document.documentElement.classList.remove('rr-vs'); } catch (e) {}
-    ['couch-deck', 'couch-seam', 'couch-p1-score'].forEach(function (id) {
+    ['vs-opp-deck', 'vs-seam', 'vs-you-score'].forEach(function (id) {
       var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e);
     });
     _gctx = null;
@@ -268,23 +275,23 @@
     var p1 = stt ? Math.round(stt.score) : 0;
     var p2 = p2f ? p2f.sc : (_p2 && _p2.getP2Score ? Math.round(_p2.getP2Score()) : 0);
     var e;
-    e = document.getElementById('couch-p1-val'); if (e) e.textContent = p1.toLocaleString();
-    e = document.getElementById('couch-p2-val'); if (e) e.textContent = p2.toLocaleString();
+    e = document.getElementById('vs-you-val'); if (e) e.textContent = p1.toLocaleString();
+    e = document.getElementById('vs-opp-val'); if (e) e.textContent = p2.toLocaleString();
     if (p2f) {
-      e = document.getElementById('couch-p2-mult'); if (e) e.textContent = (p2f.mu || 1) + 'x';
-      e = document.getElementById('couch-p2-combo'); if (e) e.textContent = (p2f.cb || 0) + 'x';
-      e = document.getElementById('couch-p2-od'); if (e) { var fi = e.firstChild; if (fi) fi.style.transform = 'scaleX(' + Math.max(0, Math.min(1, p2f.od || 0)) + ')'; e.classList.toggle('active', !!p2f.oda); }
+      e = document.getElementById('vs-opp-mult'); if (e) e.textContent = (p2f.mu || 1) + 'x';
+      e = document.getElementById('vs-opp-combo'); if (e) e.textContent = (p2f.cb || 0) + 'x';
+      e = document.getElementById('vs-od-opp'); if (e) { var fi = e.firstChild; if (fi) fi.style.transform = 'scaleX(' + Math.max(0, Math.min(1, p2f.od || 0)) + ')'; e.classList.toggle('active', !!p2f.oda); }
     }
-    e = document.querySelector('#couch-seam .vs-delta');
+    e = document.querySelector('#vs-seam .vs-delta');
     if (e) { var d = p1 - p2; e.textContent = d === 0 ? 'EVEN' : (d > 0 ? 'P1 +' + _fmtK(Math.abs(d)) : 'P2 +' + _fmtK(Math.abs(d))); }
-    var prog = document.querySelector('#couch-seam .vs-prog');
-    if (prog && stt) prog.style.setProperty('--p', Math.round((stt.progress || 0) * 100) + '%');
+    var prog = document.querySelector('#vs-seam .vs-prog');
+    if (prog && stt) prog.style.height = Math.round((stt.progress || 0) * 100) + '%';   // #vs-prog fills by height (see the vs-mode CSS), matching mountVsHud
   }
   function _fmtK(n) { return n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
 
   function renderP2Deck(p2f) {
     var RG = window.RhythmGame;
-    var cv = document.getElementById('couch-hwy2'); if (!cv) return;
+    var cv = document.getElementById('vs-opp-hwy'); if (!cv) return;
     if (!_gctx) { _gctx = cv.getContext('2d'); if (!_gctx) return; }
     var lf = RG.getLaneFrame && RG.getLaneFrame();
     if (!lf || !lf.nearX || !lf.w) return;

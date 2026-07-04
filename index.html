@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=438" />
+<link rel="stylesheet" href="jukebox.css?v=439" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -1137,7 +1137,9 @@
   .mpx-combat-toggle--hero { margin: 8px 0 0; width: 100%; justify-content: center; }
   /* build116 p1: small badge on the PLAY NOW hero itself, top-left (RANKED tag owns top-right) — readable at a glance
      before queueing. Painted by paintCombatToggle(). */
-  .mpx-hero-combat-badge { position: absolute; top: 8px; left: 14px; z-index: 1; font-family: 'JetBrains Mono', monospace;
+  /* FIX 6 (P2): was top:8px;left:14px — directly over the "QUICK MATCH" eyebrow. Move it to the RIGHT, tucked under
+     the RANKED tag (which owns top-right), so it never overlaps the eyebrow or RANKED. */
+  .mpx-hero-combat-badge { position: absolute; top: 34px; left: auto; right: 14px; z-index: 1; font-family: 'JetBrains Mono', monospace;
     font-size: 9px; font-weight: 700; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 999px; color: var(--ink-dim);
     background: rgba(8,5,6,0.4); border: 1px solid rgba(218,215,210,0.22); }
   .mpx-hero-combat-badge.on { color: #fff; background: linear-gradient(180deg, rgba(255,42,48,0.5), rgba(179,18,31,0.35)); border-color: rgba(255,31,46,0.7); box-shadow: 0 0 10px -2px rgba(255,31,46,0.7); }
@@ -1769,6 +1771,20 @@
      multiplier/combo demoted to outer-edge pills (reuse the SP gauges — restored on teardown); overdrive a
      slim gold underglow. All gated by .vs-mode. Brand: warm black + crimson + chrome, gold for OD/winning. */
   #vs-seam, #vs-you-score, #vs-od-you, #vs-opp-score { display: none; }
+  /* FIX 7 (P1): top-center NOW-PLAYING chip. Independent of .hud-panel (which is display:none in vs-mode), so it
+     shows the song title during 1v1/room matches AND tournament rounds. Subtle + pointer-events:none so it never
+     occludes the notes; z-index sits above decks but below transient overlays/countdown. Warm brand (Oxanium/Chakra). */
+  #vs-nowplaying { display: none; }
+  #game.vs-mode #vs-nowplaying { display: flex; flex-direction: column; align-items: center; gap: 1px;
+    position: absolute; left: 50%; top: 6px; transform: translateX(-50%); z-index: 44; pointer-events: none;
+    max-width: 60%; padding: 3px 14px; border-radius: 999px; text-align: center;
+    background: linear-gradient(180deg, rgba(12,8,8,0.62), rgba(12,8,8,0.34)); border: 1px solid rgba(218,215,210,0.18);
+    box-shadow: 0 2px 10px -4px rgba(0,0,0,0.6); backdrop-filter: blur(2px); opacity: 0.9; }
+  #vs-nowplaying .vs-np-t { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em;
+    color: #ffe7dc; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #vs-nowplaying .vs-np-a { font-family: 'Chakra Petch', sans-serif; font-size: 9.5px; letter-spacing: 0.1em;
+    color: #d7b2ac; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #vs-nowplaying .vs-np-a:empty { display: none; }
   #game.vs-mode #vs-seam { display: block; position: absolute; left: calc(50% - 8px); top: 0; bottom: 0; width: 16px; z-index: 46; pointer-events: none; }
   #game.vs-mode #vs-seam::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--crimson), var(--chrome)); opacity: 0.18; }
   #game.vs-mode #vs-seam::after { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: linear-gradient(180deg, var(--crimson), var(--chrome)); opacity: 0.55; }
@@ -5999,6 +6015,15 @@
             <span class="mxr-lab">STAGE</span>
             <div class="mpx-stage-row" id="mpx-stage-row" role="radiogroup" aria-label="Match stage"></div>
           </div>
+          <!-- FIX 3b (P0): in-room COMBAT toggle — host-only, flips room.combat live (was only settable at room-create).
+               maybeStart/startRoomMatch read room.combat at match start + broadcast it in `start`, so no send/adopt
+               changes are needed. Hidden for non-hosts + outside a room (shown by paintRoomWaiting). -->
+          <div class="mxrow" id="mpx-room-combat-toggle-row" hidden>
+            <span class="mxr-lab">COMBAT</span>
+            <div class="mpx-privrow">
+              <button type="button" id="mpx-room-combat-toggle" role="switch" aria-checked="false">COMBAT: OFF</button>
+            </div>
+          </div>
           <!-- build60 invite bar → pkg1.4 OPPONENT row; existing #mpx-invitebar hidden wiring already scopes it to an open seat -->
           <div class="mxrow mpx-invitebar" id="mpx-invitebar" hidden>
             <span class="mxr-lab">OPPONENT</span>
@@ -7361,7 +7386,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=438"></script>
+<script src="telemetry.js?v=439"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7540,17 +7565,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=438"></script>
-<script src="game.js?v=438"></script>
-<script src="procbg.js?v=438"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=438"></script>
-<script src="chat.js?v=438"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=438"></script>
-<script src="goals.js?v=438"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=438"></script>
-<script src="share.js?v=438"></script>
-<script src="replay.js?v=438"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=438"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=439"></script>
+<script src="game.js?v=439"></script>
+<script src="procbg.js?v=439"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=439"></script>
+<script src="chat.js?v=439"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=439"></script>
+<script src="goals.js?v=439"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=439"></script>
+<script src="share.js?v=439"></script>
+<script src="replay.js?v=439"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=439"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
