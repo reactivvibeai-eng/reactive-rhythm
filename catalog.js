@@ -2167,6 +2167,7 @@
     livematchAnnounce, livematchEnd,   // build102x: site Navbar LIVE MATCH chip (review token stays module-local; fire-and-forget)
     matchQueue, matchStatus,           // build102x: server matchmaking queue (authed REST; throws on !ok)
     presenceOnline, challenge,         // build105: ONLINE NOW roster + direct battle-calls (authed REST; 403/409 distinguishable via the error message)
+    challengeAccept, challengeDecline, roomStatus,   // v416: battle-call ACCEPT/DECLINE + room preflight ({alive,host_online}) — join-reliability
     notifRecent,                       // build105 stretch: own-rows battle-call notification probe (null = none/unavailable; self-disables on first RLS failure)
   };
 
@@ -2423,6 +2424,18 @@
   // Errors carry the status in the message (api() format 'API <status> …') so callers can distinguish:
   // 403 = target's Battle-calls toggle is OFF · 409 = rate-limited (1/20s per caller, 3/min, 60s same-pair dedupe).
   async function challenge(targetUserId, roomId) { return api('/challenge', { method: 'POST', auth: true, body: { target_user_id: String(targetUserId || ''), room_id: String(roomId || '') } }); }
+  // v416 (join-reliability): the SITE deployed a battle-call ACCEPT/DECLINE + a room preflight. These let the GAME
+  // confirm a pairing server-side instead of relying purely on the flaky realtime room-meta convergence.
+  //   POST /challenge/accept  { notification_id?, room_id? } → the server records the accept (so the caller's
+  //     room-ready/room-status flips) — call it the instant the callee taps ACCEPT, BEFORE the realtime join races.
+  //   POST /challenge/decline { notification_id?, room_id? }
+  //   GET  /room-status?room=<rid> → { alive, host_online } — a cheap preflight the join loop uses to tell "host is
+  //     just late" (alive:true) from "room is truly gone" (alive:false), so it never gives up early on a live room.
+  // All fail-soft: they THROW on !ok (so callers can distinguish 401/404), and every game-side caller wraps them so
+  // a missing/!live endpoint degrades to the pure-realtime path (byte-identical to today).
+  async function challengeAccept(opts) { opts = opts || {}; var b = {}; if (opts.notificationId) b.notification_id = String(opts.notificationId); if (opts.roomId) b.room_id = String(opts.roomId); return api('/challenge/accept', { method: 'POST', auth: true, body: b }); }
+  async function challengeDecline(opts) { opts = opts || {}; var b = {}; if (opts.notificationId) b.notification_id = String(opts.notificationId); if (opts.roomId) b.room_id = String(opts.roomId); return api('/challenge/decline', { method: 'POST', auth: true, body: b }); }
+  async function roomStatus(roomId) { return api('/room-status?room=' + encodeURIComponent(String(roomId || '')), { auth: true }); }
   // build105: GAME-SIDE presence heartbeat — puts in-game players on the ONLINE NOW roster too. Mirrors the site
   // hook semantics: POST /presence/ping every 60s while signed in AND the tab is visible; paused on document.hidden,
   // an immediate ping on return to visibility. Fire-and-forget, errors swallowed, no-op signed out (getToken null).

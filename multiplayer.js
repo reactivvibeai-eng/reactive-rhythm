@@ -84,6 +84,7 @@
   var sel = { trackId: null, title: null, artist: null, art: null, difficulty: 'medium', demo: false, env: '__default' };   // v262: env = the room's chosen STAGE/level (host picks; rides the song payload; applied on match start). __default = plain Arena.
   var meReady = false, oppReady = false;
   var roomOppReady = false;   // playtest-3 (Bug D): the opponent's readiness during the ROOM-waiting stage (before the match channel exists). Match-channel readiness stays in oppReady.
+  var _readyRebcT = 0;        // v416 (symmetric-ready): re-broadcast MY room-stage READY every 2s until the start fires, so a single dropped 'room-ready' broadcast can't deadlock the "both READY → GO" handshake.
   var matchLive = false, finishedLocal = false;
   // build114: AUTHORITATIVE MP CHART — the guest's inbox for the host's broadcast note array (see resolveAndStart /
   // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
@@ -551,19 +552,14 @@
           }, 5000);
         }
         // build60: room invite deep-link — ask the host to re-advertise; onRoomMeta auto-joins when it lands.
-        // playtest-3 fix (Bug B): the host may be a couple seconds slow to boot/subscribe/advertise (cold Realtime,
-        // backgrounded tab). A ONE-SHOT 6s ping raced that and dead-ended with "room isn't open anymore" even though
-        // the meta was about to arrive. Mirror the proven qmMatched-guest retry (setInterval 2.5s × 12 ≈ 30s); clear
-        // the instant onRoomMeta auto-joins (room.id set) or the pending rid is cleared.
+        // v416 (join-reliability): route through the UNIFIED _pendJoin funnel — it fast-paths on the host's meta
+        // exactly like before, but after a grace it DIRECTLY joins the room channel by rid so a LATE / backgrounded
+        // host (the owner-playtest "accept dumps me on the menu, can't even manually join" case) still converges
+        // instead of dead-ending. Preserves the spectate deep-link (_pendingRoomSpec) via opts.asSpec.
         if (_pendingRoomJoin) {
-          banner('mpx-lobby-msg', 'Joining the room you were invited to…');
-          var _djTries = 0;
-          var _djT = setInterval(function () {
-            if (!_pendingRoomJoin || room.id) { clearInterval(_djT); return; }   // auto-joined (onRoomMeta) or abandoned
-            if (++_djTries > 12) { clearInterval(_djT); if (_pendingRoomJoin && !room.id) { banner('mpx-lobby-msg', 'That room isn\'t open anymore — hit PLAY NOW, or open your own room.'); _pendingRoomJoin = null; } return; }
-            try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
-          }, 2500);
-          try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}   // fire once immediately, then the interval retries
+          var _dlRid = _pendingRoomJoin, _dlSpec = _pendingRoomSpec;
+          _pendingRoomJoin = null;   // hand ownership to _pendJoin (it re-pends internally)
+          _pendJoin(_dlRid, { role: 'guest', asSpec: _dlSpec, label: 'Joining the room you were invited to…' });
         }
         // build102x: ?mpqm=resume — the lobby is up; ask the server where my match queue stands (one-shot).
         // playtest-3 fix (Bug A): a battle-call ACCEPT arrives as ?mproom=<rid>&mprole=host (NO ?mpqm=resume), so
@@ -664,9 +660,20 @@
   }
   function acceptChallenge(fromId) {
     var inc = incoming[fromId]; if (!inc) return;
-    lobbyCh.send({ type: 'broadcast', event: 'challenge-ans', payload: { fromId: ME.id, toId: fromId, mid: inc.mid, ok: true } });
+    var _mid = inc.mid;
+    lobbyCh.send({ type: 'broadcast', event: 'challenge-ans', payload: { fromId: ME.id, toId: fromId, mid: _mid, ok: true } });
     incoming = {};
-    startMatchChannel(inc.mid, 'guest', lobby[fromId]);   // accepter = guest; challenger = host
+    startMatchChannel(_mid, 'guest', lobby[fromId]);   // accepter = guest; challenger = host
+    // v416 (join-reliability): the accept ONLY works if the challenger receives challenge-ans and opens its side of
+    // rr-match-<mid>. A single dropped broadcast used to strand the accepter alone on the match channel → they
+    // eventually backed out to the MP UI ("challenging just drives us back into the Multiplayer UI"). Re-emit the
+    // ans a few times until the challenger's presence lands on the match channel (oppPresent), tolerating a lost
+    // broadcast. Self-cancels the instant the opponent is present, the match goes live, or the channel is torn down.
+    var _rt = 0;
+    var _ansRetry = setInterval(function () {
+      if (!lobbyCh || matchId !== _mid || !matchCh || oppPresent || matchLive || ++_rt > 6) { clearInterval(_ansRetry); return; }
+      try { lobbyCh.send({ type: 'broadcast', event: 'challenge-ans', payload: { fromId: ME.id, toId: fromId, mid: _mid, ok: true } }); } catch (e) {}
+    }, 2000);
   }
   function declineChallenge(fromId) {
     var inc = incoming[fromId]; if (!inc) return;
@@ -826,7 +833,7 @@
     var u = _pickUrlFor(sel.trackId);
     return u ? Object.assign({}, sel, { pickUrl: u }) : sel;
   }
-  function broadcastSong() { roomOppReady = false; meReady = false; try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {}   /* playtest-3 (Bug D): a track (re)pick un-readies BOTH sides so a stale guest-ready can't auto-start the new track */
+  function broadcastSong() { roomOppReady = false; meReady = false; _stopReadyRebc(); try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {}   /* playtest-3 (Bug D): a track (re)pick un-readies BOTH sides so a stale guest-ready can't auto-start the new track. v416: also stop my ready re-broadcast (I'm no longer ready) */
     var _pl = _songPayload();
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: _pl }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: _pl }); }
   function onSong(p) {
@@ -958,6 +965,11 @@
       return;
     }
     b.textContent = meReady ? 'READY ✓' : 'READY'; }
+  // v416 (symmetric-ready): one place to emit MY room-stage readiness (+ my raw settings for the awareness pill).
+  function _sendRoomReady(mySettings) {
+    try { if (room.id && room.ch && !room.show) room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id, settings: mySettings || null } }); } catch (e) {}
+  }
+  function _stopReadyRebc() { if (_readyRebcT) { clearInterval(_readyRebcT); _readyRebcT = 0; } }
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
@@ -972,7 +984,17 @@
     var _myRawSettings = null; try { _myRawSettings = window.RhythmGame.getSettings(); } catch (e) {}
     var mySettings = _myRawSettings ? { scroll: _myRawSettings.scroll, failMode: _myRawSettings.failMode, chartMode: _myRawSettings.chartMode } : null;
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: meReady, id: ME.id, settings: mySettings } });
-    else if (room.id && room.ch && !room.show) { try { room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id, settings: mySettings } }); } catch (e) {} }
+    else if (room.id && room.ch && !room.show) {
+      _sendRoomReady(mySettings);
+      // v416 (symmetric-ready): while I'm READY at the room stage, re-broadcast every 2s so a dropped 'room-ready'
+      // can't wedge the "both READY → GO" handshake (the peer needs to SEE my ready to start / display it). Stops the
+      // instant I un-ready, the match channel opens, or the room-start fires (guarded inside the tick).
+      _stopReadyRebc();
+      if (meReady) { _readyRebcT = setInterval(function () {
+        if (!meReady || matchCh || matchLive || !(room.id && room.ch && !room.show)) { _stopReadyRebc(); return; }
+        _sendRoomReady(mySettings);
+      }, 2000); }
+    }
     var oppName = (oppMeta && oppMeta.name) || 'the other player';
     var peerReady = matchCh ? oppReady : roomOppReady;   // room stage → roomOppReady
     if (meReady && peerReady) paintWaitStatus('Both ready — starting…', true);
@@ -1603,6 +1625,26 @@
       // blit the cached composite in ONE drawImage. The bake already applied globalAlpha=0.9, so blit at alpha 1: the
       // cached RGBA pixels composite source-over onto the transparent guitar region EXACTLY as the per-band path did.
       if (_ggCv && _ggKey === _ggk) { try { _gCtx.drawImage(_ggCv, 0, 0); } catch (e) {} }
+    }
+    // v416 (pre-start polish): before the guitar art is loaded/baked (the 3·2·1 countdown window on the LEFT deck),
+    // the strings used to draw over EMPTY canvas → "strings floating in the center." Paint a clean dark neck panel
+    // behind the string span so the rival board always reads as a proper (if plain) fretboard during the count-in,
+    // never bare floating strings. Sized straight off the lane frame (near/far span) so it tracks the neck exactly.
+    if (!(art && art.img)) {
+      try {
+        var _nx0 = lf.farX[0], _nx1 = lf.farX[N - 1], _nnx0 = lf.nearX[0], _nnx1 = lf.nearX[N - 1];
+        var _left = Math.min(_nx0, _nnx0), _right = Math.max(_nx1, _nnx1), _pad = lf.lw * 0.6;
+        var _pl = (_left - _pad) * sx, _pr = (_right + _pad) * sx;
+        var _grad = _gCtx.createLinearGradient(0, lf.farY * sy, 0, lf.nearY * sy);
+        _grad.addColorStop(0, 'rgba(18,15,14,0.72)'); _grad.addColorStop(1, 'rgba(30,24,22,0.86)');   // warm dark (brand: R≥G≥B, no blue-grey)
+        _gCtx.save();
+        _gCtx.fillStyle = _grad;
+        _gCtx.beginPath();
+        _gCtx.moveTo((_left - _pad) * sx, lf.farY * sy); _gCtx.lineTo((_right + _pad) * sx, lf.farY * sy);
+        _gCtx.lineTo((_right + _pad) * sx, lf.nearY * sy); _gCtx.lineTo((_left - _pad) * sx, lf.nearY * sy);
+        _gCtx.closePath(); _gCtx.fill();
+        _gCtx.restore();
+      } catch (e) {}
     }
     // lane strings (far -> near) — brighter so the rival reads as a LIVE highway, not a faint 18% ghost
     _gCtx.lineWidth = Math.max(1, lf.lw * 0.06 * sx);
@@ -2291,6 +2333,7 @@
   }
 
   function resetForRematch() {
+    _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
@@ -2338,7 +2381,7 @@
     var g = $('game'); if (g) g.classList.remove('vs-mode', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
     try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}   // build109 s1: leaving the match shouldn't leave a stray winner-confetti canvas alive
-    matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false;
+    matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false; _stopReadyRebc();
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
@@ -2587,15 +2630,9 @@
     acc.addEventListener('click', function (ev) {
       if (ev && ev.isTrusted === false) return;
       _dismissRing();
-      // the same in-page path the ?mproom deep-link takes: pend the rid, raise MP, ping hosts to re-advertise
-      _pendingRoomSpec = false; _pendingRoomJoin = rid;
-      try { open(); } catch (e) {}
-      var tries = 0;
-      var t = setInterval(function () {                            // qmMatched-guest ping loop (host meta may lag)
-        if (!_pendingRoomJoin || room.id) { clearInterval(t); return; }
-        if (++tries > 12) { clearInterval(t); _pendingRoomJoin = null; banner('mpx-lobby-msg', 'Couldn\'t reach that battle room — it may have closed.'); return; }
-        try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
-      }, 2500);
+      // v416 (join-reliability): the same UNIFIED path the ?mproom deep-link + bc:user broadcast take — raise MP,
+      // fast-path on the host's meta, then DIRECT-join the late host so an ACCEPT never dead-ends on the menu.
+      _pendJoin(rid, { role: 'guest', asSpec: false, label: 'Joining the battle room…' });
     });
     dec.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; _dismissRing(); });
   }
@@ -2607,6 +2644,78 @@
     _ringUp = false;
   }
   try { _ringStart(); } catch (e) {}
+  // ===================== v416: BATTLE-CALL REALTIME (bc:user broadcast + notifications fallback) =====================
+  // The SITE now pushes an incoming battle call over a PRIVATE realtime channel `bc:user:<callee_uuid>`, event
+  // `live_match_invite`, payload { kind, room, role, url:'/game/...?mproom=…&skipIntro=1', caller_id, notification_id }
+  // PLUS a durable `notifications` postgres row as a fallback. The GAME previously consumed NEITHER over realtime — it
+  // only polled notifRecent() every 30s (menus-only, self-disabling on the first RLS hiccup), which is why an incoming
+  // call often failed to hook the callee in. Consume BOTH here and route straight through the UNIFIED _pendJoin funnel
+  // so the callee lands IN the room even if the URL deep-link was flaky. Deduped by notification_id (shared with the
+  // poll via _ringSeen) so the same call never double-fires across the broadcast, the row, and the poll.
+  var _bcUserCh = null, _bcUserId = null, _bcNotifSeen = {};
+  var _pendingInvite = null;   // v417 review-fix F1: an inbound battle-call that arrives DURING a live run is stashed here (never auto-joined mid-song) and consumed on the next return-to-menus edge.
+  function _bcInviteKey(p) {
+    var k = (p && (p.notification_id || p.notif_id || p.id)) || (p && p.room ? ('room:' + p.room) : null);
+    return k ? String(k) : null;
+  }
+  function _routeBattleInvite(p, src) {
+    try {
+      if (!p) return;
+      var rid = String(p.room || p.room_id || '').replace(/[^a-z0-9]/gi, '');
+      if (!rid) { try { var mm = String(p.url || '').match(/mproom=([a-z0-9]+)/i); if (mm) rid = mm[1]; } catch (e) {} }
+      if (!rid) return;
+      // v417 review-fix F1: NEVER interrupt a LIVE run. The poll path is gated on _inMenus(); this autonomous push
+      // was not — it went straight to _pendJoin -> open() (overlays MP over #game / tears down an active match room
+      // when a THIRD player calls mid-match). Stash the raw invite instead and consume it on the next return-to-menus
+      // edge (_rgObsCb), matching the poll's menus-only contract. Dedup is deferred with it (not marked yet).
+      if (!_inMenus()) { _pendingInvite = { p: p, at: Date.now() }; return; }
+      var key = _bcInviteKey(p) || ('room:' + rid);
+      // shared dedup with the ring poll (_ringSeen 'r:<rid>' TTL) AND a per-notification guard so the broadcast +
+      // the postgres row + the poll can't triple-open the same call.
+      if (_bcNotifSeen[key] && (Date.now() - _bcNotifSeen[key]) < 90000) return;
+      _bcNotifSeen[key] = Date.now();
+      var ridKey = 'r:' + rid;
+      if (_ringSeen[ridKey] && (Date.now() - _ringSeen[ridKey]) < 60000) return;   // the poll/ring already handled this room recently
+      _ringSeen[ridKey] = Date.now();
+      var role = (p.role === 'host') ? 'host' : 'guest';   // the callee is normally the GUEST; honor an explicit host role
+      var _nid = p.notification_id || p.notif_id || null;
+      try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice && _nid) window.RhythmCatalog.ackNotice(_nid); } catch (e) {}
+      _pendJoin(rid, { role: role, asSpec: false, label: 'Battle call — joining the room…', notificationId: _nid });
+    } catch (e) {}
+  }
+  function _bcUserSubscribe() {
+    try {
+      if (!supa || !ME.signedIn || !ME.id) return;                 // need a real authed uuid (bc:user is keyed on it)
+      if (_bcUserCh && _bcUserId === ME.id) return;                // already subscribed for this identity
+      if (_bcUserCh) { try { supa.removeChannel(_bcUserCh); } catch (e) {} _bcUserCh = null; }
+      _bcUserId = ME.id;
+      var ch;
+      try { ch = supa.channel('bc:user:' + ME.id, { config: { private: true } }); }
+      catch (e) { ch = supa.channel('bc:user:' + ME.id); }        // older supabase-js: no private flag → plain channel (still works if backend allows)
+      _bcUserCh = ch;
+      ch.on('broadcast', { event: 'live_match_invite' }, function (m) { _routeBattleInvite(m && m.payload, 'bc'); });
+      // durable fallback: postgres_changes on the notifications row addressed to me (INSERT). Fail-open — if the
+      // client/backend doesn't support it or RLS blocks it, the broadcast + the notifRecent poll still cover the call.
+      try {
+        ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + ME.id }, function (m) {
+          try {
+            var row = m && m.new; if (!row) return;
+            if (row.type && String(row.type) !== 'live_match_invite') return;
+            var d = row.data || row.payload || row.meta || {};
+            if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+            d.notification_id = d.notification_id || row.id;
+            _routeBattleInvite(d, 'pg');
+          } catch (e) {}
+        });
+      } catch (e) {}
+      ch.subscribe(function (status) { try { console.warn('[mp] bc:user status:', status); } catch (e) {} });
+    } catch (e) {}
+  }
+  // subscribe as soon as identity resolves, and re-subscribe on auth change (guest → signed-in re-keys the channel).
+  try { _bcUserSubscribe(); } catch (e) {}
+  try { if (window.RhythmCatalog && window.RhythmCatalog.onAuthChange) window.RhythmCatalog.onAuthChange(function () { setTimeout(_bcUserSubscribe, 250); }); } catch (e) {}
+  // identity can land a beat after boot (getUser session-restore race) — retry a few times until signed in.
+  (function _bcRetry(n) { if (_bcUserCh && _bcUserId === ME.id) return; if (n > 12) return; setTimeout(function () { try { _bcUserSubscribe(); } catch (e) {} _bcRetry(n + 1); }, 2500); })(0);
   // v415 review fix: a ring shown moments before the player launches a song must DIE on game start — _ringPoll only
   // gates NEW rings on _inMenus(); an already-mounted card (looping audio + ACCEPT/Decline) would otherwise survive
   // over live gameplay for up to 45s. Watch #game/#loading for the 'active' class (mirrors the syncActive observer
@@ -2619,7 +2728,16 @@
       // immediately instead of waiting up to 30s for the next interval tick — otherwise a call sent while the
       // receiver was mid-song could sit unseen for up to 30s after they're back and able to see it.
       var _nowInMenus = _inMenus();
-      if (_nowInMenus && !_rgWasInMenus) { try { _ringPoll(); } catch (e) {} }
+      if (_nowInMenus && !_rgWasInMenus) {
+        try { _ringPoll(); } catch (e) {}
+        // v417 review-fix F1: a battle call that arrived DURING the run was stashed — now that the player is back in
+        // menus, honor it (still fresh). Routes through the normal funnel (dedup + _pendJoin) exactly as an in-menus
+        // call would, so the callee reliably lands in the room instead of the call being silently dropped.
+        if (_pendingInvite) {
+          var _pi = _pendingInvite; _pendingInvite = null;
+          if (Date.now() - _pi.at < 90000) { try { _routeBattleInvite(_pi.p, 'deferred'); } catch (e) {} }
+        }
+      }
       _rgWasInMenus = _nowInMenus;
     };
     [$('game'), $('loading')].forEach(function (el) { if (el) new MutationObserver(_rgObsCb).observe(el, { attributes: true, attributeFilter: ['class'] }); });
@@ -2691,27 +2809,15 @@
     qmStop(false);   // matched: the server consumed the queue row — no {on:false} POST (see qmStop)
     paintQmPill('matched');
     var rid = String(st.matched_room);
+    // v416 (join-reliability): both roles now ride the UNIFIED _pendJoin funnel. HOST opens/advertises the paired
+    // room under the server-minted rid; GUEST fast-paths on the host's meta and DIRECT-joins a late host instead of
+    // one-shotting into silence (the old loop dead-ended after ~30s, stranding the guest on the menu — the exact
+    // owner-playtest "auto-match leaves me at the main menu" symptom).
     if (st.role === 'host') {
-      // older player hosts: open the paired room under the server-minted rid, PRIVATE (not browsable), then the
-      // normal advertise/room-ping machinery lets the guest's auto-join find it.
-      openRoomWithId(rid, { priv: true, name: (ME.name + "'s Match").slice(0, 28) });
+      _pendJoin(rid, { role: 'host' });
       banner('mpx-setup-msg', 'Matched! Pick the song.');
     } else {
-      // guest: ride the build60 ?mproom auto-join machinery — set the pending rid, ping hosts to re-advertise;
-      // onRoomMeta auto-joins (even private rooms) the moment the host's meta lands. The host may be up to one
-      // poll cycle behind us, so keep pinging briefly instead of one-shotting into silence.
-      _pendingRoomSpec = false;   // v405 review fix: a leftover ?spectate=1 boot flag must never make a matched guest join their own match as a SPECTATOR (host would wait forever)
-      _pendingRoomJoin = rid;
-      banner('mpx-lobby-msg', 'Matched! The host picks the song — READY up.');
-      if (lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {} }
-      var tries = 0;
-      var t = setInterval(function () {
-        // v405 review fix: bailing because a DIFFERENT room got joined must also clear the stale pending rid —
-        // otherwise a later re-advertise of the dead qm room auto-joins the player into it without consent.
-        if (!_pendingRoomJoin || room.id) { clearInterval(t); if (room.id && _pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
-        if (++tries > 12) { clearInterval(t); _pendingRoomJoin = null; paintQmPill('off'); banner('mpx-lobby-msg', 'Couldn\'t reach your match — tap FIND ME A MATCH to retry.'); return; }
-        try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
-      }, 2500);
+      _pendJoin(rid, { role: 'guest', asSpec: false, label: 'Matched! The host picks the song — READY up.' });
     }
   }
   function queueMatch(on) {
@@ -2734,20 +2840,21 @@
     if (!_qmBootRoom) return false;
     var rid = _qmBootRoom; _qmBootRoom = null;
     if (room.id || tour.id || matchLive) return false;   // never stomp something already live
-    openRoomWithId(rid, { priv: true, name: (ME.name + "'s Match").slice(0, 28) });
-    paintQmPill('matched');
-    banner('mpx-setup-msg', 'Matched! Pick the song — your rival is on the way.');
+    // v416 (join-reliability): route through the UNIFIED host funnel (opens/advertises the paired room under the
+    // server-minted rid so the guest's pend converges). Behavior matches the old openRoomWithId path.
+    _pendJoin(rid, { role: 'host' });
     return true;
   }
   // ?mpqm=resume one-shot pickup (fired from the lobby SUBSCRIBED handler): route a 'matched' pair by role,
   // resume 'waiting' as a live SEARCHING state, or land on the lobby with a nudge.
-  function qmResume() {
+  function qmResume(_attempt) {
+    _attempt = _attempt || 0;
     try {
       if (!(window.RhythmCatalog && window.RhythmCatalog.matchStatus)) return;
       // v405 review fix: 4000ms auth-hydration grace (same as /review/resolve) — ?mpqm=resume fires seconds into
       // boot, and a not-yet-restored supabase session would 401 and tell a SIGNED-IN player (who just clicked the
       // site's MATCH FOUND CTA) to "sign in", dropping the pairing.
-      window.RhythmCatalog.matchStatus(4000).then(function (st) {
+      window.RhythmCatalog.matchStatus(_attempt === 0 ? 4000 : 0).then(function (st) {
         if (st && st.status === 'matched' && st.matched_room) { _qmBootRoom = null; qmMatched(st); return; }
         if (st && st.status === 'waiting') {
           _qm.on = true;
@@ -2756,13 +2863,20 @@
           qmStartTimers();
           return;
         }
-        if (_qmHostFallback()) return;   // v413: pairing record expired mid-accept — open the room from the URL fallback
+        // v413: an ACCEPT with a KNOWN paired room (via the &mprole=host URL fallback) always lands IN the room —
+        // this wins over an early/transient 'idle' (the pairing record can lag the accept, or race the poll).
+        if (_qmHostFallback()) return;
+        // v416 (join-reliability): don't dead-end on an EARLY idle — the server's queue/pair record can be a beat
+        // behind a fresh boot. Re-poll a few times (~3 × 3s) before giving up, so a matched pair that hasn't
+        // materialized yet still gets picked up instead of dropping the player on the menu.
+        if (st && st.status === 'idle' && _attempt < 3) { setTimeout(function () { qmResume(_attempt + 1); }, 3000); return; }
         banner('mpx-lobby-msg', 'Not searching right now — tap FIND ME A MATCH to start.');
       }).catch(function (e) {
         if (_qmHostFallback()) return;   // v413: even on a status error, an ACCEPT with a known room should land IN the room
         var msg = String((e && e.message) || '');
         if (/\b401\b/.test(msg)) banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.');
         else if (/\b404\b/.test(msg)) banner('mpx-lobby-msg', 'Matchmaking isn\'t live yet — check back soon.');   // build102x: deployed backend predates /match/* (see qmFail)
+        else if (_attempt < 2) { setTimeout(function () { qmResume(_attempt + 1); }, 3000); }   // transient network/5xx → brief retry before surfacing the error
         else banner('mpx-lobby-msg', 'Couldn\'t reach matchmaking — tap FIND ME A MATCH to retry.');
       });
     } catch (e) {}
@@ -2947,7 +3061,7 @@
       }
     });
   }
-  function leaveRoomChannel() { try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat
+  function leaveRoomChannel() { _stopReadyRebc(); _clearPendJoin(); try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval.
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -2990,6 +3104,19 @@
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
       if (p2 !== room.p2) { room.p2 = p2; advertiseRoom(); }
+    } else if (!room.p1) {
+      // v416 (join-reliability): a DIRECT-joined guest with an unknown host — learn room.p1 from presence (the
+      // host advertises seat 'p1'; fall back to the earliest-joined peer) so READY enables even if the host's
+      // lobby room-meta never reaches us. onRoomMeta also heals this; whichever lands first wins.
+      var _hostPeer = null, _earliest = Infinity;
+      Object.keys(room.members).forEach(function (id) {
+        if (id === ME.id) return;
+        var pm = room.members[id];
+        if (pm && pm.seat === 'p1') _hostPeer = id;
+        else if (pm && pm.seat !== 'spec' && (pm.at || Infinity) < _earliest && !_hostPeer) { _earliest = pm.at || Infinity; }   // v417 review-fix E: NEVER heal room.p1 to a spectator (would enable READY against a non-opponent + show the wrong name)
+      });
+      if (!_hostPeer) { Object.keys(room.members).forEach(function (id) { if (id !== ME.id && room.members[id].seat !== 'spec' && (room.members[id].at || Infinity) === _earliest) _hostPeer = id; }); }
+      if (_hostPeer) { room.p1 = _hostPeer; }
     }
     paintRoomWaiting();
   }
@@ -3021,6 +3148,135 @@
     // build102s: fr.solo → the host starts the match channel with no guest handshake (empty seat)
     _fromRoom = { sel: (sel.trackId ? Object.assign({}, sel) : null), solo: !!(room.show && !p.p2Id && ME.id === p.p1Id) };   // carry host's locked track
     startMatchChannel(p.mid, role, oppMetaLocal);
+  }
+
+  // ===================== v416: UNIFIED ROBUST JOIN (join-reliability) =====================
+  // Owner-playtest ROOT CAUSE: every "come into this known room" entry point (the ?mproom deep-link, the
+  // in-game battle-call ring ACCEPT, the auto-match guest, and now the bc:user broadcast) used to ONLY ping
+  // hosts to re-advertise and wait for the host's room-meta to land, then join via onRoomMeta. If the host was
+  // late/backgrounded, or the broadcast dropped, or the accepter was on the WEBSITE and booted fresh, the meta
+  // never arrived → the loop gave up with a banner and the player sat on the menu, unable to even manually join
+  // the room they were invited to (joinRoom() hard-requires roomsDir[rid], which only room-meta populates).
+  //
+  // The fix: ALL FOUR entry points funnel through _pendJoin(). It (1) opens MP, (2) fast-paths on the host's
+  // room-meta (onRoomMeta auto-join, unchanged — the happy path), and (3) TOLERATES A LATE HOST: after a short
+  // grace it DIRECTLY joins the room channel by rid (channels are unregistered strings — the rid alone derives
+  // rr-room-<rid>), then keeps re-pinging for ~40s so a host who shows up later still converges. It never
+  // silently drops to the lobby/menu while a room is expected — worst case it holds a clear "Joining…" state.
+  var _pendJoinT = 0, _pendJoinRid = null;
+  function _clearPendJoin() { if (_pendJoinT) { clearInterval(_pendJoinT); _pendJoinT = 0; } _pendJoinRid = null; }
+  // direct channel join with NO room-meta — synthesizes a minimal room object off the rid alone. Host identity,
+  // name, combat/matched flags all self-heal from the host's room-meta (onRoomMeta) + presence + song broadcasts
+  // once the host is online. Used only as the late-host fallback; the meta fast-path stays byte-identical.
+  function joinRoomDirect(rid, asSpec) {
+    if (!supa || !lobbyCh || !rid || room.id) return false;   // never stomp a room we're already in
+    try {
+      var _koUntil = +(sessionStorage.getItem('rr_kick_' + rid) || 0);
+      if (_koUntil && Date.now() < _koUntil) { banner('mpx-rooms-msg', 'You were removed from that room — try again in a bit.'); return false; }
+    } catch (e) {}
+    if (_qm.on) qmStop(true);
+    var meta = roomsDir[rid] || null;   // may have arrived between the pend and this fallback — prefer it if so
+    clearShowRoom();                    // a direct join is never a show (show rooms always ride their own meta/persist)
+    meReady = false; roomOppReady = false;
+    room = { id: rid, name: (meta && meta.name) || 'Battle Room', priv: (meta ? !!meta.priv : true), combat: (meta ? !!meta.combat : false), matched: (meta ? !!meta.matched : false),
+      isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: (meta && meta.hostId) || null, p2: asSpec ? null : ME.id,
+      show: !!(meta && meta.show), submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
+    spectating = !!asSpec;
+    joinRoomChannel(rid, room.seat);
+    reannounce();
+    banner('mpx-lobby-msg', '');
+    enterRoomWaiting();
+    // keep re-pinging so the host (once online) re-advertises → onRoomMeta heals p1/name/flags; also lets a
+    // seated-versus start converge. Cheap fire-and-forget; the _pendJoin loop already owns the retry cadence.
+    try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+    return true;
+  }
+  // THE single funnel. opts: { role:'host'|'guest', asSpec:bool, label:string }.
+  //  - role 'host'  → this player must OPEN/advertise the paired room (auto-match/challenge host side).
+  //  - role 'guest' → pend the rid; fast-path on the host's meta, then direct-join the late host.
+  function _pendJoin(rid, opts) {
+    opts = opts || {};
+    rid = String(rid || '').replace(/[^a-z0-9]/gi, '');
+    if (!rid) return;
+    try { open(); } catch (e) {}
+    if (room.id) {   // already in a room (e.g. this IS the room we were invited to) — nothing to do
+      if (room.id === rid) return;
+      // in a DIFFERENT room — honor the new invite: the deep-link/broadcast is an explicit intent to switch.
+      try { closeRoom(true); } catch (e) {}
+    }
+    if (opts.role === 'host') {
+      // HOST side of a known pairing: open the room under the shared rid so the guest's pend converges on it.
+      _clearPendJoin();
+      var _openHost = function () {
+        if (room.id || tour.id || matchLive) return;
+        try { openRoomWithId(rid, { priv: true, name: (ME.name + "'s Match").slice(0, 28) }); } catch (e) {}
+      };
+      if (lobbyCh) _openHost(); else setTimeout(_openHost, 1200);   // lobby may still be subscribing at boot
+      paintQmPill('matched');
+      banner('mpx-setup-msg', 'Matched! Pick the song — your rival is on the way.');
+      return;
+    }
+    // GUEST side: pend + fast-path on meta, then tolerate a late host with a direct join.
+    _clearPendJoin();
+    _pendJoinRid = rid;
+    _pendingRoomSpec = !!opts.asSpec;
+    _pendingRoomJoin = rid;   // onRoomMeta auto-joins the instant the host's meta lands (the fast/happy path)
+    banner('mpx-lobby-msg', opts.label || 'Joining the room…');
+    // record the accept server-side so the caller's room-ready/room-status flips even before realtime converges
+    // (fire-and-forget; a missing endpoint or !live backend is a no-op — the realtime path still works).
+    if (opts.notificationId || opts.recordAccept) {
+      try { if (window.RhythmCatalog && window.RhythmCatalog.challengeAccept) window.RhythmCatalog.challengeAccept({ notificationId: opts.notificationId, roomId: rid }).catch(function () {}); } catch (e) {}
+    }
+    var tries = 0;
+    var directAt = 4;   // ~10s of meta-fast-path grace (4 × 2.5s) before we force a direct channel join
+    var maxTries = 18;  // ~45s baseline window
+    var _roomDead = false;   // set only when the /room-status preflight explicitly says alive:false
+    var tick = function () {
+      // converged (onRoomMeta auto-joined, or a direct join landed) → done
+      if (room.id) { _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
+      // v417 review-fix C: abandon when there's no pending join AND we're not in a room. Dropped the `_pendJoinRid !==
+      // rid` conjunct: after a user LEAVES a direct-joined room (room.id nulled, _pendingRoomJoin already nulled at the
+      // handoff) _pendJoinRid was still === rid, so the old guard stayed false and the next tick re-joinRoomDirect'd —
+      // yanking the user back into the room they left. The happy paths never reach here (room.id guard returns first).
+      if (!_pendingRoomJoin && !room.id) { _clearPendJoin(); return; }   // abandoned elsewhere (left / cleared)
+      tries++;
+      // re-ping hosts to re-advertise (heals the fast path if the host just came online)
+      try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
+      // after the grace, stop waiting on a possibly-never-coming meta — join the channel directly by rid. v417
+      // review-fix A: NOT if the preflight already declared the room dead (else we'd synthesize a channel for a
+      // gone room and park the guest on "Waiting for the host…" forever — the alive:false bail below was unreachable
+      // once room.id got set in this same tick).
+      if (tries >= directAt && !room.id && !_roomDead) {
+        _pendingRoomJoin = null;   // hand off from the meta fast-path to the direct join (no double-join)
+        try { joinRoomDirect(rid, !!opts.asSpec); } catch (e) {}
+      }
+      // preflight the server's view of the room. v417 review-fix A: fire EARLY (tick 2, BEFORE the tick-4 direct
+      // join) so a truly-gone room (alive:false) is known in time to gate the join off above → the (_roomDead &&
+      // !room.id) bail then fires normally. If the async result races AFTER a direct join already landed, EJECT the
+      // guest out of the synthesized dead room (no real host/opponent showed) instead of stranding them.
+      if (tries === 2) {
+        try {
+          if (window.RhythmCatalog && window.RhythmCatalog.roomStatus) {
+            window.RhythmCatalog.roomStatus(rid).then(function (st) {
+              if (st && st.alive === false) {
+                _roomDead = true;
+                if (room.id === rid && !room.isHost && !matchCh && !(room.p1 && room.members[room.p1])) {
+                  _clearPendJoin();
+                  try { leaveGuestRoom(); } catch (e) {}
+                  banner('mpx-lobby-msg', "That room's closed — hit PLAY NOW or open your own.");
+                }
+              }
+            }).catch(function () {});
+          }
+        } catch (e) {}
+      }
+      if ((tries >= maxTries) || (_roomDead && !room.id)) {
+        _clearPendJoin();
+        if (!room.id) { _pendingRoomJoin = null; banner('mpx-lobby-msg', 'Couldn\'t reach that room — it may have closed. Hit PLAY NOW or open your own.'); }
+      }
+    };
+    _pendJoinT = setInterval(tick, 2500);
+    try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}   // fire once now, then the interval retries
   }
 
   // ---- guest: join a listed room (as duelist or spectator) ----
@@ -3170,6 +3426,17 @@
   function onRoomMeta(p) {
     if (!p || !p.rid) return;
     if (p.hostId === ME.id) return;
+    // v416 (join-reliability): heal a DIRECT-joined guest. joinRoomDirect() enters the channel with no meta, so
+    // room.p1/name/combat/matched are unknown until the host's first room-meta lands. Adopt them here (host id is
+    // the load-bearing one — refreshReadyEnabled treats room.p1 as "opponent present" for a guest). Never mid-run,
+    // never over a match channel, and only for THE room we're actually in as a non-host guest.
+    if (room.id && !room.isHost && !matchCh && p.rid === room.id) {
+      if (!room.p1 && p.hostId) room.p1 = p.hostId;
+      if (p.name) room.name = String(p.name).slice(0, 28);
+      if (typeof p.combat !== 'undefined') room.combat = !!p.combat;
+      if (typeof p.matched !== 'undefined') room.matched = !!p.matched;
+      try { paintRoomWaiting(); } catch (e) {}
+    }
     // build60: an invite deep-link (?mproom=) auto-joins its target the moment the host's meta arrives — even private rooms.
     if (_pendingRoomJoin && p.rid === _pendingRoomJoin && !room.id) {
       var _asSpec = _pendingRoomSpec;   // build102: spectate deep-links must never take a player seat
