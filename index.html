@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&family=Bungee&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani/Bungee are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=434" />
+<link rel="stylesheet" href="jukebox.css?v=435" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -4057,6 +4057,83 @@
   .mh-streak-ribbon .msr-cal:hover, .mh-streak-ribbon .msr-cal:focus-visible { color: #fff; border-color: var(--gold); box-shadow: 0 0 14px rgba(224,169,63,0.4); outline: none; }
   @media (max-width: 600px) { .mh-streak-ribbon { flex-direction: column; align-items: stretch; text-align: center; } .mh-streak-ribbon .msr-txt { text-align: center; } .mh-streak-ribbon .msr-cal { align-self: center; } }
 
+  /* build125 — WEEKLY RIFT LADDER card. A slim GOLD-accented sibling of the .mh-daily tile (same radius/
+     border grammar, Oxanium numbers + Chakra Petch labels), sat above the hub grid. Distinct from the daily's
+     crimson: this one is all warm gold. NO blue/purple/green; warm darks (R≥G≥B). Painted by paintWeeklyRift(). */
+  .mh-weekly {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin: 12px auto 0; padding: 14px 18px; max-width: 620px;
+    border: 1px solid rgba(224,169,63,0.34); border-radius: 16px;
+    background:
+      radial-gradient(120% 140% at 0% -20%, rgba(224,169,63,0.14), rgba(224,169,63,0) 60%),
+      linear-gradient(180deg, rgba(36,26,12,0.92), rgba(20,15,9,0.95));
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.35) inset, 0 6px 22px rgba(0,0,0,0.4);
+    position: relative; overflow: hidden;
+  }
+  .mh-weekly[hidden] { display: none; }
+  /* subtle static gold sheen (no animation by default — honors reduced-motion below) */
+  .mh-weekly::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(115deg, rgba(240,200,110,0.09), rgba(240,200,110,0) 42%);
+  }
+  .mh-weekly .mwk-eyebrow {
+    position: absolute; top: 10px; left: 18px; z-index: 1;
+    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: #f0c86e; text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+  }
+  .mh-weekly .mwk-art {
+    flex: none; width: 44px; height: 44px; border-radius: 10px; position: relative; z-index: 1;
+    border: 1px solid rgba(224,169,63,0.4);
+    background:
+      radial-gradient(90% 90% at 30% 20%, rgba(240,200,110,0.5), rgba(224,169,63,0.12) 55%, rgba(20,15,9,0.9)),
+      linear-gradient(180deg, rgba(224,169,63,0.28), rgba(20,15,9,0.9));
+    box-shadow: 0 0 12px rgba(224,169,63,0.35);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mh-weekly .mwk-art::after { content: '\26A1'; font-size: 20px; filter: drop-shadow(0 0 6px rgba(224,169,63,0.6)); opacity: 0.9; }
+  .mh-weekly .mwk-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; position: relative; z-index: 1; padding-top: 8px; }
+  .mh-weekly .mwk-song {
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
+    color: var(--ink); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mh-weekly .mwk-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-family: 'Chakra Petch', monospace; font-size: 10.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-dim);
+  }
+  .mh-weekly .mwk-best { color: #f0c86e; font-family: 'Oxanium', sans-serif; font-weight: 700; }
+  .mh-weekly .mwk-dot { color: rgba(224,169,63,0.5); }
+  .mh-weekly .mwk-count { color: var(--ink-dim); }
+  .mh-weekly .mwk-actions { flex: none; display: flex; align-items: center; gap: 8px; position: relative; z-index: 1; }
+  .mh-weekly .mwk-play {
+    cursor: pointer; padding: 9px 16px; border-radius: 999px;
+    border: 1px solid rgba(240,200,110,0.7);
+    background: linear-gradient(180deg, rgba(224,169,63,0.95), rgba(176,124,30,0.95)); color: #1a1206;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; box-shadow: 0 0 16px rgba(224,169,63,0.4);
+    transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+  }
+  .mh-weekly .mwk-play:hover, .mh-weekly .mwk-play:focus-visible { transform: translateY(-1px); box-shadow: 0 0 22px rgba(224,169,63,0.6); filter: brightness(1.05); outline: none; }
+  .mh-weekly .mwk-share {
+    cursor: pointer; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid rgba(224,169,63,0.4); background: rgba(224,169,63,0.06);
+    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--gold);
+    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .mh-weekly .mwk-share[hidden] { display: none; }
+  .mh-weekly .mwk-share:hover, .mh-weekly .mwk-share:focus-visible { color: #fff; border-color: var(--gold); box-shadow: 0 0 14px rgba(224,169,63,0.4); outline: none; }
+  @media (max-width: 600px) {
+    .mh-weekly { flex-direction: column; align-items: stretch; text-align: center; padding-top: 26px; }
+    .mh-weekly .mwk-art { align-self: center; }
+    .mh-weekly .mwk-body { align-items: center; padding-top: 0; }
+    .mh-weekly .mwk-song { white-space: normal; }
+    .mh-weekly .mwk-meta { justify-content: center; }
+    .mh-weekly .mwk-actions { align-self: stretch; justify-content: center; }
+    .mh-weekly .mwk-play { flex: 1 1 auto; }
+  }
+  @media (prefers-reduced-motion: reduce) { .mh-weekly::before { background: linear-gradient(115deg, rgba(240,200,110,0.06), rgba(240,200,110,0) 42%); } .mh-weekly .mwk-play { transition: none; } }
+
   /* build122 p3: STREAK SAVED one-time reveal — a dedicated, more dramatic sibling of #levelup-toast (same
      gold/crimson visual language + centered-overlay idiom) reserved for the "you missed a day but the freeze
      covered you" moment discovered on RETURN (as opposed to the live in-session toast). Auto-dismissing,
@@ -5332,6 +5409,27 @@
         <span class="msr-ico" aria-hidden="true">🔥</span>
         <span class="msr-txt">Streak: <b id="msr-days">0</b> days — play 1 song tomorrow to keep it</span>
         <a class="msr-cal" id="msr-cal" href="#" title="Add a reminder to your calendar" aria-label="Add a reminder to your calendar">+ REMIND ME</a>
+      </div>
+      <!-- build125 — WEEKLY RIFT LADDER (delighter: the Sunday-night ritual). A slim gold-accented
+           card: this week's Rift track, YOUR best this week (or "not played yet"), a countdown to the
+           Monday 00:00 reset, and a PLAY THE RIFT button. Painted by paintWeeklyRift() (called from
+           showHub() alongside paintDailyRift). Reads window.RhythmWeeklyRift (self-contained ledger,
+           goals.js). Local-only "personal best" — no fabricated cross-player rank. Hidden until painted. -->
+      <div class="mh-weekly" id="mh-weekly" hidden>
+        <span class="mwk-eyebrow">WEEKLY RIFT</span>
+        <span class="mwk-art" id="mwk-art" aria-hidden="true"></span>
+        <div class="mwk-body">
+          <span class="mwk-song" id="mwk-song">Loading this week&rsquo;s Rift&hellip;</span>
+          <span class="mwk-meta">
+            <span class="mwk-best" id="mwk-best">Not played yet</span>
+            <span class="mwk-dot" aria-hidden="true">&middot;</span>
+            <span class="mwk-count" id="mwk-count">resets in &mdash;</span>
+          </span>
+        </div>
+        <div class="mwk-actions">
+          <button class="mwk-play" id="mwk-play" type="button">PLAY THE RIFT</button>
+          <button class="mwk-share" id="mwk-share" type="button" hidden aria-label="Share your Weekly Rift best">SHARE</button>
+        </div>
       </div>
       <div class="mh-grid" id="mh-grid">
         <button class="mh-tile primary mh-hero" id="mh-campaign" type="button">
@@ -7240,7 +7338,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=434"></script>
+<script src="telemetry.js?v=435"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7419,17 +7517,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=434"></script>
-<script src="game.js?v=434"></script>
-<script src="procbg.js?v=434"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=434"></script>
-<script src="chat.js?v=434"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=434"></script>
-<script src="goals.js?v=434"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=434"></script>
-<script src="share.js?v=434"></script>
-<script src="replay.js?v=434"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=434"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=435"></script>
+<script src="game.js?v=435"></script>
+<script src="procbg.js?v=435"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=435"></script>
+<script src="chat.js?v=435"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=435"></script>
+<script src="goals.js?v=435"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=435"></script>
+<script src="share.js?v=435"></script>
+<script src="replay.js?v=435"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=435"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -11507,6 +11605,7 @@
     try { window.RhythmGoals && window.RhythmGoals.checkRollover(); } catch (e) {}  // build112 p1: belt-and-suspenders rollover before any hub reader of RG.state()
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
     try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
+    try { paintWeeklyRift(); } catch (e) {}   // build125: Weekly Rift card — this week's track, your best, reset countdown (render-only; never throws)
     try { paintGoalsCard(); } catch (e) {}    // build110: "you're back today" XP/streak/goals hero card (render-only; never throws)
     try { paintStreakRibbon(); } catch (e) {}  // build122 p3: forward "keep your streak" nudge (render-only; never throws)
     try { maybeShowStreakSaved(); } catch (e) {}  // build122 p3: one-time STREAK SAVED reveal on return (see fn — consumes its own marker)
@@ -11717,6 +11816,99 @@
   })();
   // showHub() calls paintDailyRift through this thin shim (defined above as window.__rrPaintDailyRift).
   function paintDailyRift() { try { if (window.__rrPaintDailyRift) window.__rrPaintDailyRift(); } catch (e) {} }
+
+  // ===========================================================================
+  // build125 — WEEKLY RIFT LADDER card (delighter: the Sunday-night ritual). Mirrors the Daily Rift IIFE
+  // exactly (paint + launch + a thin shim + showHub-gated countdown), but GOLD-accented (already in CSS)
+  // and, UNLIKE the daily's forced HARDCORE Hard, the weekly plays at the player's CURRENT difficulty
+  // (inclusive — never forces a difficulty). Reads window.RhythmWeeklyRift (self-contained ledger, goals.js).
+  // Local-only "personal best" — no fabricated cross-player rank. Never throws into showHub / the run path.
+  // ===========================================================================
+  (function () {
+    var card = $('mh-weekly'); if (!card) return;
+    // shared number formatting (thousands) — mirrors the fmt() used across the hub/results.
+    function fmt(n) { return Number(n || 0).toLocaleString(); }
+    // human countdown from ms — "3d 4h" / "2h 15m" / "48m" / "<1m".
+    function humanCountdown(ms) {
+      ms = Math.max(0, +ms || 0);
+      var mins = Math.floor(ms / 60000);
+      var d = Math.floor(mins / 1440); mins -= d * 1440;
+      var h = Math.floor(mins / 60); mins -= h * 60;
+      if (d > 0) return 'resets in ' + d + 'd ' + h + 'h';
+      if (h > 0) return 'resets in ' + h + 'h ' + mins + 'm';
+      if (mins > 0) return 'resets in ' + mins + 'm';
+      return 'resets in <1m';
+    }
+    // paint the whole card. Never throws (mirrors paintDailyRift's try/catch discipline at every read).
+    function paintWeeklyRift() {
+      var WR = window.RhythmWeeklyRift; if (!WR) return;
+      var st = { bestScore: 0, bestGrade: '', played: false, msToReset: 0 };
+      try { st = WR.state() || st; } catch (e) {}
+      var t = null; try { t = WR.weeklyTrack ? WR.weeklyTrack() : null; } catch (e) {}
+      var songEl = $('mwk-song'), bestEl = $('mwk-best'), countEl = $('mwk-count'), shareEl = $('mwk-share');
+      if (songEl) {
+        if (t) { songEl.textContent = (t.title || 'Untitled') + ' · ' + (t.artist_name || t.artist_credit_name || 'Unknown'); }
+        else { songEl.textContent = 'Loading this week’s Rift…'; }
+      }
+      if (bestEl) {
+        if (st.played && (st.bestScore || 0) > 0) {
+          bestEl.textContent = 'Best: ' + fmt(st.bestScore) + (st.bestGrade ? ' · ' + st.bestGrade : '');
+        } else { bestEl.textContent = 'Not played yet'; }
+      }
+      if (countEl) countEl.textContent = humanCountdown(st.msToReset);
+      // reveal the card only once there's a real track for this week (until then it stays hidden — no empty shell)
+      if (t) card.hidden = false;
+      if (shareEl) shareEl.hidden = !(st.played && (st.bestScore || 0) > 0);
+    }
+    window.__rrPaintWeeklyRift = paintWeeklyRift;   // let showHub call it without exposing scope
+
+    function launchWeeklyRift() {
+      var WR = window.RhythmWeeklyRift, RC = window.RhythmCatalog; if (!WR || !RC) return;
+      var t = null; try { t = WR.weeklyTrack ? WR.weeklyTrack() : null; } catch (e) {}
+      if (!t) { try { window.RhythmGame.showToast && window.RhythmGame.showToast('This week’s Rift is still loading — try again in a moment', 'neutral'); } catch (e) {} return; }
+      // arm the consume flag BEFORE launch so the results hook can detect this run was the Weekly Rift.
+      window.__rrWeeklyArmedId = t.id;
+      hub.classList.remove('active');
+      try { window.RhythmGame.showToast && window.RhythmGame.showToast('Weekly Rift — ' + (t.title || 'this week’s track'), 'success'); } catch (e) {}
+      // UNLIKE the daily, do NOT force a difficulty — the weekly is inclusive, played at the player's current setting.
+      var ok = false;
+      try { ok = !!(RC.launchTrack && RC.launchTrack(t, {})); } catch (e) {}
+      if (!ok) { window.__rrWeeklyArmedId = null; try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start this week’s rift', 'error'); } catch (e2) {} }
+    }
+    var playBtn = $('mwk-play'); if (playBtn) playBtn.addEventListener('click', launchWeeklyRift);
+
+    // SHARE (part E) — best-effort; only wired if a share method exists. Swallows all errors.
+    var shareBtn = $('mwk-share');
+    if (shareBtn) shareBtn.addEventListener('click', function () {
+      try {
+        var WR = window.RhythmWeeklyRift; if (!WR) return;
+        if (!window.RhythmShare || typeof window.RhythmShare.shareScore !== 'function') return;
+        var st = WR.state() || {}; if (!(st.played && (st.bestScore || 0) > 0)) return;
+        var t = null; try { t = WR.weeklyTrack ? WR.weeklyTrack() : null; } catch (e) {}
+        window.RhythmShare.shareScore({
+          song: (t && t.title) || 'this week’s Rift',
+          artist: (t && (t.artist_name || t.artist_credit_name)) || '',
+          score: st.bestScore || 0,
+          grade: st.bestGrade || ''
+        });
+      } catch (e) {}
+    });
+  })();
+  // showHub() calls paintWeeklyRift through this thin shim (defined above as window.__rrPaintWeeklyRift).
+  function paintWeeklyRift() { try { if (window.__rrPaintWeeklyRift) window.__rrPaintWeeklyRift(); } catch (e) {} }
+  // ---- Weekly Rift countdown ticker: refresh while the hub is OPEN, cleared when it closes (no leak).
+  // A single interval, gated on #menu-hub.active. Started/stopped by a MutationObserver on the hub's class,
+  // so it can never accumulate duplicate intervals across showHub() calls (the failure mode called out in the brief).
+  (function () {
+    var _wkTimer = null;
+    function startTicker() { if (_wkTimer) return; _wkTimer = setInterval(function () { try { if (hub && hub.classList.contains('active')) paintWeeklyRift(); else stopTicker(); } catch (e) {} }, 30000); }
+    function stopTicker() { if (_wkTimer) { clearInterval(_wkTimer); _wkTimer = null; } }
+    try {
+      new MutationObserver(function () {
+        try { if (hub.classList.contains('active')) startTicker(); else stopTicker(); } catch (e) {}
+      }).observe(hub, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) {}
+  })();
 
   // ===========================================================================
   // build110 Phase 4 / build117 p1: "you're back today" start-menu hero card — daily/weekly goal
@@ -11956,6 +12148,55 @@
       try { paintGoalsCard(); } catch (e) {}
     });
     document.addEventListener('rr-levelup', function () { try { paintGoalsCard(); } catch (e) {} });
+  })();
+
+  // ===========================================================================
+  // build125 — WEEKLY RIFT results hook (arm-on-launch / consume-at-results).
+  // The Weekly Rift launch (launchWeeklyRift above) sets window.__rrWeeklyArmedId to the track it launched.
+  // recordLocal (catalog.js) — the true results moment — is in a file we don't own, and it dispatches no
+  // score/grade/trackId event we could listen to, so we hook the SAFEST index.html-only seam: observe the
+  // #results screen gaining `.active`. That fires AFTER endGame() has synchronously built + graded the run
+  // (window.RhythmGame.lastResults()) and run recordLocal (which sets results._newBest), so everything we
+  // read is finalized. We record ONLY when: the armed id is set AND equals the just-played track id
+  // (RhythmCatalog.currentTrackId()) AND the run did NOT fail (results.failed). The armed flag is CONSUMED
+  // (cleared) here no matter what once #results shows for the armed run, so it can never leak into a later
+  // non-weekly run. Wrapped end-to-end in try/catch — this must NEVER throw into the run/results path.
+  // ASSUMPTION: fail-state = results.failed (the endGame() flag); completed track id = currentTrackId() (the
+  // live track is still the just-played one when #results opens — the next launch is what changes it).
+  (function () {
+    var results = $('results'); if (!results) return;
+    function onResultsShown() {
+      try {
+        var armed = window.__rrWeeklyArmedId;
+        if (!armed) return;
+        var WR = window.RhythmWeeklyRift; if (!WR || !WR.recordRun) { window.__rrWeeklyArmedId = null; return; }
+        var res = null; try { res = window.RhythmGame && window.RhythmGame.lastResults && window.RhythmGame.lastResults(); } catch (e) {}
+        var tid = null; try { tid = window.RhythmCatalog && window.RhythmCatalog.currentTrackId && window.RhythmCatalog.currentTrackId(); } catch (e) {}
+        // consume ONCE the moment the armed run's results surface — whether or not it qualifies to record,
+        // so a fail / mismatch can't leave the flag armed to fire on a later unrelated run.
+        window.__rrWeeklyArmedId = null;
+        if (!res || res.failed) return;                 // failed runs are never recorded (a bail is not a best)
+        if (!tid || tid !== armed) return;              // only the run that was actually the armed weekly track
+        var out = null;
+        try { out = WR.recordRun(res.score, res.grade); } catch (e) { return; }
+        if (out && out.isNewBest) {
+          // NEW WEEKLY BEST flourish — reuse the existing .rbadge.gradeup (gold) pill on the results screen.
+          try {
+            var badges = $('results-badges');
+            if (badges && !/weekly best/i.test(badges.textContent)) {
+              badges.insertAdjacentHTML('afterbegin', '<span class="rbadge gradeup">★ NEW WEEKLY BEST</span>');
+            }
+          } catch (e) {}
+          // and a light toast, matching the daily-rift / goal-complete idiom
+          try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('New Weekly Rift best — ' + Number(out.bestScore || 0).toLocaleString(), 'success'); } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    try {
+      new MutationObserver(function () {
+        try { if (results.classList.contains('active')) onResultsShown(); } catch (e) {}
+      }).observe(results, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) {}
   })();
 
   var mb = $('menu-back'); if (mb) mb.addEventListener('click', showHub);

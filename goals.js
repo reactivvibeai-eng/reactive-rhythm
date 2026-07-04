@@ -420,3 +420,160 @@
   // run once at boot (rollover only — never claims/grants on load)
   try { checkRollover(); } catch (e) {}
 })();
+
+// ===========================================================================
+// build125 — WEEKLY RIFT LADDER (delighter: the Sunday-night ritual).
+// A SEPARATE, self-contained module (own IIFE, own single localStorage key
+// 'rr_weekly_rift') so it can be lifted out cleanly without touching the
+// retention ledger above. It owns NOTHING in rr_goals/rr_streak/rr_xp and never
+// mutates scoring/chart/hit-detection. Exposes window.RhythmWeeklyRift.
+//
+// What it does: one deterministically-picked track per ISO-week (the same for
+// everyone, rotating each Monday), a LOCAL best-of-week that rolls over when the
+// week key changes (rollover-guarded exactly like goals.js checkRollover so it
+// can't double-reset or leak across weeks), and the plumbing the hub + results
+// screen read to render the card / detect a new weekly best.
+//
+// Cross-player ranking is intentionally LOCAL-ONLY for now (personal best). A true
+// shared weekly board is a later backend add (GET /leaderboard/:id?period=weekly);
+// see submitBestToLeaderboard() below for the optional signed-in submit seam.
+// ===========================================================================
+(function () {
+  'use strict';
+
+  var KEY_WEEKLY = 'rr_weekly_rift';
+
+  // ISO week key — LOCAL time, byte-identical to goals.js isoWeekKey() above (same
+  // deliberate local-boundary reasoning: the player's own Monday, not UTC). Duplicated
+  // (not imported) to keep this module independently removable, matching the file's
+  // existing "duplicated helpers" convention.
+  function isoWeekKey() {
+    var d = new Date(); var day = (d.getDay() + 6) % 7;
+    var t = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day + 3);
+    var w1 = new Date(t.getFullYear(), 0, 4);
+    var wk = 1 + Math.round(((t - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7);
+    return t.getFullYear() + '-W' + wk;
+  }
+
+  // ms until next Monday 00:00 LOCAL (the reset boundary). Used by the hub countdown.
+  // Always > 0 (if it's exactly Monday 00:00, the next reset is 7 days out).
+  function msToNextReset() {
+    var now = new Date();
+    var day = now.getDay();                 // 0=Sun..6=Sat
+    var daysUntilMon = (8 - day) % 7;        // Mon→7, Tue→6, ... Sun→1
+    if (daysUntilMon === 0) daysUntilMon = 7;
+    var next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilMon, 0, 0, 0, 0);
+    return Math.max(0, next.getTime() - now.getTime());
+  }
+
+  function load() {
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY_WEEKLY) || 'null');
+      if (v && typeof v === 'object' && !Array.isArray(v)) return v;   // guard: a bare array typeof==='object' but would drop named state on next save (mirrors goals.js load())
+    } catch (e) {}
+    return { weekKey: isoWeekKey(), bestScore: 0, bestGrade: '', playedAt: 0 };
+  }
+  function save(o) { try { localStorage.setItem(KEY_WEEKLY, JSON.stringify(o)); } catch (e) {} }
+
+  // The weekly Rift track — deterministic date-hashed pick over the decodable music
+  // pool, REUSING RhythmCatalog.dailyRiftTrack but keyed on the WEEK (not the day) so
+  // every player gets the same song all week and it rotates each Monday. Returns null
+  // until the catalog has music loaded. The 'rift|<key>' hash formula lives in catalog.js;
+  // passing a week key ('YYYY-Www') instead of a day key ('YYYY-MM-DD') gives a stable
+  // weekly pick from the exact same code path.
+  function weeklyTrack() {
+    try {
+      var RC = window.RhythmCatalog;
+      if (RC && RC.dailyRiftTrack) return RC.dailyRiftTrack(isoWeekKey());
+    } catch (e) {}
+    return null;
+  }
+
+  // rollover guard (mirrors goals.js checkRollover's reentrancy + write-once pattern):
+  // if the stored week key differs from the current week, reset the best to zero for the
+  // fresh week. Idempotent — a reentrant call is a no-op read; the outer call owns the write.
+  var _rolling = false;
+  function checkRollover() {
+    if (_rolling) return load();
+    _rolling = true;
+    try {
+      var o = load();
+      var cur = isoWeekKey();
+      if (o.weekKey !== cur) {
+        o = { weekKey: cur, bestScore: 0, bestGrade: '', playedAt: 0 };
+        save(o);
+      }
+      return o;
+    } finally { _rolling = false; }
+  }
+
+  // Current week's state (rollover-checked). { weekKey, bestScore, bestGrade, playedAt, played:bool }.
+  function state() {
+    var o = checkRollover();
+    return {
+      weekKey: o.weekKey,
+      bestScore: o.bestScore || 0,
+      bestGrade: o.bestGrade || '',
+      playedAt: o.playedAt || 0,
+      played: !!(o.playedAt && (o.bestScore || 0) > 0),
+      msToReset: msToNextReset()
+    };
+  }
+
+  // GRADE ordering so a higher grade at an (equal-or-)higher score is recorded. We record a
+  // new best strictly on a higher SCORE (the ladder metric); bestGrade tracks that best run's grade.
+  var GRADE_ORDER = { D: 0, C: 1, B: 2, A: 3, S: 4 };
+
+  // Record a completed Weekly-Rift run's score. Call ONLY when the run was on this week's
+  // Rift track and did NOT fail. Returns { isNewBest, bestScore, bestGrade } so the caller
+  // can fire a "NEW WEEKLY BEST" flourish. Never throws into the run/scoring path.
+  function recordRun(score, grade) {
+    score = Math.round(+score || 0);
+    grade = String(grade || '').toUpperCase();
+    var o = checkRollover();
+    var prev = o.bestScore || 0;
+    var isNewBest = score > prev;
+    if (isNewBest) {
+      o.bestScore = score;
+      o.bestGrade = grade || o.bestGrade || '';
+      o.playedAt = Date.now();
+      save(o);
+      // optional signed-in submit to a future shared weekly board (no-op today; see seam)
+      try { submitBestToLeaderboard(score, grade); } catch (e) {}
+    } else if (!o.playedAt) {
+      // record that they've played this week even if it wasn't a best, so "not played yet"
+      // flips to a real (lower) best/played state. Only stamps playedAt; never lowers bestScore.
+      o.playedAt = Date.now();
+      if (!o.bestScore) { o.bestScore = score; o.bestGrade = grade; }
+      save(o);
+    }
+    return { isNewBest: isNewBest, bestScore: o.bestScore || 0, bestGrade: o.bestGrade || '' };
+  }
+
+  // ---- OPTIONAL backend seam (does NOT block anything) ----
+  // When a real cross-player weekly board exists, submit the player's weekly-Rift best here.
+  // Today this is a best-effort no-op: it only fires if a clean, already-present signed-in
+  // submit path exists on RhythmCatalog, and it swallows every failure. There is NO shared
+  // weekly rank surfaced anywhere until this lands — the hub/results only ever show a LOCAL
+  // "personal best", never a fabricated cross-player rank.
+  function submitBestToLeaderboard(score, grade) {
+    try {
+      var RC = window.RhythmCatalog;
+      if (!RC || typeof RC.submitWeeklyRift !== 'function') return;   // seam absent → nothing to do (the norm today)
+      var t = weeklyTrack();
+      RC.submitWeeklyRift({ trackId: t && t.id, weekKey: isoWeekKey(), score: score, grade: grade });
+    } catch (e) {}
+  }
+
+  window.RhythmWeeklyRift = {
+    isoWeekKey: isoWeekKey,
+    msToNextReset: msToNextReset,
+    weeklyTrack: weeklyTrack,
+    checkRollover: checkRollover,
+    state: state,
+    recordRun: recordRun
+  };
+
+  // run once at boot (rollover only — never records/awards on load)
+  try { checkRollover(); } catch (e) {}
+})();
