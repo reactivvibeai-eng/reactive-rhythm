@@ -242,6 +242,15 @@
 
   // scoring
   let score = 0, combo = 0, maxCombo = 0;
+  // build122 p1 — CLUTCH (delighter #1): celebrate rebuilding a broken combo back PAST where it snapped.
+  // PURELY OBSERVATIONAL/COSMETIC — reads combo, never writes score/mult/judging. `_peakCombo` tracks the
+  // highest combo seen on the CURRENT streak (mirrors maxCombo but is a per-streak high, not a per-run high);
+  // when the streak breaks (miss/bomb), that peak is snapshotted into `_lastBreakPeak` before combo zeroes.
+  // If the NEXT streak climbs back past `_lastBreakPeak` (and that break-peak was >=25, so a trivial 5-note
+  // recovery doesn't trigger), fire the CLUTCH callout once, then null the gate so it can't refire on the
+  // same recovery. `_clutchCount` is a per-run tally surfaced on the results screen.
+  let _peakCombo = 0, _lastBreakPeak = 0, _clutchCount = 0, _clutchArmed = false;
+  const CLUTCH_MIN_BREAK_PEAK = 25;
   // build104 s7 (#26b): FULL CHORD bonus state — per-lane last-press timestamps + the pending re-check queue
   // (a chord judged before the second finger landed re-checks for ~35ms so a 5ms-late finger still earns it).
   const _lanePressMs = {};
@@ -277,6 +286,24 @@
     try { const cd = $('combo-display'); if (cd) { cd.classList.remove('tierpop'); void cd.offsetWidth; cd.classList.add('tierpop'); } } catch (e) {}
     if (navigator.vibrate) { try { navigator.vibrate(idx >= 4 ? [16, 26, 16, 26, 16] : [14, 22, 14]); } catch (e) {} }
     try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, idx >= 3); } catch (e) {}
+  }
+  // build122 p1 — CLUTCH: called right after `combo` increments (main hit + hopo chain). Purely reads
+  // combo/_peakCombo/_lastBreakPeak — never mutates score/mult/judging. Fires the celebration ONCE per
+  // recovery via `_clutchArmed` (armed when a qualifying break happens, disarmed the instant it fires or
+  // the moment a NEW break happens before recovery — see the two combo-reset sites).
+  function checkClutch(lane) {
+    if (combo > _peakCombo) _peakCombo = combo;   // track the current streak's own high (separate from maxCombo, the run's all-time high)
+    if (!_clutchArmed) return;
+    if (combo <= _lastBreakPeak) return;
+    _clutchArmed = false;
+    _clutchCount++;
+    flashJudgment('CLUTCH ×' + _clutchCount, '#ff1f2e');
+    try { emitComboWave(typeof lane === 'number' ? lane : 2, 3, false); } catch (e) {}   // reuse the combo-milestone board-wide wave for the crimson pop
+    cameraShake = Math.max(cameraShake, 14);
+    bgPulse = 1;
+    scanT = scanDur = 0.5; scanTier = 3;
+    if (navigator.vibrate) { try { navigator.vibrate([14, 22, 14, 22, 20]); } catch (e) {} }
+    try { const cd = $('combo-display'); if (cd) { cd.classList.remove('tierpop'); void cd.offsetWidth; cd.classList.add('tierpop'); } } catch (e) {}
   }
   let scanT = 0, scanDur = 0.5, scanTier = 1;   // overdrive/combo "scan" — an additive band that sweeps up the guitar
   // --- VISUAL-ONLY feedback timers (no scoring/timing impact) ---
@@ -2782,6 +2809,7 @@
 
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
+    _peakCombo = 0; _lastBreakPeak = 0; _clutchCount = 0; _clutchArmed = false;   // build122 p1: CLUTCH per-run state
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
     _endingLock = false;   // build108: a fresh run always starts unlocked
@@ -3076,6 +3104,7 @@
       full_combo: _isFC,
       failed: runFailed,
       boss: bossMode,
+      clutch_count: _clutchCount,   // build122 p1: display-only — never read by scoring/grade/leaderboard-submit
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
@@ -3282,7 +3311,13 @@
     setTimeout(() => { ['perfect', 'great', 'good', 'miss'].forEach(j => { const el = $('rb-seg-' + j); if (el) el.style.width = (counts[j] / rbTotal * 100) + '%'; }); }, 90);
 
     // FULL COMBO badge (NEW BEST is added by the catalog layer after the save)
-    const badges = $('results-badges'); if (badges) badges.innerHTML = results.full_combo ? '<span class="rbadge fc">Full Combo</span>' : '';
+    // build122 p1: CLUTCH badge — only if this run had at least one recovery. Reuses the existing .rbadge
+    // pill (crimson variant, no new visual language). Display-only; clutch_count never touches scoring.
+    const badges = $('results-badges');
+    if (badges) {
+      badges.innerHTML = (results.full_combo ? '<span class="rbadge fc">Full Combo</span>' : '')
+        + ((results.clutch_count > 0) ? '<span class="rbadge clutch">⚡ CLUTCH ×' + results.clutch_count + '</span>' : '');
+    }
     // reset the Bonus-Sparks line each render — the catalog layer (recordLocal) re-paints it for a COMPLETED
     // run; a failed run leaves it cleared so a prior run's "+N BONUS SPARKS" can't linger on this screen.
     { const rb = $('results-bonus'); if (rb) { rb.innerHTML = ''; rb.style.display = 'none'; } }
@@ -3529,6 +3564,9 @@
       holding: () => holdNote.map((h, i) => h ? { lane: i, scored: +holdScored[i].toFixed(2) } : null).filter(Boolean),
       press: (lane, lagMs) => { if (state === 'playing') { laneDown[lane] = true; onLaneInput(lane, 'key', performance.now() - (lagMs || 0)); } },   // build104 s1a: optional lagMs simulates a delayed input event (late-edge race probe)
       release: (lane) => onLaneRelease(lane),
+      // build122 p1 CLUTCH dev hook (strip at content-freeze): inspect the recovery-tracking state headlessly
+      // without a real 25+ combo break/rebuild. Read-only — does not itself mutate combo/score.
+      clutch: () => ({ peakCombo: _peakCombo, lastBreakPeak: _lastBreakPeak, armed: _clutchArmed, count: _clutchCount, combo }),
       // GH require-strum dev hooks (strip at content-freeze): verify the gate + live config + held frets
       requireStrum: () => requireStrum(),
       strumState: () => ({ require: requireStrum(), profile: laneProfile, guitar: guitarPadId(), cfg: Object.assign({}, strumCfg), heldFrets: Array.from(_frets) }),
@@ -3999,6 +4037,10 @@
     // HAZARD: pressing a lane while a BOMB sits in its window penalizes — these are "don't hit".
     if (target.type === 'bomb') {
       target.judged = true; target.hit = 'bomb';
+      // build122 p1 CLUTCH: snapshot the streak's peak before it zeroes, arm the recovery gate if it
+      // qualifies (>=25). Observational only — does not affect scoring.
+      if (_peakCombo >= CLUTCH_MIN_BREAK_PEAK) { _lastBreakPeak = _peakCombo; _clutchArmed = true; } else { _clutchArmed = false; }
+      _peakCombo = 0;
       combo = 0; comboTierCur = 0; lastMult = 1;
       stability = Math.max(0, stability - bossDrain(0.06));
       glitchAmount = Math.min(1, glitchAmount + 0.25);
@@ -4027,6 +4069,7 @@
 
     target.judged = true; target.hit = kind;
     counts[kind]++; combo++; if (combo > maxCombo) maxCombo = combo;
+    checkClutch(lane);   // build122 p1: observational-only CLUTCH recovery check (see checkClutch/_peakCombo)
     // combo milestone → LIGHTNING STRIKE (Guitar-Hero-style streak reward)
     if (combo > 0 && combo % 25 === 0) {
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
@@ -4163,6 +4206,7 @@
       if (n.time > t + diff.hitWindow) break;
       n.judged = true; n.hit = 'great';
       counts.great++; combo++; if (combo > maxCombo) maxCombo = combo;
+      checkClutch(n.lane);   // build122 p1: observational-only CLUTCH recovery check
       { const _nt = comboTierIdx(combo); if (_nt > comboTierCur) { comboTierCur = _nt; onComboTierUp(_nt, n.lane); } }
       score += JUDGE.great.score * curMult();
       laneHitPulse[n.lane] = 1.0; lanePluckT[n.lane] = 0;
@@ -4704,6 +4748,10 @@
   }
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
+    // build122 p1 CLUTCH: snapshot the streak's peak before it zeroes, arm the recovery gate if it
+    // qualifies (>=25). Observational only — does not affect scoring.
+    if (_peakCombo >= CLUTCH_MIN_BREAK_PEAK) { _lastBreakPeak = _peakCombo; _clutchArmed = true; } else { _clutchArmed = false; }
+    _peakCombo = 0;
     counts.miss++; combo = 0; comboTierCur = 0;
     _rfPush(note.lane, 'm');   // versus stream
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
