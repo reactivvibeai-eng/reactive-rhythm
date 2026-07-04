@@ -3978,15 +3978,25 @@
   function _seedPadPrev() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) _padPrev[gp.index + ':' + b] = gp.buttons[b].pressed; } } catch (e) {} }
   let _lastWizBindMs = 0;
   function _anyPadBtnDown() { try { for (const gp of (navigator.getGamepads ? navigator.getGamepads() : [])) { if (!gp) continue; for (let b = 0; b < gp.buttons.length; b++) if (gp.buttons[b].pressed) return true; } } catch (e) {} return false; }
+  // build138: LOCAL COUCH input split — when a P2 shadow engine is live (couch versus ONLY; online MP never
+  // spawns _p2), P1 must NOT consume P2's controller. pollGamepad iterated EVERY connected pad into P1, so a 2nd
+  // controller drove P1's highway too (owner playtest: "keyboard AND controller both hit the RIGHT deck, LEFT deck
+  // inert"). P2 owns exactly one gamepad index (createEngine's gpIndex, exposed on the api); P1 skips that pad here
+  // so it plays only the keyboard + every OTHER pad (index 0 in the standard 2-controller setup). Returns -1 when no
+  // couch match is live → single-player + online MP poll every pad, byte-identical.
+  function _couchP2PadIndex() { return (_p2 && _p2._p2state && _p2._p2state.alive && typeof _p2.gamepadIndex === 'number') ? _p2.gamepadIndex : -1; }
   function pollGamepad(liteAxes) {
     if ((state !== 'playing' && !laneProbe && padRebindLane == null) || !navigator.getGamepads) return;
     const pads = navigator.getGamepads();
+    const _p2Pad = _couchP2PadIndex();   // build138: P2's claimed controller (or -1 when not in couch versus) — P1 skips it
     // build100q FIX: RELEASE GATE — after a wizard fret binds, the next fret can't capture until EVERY button is
     // released. This kills the "press blue → it auto-jumps to the next step" bug: a fret still held (or a noisy
     // GH/clone button/strum reporting pressed) used to fire a fresh edge that auto-bound the next lane.
     if (_wizActive && _wizNeedRelease && !_anyPadBtnDown()) _wizNeedRelease = false;
     for (const gp of pads) {
       if (!gp) continue;
+      if (_p2Pad >= 0 && gp.index === _p2Pad) continue;   // build138: this pad belongs to P2 in couch versus — never route it into P1
+
       for (let b = 0; b < gp.buttons.length; b++) {
         const pressed = gp.buttons[b].pressed; const key = gp.index + ':' + b; const was = _padPrev[key];   // RAW press → a real fret/strum always registers in gameplay
         _padPrev[key] = pressed;
@@ -8289,6 +8299,7 @@
 
     const api = {
       isP2: true,
+      gamepadIndex: gpIndex,   // build138: P2's claimed controller index — pollGamepad reads this to EXCLUDE it from P1 (couch input split)
       getP2Frame: p2Frame,
       getP2Ghost: p2Ghost,
       getP2Score: function () { return P.score; },
