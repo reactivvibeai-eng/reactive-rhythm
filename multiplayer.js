@@ -1086,6 +1086,12 @@
   // ghost-note arrivals + the rival's combo trend (tournaments stream only score/combo/prog, no per-note ev).
   var _gFlash = [0, 0, 0, 0, 0, 0], _gFlashCr = [false, false, false, false, false, false];
   var _gPrevCombo = 0, _gMissWin = 0;   // _gMissWin: frames left to paint note-arrivals as misses after a rival combo drop
+  // perf: the WARPED rival guitar is identical frame-to-frame (only the ghost NOTES move), yet the neck-recede warp
+  // re-slices it into ~40 drawImage bands EVERY frame on a SECOND concurrent rAF. Mirror the engine's own warped-guitar
+  // cache (game.js _guitarShadow / _shadowCv): bake the band-slice composite into an offscreen canvas ONCE, keyed on
+  // every input that changes it (canvas size, scale, placement rect, skin image + warp anchors + warp amount), then
+  // blit a SINGLE drawImage per frame. Notes/strings/flashes that actually move each frame still draw live on top.
+  var _ggCv = null, _ggCtx = null, _ggKey = '';
   function vsIsMobile() { try { return window.matchMedia('(max-width:900px)').matches; } catch (e) { return false; } }
   function _vsEl(tag, id, cls) { var e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; return e; }
   function _lerp(a, b, t) { return a + (b - a) * t; }
@@ -1152,6 +1158,7 @@
     }
     _myRf = null; _oppEase = { sc: 0, cb: 0, od: 0, mu: 1, st: 1, pr: 0 }; _leadEase = 0; _vsScoreDisp = 0; _lastDeltaSign = 0; _lastOda = false;
     _gCtx = null; for (var _i = 0; _i < _spk.length; _i++) _spk[_i].on = false;   // ghost: re-grab the context, clear the pool
+    _ggCv = null; _ggCtx = null; _ggKey = '';   // drop the cached warped-guitar composite so it rebuilds for this mount
     // pkg2 (contract rule 8): the tug module state dies with every mount
     _tugX = 0; _tugV = 0; _prevMyScore = 0; _prevOppSc = 0; _oppImp = 0; _tugLastT = 0;
     _wasEnd = false; _wasPhoto = false; _tugSign = 0; _tugFlipAt = 0; _tugAriaAt = 0;
@@ -1409,27 +1416,50 @@
     // second board played beside you (was a dim 0.5 FLAT blit = the "looks like a sticker, not them playing").
     var art = window.RhythmGame.getGuitarArt && window.RhythmGame.getGuitarArt();
     if (art && art.img) {
-      _gCtx.save(); _gCtx.globalAlpha = 0.9;
-      try {
-        var gwp = art.warp || 0;
-        if (gwp > 0 && art.nutFY != null && art.bridgeFY != null) {
-          // replicate the engine's NECK-RECEDE warp: slice the guitar into bands, narrow each toward the centerline
-          // by (1 - warp*u) (u: 0 at the bridge → 1 at the nut), so the rival neck recedes exactly like yours.
-          var giw = art.img.width, gih = art.img.height, GNS = 40;
-          var gnY = (art.gy + art.bridgeFY * art.gh) * sy, gfY = (art.gy + art.nutFY * art.gh) * sy;
-          var gcX = (art.gx + 0.5 * art.gw) * sx, gwpx = art.gw * sx;
-          for (var gb = 0; gb < GNS; gb++) {
-            var gv0 = gb / GNS, gv1 = (gb + 1) / GNS;
-            var gdy0 = (art.gy + gv0 * art.gh) * sy, gdy1 = (art.gy + gv1 * art.gh) * sy;
-            var guu = ((gdy0 + gdy1) / 2 - gnY) / (gfY - gnY);
-            var gdw = gwpx * (1 - gwp * (guu < 0 ? 0 : guu));
-            _gCtx.drawImage(art.img, 0, gv0 * gih, giw, (gv1 - gv0) * gih, gcX - gdw / 2, gdy0, gdw, (gdy1 - gdy0) + 0.6);
+      // The warped guitar is STATIC frame-to-frame — bake the band-slice composite into an offscreen canvas ONCE and
+      // blit it. Key on EVERY input that changes the composite: skin image identity + size, warp anchors + amount, the
+      // placement rect (gx/gy/gw/gh), and the ghost-canvas size + scale (bw/bh + sx/sy). A change in any rebuilds it.
+      var gwp0 = art.warp || 0;
+      var _ggk = (art.img.src || 'def') + '|' + art.img.width + 'x' + art.img.height + '|' + bw + 'x' + bh
+        + '|' + sx.toFixed(4) + ',' + sy.toFixed(4)
+        + '|' + gwp0 + '|' + art.nutFY + ',' + art.bridgeFY
+        + '|' + art.gx.toFixed(3) + ',' + art.gy.toFixed(3) + ',' + art.gw.toFixed(3) + ',' + art.gh.toFixed(3);
+      if (!_ggCv || _ggKey !== _ggk) {
+        try {
+          if (!_ggCv) { _ggCv = document.createElement('canvas'); _ggCtx = null; }
+          if (_ggCv.width !== bw || _ggCv.height !== bh) { _ggCv.width = bw; _ggCv.height = bh; _ggCtx = null; }
+          if (!_ggCtx) _ggCtx = _ggCv.getContext('2d');
+          if (_ggCtx) {
+            _ggCtx.setTransform(1, 0, 0, 1, 0, 0);
+            _ggCtx.clearRect(0, 0, bw, bh);
+            // Bake at the SAME globalAlpha=0.9 the live path used, so the offscreen holds the EXACT pixels the per-band
+            // loop wrote onto the (freshly-cleared, transparent) ghost canvas — including the +0.6 seam-bleed overlap.
+            _ggCtx.save(); _ggCtx.globalAlpha = 0.9;
+            var gwp = gwp0;
+            if (gwp > 0 && art.nutFY != null && art.bridgeFY != null) {
+              // replicate the engine's NECK-RECEDE warp: slice the guitar into bands, narrow each toward the centerline
+              // by (1 - warp*u) (u: 0 at the bridge → 1 at the nut), so the rival neck recedes exactly like yours.
+              var giw = art.img.width, gih = art.img.height, GNS = 40;
+              var gnY = (art.gy + art.bridgeFY * art.gh) * sy, gfY = (art.gy + art.nutFY * art.gh) * sy;
+              var gcX = (art.gx + 0.5 * art.gw) * sx, gwpx = art.gw * sx;
+              for (var gb = 0; gb < GNS; gb++) {
+                var gv0 = gb / GNS, gv1 = (gb + 1) / GNS;
+                var gdy0 = (art.gy + gv0 * art.gh) * sy, gdy1 = (art.gy + gv1 * art.gh) * sy;
+                var guu = ((gdy0 + gdy1) / 2 - gnY) / (gfY - gnY);
+                var gdw = gwpx * (1 - gwp * (guu < 0 ? 0 : guu));
+                _ggCtx.drawImage(art.img, 0, gv0 * gih, giw, (gv1 - gv0) * gih, gcX - gdw / 2, gdy0, gdw, (gdy1 - gdy0) + 0.6);
+              }
+            } else {
+              _ggCtx.drawImage(art.img, art.gx * sx, art.gy * sy, art.gw * sx, art.gh * sy);   // skins without warp: plain blit
+            }
+            _ggCtx.restore();
+            _ggKey = _ggk;
           }
-        } else {
-          _gCtx.drawImage(art.img, art.gx * sx, art.gy * sy, art.gw * sx, art.gh * sy);   // skins without warp: plain blit
-        }
-      } catch (e) {}
-      _gCtx.restore();
+        } catch (e) { _ggKey = ''; }   // bake failed → leave key empty so we retry next frame (never a stale blit)
+      }
+      // blit the cached composite in ONE drawImage. The bake already applied globalAlpha=0.9, so blit at alpha 1: the
+      // cached RGBA pixels composite source-over onto the transparent guitar region EXACTLY as the per-band path did.
+      if (_ggCv && _ggKey === _ggk) { try { _gCtx.drawImage(_ggCv, 0, 0); } catch (e) {} }
     }
     // lane strings (far -> near) — brighter so the rival reads as a LIVE highway, not a faint 18% ghost
     _gCtx.lineWidth = Math.max(1, lf.lw * 0.06 * sx);
