@@ -1495,7 +1495,116 @@
       }
     });
 
+    // ---- PRACTICE panel wiring (chartable MUSIC tracks only). A film / unplayable / demo row hides it entirely.
+    setupPracticePanel(track, (vid || !ready || !isLaunchable(track)));
+
     sheet.classList.add('open');
+  }
+
+  // ===== PRACTICE MODE — song-sheet panel =====
+  // Parses/validates a section + speed, then launches a NEVER-SCORED drill run via RhythmGame.playPractice.
+  const PP_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5];
+  function ppLoadSpeed() { try { const v = parseFloat(localStorage.getItem('rr_practice_speed')); return PP_SPEEDS.indexOf(v) >= 0 ? v : 1; } catch (e) { return 1; } }
+  function ppSaveSpeed(v) { try { localStorage.setItem('rr_practice_speed', String(v)); } catch (e) {} }
+  function ppParseTime(str) {
+    // accept "m:ss", "mm:ss", or a bare seconds count; returns seconds (NaN if unparseable)
+    if (str == null) return NaN;
+    str = String(str).trim();
+    if (!str) return NaN;
+    if (str.indexOf(':') >= 0) {
+      const parts = str.split(':');
+      const m = parseInt(parts[0], 10), s = parseInt(parts[1], 10);
+      if (!isFinite(m) || !isFinite(s)) return NaN;
+      return m * 60 + Math.min(59, Math.max(0, s));
+    }
+    const n = parseFloat(str);
+    return isFinite(n) ? n : NaN;
+  }
+  function ppFmt(s) { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  let _ppWired = false;
+  function setupPracticePanel(track, hide) {
+    const openBtn = document.getElementById('practice-open-btn');
+    const panel = document.getElementById('practice-panel');
+    if (!openBtn || !panel) return;
+    if (hide) { openBtn.hidden = true; panel.hidden = true; openBtn.setAttribute('aria-expanded', 'false'); return; }
+    openBtn.hidden = false;
+
+    // duration for clamping (track metadata; the decoded buffer is authoritative but not known until launch)
+    const dur = Math.max(1, Math.floor(track.duration_seconds || 0)) || 0;
+    const startEl = document.getElementById('pp-start');
+    const endEl = document.getElementById('pp-end');
+    // default full song each open
+    if (startEl) startEl.value = '0:00';
+    if (endEl) endEl.value = dur ? ppFmt(dur) : '0:00';
+    // restore last-used speed
+    let curSpeed = ppLoadSpeed();
+    const spdBtns = Array.prototype.slice.call(panel.querySelectorAll('.pp-spd'));
+    spdBtns.forEach(b => { const on = (parseFloat(b.dataset.spd) === curSpeed); b.classList.toggle('active', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); });
+    // collapse panel on every (re)open
+    panel.hidden = true; openBtn.setAttribute('aria-expanded', 'false');
+
+    // wire the interactive controls ONCE (idempotent — these read the LIVE closured currentTrack/dur via the DOM).
+    if (!_ppWired) {
+      _ppWired = true;
+      openBtn.addEventListener('click', () => {
+        const show = panel.hidden;
+        panel.hidden = !show;
+        openBtn.setAttribute('aria-expanded', show ? 'true' : 'false');
+      });
+      panel.querySelectorAll('.pp-spd').forEach(b => {
+        b.addEventListener('click', () => {
+          const v = parseFloat(b.dataset.spd);
+          ppSaveSpeed(v);
+          panel.querySelectorAll('.pp-spd').forEach(x => { const on = (x === b); x.classList.toggle('active', on); x.setAttribute('aria-checked', on ? 'true' : 'false'); });
+        });
+      });
+      const fullBtn = document.getElementById('pp-full');
+      if (fullBtn) fullBtn.addEventListener('click', () => {
+        const d = _ppDur || 0;
+        if (startEl) startEl.value = '0:00';
+        if (endEl) endEl.value = d ? ppFmt(d) : '0:00';
+      });
+      const startPBtn = document.getElementById('pp-start-btn');
+      if (startPBtn) startPBtn.addEventListener('click', () => launchPractice());
+    }
+    _ppDur = dur;
+  }
+  let _ppDur = 0;
+  function launchPractice() {
+    const track = currentTrack;
+    if (!track || !isLaunchable(track)) { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('This track can’t be practiced', 'error'); return; }
+    const startEl = document.getElementById('pp-start');
+    const endEl = document.getElementById('pp-end');
+    const panel = document.getElementById('practice-panel');
+    const dur = _ppDur || Math.floor(track.duration_seconds || 0) || 0;
+    let start = ppParseTime(startEl ? startEl.value : '0');
+    let end = ppParseTime(endEl ? endEl.value : '');
+    if (!isFinite(start)) start = 0;
+    // if end unparseable / <= start / beyond song → treat as full-song-from-start.
+    let section = null;
+    if (dur > 0) {
+      start = Math.max(0, Math.min(start, dur - 1));
+      if (!isFinite(end) || end <= start || end > dur) end = dur;
+    } else {
+      // no known duration → let end stand if valid & > start, else full song (null section)
+      if (!isFinite(end) || end <= start) end = null;
+    }
+    if (end != null && end > start) section = { start: start, end: end };
+    // if start==0 and end==dur, section covers the whole song — still launch as practice (loops the full track).
+    let speed = ppLoadSpeed();
+
+    // reflect the clamped values back to the inputs so the user sees what will run
+    if (startEl) startEl.value = ppFmt(start);
+    if (endEl && section) endEl.value = ppFmt(section.end);
+
+    closeSheet(); stopPreview();
+    currentTrack = track;
+    // Route to the in-browser chart path (the ONLY practice-capable path — needs a decodable audio_url).
+    window.RhythmGame.playPractice(trackAudioUrl(track), {
+      id: track.id, title: track.title,
+      artist: track.artist_credit_name || track.artist_name, genre: track.genre, artwork: track.artwork_url,
+    }, section, speed);
+    if (panel) panel.hidden = true;
   }
   function closeSheet() { sheet.classList.remove('open'); }
 
@@ -1731,6 +1840,11 @@
   // real play instead of only the mock seed. Leaderboard submit (below) stays separate.
   function recordLocal(results) {
     if (!results) return;
+    // PRACTICE MODE hard exclusion — a drill run has ZERO competitive/economy side effects. This single early
+    // return gates EVERYTHING downstream in one place: the lifetime career aggregate (block 1), the per-song best
+    // + NEW BEST/GRADE UP badges (block 2), the Bonus Sparks earn loop + Daily-Rift ×3 (block 3), the RhythmGoals
+    // XP/Level/Streak grant (block 3), AND the account /score leaderboard submit (block 4) all live below this line.
+    if (results && (results.practice || results.isPractice)) return;
     if ((currentTrack && currentTrack._preview) || (results && results.preview)) return;   // build100h+: host review preview — NO career/best/bonus/plays/score submit (scoring:'preview_only')
     const grade = results.grade || gradeFor(results.accuracy || 0);
     const failed = !!results.failed;

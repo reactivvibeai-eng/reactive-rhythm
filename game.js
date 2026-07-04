@@ -126,6 +126,33 @@
   let state = 'menu';
   let muted = false;
 
+  // ---- PRACTICE MODE (additive; default OFF → single-player / MP / campaign paths byte-identical) ----
+  // A practice run drills a SECTION at a chosen SPEED and NEVER touches the leaderboard, per-song best,
+  // career aggregate, Daily-Rift ×3, or XP/streak (all gated on `isPractice` — see endGame + catalog.recordLocal).
+  let _practiceOn = false;        // is the CURRENT run a practice run
+  let _practiceSection = null;    // { start, end } in song-buffer seconds (clamped to the song), or null = full song
+  let _practiceRate = 1;          // playback speed multiplier applied to BOTH note approach and audio (0.5..1.5)
+  let _practiceArming = false;    // re-arm guard so the section-loop / wipeout auto-retry can't stack beginPlay()s
+  function _practiceSpeedMul() { return _practiceOn ? (_practiceRate || 1) : 1; }   // note-approach divisor factor (mirrors _levelSpeedMul)
+  function _fmtT(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  // PRACTICE HUD tag: an unmistakable "this run isn't scored" badge + the active section/speed. Toggled on the
+  // #practice-tag element (built in index.html); pure DOM, no per-frame cost (called once per (re)arm from beginPlay).
+  function _updatePracticeHud() {
+    try {
+      const el = document.getElementById('practice-tag'); if (!el) return;
+      if (_practiceOn) {
+        const sec = _practiceSection;
+        const secTxt = sec ? (_fmtT(sec.start) + '–' + _fmtT(sec.end)) : 'FULL SONG';
+        const spd = (_practiceRate === 1) ? '1×' : ((+_practiceRate).toString().replace(/\.0+$/, '') + '×');
+        const rd = document.getElementById('practice-tag-read');
+        if (rd) rd.textContent = secTxt + ' · ' + spd;
+        el.hidden = false;
+      } else {
+        el.hidden = true;
+      }
+    } catch (e) {}
+  }
+
   // visuals
   let lanePulse = Array(LANE_COUNT).fill(0);
   let laneHitPulse = Array(LANE_COUNT).fill(0);
@@ -1193,12 +1220,24 @@
       this.ctx = null; this.src = null; this.gain = null;
       this._start = 0; this._pausedAt = null; this._pauseAccum = 0;
       this.onended = null;
+      // PRACTICE MODE (additive; default 1 = byte-identical). Playback rate speeds/slows the AudioBufferSourceNode.
+      // getTime() must return SONG-BUFFER time (the position within the decoded track), so real-elapsed seconds
+      // are multiplied by _rate. Pitch shifts with rate — accepted for practice drilling (no time-stretch lib).
+      this._rate = 1;
     }
+    // call BEFORE play() — a live source node's playbackRate could be ramped, but practice sets the rate once per arm.
+    setRate(r) { this._rate = (typeof r === 'number' && r > 0) ? Math.max(0.25, Math.min(4, r)) : 1; if (this.src) { try { this.src.playbackRate.value = this._rate; } catch (e) {} } }
     async prepare() {}
     play(offset) {
+      // PRACTICE: a (re)play is a FRESH timeline — clear any pause bookkeeping from a prior play on this SAME instance
+      // (the practice fast re-arm reuses one DemoPlayer via stop()→play(); a stale _pauseAccum/_pausedAt would corrupt
+      // getTime() → the section-end clock never matches). A first-launch instance has these at 0 already, so this is a
+      // no-op on every existing (non-practice) path — byte-identical.
+      this._pausedAt = null; this._pauseAccum = 0;
       this.ctx = getAC(); // shared, already unlocked by a user gesture
       this.src = this.ctx.createBufferSource();
       this.src.buffer = this.buffer;
+      try { this.src.playbackRate.value = this._rate; } catch (e) {}   // PRACTICE: apply the chosen speed to the buffer
       this.gain = this.ctx.createGain();
       this.gain.gain.value = muted ? 0 : musicVol;
       this.src.connect(this.gain); this.gain.connect(this.ctx.destination);
@@ -1207,16 +1246,18 @@
       const when = this.ctx.currentTime + 0.12;
       // build102t (additive; default 0 = byte-identical): optional mid-buffer start offset so a live-show
       // SPECTATOR joining mid-run can lock onto the shared clock. getTime() stays absolute song time because
-      // _start is back-dated by the offset.
+      // _start is back-dated by the offset. PRACTICE reuses this SAME offset primitive to seek to a section start.
       const off = (typeof offset === 'number' && offset > 0) ? Math.min(offset, Math.max(0, this.duration - 0.05)) : 0;
       this.src.start(when, off);
-      this._start = when - off;
+      // _start is the real-clock instant that maps to song-buffer position 0. With a non-unit rate, song-buffer
+      // time = (realElapsed) * rate + off; we fold `off` in by back-dating _start by off/rate real-seconds.
+      this._start = when - off / this._rate;
       this.src.onended = () => { if (this.onended) this.onended(); };
     }
     getTime() {
       if (!this.ctx) return -3;
-      if (this._pausedAt != null) return this._pausedAt - this._start - this._pauseAccum;
-      return this.ctx.currentTime - this._start - this._pauseAccum;
+      const real = (this._pausedAt != null ? this._pausedAt : this.ctx.currentTime) - this._start - this._pauseAccum;
+      return real * this._rate;   // PRACTICE: real seconds → song-buffer seconds at the current rate (rate 1 = identity)
     }
     getDuration() { return this.duration; }
     pause() { if (!this.ctx) return; this._pausedAt = this.ctx.currentTime; try { this.ctx.suspend(); } catch (e) {} }
@@ -2607,6 +2648,21 @@
   async function play(prov, opts) {
     provider = prov;
     bossMode = !!(opts && opts.boss) || bossFlag;   // Boss Stage: Levels boss card → playBoss(), or ?boss=1 to test
+    // ---- PRACTICE MODE arm/disarm (single-player ONLY). A fresh play() ALWAYS re-decides practice from opts, so
+    // a normal quick-play / campaign / MP launch that passes no practice opts clears any stale practice state →
+    // the default (non-practice) path stays byte-identical. MP is hard-excluded (practice is a solo drill).
+    var _mpLive = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive());
+    if (!_mpLive && opts && opts.mode === 'practice') {
+      _practiceOn = true;
+      var _sp = (opts.speed != null) ? +opts.speed : 1;
+      _practiceRate = (isFinite(_sp) && _sp > 0) ? Math.max(0.5, Math.min(1.5, _sp)) : 1;
+      var _sec = opts.section;
+      if (_sec && isFinite(_sec.start) && isFinite(_sec.end) && _sec.end > _sec.start) {
+        _practiceSection = { start: Math.max(0, +_sec.start), end: Math.max(0, +_sec.end) };
+      } else { _practiceSection = null; }   // no/invalid section → drill the whole song at the chosen speed
+    } else {
+      _practiceOn = false; _practiceSection = null; _practiceRate = 1;
+    }
     // re-assert the equipped skin at start UNLESS a per-level override is active (launchLevel sets it via applyLevelTheme before play())
     try { if (!_levelSkinActive && typeof applyEquippedSkin === 'function') applyEquippedSkin(); } catch (e) {}
     $('play-btn').disabled = true;
@@ -2884,6 +2940,9 @@
     } else {
       buildNotes();
     }
+    // ---- PRACTICE section filter (AFTER buildNotes so the chart is unchanged; only WHICH notes are live differs).
+    // Never runs on a normal launch (_practiceOn false) → default path byte-identical.
+    if (_practiceOn && _practiceSection) _applyPracticeSection();
     resetScoring();
 
     // update HUD meta
@@ -2893,6 +2952,7 @@
       // when it's truthy, else show just the title (a null artist was printing the literal "Title — null").
       $('hud-track').textContent = session.meta.artist ? (session.meta.title + ' — ' + session.meta.artist) : session.meta.title;
     }
+    _updatePracticeHud();   // PRACTICE: show/hide the unmistakable "not scored" tag + section/speed readout
 
     showScreen('game');
     // build10b/18: LEVEL-START CINEMATIC — the backdrop opens slightly zoomed and eases out
@@ -2929,7 +2989,12 @@
     await runCountdown();
     if (myGen !== _playGen || !player) return;   // superseded during the 3·2·1 countdown (the common case)
 
-    player.onended = () => { if (state === 'playing') endGame(); };
+    // PRACTICE: a natural buffer-end (section == full song, or drilling the whole song at a speed) LOOPS back to
+    // the section start instead of ending the run — practice is a repeating drill, not a scored playthrough.
+    player.onended = () => { if (state === 'playing') { if (_practiceOn) practiceRearm(); else endGame(); } };
+    // PRACTICE: apply the chosen playback SPEED to the audio buffer BEFORE it starts (rate-scaled getTime keeps
+    // note-time ↔ audio-time in sync). A normal run leaves rate at 1 → byte-identical.
+    try { if (player.setRate) player.setRate(_practiceOn ? _practiceRate : 1); } catch (e) {}
     // re-arm audio: the countdown delay can let mobile browsers re-suspend the
     // context that the tap gesture unlocked, which would start the song silent.
     try { const ac = getAC(); if (ac.state === 'suspended') await ac.resume(); } catch (e) {}
@@ -2939,7 +3004,11 @@
     // mobile pause / window-blur / tab-hide all set state='paused' while we were awaiting the 2s buffer + countdown), do NOT
     // force the song to start behind the now-stuck PAUSED overlay — stash the start and let resumeGame() run it on resume.
     const _go = () => {
-      player.play();
+      // PRACTICE: seek the audio to the section start (DemoPlayer.play(offset) is the existing spectator seek
+      // primitive; getTime() stays absolute song-buffer time because _start is back-dated by the offset). A normal
+      // run passes no offset (undefined) → play() starts at 0, byte-identical.
+      const _pOff = (_practiceOn && _practiceSection) ? _practiceSection.start : undefined;
+      player.play(_pOff);
       state = 'playing';
       // build104 s1b: SEED audio-latency compensation for devices that never calibrated. Chrome reports the real
       // hardware output latency only once the context is LIVE (0/jittery at construction — hence here, not at boot).
@@ -3048,9 +3117,140 @@
     // BEAT IT! flash mid-versus. endGame calls stopGame first, so this ONE clear covers song-end, fail-out, and
     // every quit/abort path. (A mid-run RESTART also lands here — restart = a fresh run, one-run contract holds.)
     try { if (_ghostTarget) { _ghostTarget = null; _ghostBeat = false; const _ge = $('ghost-target'); if (_ge) _ge.remove(); } } catch (e) {}
+    // PRACTICE: hide the "not scored" tag on any teardown. A practice RE-ARM re-shows it immediately (beginPlay →
+    // _updatePracticeHud), so a section-loop won't flicker it off; only a genuine exit-to-menu leaves it hidden.
+    try { if (!_practiceArming) { const _pt = document.getElementById('practice-tag'); if (_pt) _pt.hidden = true; } } catch (e) {}
+  }
+
+  // ---- PRACTICE: keep only the notes whose HEAD lands in [start, end); preserve time-sort + chord/hold integrity.
+  // Called from beginPlay() AFTER buildNotes(), so `notes` is already ascending-by-time. A pure inclusive-lower /
+  // exclusive-upper filter keeps that order (we never reorder), so the miss-sweep's ascending-time assumption holds.
+  // • CHORD integrity: every member of a chord shares n.time, so a per-note head test passes/fails the WHOLE chord
+  //   together automatically. We still do an explicit chordId union pass (belt-and-suspenders) so a chord is
+  //   all-in-or-all-out even if a future chart ever desyncs partner times.
+  // • HOLD integrity: a hold whose HEAD is in range but whose TAIL (time+hold) exceeds `end` is CLAMPED to end so
+  //   the sustain can't run past the loop boundary.
+  function _applyPracticeSection() {
+    const sec = _practiceSection; if (!sec) return;
+    const start = sec.start, end = sec.end;
+    // 1) collect chordIds that have ANY member head in range → those chords are fully included.
+    const keepChord = Object.create(null);
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      if (n.chord && n.chordId != null && n.time >= start && n.time < end) keepChord[n.chordId] = 1;
+    }
+    // 2) single forward pass (input already sorted → output stays sorted; no re-sort needed).
+    const out = [];
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const inRange = (n.time >= start && n.time < end);
+      const keep = inRange || (n.chord && n.chordId != null && keepChord[n.chordId]);
+      if (!keep) continue;
+      if (n.type === 'hold' && n.hold > 0 && (n.time + n.hold) > end) {
+        n.hold = Math.max(0.05, end - n.time);   // clamp the sustain tail to the section boundary (min a hair so it stays a hold)
+      }
+      out.push(n);
+    }
+    notes = out;
+    try { if (window.__rrChartStats) window.__rrChartStats.practiceCharted = notes.length; } catch (e) {}
+  }
+
+  // ---- PRACTICE: reset the per-NOTE runtime flags on the current (already section-filtered) chart so a re-arm
+  // starts each rep with every note un-judged, without re-running buildNotes()/_applyPracticeSection(). The section
+  // + speed never change across a loop, so the current `notes` array IS the correct subset (hold tails already
+  // clamped, idempotently). Clears exactly the fields play() writes: judged/hit/_pulsed/dropped + any live bomb FX.
+  function _practiceResetNotes() {
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      n.judged = false; n.hit = null; n._pulsed = false;
+      if (n.dropped) n.dropped = false;
+      if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; }
+      if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; }
+    }
+  }
+
+  // ---- PRACTICE: SHORT re-arm lead-in (used ONLY on re-arms, NOT the first Start-Practice launch). A brief "GO"
+  // beat reorients the player without the full ~2.1s guitar-in wait + 3·2·1. Gen-guarded so a superseded re-arm
+  // leaves the newer countdown node untouched. ~650ms total — snappy loop feel.
+  async function runCountdownShort(myGen) {
+    const el = $('countdown');
+    if (!el) return;
+    screens.countdown.classList.add('active');
+    try {
+      el.textContent = 'GO!';
+      el.style.fontSize = '';
+      el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+      await new Promise(r => setTimeout(r, 650));
+      if (myGen !== _playGen) return;   // superseded mid-lead-in → don't touch the newer countdown
+      screens.countdown.classList.remove('active');
+    } catch (e) { try { screens.countdown.classList.remove('active'); } catch (_) {} }
+  }
+
+  // ---- PRACTICE: FAST re-arm — auto-retry on section-end / natural-end / wipeout, plus the pause "Restart Section"
+  // button. Keeps the live provider + player + DECODED BUFFER + session (NO re-decode, NO showScreen('loading'), NO
+  // ~2.1s guitar-in wait, NO 3·2·1) — only a short "GO" lead-in. Explicitly replicates the per-run state reset that
+  // beginPlay() would otherwise do (resetScoring() clears combo/score/multiplier/holdNote/_missCursor/particles/FX/
+  // clutch+streak; _practiceResetNotes() clears the per-note judged/hit flags) so a rep starts truly fresh.
+  //
+  // DOUBLE-REARM RACE GUARD: the loop() t>=end path and the player.onended path can BOTH fire near a section end.
+  // Both funnel through this ONE function; the _practiceArming latch makes a concurrent 2nd call a no-op, and the
+  // ++_playGen bump immediately supersedes the OLD run — so a stale onended/loop from the prior rep that fires after
+  // we've begun re-arming sees myGen !== _playGen (in the async lead-in) OR bails on the _practiceArming latch, and
+  // can never spawn a 2nd AudioBufferSourceNode or a 2nd loop. The latch clears only after the new run has started
+  // (or on any bail), and the source is stopped BEFORE we create the next one, so there is never double audio.
+  function practiceRearm() {
+    if (!_practiceOn) return;
+    if (_practiceArming) return;               // a concurrent re-arm (loop vs onended) already owns this rep
+    // Fast path requires a live player + decoded buffer + session. If any is missing (hard teardown happened), fall
+    // back to the full launch so a re-arm is never left dead — correctness over speed in that rare edge.
+    if (!player || !session || !(player.play && player.stop)) {
+      _practiceArming = true;
+      try { stopGame(); } catch (e) {}
+      Promise.resolve().then(() => beginPlay()).finally(() => { _practiceArming = false; });
+      return;
+    }
+    _practiceArming = true;
+    const myGen = ++_playGen;                  // supersede the OLD rep immediately (stale loop()/onended now no-ops)
+    try {
+      state = 'paused';                        // freeze the loop instantly (loop() returns on non-'playing')
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      _deferredStart = null;
+      // stop the current source WITHOUT the full stopGame() teardown (keep player/session/provider/buffer/skin/theme).
+      try { player.onended = null; player.stop(); } catch (e) {}
+      try { window.RhythmProcBg && window.RhythmProcBg.stop(); } catch (e) {}
+      // fresh per-run + per-note state (the reason the first version used a full teardown — replicated here).
+      resetScoring();
+      _practiceResetNotes();
+      _missCursor = 0;
+      updateHUD();
+      _updatePracticeHud();
+    } catch (e) { _practiceArming = false; state = 'menu'; return; }
+    // short lead-in, then start — mirrors _go()'s audio-start + loop kickoff. Gen-guarded end-to-end.
+    (async () => {
+      try {
+        try { const ac = getAC(); if (ac.state === 'suspended') await ac.resume(); } catch (e) {}
+        if (myGen !== _playGen) return;        // a newer re-arm/launch superseded us during resume()
+        await runCountdownShort(myGen);
+        if (myGen !== _playGen) return;        // superseded during the lead-in → do not start a stale source/loop
+        muteUntil = -1; curGain = 1; applyGate();
+        const off = (_practiceSection ? _practiceSection.start : undefined);
+        try { if (player.setRate) player.setRate(_practiceRate); } catch (e) {}
+        // re-arm onended → loop again on the next natural end (fresh closure over this player instance).
+        player.onended = () => { if (state === 'playing') { if (_practiceOn) practiceRearm(); else endGame(); } };
+        player.play(off);
+        state = 'playing';
+        try { if (anyPadConnected()) _ensureFastPoll(); } catch (e) {}
+        try { window.RhythmProcBg && window.RhythmProcBg.play(); } catch (e) {}
+        lastFrame = performance.now();
+        loop();
+      } catch (e) { try { console.error(e); } catch (_) {} }
+      finally { _practiceArming = false; }     // clear the latch only after the new rep is live (or bailed)
+    })();
   }
 
   function restartGame() {
+    // PRACTICE: a restart during a practice run re-arms the SAME section+speed (never a scored full run).
+    if (_practiceOn) { practiceRearm(); return; }
     // build114 review: if THIS run used a host-broadcast authoritative chart (a live 1v1/room MP match), re-arm it
     // so a RESTART/REPLAY replays the IDENTICAL chart. Without this, the one-shot _injectedNotes is already consumed,
     // so bare beginPlay() would run a FRESH local buildNotes() that can diverge from the opponent's decoder output —
@@ -3072,6 +3272,9 @@
   // _endingLock guard, so cameraShake/glitchAmount visibly settle) before tearing down into results.
   function failRun() {
     if (runFailed || state !== 'playing') return;
+    // PRACTICE: a practice run NEVER fails out — a wipeout just LOOPS the section (auto-retry). Fail Mode is a
+    // scored-run mechanic; drilling shouldn't eject you. Re-arm the section instead of running the fail teardown.
+    if (_practiceOn) { practiceRearm(); return; }
     runFailed = true; _endingLock = true;
     cameraShake = Math.max(cameraShake, 14); glitchAmount = 1;
     flashJudgment('SIGNAL LOST', '#ff1f2e');
@@ -3117,6 +3320,11 @@
       failed: runFailed,
       boss: bossMode,
       clutch_count: _clutchCount,   // build122 p1: display-only — never read by scoring/grade/leaderboard-submit
+      // PRACTICE: the HARD safety flag. recordLocal() early-returns on it (no career / per-song best / Bonus Sparks /
+      // Daily-Rift ×3 / XP / streak / account-leaderboard submit), and the live server submit below is skipped. A
+      // practice run has ZERO competitive/economy side effects. Default false → normal runs record exactly as before.
+      practice: _practiceOn,
+      isPractice: _practiceOn,   // alias — the requested __rrDebug.practiceState() surface + any future reader
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
@@ -3172,7 +3380,10 @@
     // perfFrac/greatFrac/comboStep differ), so its scores aren't comparable — route tight runs to LOCAL PRACTICE. The
     // in-browser path already gated this; gating HERE also closes the SERVER-CHART (liveProvider) submit, which bypassed it.
     // (recordLocal — per-song best + career — already ran above, so practice runs still count locally.)
-    if (timingFeel === 'tight') {
+    if (_practiceOn) {
+      // PRACTICE: NEVER submit to the leaderboard (server chart OR account). Show the local-practice note only.
+      try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
+    } else if (timingFeel === 'tight') {
       try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
     } else if (session && session.submit) {
       try {
@@ -3450,6 +3661,8 @@
   function pauseGame() {
     if (state !== 'playing' || _endingLock) return;   // build108 review fix (critical): NEVER pause during the fail-out wipeout beat — a pause (Escape/gamepad/blur/visibilitychange all route here) would flip state off 'playing', so the deferred endGame() re-entry guard would silently swallow the only teardown call and strand the failed run (resume then continues it as if it never failed).
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
+    // PRACTICE: the RESTART SECTION action is only meaningful in a practice run — show it there, hide it otherwise.
+    try { const _rs = document.getElementById('restart-section-btn'); if (_rs) _rs.hidden = !_practiceOn; } catch (e) {}
     try { window.RhythmProcBg && window.RhythmProcBg.pause(); } catch (e) {}   // build66: freeze the reactive backdrop while paused
   }
   // two-tap RESTART confirm state (wired on #restart-btn below) — declared here so resumeGame can disarm it
@@ -3501,6 +3714,11 @@
       if (!_restartArmed) { _restartArmed = true; rsb.textContent = 'TAP AGAIN TO RESTART'; rsb.classList.add('arm'); clearTimeout(restartArmT); restartArmT = setTimeout(_disarmRestart, 3000); return; }
       _disarmRestart(); hidePause(); restartGame();
     });
+  } }
+  // PRACTICE: RESTART SECTION — single tap re-seeks to the section start + re-arms WITHOUT a full teardown of the
+  // practice context (same section + speed). No confirm gate: it's a low-stakes drill reset, not a run-nuking action.
+  { const rsec = document.getElementById('restart-section-btn'); if (rsec) {
+    rsec.addEventListener('click', () => { _disarmRestart(); hidePause(); if (_practiceOn) practiceRearm(); });
   } }
   $('exit-btn').addEventListener('click', () => { _disarmRestart(); hidePause(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
   let lastResults = null;
@@ -3666,6 +3884,15 @@
       beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
       notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0 })),   // build104 s5/6 diag (strip at freeze)
       endRun: () => { if (state === 'playing') { endGame(); return true; } return state; },
+      // PRACTICE MODE dev hook (strip at content-freeze): confirm the section filter + speed + no-score gating headlessly.
+      practiceState: () => ({
+        enabled: _practiceOn,
+        section: _practiceSection ? { start: +(+_practiceSection.start).toFixed(3), end: +(+_practiceSection.end).toFixed(3) } : null,
+        speed: _practiceRate,
+        chartedNotes: notes.length,
+        currentTime: (state === 'playing') ? +songTime().toFixed(3) : null,
+        isPractice: _practiceOn,   // the exact leaderboard/career exclusion flag stamped onto results
+      }),
       lanes: () => ({ down: laneDown.slice(), pulse: lanePulse.map(v => +v.toFixed(2)), pluck: lanePluckT.map(v => +v.toFixed(2)) }),
       // FLIPBOOK FX dev hooks (stripped at content-freeze): inspect/emit/draw the additive layer
       fx: () => fx ? { loaded: true, sheets: Object.keys(fx.manifest || {}).length, imgs: Object.keys(fx.images || {}).length, active: (fx.active || []).length, theme: _fxTheme(), names: (fx.active || []).map(function (i) { return (i.meta && i.meta.src ? i.meta.src.split('/').pop() : '?') + (i.loop ? '*' : ''); }), pts: (fx.active || []).map(function (i) { return { n: (i.meta && i.meta.src ? i.meta.src.split('/').pop().replace('.png', '') : '?'), x: Math.round(i.x), y: Math.round(i.y), s: +(+i.scale).toFixed(2) }; }) } : { loaded: false },
@@ -5345,7 +5572,13 @@
     }
     if (sustaining) updateHUD();
 
-    if (t > songDuration + 0.6) { for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i); endGame(); return; }   // build58: bank any sustain still correctly held when the clock crosses the end
+    // PRACTICE section-end → LOOP back to the section start (auto-retry). Alloc-free: bare number compare on the
+    // clock we already read this frame. Only ever true inside a practice run with a section (default path untouched).
+    if (_practiceOn && _practiceSection && t >= _practiceSection.end) {
+      for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i);
+      practiceRearm(); return;
+    }
+    if (t > songDuration + 0.6) { for (let i = 0; i < LANE_COUNT; i++) if (holdNote[i]) completeHold(i); if (_practiceOn) { practiceRearm(); return; } endGame(); return; }   // build58: bank any sustain still correctly held when the clock crosses the end · PRACTICE loops instead of ending
     }   // end !_endingLock (build108)
 
     // build64 PERF (build121 revision): oldest-first cap-trim via copyWithin — same resulting elements
@@ -5522,7 +5755,7 @@
       if (_skinBuildT >= 1) _igniteCatchers();
     }
     const t = songTime();
-    const approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul());   // build36: per-level SPEED mod
+    const approach = DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul() * _practiceSpeedMul());   // build36: per-level SPEED mod · PRACTICE: speed spreads notes so real-time travel matches the faster/slower audio (crossing still lands at t==n.time → strike-line sync preserved)
     // build121 PERF: skip the Math.random()-based translate when shake has decayed to ~0 — at that
     // point sx/sy are ~0 anyway (cameraShake decays to exactly 0 between hits), so translate(0,0) was
     // a no-op transform every idle frame. save()/restore() stay unconditional (transform stack balance
@@ -7948,8 +8181,14 @@
   // ---------- EXPOSE ENGINE API ----------
   Object.assign(window.RhythmGame, {
     play,                              // play(provider)
-    playDemo: () => play(demoProvider),
-    playUrl: (url, meta) => play(() => bufferedProvider(url, meta)),   // in-browser chart a live track
+    playDemo: (opts) => play(demoProvider, opts),
+    playUrl: (url, meta, opts) => play(() => bufferedProvider(url, meta), opts),   // in-browser chart a live track (opts forwards practice/boss)
+    // PRACTICE launcher: chart a live track in-browser and drill a SECTION at a SPEED. section = {start,end} in
+    // song seconds (omit/null = full song); speed ∈ 0.5..1.5. Never scores (see play()→beginPlay()→endGame gates).
+    playPractice: (url, meta, section, speed) => play(() => bufferedProvider(url, meta), { mode: 'practice', section: section || null, speed: (speed != null ? speed : 1) }),
+    playDemoPractice: (section, speed) => play(demoProvider, { mode: 'practice', section: section || null, speed: (speed != null ? speed : 1) }),
+    // read the decoded track duration (for the practice Start/End range max) once a provider has resolved the buffer.
+    getSongDuration: () => songDuration || 0,
     setDifficulty: (d) => { if (DIFF_STEP[d]) { difficulty = d; syncDiffButtons(); try { localStorage.setItem('rr_diff', d); } catch (e) {} } },
     getDifficulty: () => difficulty,
     setMenuPlayHandler: (fn) => { _menuPlayHandler = fn; },

@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=444" />
+<link rel="stylesheet" href="jukebox.css?v=445" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2570,6 +2570,26 @@
   /* vs-mode docks the capsule with its own transform — don't let the SP burst yank it */
   #game.vs-mode #combo-display.tierpop { animation: none; }
 
+  /* ============ PRACTICE tag (in-game "not scored" badge) ============ */
+  .practice-tag {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 40; pointer-events: none;
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 6px 14px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(28,17,9,0.92), rgba(14,9,6,0.92));
+    border: 1px solid rgba(224,169,63,0.55);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 6px 22px rgba(0,0,0,0.5), 0 0 18px rgba(224,169,63,0.18);
+    font-family: 'Chakra Petch', sans-serif; white-space: nowrap;
+  }
+  .practice-tag[hidden] { display: none; }
+  .practice-tag .pt-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px rgba(224,169,63,0.9); animation: pt-pulse 1.6s ease-in-out infinite; }
+  .practice-tag .pt-lab { font-family: 'Oxanium', sans-serif; font-weight: 800; letter-spacing: 0.16em; font-size: 12px; color: var(--gold); text-transform: uppercase; }
+  .practice-tag .pt-read { font-size: 12px; letter-spacing: 0.06em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .practice-tag .pt-note { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); padding-left: 8px; border-left: 1px solid rgba(160,147,143,0.35); }
+  @keyframes pt-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .rr-reduce-motion .practice-tag .pt-dot { animation: none; }
+  @media (max-width: 640px) { .practice-tag { top: 6px; padding: 4px 10px; gap: 6px; } .practice-tag .pt-note { display: none; } .practice-tag .pt-read { font-size: 11px; } }
+
   /* ============ PAUSE ============ */
   .pause-overlay {
     position: absolute; inset: 0;
@@ -3481,6 +3501,54 @@
   .sheet-foot { display: flex; flex-direction: column; gap: 14px; }
   .sheet-foot .play-btn { width: 100%; justify-content: center; padding: 20px; font-size: 15px; border-radius: 14px; }
   .sheet-hint { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.05em; }
+
+  /* ===== PRACTICE panel (song sheet) ===== */
+  .practice-open-btn {
+    width: 100%; padding: 12px; border-radius: 12px; cursor: pointer;
+    background: rgba(224,169,63,0.08); border: 1px solid rgba(224,169,63,0.4);
+    color: var(--gold); font-family: 'Chakra Petch', sans-serif; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .practice-open-btn:hover, .practice-open-btn:active { background: rgba(224,169,63,0.16); border-color: rgba(224,169,63,0.7); }
+  .practice-open-btn[aria-expanded="true"] { background: rgba(224,169,63,0.16); }
+  .practice-panel { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 14px; background: rgba(20,13,9,0.7); border: 1px solid rgba(224,169,63,0.28); }
+  .practice-panel[hidden] { display: none; }
+  .practice-panel .pp-row { display: flex; align-items: center; gap: 10px; }
+  .practice-panel .pp-times { justify-content: center; flex-wrap: wrap; }
+  .practice-panel .pp-field { display: flex; flex-direction: column; gap: 4px; }
+  .practice-panel .pp-field span { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  .practice-panel .pp-field input {
+    width: 78px; padding: 8px 10px; border-radius: 9px; text-align: center;
+    background: rgba(8,6,5,0.85); border: 1px solid rgba(160,147,143,0.35); color: var(--ink);
+    font-family: 'Oxanium', sans-serif; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0.04em;
+  }
+  .practice-panel .pp-field input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px rgba(224,169,63,0.25); }
+  .practice-panel .pp-sep { color: var(--ink-dim); font-size: 16px; align-self: flex-end; padding-bottom: 8px; }
+  .practice-panel .pp-full {
+    align-self: flex-end; padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    background: rgba(160,147,143,0.12); border: 1px solid rgba(160,147,143,0.35); color: var(--ink-dim);
+    font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .practice-panel .pp-full:hover { color: var(--ink); border-color: var(--ink); }
+  .practice-panel .pp-lab { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); flex: 0 0 auto; }
+  .practice-panel .pp-speeds { display: flex; gap: 6px; flex: 1 1 auto; flex-wrap: wrap; }
+  .practice-panel .pp-spd {
+    flex: 1 1 0; min-width: 48px; padding: 9px 4px; border-radius: 9px; cursor: pointer;
+    background: rgba(8,6,5,0.7); border: 1px solid rgba(160,147,143,0.3); color: var(--ink-dim);
+    font-family: 'Oxanium', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+  }
+  .practice-panel .pp-spd:hover { color: var(--ink); border-color: rgba(224,169,63,0.5); }
+  .practice-panel .pp-spd.active { background: rgba(224,169,63,0.18); border-color: var(--gold); color: var(--gold); }
+  .practice-panel .pp-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.5; color: var(--ink-dim); letter-spacing: 0.02em; text-align: center; }
+  .practice-panel .pp-start-btn {
+    width: 100%; padding: 15px; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(180deg, rgba(224,169,63,0.95), rgba(196,138,42,0.95));
+    border: 1px solid rgba(224,169,63,0.9); color: #140c06;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .practice-panel .pp-start-btn:hover, .practice-panel .pp-start-btn:active { filter: brightness(1.08); }
+  .practice-panel .pp-start-btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
   .sheet-back { background: none; border: none; color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; padding: 6px; }
   .sheet-back:hover, .sheet-back:active { color: var(--ink); }
 
@@ -6463,6 +6531,28 @@
           <span>Initiate the Signal</span>
           <span class="arrow">↳</span>
         </button>
+        <button class="practice-open-btn" id="practice-open-btn" type="button" aria-expanded="false" aria-controls="practice-panel">🎯 Practice this section</button>
+        <!-- PRACTICE PANEL — pick a start/end + speed, then drill it (never scored). Hidden until "Practice" is tapped. -->
+        <div class="practice-panel" id="practice-panel" hidden>
+          <div class="pp-row pp-times">
+            <label class="pp-field"><span>Start</span><input type="text" id="pp-start" inputmode="numeric" placeholder="0:00" value="0:00" aria-label="Practice section start (mm:ss)"></label>
+            <span class="pp-sep">→</span>
+            <label class="pp-field"><span>End</span><input type="text" id="pp-end" inputmode="numeric" placeholder="0:00" value="0:00" aria-label="Practice section end (mm:ss)"></label>
+            <button class="pp-full" id="pp-full" type="button" title="Reset to the whole song">Full</button>
+          </div>
+          <div class="pp-row">
+            <span class="pp-lab">Speed</span>
+            <div class="pp-speeds" id="pp-speeds" role="radiogroup" aria-label="Practice playback speed">
+              <button type="button" class="pp-spd" data-spd="0.5" role="radio" aria-checked="false">0.5×</button>
+              <button type="button" class="pp-spd" data-spd="0.75" role="radio" aria-checked="false">0.75×</button>
+              <button type="button" class="pp-spd active" data-spd="1" role="radio" aria-checked="true">1×</button>
+              <button type="button" class="pp-spd" data-spd="1.25" role="radio" aria-checked="false">1.25×</button>
+              <button type="button" class="pp-spd" data-spd="1.5" role="radio" aria-checked="false">1.5×</button>
+            </div>
+          </div>
+          <div class="pp-hint" id="pp-hint">Practice runs loop the section and are never scored — no leaderboard, no career.</div>
+          <button class="pp-start-btn" id="pp-start-btn" type="button">Start Practice</button>
+        </div>
         <div class="sheet-hint" id="sheet-hint">Tap each lane as glyphs cross the line</div>
         <button class="sheet-back" id="sheet-back">← Back to songs</button>
       </div>
@@ -7297,6 +7387,14 @@
         <div class="m-prog"><i id="m-progress"></i></div>
       </div>
 
+      <!-- PRACTICE tag — unmistakable "this run isn't scored" badge + active section/speed readout (hidden by default) -->
+      <div class="practice-tag" id="practice-tag" role="status" aria-live="polite" hidden>
+        <span class="pt-dot" aria-hidden="true"></span>
+        <span class="pt-lab">PRACTICE</span>
+        <span class="pt-read" id="practice-tag-read">FULL SONG · 1×</span>
+        <span class="pt-note">not scored</span>
+      </div>
+
       <!-- live multiplier (left) + overdrive (right) gauges -->
       <div class="gauge mult" id="mult-gauge">
         <div class="gauge-badge" id="mult-badge">1x</div>
@@ -7337,6 +7435,7 @@
         <h2 class="display">Paused</h2>
         <div class="pause-actions">
           <button class="ghost-btn primary" id="resume-btn">RESUME</button>
+          <button class="ghost-btn" id="restart-section-btn" hidden>RESTART SECTION</button>
           <button class="ghost-btn" id="restart-btn">RESTART</button>
           <button class="ghost-btn" id="exit-btn">EXIT</button>
         </div>
@@ -7531,7 +7630,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=444"></script>
+<script src="telemetry.js?v=445"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7710,17 +7809,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=444"></script>
-<script src="game.js?v=444"></script>
-<script src="procbg.js?v=444"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=444"></script>
-<script src="chat.js?v=444"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=444"></script>
-<script src="goals.js?v=444"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=444"></script>
-<script src="share.js?v=444"></script>
-<script src="replay.js?v=444"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=444"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=445"></script>
+<script src="game.js?v=445"></script>
+<script src="procbg.js?v=445"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=445"></script>
+<script src="chat.js?v=445"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=445"></script>
+<script src="goals.js?v=445"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=445"></script>
+<script src="share.js?v=445"></script>
+<script src="replay.js?v=445"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=445"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
