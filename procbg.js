@@ -53,9 +53,16 @@
   //   ember: + AMBIENT forge-glow wash (1 radial fill), + forge COAL bed (≤46 glow+ellipse pool, the SOURCE),
   //          + layered HEAT-HAZE columns (≤7 drawImage smoke, dropped under _soft — heaviest ember add). Particle
   //          planes unchanged. Coal/ambient are cheap and always on; haze sheds under _soft.
+  // ══ build139 EMBER BUSIER PASS (owner: "more movement, more particles — starting to look good") ══
+  //   MORE PARTICLES (all counts set at reseed, never per-frame): FAR 220→330, MID 120→180, NEAR 40→52 desktop
+  //          (lite 70/60/10 → 96/84/14). + a new RISING-SPARK pool (≤64/26) lifting off the coal bed = 1 arc().fill() each.
+  //   MORE MOVEMENT: per-particle lateral SWIRL on FAR/MID drift (hoisted amp + spawn-set phase), livelier 2-sine coal
+  //          FLICKER, and the rising-spark stream (continuous mod-1 rise + sin() end-fade + sine sway). All alloc-free.
+  //   _soft: FAR/MID draw ceiling already halved via _densCap; the rising sparks also halve their draw count under _soft.
   //   LOOP-SEAMLESS at rest: bands/lights/coals/ridges have NO positional reset (only slow brightness breathe);
-  //   ribbons/haze/warp-sway use continuous sines or mod-1 rise with sin() fade at the ends → no pop at the wrap.
-  //   reduce-motion: ALL new parallax/drift/rise/sway frozen (ribbons, ridge parallax, warp sway, haze rise).
+  //   ribbons/haze/warp-sway/ember-swirl use continuous sines or mod-1 rise with sin() fade at the ends → no pop at the wrap.
+  //   reduce-motion: ALL new parallax/drift/rise/sway/swirl/flicker frozen (ribbons, ridge parallax, warp sway, haze rise,
+  //          ember swirl + rising sparks + coal flicker).
   // ══ pkg3.0(D) CAMERA RIG — breathe/kick zoom + slow tilt + LFO drift; identity under reduce-motion ══
   var CAM = { z: 1, tilt: 0, dx: 0, dy: 0 };
   function _updateCam(dt, st) {
@@ -306,6 +313,7 @@
     e.x = _w * 0.5 + Math.cos(ang) * r0; e.y = _h * 0.58 + Math.sin(ang) * r0;
     e.vx = burst ? Math.cos(ang) * burst : 0; e.vy = burst ? Math.sin(ang) * burst : 0;
     e.life = 0; e.maxlife = 2.2 + Math.random() * 3.2; e.z = Math.random(); e.gold = false;
+    e.sw = Math.random() * 6.2832; e.swf = 0.5 + Math.random() * 1.1;   // build139: per-particle swirl phase + freq → gentle lateral turbulence (alloc-free; only mutates e, never a new object)
     var r = Math.random();
     e.kind = layer === 1 ? (r < mix.smoke ? 2 : r < mix.smoke + mix.spark ? 1 : 0) : 0;   // smoke/spark live on MID only
     e.px1 = e.px2 = e.x; e.py1 = e.py2 = e.y;   // NEAR streak memory (drawn tails)
@@ -339,8 +347,12 @@
       // pt4: FAR 140→220 desktop (cheapest draw — 1 arc().fill() each, see L~378) — reads as a full "storm" at negligible cost.
       // pt4 PERF GUARD: array stays full-sized here; _soft relief is applied per-FRAME as a draw cap (see _densCap below), NOT at reseed —
       //   _soft flips mid-session and never re-dirties _state, so a reseed-time halving would never fire for a machine that slows down while already in ember.
-      var nF = lite ? 70 : 220, nM = lite ? 60 : 120, nN = lite ? 10 : 40, si, e0;
-      S = _state.fs = { far: [], mid: [], near: [], coals: [], haze: [] };
+      // build139 BUSIER PASS (owner: "more movement, more particles"): FAR 220→330, MID 120→180, NEAR 40→52 desktop.
+      //   FAR is the cheapest draw (1 arc().fill() each) so the +110 far sparks add real DEPTH/populate at negligible
+      //   cost; MID +60 fills the mid plane. Lite counts bump only modestly (70→96 / 60→84 / 10→14) so slow machines
+      //   stay light — and _densCap (see below) still halves the FAR/MID per-FRAME draw ceiling the instant _soft trips.
+      var nF = lite ? 96 : 330, nM = lite ? 84 : 180, nN = lite ? 14 : 52, si, e0;
+      S = _state.fs = { far: [], mid: [], near: [], coals: [], haze: [], rise: [] };
       for (si = 0; si < nF; si++) { e0 = _fsSpawn({}, 0, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.far.push(e0); }
       for (si = 0; si < nM; si++) { e0 = _fsSpawn({}, 1, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.life = Math.random() * e0.maxlife; S.mid.push(e0); }
       for (si = 0; si < nN; si++) { e0 = _fsSpawn({}, 2, _state.fmix); e0.x = Math.random() * w; e0.y = Math.random() * h; e0.px1 = e0.px2 = e0.x; e0.py1 = e0.py2 = e0.y; S.near.push(e0); }
@@ -348,6 +360,11 @@
       // the bottom gives the embers an origin; layered HAZE columns give the smoke real volume (not just dots).
       var nC = lite ? 22 : 46; for (si = 0; si < nC; si++) S.coals.push({ x: Math.random(), w: 0.02 + Math.random() * 0.06, ph: Math.random() * 6.28, h0: 0.5 + Math.random() * 0.9 });   // xf, size, flicker phase, brightness
       var nH = lite ? 3 : 7; for (si = 0; si < nH; si++) S.haze.push({ x: 0.08 + Math.random() * 0.84, rise: 0, sp: 0.10 + Math.random() * 0.14, sz: 0.5 + Math.random() * 0.7, ph: Math.random() * 6.28 });   // rising smoke columns
+      // build139: RISING-SPARK STREAM (alloc ONLY here) — a fixed pool of sparks that lift OFF the coal bed and float up
+      //   with lateral sway, tying the embers to their forge SOURCE and adding constant gentle upward motion. Each rise
+      //   is a continuous 0..1 progress (mod-1, sin() end-fade → LOOP-SEAMLESS, no pop); drawn as ONE cheap arc().fill().
+      //   xf = base column across the frame, sp = rise speed, sway/swf = lateral swirl amp+freq, ph = phase, br = brightness.
+      var nR = lite ? 26 : 64; for (si = 0; si < nR; si++) S.rise.push({ xf: Math.random(), t: Math.random(), sp: 0.10 + Math.random() * 0.16, sway: 0.02 + Math.random() * 0.05, swf: 0.6 + Math.random() * 1.4, ph: Math.random() * 6.28, br: 0.5 + Math.random() * 0.7, z: Math.random() });
     }
     // ── palette-mode advance is EARNED: fires once per tier-up cutaway (never a timer). Eased, never a hard jump. ──
     if ((st.hold > 0 || st.cut > 0.9) && !_state.cutFired) {
@@ -408,7 +425,9 @@
       var coalY = h * 0.965, coalSpr = spr;
       for (var cb = 0; cb < S.coals.length; cb++) {
         var CO = S.coals[cb];
-        var flick = 0.5 + 0.5 * Math.sin(_t * (2.0 + CO.h0) + CO.ph);
+        // build139: livelier flicker — a slow breath PLUS a faster shimmer term (two coprime-ish sines) so the coals
+        //   pulse actively instead of drifting. FROZEN under reduce-motion (flicker IS motion): hold a steady mid value.
+        var flick = reduce ? 0.5 : (0.5 + 0.34 * Math.sin(_t * (2.0 + CO.h0) + CO.ph) + 0.16 * Math.sin(_t * (5.3 + CO.h0 * 1.7) + CO.ph * 2.1));
         var cheat = clamp(0.25 + bassN * 0.4 + beatPunch * 0.35, 0, 1);
         var ca = (0.22 + 0.4 * flick) * (0.5 + bass * 0.6) * CO.h0 * calm; if (ca < 0.03) continue;
         var cx0 = CO.x * w, csz = CO.w * w * (0.8 + 0.4 * flick);
@@ -416,6 +435,30 @@
         if (coalSpr && !lite) { ctx.globalAlpha = clamp(ca * 0.7, 0, 0.8); ctx.drawImage(coalSpr, cx0 - csz, coalY - csz * 0.7, csz * 2, csz * 1.4); ctx.globalAlpha = 1; }
         ctx.fillStyle = _hsl(chue, _heatS(cheat), _heatL(cheat, 46), clamp(ca, 0, 0.9));
         ctx.beginPath(); ctx.ellipse ? ctx.ellipse(cx0, coalY, csz * 0.42, csz * 0.24, 0, 0, 6.2832) : ctx.arc(cx0, coalY, csz * 0.3, 0, 6.2832); ctx.fill();
+      }
+    }
+    // build139: RISING-SPARK STREAM — sparks lift off the coal bed and float up with lateral sway, giving the field
+    //   constant gentle UPWARD motion tied to the forge SOURCE. Walks the FIXED S.rise pool (alloc'd at reseed) — NO
+    //   push/new here. rise.t is a continuous 0..1 (mod-1) so there's no positional pop; a sin(t·π) fade zeroes alpha
+    //   at both ends → LOOP-SEAMLESS. Sway is a continuous sine (swirl). FROZEN under reduce-motion. Sheds under _soft
+    //   via a draw-count cutoff (halve the visible sparks). Bottom alpha kept modest so it never washes out the lanes.
+    if (S.rise) {
+      var riseCap = (_soft ? 0.5 : 1) * S.rise.length, riseSpeed = (0.6 + bassN * 0.7 + (st.od || 0) * 0.4) * mf;
+      for (var rs = 0; rs < S.rise.length; rs++) {
+        var RS = S.rise[rs];
+        if (!frozen && !reduce) { RS.t += dt * RS.sp * riseSpeed; if (RS.t >= 1) RS.t -= 1; }
+        if (rs > riseCap) continue;                                  // _soft: skip the draw on the upper half (never splice — no alloc)
+        var rfade = Math.sin(RS.t * 3.14159);                        // 0 at coal bed + at top → seamless, no pop
+        var rA = (0.10 + bass * 0.10 + comboGlow * 0.08) * rfade * RS.br * calm; if (rA < 0.02) continue;
+        var ry = h * (0.965 - RS.t * 0.82);                          // from the coal bed (0.965h) up past mid
+        var swirl = reduce ? 0 : Math.sin(_t * RS.swf + RS.ph) * RS.sway * w;   // lateral swirl (frozen under reduce)
+        var rx = RS.xf * w + swirl;
+        var rheat = clamp(0.3 + bassN * 0.35 + beatPunch * 0.3 + comboGlow * 0.3, 0, 1);
+        var rhue = _warmHue(rheat, pal, 0);
+        var rsz = (0.9 + RS.z * 1.6) * _dpr * (0.7 + 0.6 * (1 - RS.t));         // fades small as it climbs (cools)
+        if (spr && !lite) { var rgd = rsz * 6; ctx.globalAlpha = clamp(rA * 0.5, 0, 0.4); ctx.drawImage(spr, rx - rgd, ry - rgd, rgd * 2, rgd * 2); ctx.globalAlpha = 1; }
+        ctx.fillStyle = _hsl(rhue, _heatS(rheat), _heatL(rheat, 62), clamp(rA, 0, 0.5));
+        ctx.beginPath(); ctx.arc(rx, ry, rsz, 0, 6.2832); ctx.fill();
       }
     }
     // ── beat ERUPTION fires AT the VP (one discrete event per beat; 0.10s cooldown) ──
@@ -438,16 +481,21 @@
     // instead of recomputing the identical Math.pow(0.18, dt) for every one of the ~760 live embers/frame.
     // Mathematically identical (same base, same exponent, every iteration).
     var _decay = Math.pow(0.18, dt);
+    // build139: TURBULENCE — a gentle per-particle lateral swirl on FAR/MID so embers waver as they drift instead of
+    //   flying dead-straight (more "alive"). Amplitude hoisted (invariant across the loop); the per-particle phase
+    //   uses e.sw/e.swf (set at spawn). Continuous sine → LOOP-SEAMLESS. Zeroed under reduce-motion (it IS motion).
+    var _swirlAmp = reduce ? 0 : (h * 0.055) * (0.5 + bassN * 0.6);
     for (var L = 0; L < 3; L++) {
       var arr = L === 0 ? S.far : L === 1 ? S.mid : S.near;
       var activeCap = L === 0 ? farActive : L === 1 ? midActive : arr.length;
       var flow = reduce ? 0 : _FS_FLOW[L] * flowE;
+      var swirlL = L < 2 ? _swirlAmp * (L === 0 ? 0.7 : 1) : 0;   // FAR waver less than MID; NEAR streaks stay straight (drive reads clean)
       for (var k = 0; k < arr.length; k++) {
         var e = arr[k];
         if (!frozen) {
           if (L === 2) { e.px2 = e.px1; e.py2 = e.py1; e.px1 = e.x; e.py1 = e.y; }   // streak memory (drawn tail)
           var fk = flow * dt;
-          e.x += (e.x - VPX) * fk + e.vx * dt + missK * w * 0.25 * dt * e.z;         // miss = lateral wind (3.1)
+          e.x += (e.x - VPX) * fk + e.vx * dt + missK * w * 0.25 * dt * e.z + (swirlL ? Math.sin(_t * e.swf + e.sw) * swirlL * dt : 0);   // + gentle lateral swirl
           e.y += (e.y - VPY) * fk + e.vy * dt + (reduce ? -14 * dt : 0);             // reduce-motion: embers drift up in place
           e.vx *= _decay; e.vy *= _decay;                                            // burst velocity decays
           e.life += dt;
