@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=437" />
+<link rel="stylesheet" href="jukebox.css?v=438" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -7361,7 +7361,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=437"></script>
+<script src="telemetry.js?v=438"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7540,17 +7540,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=437"></script>
-<script src="game.js?v=437"></script>
-<script src="procbg.js?v=437"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=437"></script>
-<script src="chat.js?v=437"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=437"></script>
-<script src="goals.js?v=437"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=437"></script>
-<script src="share.js?v=437"></script>
-<script src="replay.js?v=437"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=437"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=438"></script>
+<script src="game.js?v=438"></script>
+<script src="procbg.js?v=438"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=438"></script>
+<script src="chat.js?v=438"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=438"></script>
+<script src="goals.js?v=438"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=438"></script>
+<script src="share.js?v=438"></script>
+<script src="replay.js?v=438"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=438"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8105,7 +8105,7 @@
     { id:'shaman_wolf',   title:'Shaman Wolf',      thumb:'assets/guitars/shaman-wolf-card.jpg',   src:'assets/guitars/shaman-wolf.png' },
     { id:'crimson_chaos', title:'Crimson Chaos',    thumb:'assets/guitars/crimson-chaos-ryo-card.jpg', src:'assets/guitars/crimson-chaos-ryo.png' },
     { id:'alarm_clock',   title:'Alarm Clock Hero', thumb:'assets/guitars/alarm-clock-card.jpg',    src:'assets/guitars/alarm-clock.png' },
-    { id:'sasoka',        title:'Sasoka',           thumb:'assets/guitars/sasoka-card.jpg',         src:'assets/guitars/sasoka.png' },
+    { id:'sasoka',        title:'Sisoka',           thumb:'assets/guitars/sasoka-card.jpg',         src:'assets/guitars/sasoka.png' },
     { id:'pirate_fox',    title:'Pirate Fox',       thumb:'assets/guitars/pirate-fox-card.jpg',     src:'assets/guitars/pirate-fox.png' },
     { id:'deadkin',       title:'Deadkin',          thumb:'assets/guitars/deadkin-card.jpg',        src:'assets/guitars/deadkin.png' },
     // build65: the 5 shipped guitars that were sold in the Store but MISSING from the profile loadout (user: "I'm missing
@@ -10435,7 +10435,7 @@
     // build58: crimson_chaos REMOVED from the store — it resolves to crimson-chaos-ryo.png, the FREE default play guitar, so the
     // purchase produced no visible change (a scam-feeling buy). Re-add only if it gets a visually distinct PNG.
     { item_type:'skin',  item_id:'alarm_clock',  title:'Alarm Clock Hero', price_sparks:80, meta:{ description:'Ivory-and-gold alarm-clock bass — the time-traveler’s axe', art_url:'assets/guitars/alarm-clock-card.jpg', skin_url:SKIN_GUITAR.alarm_clock } },
-    { item_type:'skin',  item_id:'sasoka',       title:'Sasoka',           price_sparks:80, meta:{ description:'Bayou wolf-priestess bass — driftwood, bone & violet Loa runes', art_url:'assets/guitars/sasoka-card.jpg', skin_url:SKIN_GUITAR.sasoka } },
+    { item_type:'skin',  item_id:'sasoka',       title:'Sisoka',           price_sparks:80, meta:{ description:'Bayou wolf-priestess bass — driftwood, bone & violet Loa runes', art_url:'assets/guitars/sasoka-card.jpg', skin_url:SKIN_GUITAR.sasoka } },
     { item_type:'skin',  item_id:'pirate_fox',   title:'Pirate Fox',       price_sparks:80, meta:{ description:'Ryo’s black-chrome pirate-fox bass — chaos energy, fox & skulls', art_url:'assets/guitars/pirate-fox-card.jpg', skin_url:SKIN_GUITAR.pirate_fox } },
     { item_type:'skin',  item_id:'deadkin',      title:'Deadkin',          price_sparks:80, meta:{ description:'Marble-ivory carnival bass — skulls, cut glass & a beating heart wired in', art_url:'assets/guitars/deadkin-card.jpg', skin_url:SKIN_GUITAR.deadkin } },
     // build63: the Shorty X level guitar is now sold as a SKIN too (own the level OR just the skin). item_id 'shorty_skin' is
