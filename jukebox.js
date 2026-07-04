@@ -669,7 +669,10 @@
     const hero = document.createElement('div');
     hero.className = 'flixs-marquee';
     function render(t) {
-      const poster = RC().posterFor(t) || '';
+      // posterFor() returns a raw user-authored URL (poster_url/thumbnail_url/artwork_url) — run it
+      // through the scheme-allowlist before it reaches the CSS background-image (blocks javascript:/data:,
+      // strips quotes so it can't break out of the url("...") value). safeUrl('') → '' → branded fallback.
+      const poster = safeUrl(RC().posterFor(t));
       const runtime = RC().fmtDur(t.duration_seconds) || '';
       const genre = RC().cleanGenre(t.genre) || '';
       const artist = t.artist_name || '';

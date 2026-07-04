@@ -266,7 +266,11 @@
     const cost = Math.max(0, Math.floor(Number(price) || 0));
     const key = String(item_type) + ':' + String(item_id);
     const owns = loadBonusOwns();
-    if (owns.indexOf(key) >= 0) return { ok: true, deduped: true, balance: getBonusSparks() };
+    // launch-hardening: dedup slug-insensitively (hyphen==underscore) — matches ownsItem()'s normalization so an id-form
+    // drift ('deadkin' vs a hyphenated variant) can't slip past the owned-check and DOUBLE-CHARGE Bonus Sparks for an
+    // item the player already has. Exact indexOf would miss the alternate form and debit a second time.
+    const _nmk = String(item_type) + ':' + String(item_id).replace(/-/g, '_');
+    if (owns.some(function (k) { return k === key || String(k).replace(/-/g, '_') === _nmk; })) return { ok: true, deduped: true, balance: getBonusSparks() };
     if (bonusServerReady()) {
       const sr = await _bonusSrvSpend(item_type, item_id, cost);
       if (!sr || !sr.ok) return { ok: false, error: (sr && sr.error) || 'spend_failed', balance: getBonusSparks() };
@@ -533,16 +537,20 @@
   // synchronous ownership check (reads the last-fetched cache). Returns false until getEntitlements()/getStore() has run.
   function ownsItem(item_type, item_id) {
     var t = String(item_type), i = String(item_id);
-    if (FREE_ITEMS[t + ':' + i]) return true;   // FREE community unlock (e.g. CelinesRazor's guitar) — owned by everyone, no purchase, even for a fresh player
-    var _asPlayer = false; try { _asPlayer = /[?&]asplayer=1/.test(location.search); } catch (e) {}
-    if (!_asPlayer && (_isAdmin || _isDevUnlock())) return true;   // admin/dev owns everything; a fresh-player sim owns ONLY real entitlements
-    try { if (loadBonusOwns().indexOf(t + ':' + i) >= 0) return true; } catch (e) {}   // earned-Bonus-Sparks purchase (local, legit even for a fresh player)
     // build100q: normalize hyphen/underscore on BOTH sides — authored level ids are hyphen ('high-seas') while the
     // store/campaign entitlement ids are underscore ('high_seas'). Exact compare made the env-pick/launch gate query an
     // id never in the cache → a real purchaser (and the admin during the async _isAdmin resolve window) saw paid levels
     // as locked. Compare slug-insensitively so the two id forms agree.
     var _nm = function (s) { return String(s).replace(/-/g, '_'); };
-    var _ni = _nm(i);
+    var _ni = _nm(i), _key = t + ':' + _ni;
+    // launch-hardening: apply the SAME slug-normalization to the FREE + Bonus-owns lookups as the server-entitlement
+    // branch below. build100q only normalized the entitlements path, so a FREE gift or an earned-Bonus purchase stored
+    // under one id form (e.g. 'high-seas') read as UNOWNED when the gate queried the other form ('high_seas', the entId)
+    // → the exact "owned but can't play" mismatch. Key both maps on the normalized id so all three ownership sources agree.
+    if (FREE_ITEMS[t + ':' + i] || FREE_ITEMS[_key]) return true;   // FREE community unlock (e.g. CelinesRazor's guitar) — owned by everyone, no purchase, even for a fresh player
+    var _asPlayer = false; try { _asPlayer = /[?&]asplayer=1/.test(location.search); } catch (e) {}
+    if (!_asPlayer && (_isAdmin || _isDevUnlock())) return true;   // admin/dev owns everything; a fresh-player sim owns ONLY real entitlements
+    try { if (loadBonusOwns().some(function (k) { return _nm(k) === _key; })) return true; } catch (e) {}   // earned-Bonus-Sparks purchase (local, legit even for a fresh player)
     return _entitlements.owns.some(function (o) { return o.item_type === t && _nm(o.item_id) === _ni; });
   }
   async function getEntitlements() {
