@@ -3342,7 +3342,7 @@
           const _next = (_curIdx >= 0 && _curIdx < _GRADE_LADDER.length - 1) ? _GRADE_LADDER[_curIdx + 1] : null;
           if (_next) {
             const _gap = _next[1] - accPct;
-            if (_gap > 0 && _gap <= 1.5) { _almostText = _gap.toFixed(1) + '% FROM A' + ((_next[0] === 'S' || _next[0] === 'A') ? 'N ' : ' ') + _next[0]; }
+            if (_gap > 0 && _gap <= 1.5) { const _gTxt = _gap < 0.05 ? '<0.1' : _gap.toFixed(1); _almostText = _gTxt + '% FROM A' + ((_next[0] === 'S' || _next[0] === 'A') ? 'N ' : ' ') + _next[0]; }   // build122 review: a gap under 0.05 rounded to a nonsense "0.0% FROM ..." — show "<0.1%" instead
           }
         }
         if (_almostText) {
@@ -3571,6 +3571,11 @@
       flashJudgment('SLIP', '#dad7d2');
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
+      // build122 review: this is the THIRD combo-break site — the miss/bomb sites snapshot the CLUTCH state
+      // but this one omitted it, so a dropped-hold peak could leak stale-high across the broken streak and
+      // spuriously arm a CLUTCH the player never earned. Mirror the miss/bomb reset (observational only).
+      if (_peakCombo >= CLUTCH_MIN_BREAK_PEAK) { _lastBreakPeak = _peakCombo; _clutchArmed = true; } else { _clutchArmed = false; }
+      _peakCombo = 0;
       combo = 0; comboTierCur = 0;
       stability = Math.max(0, stability - 0.03);
       lanePluckT[lane] = 9;             // the string goes dead in this lane

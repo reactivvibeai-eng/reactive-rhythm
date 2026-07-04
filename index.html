@@ -11831,6 +11831,10 @@
     var d = new Date(); d.setDate(d.getDate() + 1);
     var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
     var dateStr = y + '' + m + '' + day;
+    // build122 review: DTEND for a VALUE=DATE event is NON-inclusive → it must be the day AFTER DTSTART.
+    // Equal dates make a zero-length all-day event that strict clients (Google Calendar) reject/drop.
+    var e = new Date(); e.setDate(e.getDate() + 2);
+    var endStr = e.getFullYear() + '' + ('0' + (e.getMonth() + 1)).slice(-2) + '' + ('0' + e.getDate()).slice(-2);
     var stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     var uid = 'rr-streak-' + dateStr + '@reactivvibe.com';
     var lines = [
