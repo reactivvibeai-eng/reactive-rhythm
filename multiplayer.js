@@ -149,6 +149,7 @@
   var _lastShowSpec = null;       // last GO LIVE spec — the solo-always-works fallback re-opens the review card from it
   var _showOpenT = 0;             // ~8s watchdog: lobby/room channel never SUBSCRIBED → banner + re-show the review card (owner: solo PLAY must always stay reachable)
   var _showHbT = 0;               // 4s 'show-snap' heartbeat handle (host only; mirrors the t-snapshot pattern)
+  var _liveAdvT = 0;              // build121: ~10s NORMAL-match live re-advertise handle (host only) — keeps the LIVE NOW / WATCH card discoverable for a spectator who opens the lobby mid-song (roomsDir is softPresence/broadcast-fed, never replayed to a late subscriber, so the one-shot beginMatch advertise alone can be missed)
   var _showAtMs = 0;              // the live run's shared start timestamp (rides show-snap so late arrivals can align)
   var _soloRun = false;           // SNAPSHOT taken at beginMatch: was this a SOLO show run? (security judge BLOCKER: the
                                   // settle/rank gates key on this snapshot, never live room.p2 — a mid-run seat can't flip a
@@ -158,6 +159,8 @@
                                   // fills, on a fresh show room, and on teardown so it never leaks into the next room.
   var _specShowSolo = false;      // spectating a SOLO show run → no verdict card; back to the waiting room on 'final'
   var _specShow = false;          // snapshot at spectateMatch entry: is this a SHOW-room spectate? (normal spectate keeps the pre-diff card byte-identical)
+  var _specDual = false;          // build121: snapshot at spectateMatch entry: should the REAL dual mirror-deck stage mount? true for a SHOW spectate OR a normal 2-seat human match with a decodable track (both decks fed from the id-tagged tick/state streams). Distinct from _specShow so the show-only verdict/solo semantics stay byte-identical.
+  var _specNormAtMs = 0;          // build121: a normal-room spectator's shared run clock, learned from the players' own streamed progress (no 'start' broadcast reaches a match-channel watcher in a normal room) — drives per-deck audio + fallback timing
   var _specFinals = {}, _specVerdictT = 0;   // show spectate: BOTH finals collected (keyed id||name) before the neutral verdict names the higher score
   var _inviteBusy = false, _inviteAt = 0, _inviteRenotified = false;   // CALL IN THE ARTIST button state (60s NUDGE re-arm)
   // ---- build102t (Phase-2 C2): SPECTATOR DUAL-DECK state — all dead unless a SHOW spectate mounts ----
@@ -1721,6 +1724,7 @@
     // after matchLive flips true, because nothing called it at this transition. No-ops for the guest peer
     // (advertiseRoom self-guards on room.isHost) and for SHOW rooms (already always-listed via r.show).
     try { advertiseRoom(); } catch (e) {}
+    try { startLiveAdvertise(); } catch (e) {}   // build121: + a ~10s re-advertise so a late spectator opening the lobby mid-song still finds the WATCH card (host-only; no-op for guests/show rooms)
     try { console.warn('[mp] match starting — combat (damage) =', matchCombat ? 'ON' : 'OFF'); } catch (e) {}   // build100r: confirm whether shocks will fire this match (combat is the HOST's setting)
     step('go'); startCountdown(atMs);   // synced 3·2·1·GO! in the centered card, off the shared atMs
     // register one-shot song-end handler BEFORE launch
@@ -2000,9 +2004,11 @@
       // versus split-screen: additive high-rate render stream for the opponent ghost deck (~13/s).
       // getRenderFrame() DRAINS the hits buffer → call it ONCE here, cache as _myRf, reuse for YOUR HUD.
       // build102t: SHOW runs always stream (solo + mobile included) so watchers can render the dual decks.
-      // Gate is room.show ONLY (judge mandate: a normal room with spec seats must NOT start streaming state).
+      // build121: WIDENED — a NORMAL 2-seat human match streams too (via _specStreamOn), so a 3rd person can WATCH
+      // real mirror-decks (the owner-playtest gap). Still keeps _vsActive for the desktop-split ghost deck that
+      // rendered from this same stream. The stream is SEND-ONLY (see _specStreamOn) → both players stay byte-identical.
       // DEGRADE RULE (judge): >8 watchers → stretch the interval 72ms → ~180ms; tick above stays 160ms.
-      if ((_vsActive || (room.show && matchLive)) && matchCh && now - _lastStateSend > ((room.show && _specNCache > 8) ? 180 : 72)) {
+      if ((_vsActive || _specStreamOn()) && matchCh && now - _lastStateSend > (_specNCache > 8 ? 180 : 72)) {
         _lastStateSend = now;
         var rf = window.RhythmGame.getRenderFrame ? window.RhythmGame.getRenderFrame() : null;
         if (rf) { _myRf = rf; try { matchCh.send({ type: 'broadcast', event: 'state', payload: Object.assign({ id: ME.id }, rf) }); } catch (e) {} }   // build102t: id-tagged copy (shallow — additive field, old receivers unaffected)
@@ -2013,6 +2019,16 @@
     oppRaf = requestAnimationFrame(frame);
   }
   function stopTick() { if (oppRaf) cancelAnimationFrame(oppRaf); oppRaf = 0; }
+  // build121: should THIS live player be streaming its render frame for a possible spectator? True for every human
+  // 2-seat match a watcher can drop into — a SHOW run (always, incl. solo), OR a normal room whose seats are both
+  // filled (room.p2). Independent of _vsActive, so a MOBILE/narrow duelist (which never sets _vsActive → the old
+  // gate never streamed) now streams too. SEND-ONLY: this only decides whether an extra outbound broadcast fires;
+  // it never reads back into the player's own loop/score/render, so widening it is byte-identical to both players.
+  function _specStreamOn() {
+    if (!matchLive || !matchCh || spectating) return false;      // must be a live PLAYER (never a watcher)
+    if (oppMeta && oppMeta.bot) return false;                    // a CPU warm-up has no human watcher deck to feed
+    return !!(room && (room.show || room.p2));                   // show run (incl. solo), or a filled normal room
+  }
   function onTick(p) { if (p) lastOppTick = p; }
   function onState(p) { if (p) lastOppState = p; }   // versus P2: store; the ghost deck (P4) reads/eases this
   function renderOpp(my) {
@@ -2312,6 +2328,7 @@
     // around for the next solo/unmatched session). No-op when this match never forced anything.
     if (_mySettingsSnapshot) { try { window.RhythmGame.applySettings(_mySettingsSnapshot); } catch (e) {} _mySettingsSnapshot = null; }
     matchMatched = false; _oppSettings = null;
+    stopLiveAdvertise();   // build121: stop the normal-match live re-advertise; matchLive flips false below so one more advertiseRoom (if the host is still in the room) clears the WATCH card
     stopTick(); stopCountdown(); unmountOppPanel();
     try { if (window.RhythmLevels) window.RhythmLevels.clearEnvironment(); } catch (e) {}   // v262: drop the room's stage env so it can't leak into the next match / solo
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }           // kill any pending deferred split-mount (abort mid-lead-in)
@@ -2333,6 +2350,9 @@
     try { if (sel && sel.flixVideo && window.RhythmCatalog && window.RhythmCatalog.flixBackdropStop) window.RhythmCatalog.flixBackdropStop(); } catch (e) {}   // build102z p1.5: a VIDEO-review backdrop dies with the match (gated — normal matches never call it; the stop itself no-ops unless a flix backdrop is live)
     setLobbyInMatch(false);
     try { if (window.RhythmChat && window.RhythmChat.showLobbyChat) window.RhythmChat.showLobbyChat(); } catch (e) {}   // build111 review: match over → restore the lobby chat drawer that onRoomStart hid (buffer + channel intact)
+    // build121: match ended → re-advertise so the LIVE NOW / WATCH card clears (matchLive is now false → live:0/mid:null).
+    // Host-only + guarded to a still-open NORMAL room (show rooms clear via their own snap/close path).
+    try { if (room.id && room.isHost && !room.show) advertiseRoom(); } catch (e) {}
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
   function backToLobby() {
@@ -2816,12 +2836,27 @@
       // this one-shot re-advertise at beginMatch/settleIfReady is enough since LIVE NOW only surfaces the room
       // to a NEW spectator at the moment they open the lobby (they always fetch fresh roomsDir on join).
       mid: matchLive ? (matchId || null) : null,
+      p2Id: matchLive ? (room.p2 || null) : null,   // build121: the challenger id so a discovery late-join pins the RIGHT second deck (was recovered by a members scan; this makes it deterministic)
+      trackId: (matchLive && !room.show && sel && sel.trackId && !sel.demo) ? sel.trackId : null,   // build121: the live track id so a DISCOVERY late-join (which never received the room 'song' broadcast) resolves the RIGHT chart via _pickUrlFor instead of a stale module-level sel — normal rooms only (show sel carries its own audioUrl)
       open: (room.show && room.openSeat && room.openSeat !== 'artist') ? 1 : 0,
       title: room.show ? String(((sel && sel.title) || '') + ((sel && sel.artist) ? ' — ' + sel.artist : '')).slice(0, 40) : '',
       art: room.show ? ((sel && sel.art) || '') : '',
       stage: _bbStage,
-      specN: room.show ? (_specNCache || 0) : 0 } });
+      specN: _specNCache || 0 } });   // build121: watcher count for BOTH show + normal rooms (LIVE NOW card)
   }
+  // build121: keep a live NORMAL match discoverable. roomsDir is softPresence/broadcast-fed — a spectator who
+  // opens the lobby mid-song was NOT subscribed when beginMatch's one-shot advertise fired, so re-advertise the
+  // live/mid/p2Id every ~10s while a normal match is live (mirrors the show-room 4s snap, lighter cadence). Host
+  // only; self-stops the instant the match ends / room closes / it becomes a show room (which has its own heartbeat).
+  function startLiveAdvertise() {
+    stopLiveAdvertise();
+    if (!room.isHost || room.show) return;   // show rooms already re-advertise via startShowHeartbeat
+    _liveAdvT = setInterval(function () {
+      if (!room.id || !room.isHost || room.show || !matchLive) { stopLiveAdvertise(); return; }
+      try { advertiseRoom(); } catch (e) {}
+    }, 10000);
+  }
+  function stopLiveAdvertise() { if (_liveAdvT) { clearInterval(_liveAdvT); _liveAdvT = 0; } }
   // build111 s3: the exact non-host leave path (extracted from the mpx-room-close click handler so a host
   // mod-kick can trigger the SAME leave a manual "LEAVE ROOM" click already does — one code path, two triggers).
   function leaveGuestRoom() {
@@ -2916,8 +2951,10 @@
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
-    // build102t: cache the watcher count for the state-interval degrade rule (host + streaming challenger read it)
-    if (room.show) { try { _specNCache = Object.keys(all).filter(function (id) { return all[id].seat === 'spec'; }).length; } catch (e) {} }
+    // build102t: cache the watcher count for the state-interval degrade rule (host + streaming challenger read it).
+    // build121: normal rooms count watchers too — the state-send degrade rule + the dual-deck "N watching" chip
+    // now apply to a normal live match, not just a show room.
+    try { _specNCache = Object.keys(all).filter(function (id) { return all[id].seat === 'spec'; }).length; } catch (e) {}
     // seat assignment is host-authoritative: host = p1; first non-spec joiner = p2.
     if (room.isHost && room.show) {
       // build102s SEAT POLICY (both judges' blocker): in a SHOW room NOBODY is auto-seated — ids are spoofable and
@@ -3015,11 +3052,19 @@
     // the shipped room-start spectate path already has, not a new risk). oppMeta/the opp panel self-heal once the
     // match's own tick/state stream + room presence sync land, same as any other spectate entry.
     if (asSpec && meta.live && meta.mid && !meta.show) {
+      // build121: a discovery late-join never received this room's 'song' broadcast, so the module-level `sel` may be
+      // stale (a different track). Seed it from the advertised trackId so the dual-deck decode charts the RIGHT song;
+      // without a known trackId we clear it → _specSpecTrackUrl returns null → graceful compact-panel fallback.
+      if (meta.trackId) { sel = { trackId: meta.trackId, difficulty: (sel && sel.difficulty) || 'medium', demo: false }; }
+      else { sel = { trackId: null, difficulty: (sel && sel.difficulty) || 'medium', demo: false }; }
       var _p1m = room.members[meta.hostId] || lobby[meta.hostId] || { id: meta.hostId, name: meta.hostName || 'Host' };
-      // seat==='p2' specifically (room.members also carries other spectators who joined earlier — must not
-      // grab one of THEM as the "opponent").
-      var _p2id = null; for (var _k in room.members) { if (_k !== meta.hostId && room.members[_k].seat === 'p2') { _p2id = _k; break; } }
-      var _p2m = _p2id ? room.members[_p2id] : null;
+      // build121: prefer the advertised p2Id (deterministic) so the second deck pins to the RIGHT player; fall back
+      // to the members scan (seat==='p2' specifically — room.members also carries OTHER spectators who must not be
+      // grabbed as the "opponent"). A discovery joiner's members map is often still empty this tick, so synthesize
+      // a minimal meta from the advertised id + lobby roster; presence sync fills the real name/avatar shortly.
+      var _p2id = meta.p2Id || null;
+      if (!_p2id) { for (var _k in room.members) { if (_k !== meta.hostId && room.members[_k].seat === 'p2') { _p2id = _k; break; } } }
+      var _p2m = _p2id ? (room.members[_p2id] || lobby[_p2id] || { id: _p2id, name: 'Player 2' }) : null;
       spectateMatch(meta.mid, _p1m, _p2m);
       return;
     }
@@ -3351,16 +3396,37 @@
   }
 
   // ===================== BUILD8: SPECTATE =====================
+  // build121: the decodable URL a spectator rebuilds the players' chart from. Show sel carries audioUrl; a normal
+  // room's sel carries pickUrl (added to the 'song' broadcast by _songPayload) or resolves it from the trackId via
+  // the catalog. Returns null for a demo / HLS-only / unknown track → the caller falls back to the compact panel.
+  function _specSpecTrackUrl() {
+    try {
+      if (sel && sel.audioUrl) return sel.audioUrl;                 // show/review path (unchanged)
+      if (sel && sel.pickUrl) return sel.pickUrl;                   // normal room: rode the 'song' broadcast
+      if (sel && sel.trackId && !sel.demo) return _pickUrlFor(sel.trackId);   // discovery late-join: resolve locally
+    } catch (e) {}
+    return null;
+  }
   function spectateMatch(mid, p1meta, p2meta) {
     spectating = true; matchLive = true; finishedLocal = true;   // finishedLocal=true → never wait on "my" result
     // build102s: snapshot show-spectate mode at ENTRY — only a show room gets the neutral dual-final verdict;
     // a normal-room spectate renders the exact pre-diff card (owner's byte-identity decree).
     _specShow = !!room.show; _specFinals = {};
+    // build121: REAL DUAL MIRROR-DECKS for a normal room too. Mount the same stage a show spectate uses when this is
+    // a 2-seat human match with a decodable track (resolved below). _specDual drives the deck feeds + mount; _specShow
+    // stays the show-only verdict/solo switch, so a normal spectate's verdict path is byte-identical to before.
+    var _dualTrack = _specSpecTrackUrl();   // decodable url for the players' chart (sel.audioUrl | sel.pickUrl | catalog lookup) or null
+    _specDual = !!(_specShow || (matchLive && _dualTrack && p1meta && p2meta && !(oppMeta && oppMeta.bot)));
+    // deck seat assignment (host left, challenger right). Show rooms set _specIds at the room-start/snap seam; a
+    // normal-room spectate resolves it here from the two metas — mirror how the discovery late-join scans members.
+    if (!_specShow) { _specIds = { p1: (p1meta && p1meta.id) || room.p1 || null, p2: (p2meta && p2meta.id) || null }; }
+    _specNormAtMs = 0;
     _specLastFeedAt = Date.now();   // build109 s4 review: arm the liveness clock at ENTRY so a non-show watcher that joined a DEAD match (via a stale cached room.mid — match already ended, channel torn down) self-heals via startSpectatorTick's watchdog instead of hanging forever on a blank SPECTATING screen
     // build102u (review BLOCKER 1): every watch starts with a CLEAN run clock + feeds — a stale _specAtMs from the
     // previous run made _syncSpecAudio clamp to buffer-end and the ghost advance eat the whole chart on run #2
     // (empty decks, no audio, unrecoverable). onShowSnap's late-join sets its atMs AFTER this call by design.
-    if (_specShow) { _specAtMs = 0; _specTicks = {}; _specStates = {}; _specFedReal = false; }
+    // build121: a normal dual spectate resets the same clean-slate feeds (it never gets the show 'start' broadcast).
+    if (_specDual) { _specAtMs = 0; _specTicks = {}; _specStates = {}; _specFedReal = false; }
     if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
     oppMeta = p1meta || p2meta || null;
     step('go'); var gn = $('mpx-go-num'); if (gn) gn.textContent = 'SPECTATING';
@@ -3369,8 +3435,17 @@
     watchCh.on('broadcast', { event: 'tick' }, function (m) {
       lastOppTick = m.payload;
       _specLastFeedAt = Date.now();   // build109 s4 review: any tick = a live feed → keeps the non-show watchdog from bailing (the show branch below also sets it, harmlessly redundant)
-      if (_specShow && m.payload) {
+      if (_specDual && m.payload) {
         _specTicks[String(m.payload.id || m.payload.name || 'p1')] = m.payload; _specLastFeedAt = Date.now(); _specFedReal = true;   // build102t: keyed per player for the dual decks + liveness
+        // build121: a normal-room watcher gets NO 'start' broadcast, so learn the shared run clock from the players'
+        // own streamed progress — the first tick with prog>0 back-derives atMs (prog * duration seconds ago). Kept
+        // separate from the show _specAtMs seed; both feed _syncSpecAudio + the per-deck timeline below.
+        try {
+          if (!_specShow && !_specAtMs && _specChart && _specChart.duration && m.payload.prog > 0.001) {
+            _specAtMs = Date.now() - (m.payload.prog * _specChart.duration) * 1000;
+            _specNormAtMs = _specAtMs; _syncSpecAudio();
+          }
+        } catch (eN) {}
         // build102u (review MAJOR 2c): DRIFT CORRECTION — the players' clock can shift off wall-time (host pause,
         // engine hiccup). The HOST's streamed progress is the authority: >2.5s apart → re-seat our clock + audio +
         // ghost index (the advance loop tolerates _specIdx rewinding to 0; it re-seeks forward in one pass).
@@ -3388,11 +3463,13 @@
         } catch (e1) {}
       }
     });
-    if (_specShow) {   // build102t: show watchers also consume the id-tagged state stream + the one-shot 'start' (sel/atMs)
+    if (_specDual) {   // build102t/121: dual-deck watchers (show OR normal) consume the id-tagged render-frame stream — the REAL notes/hits/combo/OD each deck mirrors
       watchCh.on('broadcast', { event: 'state' }, function (m) {
         var p = m.payload; if (!p) return;
         _specStates[String(p.id || 'p1')] = p; _specLastFeedAt = Date.now(); _specFedReal = true;
       });
+    }
+    if (_specShow) {   // build102t: show watchers also consume the one-shot 'start' (sel/atMs) — normal rooms never broadcast it
       watchCh.on('broadcast', { event: 'start' }, function (m) {
         var p = m.payload; if (!p || !p.atMs) return;
         _specAtMs = p.atMs; if (p.sel) { sel = p.sel; }
@@ -3413,6 +3490,11 @@
         else if (!_specVerdictT) _specVerdictT = setTimeout(function () { _specVerdictT = 0; _renderSpecVerdict(); }, 8000);   // one final never arrived → render what we have
         return;
       }
+      // build134 (batchB review): a normal-DUAL watch has the z-252 full-bleed stage mounted OVER the z-240 winner
+      // card showWinner() paints, so unmount it first or the verdict is fully occluded (frozen decks, then the 12s
+      // feed-quiet watchdog bounces the watcher with a misleading message). The SHOW path banners into #mss-verdict
+      // via _renderSpecVerdict; a normal room has no such path, so honor the pre-diff-card decree by revealing it.
+      if (_specStage) { try { _unmountSpecStage(); } catch (e) {} }
       oppFinal = m.payload; myFinal = myFinal || { score: 0 }; showWinner();   // pre-diff normal-spectate card, untouched
     });
     watchCh.subscribe(function (status) {
@@ -3423,8 +3505,10 @@
         var panel = $('mp-opp'); if (panel) panel.classList.add('spectate');
         var sp = panel && panel.querySelector('.mo-spec'); if (!sp && panel) { var s = document.createElement('div'); s.className = 'mo-spec'; s.textContent = 'SPECTATING'; panel.insertBefore(s, panel.firstChild); }
         startSpectatorTick();
-        // build102t: SHOW spectate gets the real dual-deck stage (compact panel stays beneath as the fallback)
-        if (_specShow && sel && sel.audioUrl) { try { _mountSpecStage(); } catch (e) { console.error('[mp] spec stage mount failed', e); } }
+        // build102t/121: a DUAL spectate (show OR a normal 2-seat human match with a decodable track) gets the real
+        // dual mirror-deck stage — the compact panel stays mounted beneath as the graceful fallback (HLS-only /
+        // decode fail / unknown track → _specDeckFallback unmounts the stage and the panel takes over).
+        if (_specDual && _specSpecTrackUrl()) { try { _mountSpecStage(); } catch (e) { console.error('[mp] spec stage mount failed', e); } }
       }
     });
   }
@@ -3435,7 +3519,12 @@
       // that). A watcher that joined via a STALE cached room mid — the match already ended and its channel was torn
       // down — would otherwise sit on a blank SPECTATING screen forever. Self-heal: no tick within ~14s (comfortably
       // longer than the silent lead-in, so a live match that just started is never falsely bounced) ⇒ bail to the room.
-      if (!_specShow && _specLastFeedAt && (Date.now() - _specLastFeedAt) > 14000) { endSpectate('That match already ended.'); return; }
+      // build121: the dual stage (_specLoop) owns the 12s liveness watchdog while mounted — don't double-bail. A
+      // NON-dual normal spectate (compact panel only: HLS-only/unknown track) keeps this 14s self-heal.
+      // build134 (batchB review): gate on !_specStage, NOT !_specDual — if the dual stage decode-fails and
+      // _specDeckFallback unmounts it, _specDual stays true but the 12s watchdog died with the stage; keying on
+      // the actual mounted stage re-arms THIS 14s self-heal so a stranded watcher can still bail.
+      if (!_specStage && _specLastFeedAt && (Date.now() - _specLastFeedAt) > 14000) { endSpectate('That match already ended.'); return; }
       oppRaf = requestAnimationFrame(frame);
       if (oppPanel && oppPanel.parentNode) renderOpp(null);
     }
@@ -3714,7 +3803,7 @@
     try { _unmountSpecStage(); } catch (e) {}   // build102t: decks + audio die with the watch channel
     try { if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchLive = false; finishedLocal = false; myFinal = null; oppFinal = null; lastOppTick = null;
-    _specShowSolo = false; _specShow = false; _specFinals = {};
+    _specShowSolo = false; _specShow = false; _specDual = false; _specNormAtMs = 0; _specFinals = {};   // build121: dual-spectate flags die with the watch channel too
     if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
     var _wyr = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wyr) _wyr.textContent = 'YOU';   // undo the spec-verdict relabel
     unmountOppPanel();
@@ -3734,23 +3823,28 @@
     } else { step('lobby'); }
   }
 
-  // ===================== BUILD102t: SPECTATOR DUAL-DECK STAGE =====================
-  // The real in-game show view: the watcher rebuilds the players' chart locally (RhythmGame.chartUrl on the
-  // SAME sel.audioUrl + difficulty), plays the decoded audio locked to the shared atMs, and renders one deck
-  // per player driven by their id-tagged tick/state streams. Nothing in this block runs unless a SHOW
-  // spectate mounts it — normal MP and normal-room spectating never reach it.
+  // ===================== BUILD102t/121: SPECTATOR DUAL-DECK STAGE =====================
+  // The real in-game watch view: the watcher rebuilds the players' chart locally (RhythmGame.chartUrl on the SAME
+  // decodable url + difficulty), plays the decoded audio locked to the shared clock, and renders one deck per
+  // player driven by their id-tagged tick/state streams — REAL notes, hits/misses, score, combo, OD. build121:
+  // this now mounts for a NORMAL 2-seat human match too (not just a SHOW), each deck riding that player's own
+  // streamed progress so the two decks genuinely diverge. Nothing here runs unless a DUAL spectate (_specDual)
+  // mounts it — a normal room with an HLS-only/unknown track falls back to the compact score panel.
   var _SPEC_APPROACH = 1.6;   // visual fall window (seconds) — display-only, independent of the players' scroll setting
   function _mountSpecStage() {
     if (_specStage) return;
-    _specSolo = !!_specShowSolo;
+    // build121: a normal-room dual spectate is NEVER solo (both seats are real players) — only a SHOW solo run is.
+    _specSolo = !!(_specShow && _specShowSolo);
+    var _liveLbl = _specShow ? '● LIVE SHOW' : '● LIVE MATCH';   // build121: normal rooms are a live MATCH, not a show
+    var _n1 = _specShow ? 'HOST' : 'PLAYER 1', _n2 = _specShow ? 'CHALLENGER' : 'PLAYER 2';
     var st = document.createElement('div');
     st.id = 'mpx-spec-stage';
     if (_specSolo) st.className = 'solo';
     st.innerHTML =
       '<div class="mss-head">' +
-        '<span class="mss-plate p1"><span class="mss-av" id="mss-av1">?</span><span class="mss-name" id="mss-name1">HOST</span><b class="mss-sc" id="mss-sc1">0</b><span class="mss-cb" id="mss-cb1">0x</span></span>' +
-        '<span class="mss-live">● LIVE SHOW</span>' +
-        '<span class="mss-plate p2" id="mss-plate2"><span class="mss-av" id="mss-av2">?</span><span class="mss-name" id="mss-name2">CHALLENGER</span><b class="mss-sc" id="mss-sc2">0</b><span class="mss-cb" id="mss-cb2">0x</span></span>' +
+        '<span class="mss-plate p1"><span class="mss-av" id="mss-av1">?</span><span class="mss-name" id="mss-name1">' + _n1 + '</span><b class="mss-sc" id="mss-sc1">0</b><span class="mss-cb" id="mss-cb1">0x</span></span>' +
+        '<span class="mss-live">' + _liveLbl + '</span>' +
+        '<span class="mss-plate p2" id="mss-plate2"><span class="mss-av" id="mss-av2">?</span><span class="mss-name" id="mss-name2">' + _n2 + '</span><b class="mss-sc" id="mss-sc2">0</b><span class="mss-cb" id="mss-cb2">0x</span></span>' +
       '</div>' +
       '<div class="mss-decks"><canvas id="mss-deck1"></canvas><canvas id="mss-deck2"></canvas></div>' +
       '<div class="mss-sync" id="mss-sync"><span class="mss-sync-dot"></span>&nbsp;SYNCING — locking to the live run…</div>' +
@@ -3758,8 +3852,10 @@
       '<div class="mss-foot"><span id="mss-watchn"></span><span class="mss-note">You\'re invisible to the players</span><button class="ghost-btn" id="mss-take" type="button" hidden title="Request the challenger seat in this live show">TAKE THE STAGE</button><button class="ghost-btn" id="mss-leave" type="button">LEAVE</button></div>';   // build108 s3d: same clarifying title as mpx-show-take
     document.body.appendChild(st);
     _specStage = st;
-    _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, 'HOST');
-    _specPlate('2', (_specIds.p2 && room.members[_specIds.p2]) || null, 'CHALLENGER');
+    _specPlate('1', (_specIds.p1 && room.members[_specIds.p1]) || null, _n1);
+    _specPlate('2', (_specIds.p2 && room.members[_specIds.p2]) || null, _n2);
+    // build121: TAKE THE STAGE is a show-only seat request — hide the button entirely on a normal-room watch
+    var _tkRow = $('mss-take'); if (_tkRow && !_specShow) _tkRow.style.display = 'none';
     var lv = $('mss-leave'); if (lv) lv.addEventListener('click', function () { endSpectate('You left the live view — still in the room.'); });
     // build102y step5: raise-your-hand from the live view — same toggle as the waiting card; painted by snaps
     var tk = $('mss-take'); if (tk) tk.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; toggleTakeStage(); });
@@ -3773,8 +3869,9 @@
     // build102u (review fix 3): BOTH callbacks are generation-guarded — a stale resolve from an abandoned mount must
     // never poison a newer stage's chart/audio, and a stale network failure must never unmount a healthy one.
     var _gen = ++_specGen;
+    var _chartUrl = _specSpecTrackUrl();   // build121: sel.audioUrl (show) | sel.pickUrl / catalog lookup (normal room)
     try {
-      window.RhythmGame.chartUrl(sel.audioUrl, (sel && sel.difficulty) || 'medium').then(function (res) {
+      window.RhythmGame.chartUrl(_chartUrl, (sel && sel.difficulty) || 'medium').then(function (res) {
         if (!_specStage || _gen !== _specGen) return;   // unmounted / remounted while decoding
         _specChart = res; _specIdx = 0;
         var sy = $('mss-sync'); if (sy) sy.hidden = true;
@@ -3802,6 +3899,7 @@
   function _specDeckFallback() {
     // dead URL / HLS-only / decode fail → the C1 compact score panel is already mounted beneath the stage
     _unmountSpecStage();
+    _specLastFeedAt = Date.now();   // build134 (batchB review): _unmountSpecStage zeroed it — re-arm so the compact panel's 14s self-heal clock starts from the fallback moment (a decode-fail watcher can still bail if the match dies silently)
     try { window.RhythmGame.showToast && window.RhythmGame.showToast('Live decks unavailable — score view only.', 'neutral'); } catch (e) {}
   }
   function _unmountSpecStage() {
@@ -3812,7 +3910,7 @@
     _specDp = null;
     if (_specStage && _specStage.parentNode) { try { _specStage.parentNode.removeChild(_specStage); } catch (e) {} }
     _specStage = null; _specChart = null; _specDecks = null; _specIdx = 0; _specLastFeedAt = 0;
-    _specAtMs = 0; _specFedReal = false;   // build102u (review BLOCKER 1): the run clock dies with the stage — run #2 must sync fresh, never off run #1's atMs
+    _specAtMs = 0; _specNormAtMs = 0; _specFedReal = false;   // build102u (review BLOCKER 1): the run clock dies with the stage — run #2 must sync fresh, never off run #1's atMs (build121: the normal-room clock too)
   }
   // spectator audio: the SAME decoded buffer, offset-started onto the shared clock (DemoPlayer build102t seam);
   // volume follows the global mute + music setting so a streamer can silence it like any other music.
@@ -3851,6 +3949,22 @@
     if (sc && feed) sc.textContent = Number(feed.score != null ? feed.score : (feed.sc || 0)).toLocaleString();
     if (cb && feed) cb.textContent = (feed.combo != null ? feed.combo : (feed.cb || 0)) + 'x';
   }
+  // build121: a PER-PLAYER deck clock — the SAME chart scrolled to where THIS player actually is, read from their
+  // streamed progress (state.pr | tick.prog) × chart duration. This is what makes the two decks genuinely DIVERGE
+  // and mirror the real match (the fix for the owner's "two near-identical static decks"): the player who's ahead
+  // shows notes further along than the one behind. Falls back to the shared audio clock until a real feed lands, so
+  // a pre-first-tick deck still scrolls with the music instead of freezing. Display-only — the streamed hit/miss
+  // events (in _renderSpecDeck) remain the sole authority for what actually got judged.
+  function _specDeckTime(pid, fallbackT) {
+    try {
+      if (_specChart && _specChart.duration) {
+        var s = pid && _specStates[pid], tk = pid && _specTicks[pid];
+        var pr = (s && typeof s.pr === 'number') ? s.pr : ((tk && typeof tk.prog === 'number') ? tk.prog : null);
+        if (pr != null && pr >= 0) return pr * _specChart.duration;
+      }
+    } catch (e) {}
+    return fallbackT;
+  }
   function _specLoop() {
     _specRaf = requestAnimationFrame(_specLoop);
     if (!_specStage) return;
@@ -3861,11 +3975,16 @@
     var wn = $('mss-watchn');
     if (wn) { var n = (room._snapSpecN != null) ? room._snapSpecN : _specNCache; wn.textContent = (n > 10 ? '10+' : (n || 1)) + ' watching'; }   // never authoritative past the ≤10-peer design
     if (!_specChart || !_specChart.notes || !_specChart.notes.length) return;   // still syncing (shimmer up)
-    var t = _specTime();
+    var t = _specTime();                                   // shared audio clock (follows p1 / the run)
     var ns = _specChart.notes;
-    while (_specIdx < ns.length && ns[_specIdx].time < t - 0.35) _specIdx++;   // both decks scroll the SAME chart (both players play the same notes)
-    _renderSpecDeck(_specDecks.d1, 'mss-deck1', _specIds.p1, ns, t);
-    if (!_specSolo) _renderSpecDeck(_specDecks.d2, 'mss-deck2', _specIds.p2, ns, t);
+    // build121: each deck rides its OWN player's clock (real, divergent). Advance the shared pool cursor by the
+    // MORE-BEHIND deck so neither deck loses a note it still needs to draw (a laggard player's gems keep coming).
+    var t1 = _specDeckTime(_specIds.p1, t);
+    var t2 = _specSolo ? t1 : _specDeckTime(_specIds.p2, t);
+    var tMin = Math.min(t1, t2);
+    while (_specIdx < ns.length && ns[_specIdx].time < tMin - 0.35) _specIdx++;
+    _renderSpecDeck(_specDecks.d1, 'mss-deck1', _specIds.p1, ns, t1);
+    if (!_specSolo) _renderSpecDeck(_specDecks.d2, 'mss-deck2', _specIds.p2, ns, t2);
   }
   // ---- one spectator deck: a synthetic 5-lane trapezoid fan. The spectator's engine is NOT running, so
   // getLaneFrame (live canvas geometry) is unavailable — this fan mirrors the board's 1/z projection instead.
