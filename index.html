@@ -26,8 +26,8 @@
 <link rel="apple-touch-icon" href="assets/app-icon-180.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&family=Bungee&display=swap" rel="stylesheet" />
-<!-- build118 p2: Orbitron/Rajdhani/Bungee are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
+<!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
 <link rel="stylesheet" href="jukebox.css?v=435" />
 <style>
   :root {
@@ -3277,7 +3277,7 @@
   #review-launch .rvl-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 22px; color: #f3ece8; line-height: 1.2; margin-bottom: 4px; overflow-wrap: anywhere; }
   #review-launch .rvl-artist { font-family: 'Chakra Petch', monospace; font-size: 13px; color: rgba(238,230,226,0.62); margin-bottom: 18px; }
   #review-launch .rvl-diff { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
-  #review-launch .rvl-diff button { flex: 1; max-width: 118px; padding: 11px 0; border-radius: 12px; border: 1px solid rgba(222,216,212,0.16); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.6); font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.14em; cursor: pointer; transition: border-color .12s ease, color .12s ease, transform .12s ease; }
+  #review-launch .rvl-diff button { flex: 1; max-width: 118px; padding: 11px 0; border-radius: 12px; border: 1px solid rgba(222,216,212,0.16); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.6); font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; transition: border-color .12s ease, color .12s ease, transform .12s ease; }
   #review-launch .rvl-diff button:hover { transform: translateY(-1px); border-color: rgba(224,218,214,0.4); color: #eee6e2; }
   #review-launch .rvl-diff button.active { border-color: var(--crimson, #ff2a30); color: #fff; background: rgba(255,42,48,0.14); box-shadow: 0 0 18px -6px rgba(255,42,48,0.55); }
   #review-launch .rvl-play { width: 100%; padding: 16px 0; border-radius: 14px; border: 1px solid rgba(255,42,48,0.65); background: linear-gradient(180deg, #ff2a30, #b3121c); color: #fff; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.16em; cursor: pointer; box-shadow: 0 12px 34px -10px rgba(255,31,46,0.65); transition: transform .12s ease, box-shadow .12s ease; }
@@ -5253,7 +5253,7 @@
     <div class="bg-foot">No code yet? <a href="https://reactivvibe.com" target="_blank" rel="noopener">Request access at reactivvibe.com</a></div>
     <!-- build100l: SIGN-IN gate (owner decree — login required so every run/score/rank tracks to the player's account) -->
     <div class="bg-signin" id="bg-signin">
-      <button id="bg-signin-btn" type="button">Sign In to Play</button>
+      <button id="bg-signin-btn" type="button">Sign in to play</button>
       <button class="bg-signin-cont" id="bg-signin-cont" type="button">I’ve signed in — Continue</button>
       <div class="bg-signin-status" id="bg-signin-status" role="status" aria-live="polite"></div>
     </div>
@@ -5337,7 +5337,7 @@
       </button>
       <button class="mh-signin" id="mh-signin" type="button" title="Sign in on ReactivVibeAI.com">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="M10 17l5-5-5-5"></path><path d="M15 12H3"></path></svg>
-        <span>Sign In</span>
+        <span>Sign in</span>
       </button>
       <!-- v413 owner ask: a way BACK to the website from the mode-select menu ('/' = site home when the game lives at /game/) -->
       <a class="mh-backsite" id="mh-backsite" href="/" title="Back to ReactivVibe" aria-label="Back to the ReactivVibe website">
@@ -6361,11 +6361,11 @@
     .set-section::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 8px rgba(255,31,46,0.5); flex: 0 0 auto; }
     .set-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,31,46,0.32), var(--line) 40%, transparent); }
     .set-section:first-of-type { margin-top: 6px; }
-    .set-l { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); flex: 0 0 96px; text-align: left; }
+    .set-l { font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); flex: 0 0 96px; text-align: left; }
     .set-row input[type=range] { flex: 1; accent-color: var(--crimson); }
     .set-v { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--crimson); flex: 0 0 46px; text-align: right; }
     .set-seg { display: flex; gap: 6px; flex: 1; }
-    .set-seg button { flex: 1; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--ink-dim); font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; cursor: pointer; transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease; }
+    .set-seg button { flex: 1; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--ink-dim); font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease; }
     .set-seg button:not(.active):hover { color: var(--chrome); border-color: rgba(224,218,214,0.35); transform: translateY(-1px); }
     .set-seg button:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
     .set-seg button.active { border-color: var(--crimson); color: var(--ink); background: rgba(255,42,48,0.12); }
@@ -6822,7 +6822,7 @@
         <span class="set-l">Guitar on Levels</span>
         <div class="set-seg" id="set-levelguitar">
           <button data-levelguitar="mine" class="active">My Guitar</button>
-          <button data-levelguitar="level">Level's</button>
+          <button data-levelguitar="level">Themed</button>
         </div>
       </div>
 

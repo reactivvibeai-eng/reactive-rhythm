@@ -581,7 +581,10 @@
   }
 
   // ---------- API client ----------
-  async function api(path, { method = 'GET', body = null, auth = false, authWaitMs = 0 } = {}) {
+  // onRes: optional hook called with the raw fetch Response BEFORE the body is parsed —
+  // lets a caller read response headers (e.g. X-Total-Count for paged crawls) without
+  // changing the return shape. Guarded: an onRes that throws must never fail the request.
+  async function api(path, { method = 'GET', body = null, auth = false, authWaitMs = 0, onRes = null } = {}) {
     const headers = { 'content-type': 'application/json' };
     if (auth) {
       let tk = await getToken();
@@ -598,6 +601,7 @@
       let detail = ''; try { detail = (await res.json()).error || ''; } catch (e) {}
       throw new Error('API ' + res.status + (detail ? ' · ' + detail : '') + ' (' + path + ')');
     }
+    if (onRes) { try { onRes(res); } catch (e) {} }
     return res.json();
   }
 
@@ -863,41 +867,110 @@
     _sectionsCache = null;   // build58: a fresh/grown catalog must recompute the rails (incl. a new Surprise + newest-first New)
     const forceMock = /[?&]mock=1/.test(location.search);
     if (API_BASE && !forceMock) {
+      // build127: the paged crawl is NO LONGER one big try/catch. A single flaky page mid-crawl
+      // (transient 500 / network blip / timeout — likelier as the library grows) must NOT discard the
+      // hundreds of REAL tracks already fetched. Each page fetch is guarded on its own; a partial crawl
+      // is treated as SUCCESS (catalogLive true, real tracks) as long as ≥1 real track came back. We only
+      // fall through to the mock catalog when ZERO real tracks were fetched (the true "unreachable" case).
+      // FIX 2: page 0 reads X-Total-Count, then the remaining pages fire in PARALLEL (Promise.allSettled)
+      // and are assembled IN OFFSET ORDER; a single failed page among the batch still yields the others.
+      const LIMIT = 200, MAX_PAGES = 60;
+      const all = [];
+      let crawlErrored = false;   // a page threw / was dropped → the set may be partial
+      let crawlComplete = false;  // reached a short/empty page → we have the WHOLE library
+
+      const pushPage = (list) => {
+        if (list && list.length) for (let i = 0; i < list.length; i++) all.push(list[i]);
+      };
+
       try {
-        // pull the whole library in pages (scale-ready — up to ~12k tracks)
-        let all = [], page = 0, LIMIT = 200;
-        for (; page < 60; page++) {
-          const list = await api('/tracks?limit=' + LIMIT + '&offset=' + (page * LIMIT));
-          if (!list || !list.length) break;
-          all = all.concat(list);
-          if (list.length < LIMIT) break;
-        }
-        if (all.length) {
-          all.forEach(t => {
-            if (!t) return;
-            // some rows pack the description into the title field — keep just the first line
-            if (t.title) t.title = String(t.title).split('\n')[0].trim().slice(0, 80);
-            // created_at arrives as an ISO string (live) or ms number (mock) — unify to ms
-            // so "New"/fresh-upload sorting works and a just-uploaded track surfaces first
-            t.created_at = (+new Date(t.created_at)) || 0;
-          });
-          catalogRawCount = all.length;
-          // ONLY show songs that actually play — no dead taps, ever. THE chokepoint:
-          // split videos OUT of the music catalog here, so every music surface (rails,
-          // browse, search, pickers) is music-only for free; videos go to their own bucket.
-          var ready = all.filter(trackReady);
-          catalogTracks = ready.filter(function (t) { return !isVideo(t); });
-          // build99N: videos gate on WATCHABILITY, not the music chartability gate (trackReady). A film can
-          // always be watched even with no decodable audio to chart — recovers ~30 of 142 films that were hidden.
-          catalogVideos = all.filter(function (t) { return isVideo(t) && videoReady(t); });
-          catalogLive = true;
-          return;
+        // --- page 0 (sequential): learn the total from X-Total-Count if the server sends it ---
+        let total = NaN;
+        const first = await api('/tracks?limit=' + LIMIT + '&offset=0', {
+          onRes: (res) => {
+            try {
+              const h = res.headers && res.headers.get && res.headers.get('X-Total-Count');
+              if (h != null && h !== '') { const n = parseInt(h, 10); if (isFinite(n) && n >= 0) total = n; }
+            } catch (e) {}
+          },
+        });
+        pushPage(first);
+        const firstLen = (first && first.length) || 0;
+        if (firstLen < LIMIT) {
+          // whole library fit in one page (or it's empty) — nothing more to fetch
+          crawlComplete = true;
+        } else if (isFinite(total) && total > 0) {
+          // --- FIX 2: parallel path — we know the total, so fire every remaining page at once ---
+          const pageCount = Math.min(Math.ceil(total / LIMIT), MAX_PAGES);
+          const jobs = [];
+          for (let p = 1; p < pageCount; p++) {
+            const offset = p * LIMIT;
+            jobs.push(api('/tracks?limit=' + LIMIT + '&offset=' + offset).then(
+              (list) => ({ p: p, list: list }),
+              (err) => ({ p: p, err: err })
+            ));
+          }
+          // Promise.allSettled semantics via the resolve-both mapping above — no page can reject the batch.
+          const results = await Promise.all(jobs);
+          results.sort((a, b) => a.p - b.p);   // ASSEMBLE IN OFFSET ORDER (fresh-first sort downstream relies on order)
+          for (let i = 0; i < results.length; i++) {
+            const r = results[i];
+            if (r.err) { crawlErrored = true; console.warn('catalog page ' + r.p + ' failed — keeping the rest', r.err); continue; }
+            pushPage(r.list);
+          }
+          crawlComplete = !crawlErrored;   // every page that we asked for came back
         } else {
-          // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
-          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Library is empty right now — showing samples', 'error'); } catch (e2) {}
+          // --- sequential fallback: X-Total-Count absent/unparseable → crawl page-by-page ---
+          // Each page is guarded independently: on a page error, STOP but keep everything already fetched.
+          for (let page = 1; page < MAX_PAGES; page++) {
+            let list;
+            try {
+              list = await api('/tracks?limit=' + LIMIT + '&offset=' + (page * LIMIT));
+            } catch (e) {
+              crawlErrored = true;
+              console.warn('catalog page ' + page + ' failed — proceeding with the pages fetched so far', e);
+              break;
+            }
+            if (!list || !list.length) { crawlComplete = true; break; }
+            pushPage(list);
+            if (list.length < LIMIT) { crawlComplete = true; break; }
+          }
         }
       } catch (e) {
+        // page 0 itself failed → we have nothing; fall through to the mock branch below.
+        crawlErrored = true;
         console.warn('catalog fetch failed → preview catalog', e);
+      }
+
+      if (all.length) {
+        // --- SUCCESS path (runs on a PARTIAL `all` too — every side effect preserved) ---
+        all.forEach(t => {
+          if (!t) return;
+          // some rows pack the description into the title field — keep just the first line
+          if (t.title) t.title = String(t.title).split('\n')[0].trim().slice(0, 80);
+          // created_at arrives as an ISO string (live) or ms number (mock) — unify to ms
+          // so "New"/fresh-upload sorting works and a just-uploaded track surfaces first
+          t.created_at = (+new Date(t.created_at)) || 0;
+        });
+        catalogRawCount = all.length;
+        // ONLY show songs that actually play — no dead taps, ever. THE chokepoint:
+        // split videos OUT of the music catalog here, so every music surface (rails,
+        // browse, search, pickers) is music-only for free; videos go to their own bucket.
+        var ready = all.filter(trackReady);
+        catalogTracks = ready.filter(function (t) { return !isVideo(t); });
+        // build99N: videos gate on WATCHABILITY, not the music chartability gate (trackReady). A film can
+        // always be watched even with no decodable audio to chart — recovers ~30 of 142 films that were hidden.
+        catalogVideos = all.filter(function (t) { return isVideo(t) && videoReady(t); });
+        catalogLive = true;   // server-charted launches unblocked, even on a partial library
+        // build127: a partial crawl is still LIVE — just quietly note more is loading, don't cry "samples".
+        if (crawlErrored && !crawlComplete) {
+          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Some of the library is still loading…', 'neutral'); } catch (e2) {}
+        }
+        return;
+      } else if (!crawlErrored) {
+        // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
+        try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Library is empty right now — showing samples', 'error'); } catch (e2) {}
+      } else {
         // build58: don't silently swap in fake sample songs — tell the player the live library didn't load (the refresh icon retries).
         try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't reach the library — showing samples", 'error'); } catch (e2) {}
       }

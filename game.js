@@ -110,6 +110,9 @@
   let player = null;         // current Player instance
   let beats = [];            // raw chart [{t, strength}]
   let notes = [];            // derived [{time, lane, strength, judged, hit}]
+  let _missCursor = 0;       // build60 PERF: monotonic miss-sweep cursor — notes[<cursor] are all definitively judged.
+                              // Only advances (never rewinds) past leading judged notes; the miss loop starts here + breaks
+                              // at the first note whose miss window is still future. Reset to 0 at every run start (resetScoring).
   let _injectedNotes = null; // build114: AUTHORITATIVE MP CHART — when set, beginPlay() skips buildNotes() and
                               // uses this array verbatim (rehydrated full note objects, not the stripped spectator
                               // shape). ALWAYS consumed + cleared by beginPlay() so it can never leak into the next
@@ -279,6 +282,7 @@
   // The "you entered a new MODE" beat — fired once when the streak crosses up a tier.
   function onComboTierUp(idx, lane) {
     const ti = COMBO_TIERS[idx]; if (!ti) return;
+    _armJudgePriority(550);   // build60: a MODE cross-up headlines — protect it from the next note's plain GREAT
     flashJudgment(ti.name + (idx >= 4 ? ' MODE!!' : ' MODE'), 'rgb(' + ti.rgb.join(',') + ')');
     try { playStingSfx(idx >= 4 ? 'big' : ''); } catch (e) {}   // v257: a rising sting on each combo-tier cross-up
     scanT = scanDur = 0.55; scanTier = idx + 2;                 // a fuller sweep than a plain milestone
@@ -297,6 +301,7 @@
     if (combo <= _lastBreakPeak) return;
     _clutchArmed = false;
     _clutchCount++;
+    _armJudgePriority(500);   // build60: CLUTCH recovery is a big earned moment — protect it
     flashJudgment('CLUTCH ×' + _clutchCount, '#ff1f2e');
     try { emitComboWave(typeof lane === 'number' ? lane : 2, 3, false); } catch (e) {}   // reuse the combo-milestone board-wide wave for the crimson pop
     cameraShake = Math.max(cameraShake, 14);
@@ -1027,14 +1032,16 @@
     load('assets/miss-squelch.mp3', d => { missBuffer = d; });   // GH-style "clam" on a miss
   }
   // miss "squelch" — like GarageBand/Guitar Hero clamming a note. Music stays at full level.
-  function playMissSfx() {
+  function playMissSfx(heavy) {
     if (muted || !missBuffer) return;
     try {
       const ac = getAC();
       // build35 (audit P1): scale the miss squelch by the Hit-Sound mixer (was a hardcoded 0.5 ≈ 10×
       // a hit at the default level, and it ignored the Settings slider). ~1.6× a perfect hit, capped.
-      const g = ac.createGain(); g.gain.value = Math.min(0.5, SFX_LEVEL * 1.6);
+      // build60 FEEL: `heavy` (a high streak just broke) → louder + pitched-down for a gut-punch squelch. Still mixer/mute-gated.
+      const g = ac.createGain(); g.gain.value = Math.min(heavy ? 0.62 : 0.5, SFX_LEVEL * (heavy ? 2.1 : 1.6));
       const s = ac.createBufferSource(); s.buffer = missBuffer;
+      if (heavy) { try { s.playbackRate.value = 0.85; } catch (e) {} }   // drop the pitch → heavier "clam"
       s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
     } catch (e) {}
   }
@@ -2810,6 +2817,7 @@
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
     _peakCombo = 0; _lastBreakPeak = 0; _clutchCount = 0; _clutchArmed = false;   // build122 p1: CLUTCH per-run state
+    _missCursor = 0;   // build60 PERF: fresh run → miss-sweep cursor points at the first (unjudged) note
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
     _endingLock = false;   // build108: a fresh run always starts unlocked
@@ -3388,15 +3396,19 @@
       const encEl = $('results-encore'), rep = $('results-replay');
       if (encEl) { encEl.hidden = !encore; encEl.classList.toggle('show', encore); }
       if (rep) { rep.textContent = encore ? '🎸 ENCORE' : 'PLAY AGAIN'; rep.classList.toggle('encore-armed', encore); }
+      // build60 FEEL: EVERY non-failed finish now lands a grade-scaled STING under the count-up (a B/C/D used to
+      // finish silently — only the encore/S-A branch played one). S/A → the big 6-note run; B/C/D → the softer
+      // 4-note arpeggio. A FAILED run stays silent (no reward for a fail-out). playStingSfx is mute/mixer-gated.
+      if (!results.failed) { try { playStingSfx(grade === 'S' || grade === 'A' ? 'big' : ''); } catch (e) {} }
       // v255: the crowd cheers on an encore — play the optional cheer SFX (gated by mute + the SFX level; absent file = silent).
+      // The cheer LAYERS on top of the sting above; only high grades earn it.
       if (encore && !muted) {
-        // v259: prefer a real crowd-cheer.mp3 if it actually loaded; otherwise the procedural applause synth (no asset). + the sting.
+        // v259: prefer a real crowd-cheer.mp3 if it actually loaded; otherwise the procedural applause synth (no asset).
         try {
           const _ch = $('encore-cheer');
           if (_ch && _ch.readyState >= 2 && isFinite(_ch.duration) && _ch.duration > 0) { _ch.volume = Math.min(0.85, Math.max(0.35, SFX_LEVEL * 6)); _ch.currentTime = 0; _ch.play().catch(() => {}); }
           else { playCheerSfx(); }
         } catch (e) { try { playCheerSfx(); } catch (e2) {} }
-        try { playStingSfx('big'); } catch (e) {}
       }
     } catch (e) {}
     // build8c: celebratory burst over the card — confetti/fireworks (+ gradeup-flare when the badge lands)
@@ -3738,6 +3750,7 @@
     // mult, the HUD flame, and note-comet trails — all anchored to play elements.
     try { if (_odAura) { _odAura.stop(); _odAura = null; } } catch (e) {}
     bgPulse = 1; odBurst = 1; cameraShake = 10;   // odBurst → screen-flooding ignition flash + shockwave (render)
+    _armJudgePriority(550);   // build60: OVERDRIVE ignition is the biggest moment — protect its callout
     flashJudgment('OVERDRIVE', '#ffd98a');
     _scorePop(true);   // build51: big gold score punch when Overdrive engages
     if (odFlame) odFlame.classList.add('active');
@@ -4136,6 +4149,7 @@
       cameraShake = Math.max(cameraShake, 11 + Math.min(9, tier * 2));
       bgPulse = 1;
       const big = combo % 100 === 0;                            // every 100 is a bigger moment
+      _armJudgePriority(big ? 550 : 450);   // build60: a STREAK milestone headlines — protect it from the next plain GREAT
       flashJudgment(combo + (big ? ' STREAK!!' : ' STREAK'), big ? '#fff2cd' : '#ffe08a');
       _scorePop(big);   // build51: the score punches on each streak milestone (big gold pop every 100)
       if (navigator.vibrate) { try { navigator.vibrate(big ? [12, 18, 12, 18, 12] : [10, 20, 10]); } catch (e) {} }
@@ -4236,7 +4250,7 @@
     // white burst + crimson shockwave already read as "perfect", so the word is suppressed — the climbing combo counter +
     // streak/tier headlines carry a clean run (true Guitar-Hero feel). GREAT/GOOD (you're slightly off — worth seeing) and
     // MISS still flash. Streak/tier/Overdrive/HOLD/BOMB callouts call flashJudgment directly and are unaffected.
-    if (kind !== 'perfect') flashJudgment(JUDGE[kind].name, JUDGE[kind].color);
+    if (kind !== 'perfect') flashJudgment(JUDGE[kind].name, JUDGE[kind].color, false, true);   // build60: plain=true → won't stomp a live ceremony callout
     flashTiming(kind, _signed);   // tiny EARLY/LATE hint (cosmetic; off via Settings → Timing Hint)
     hitFeel(kind, lane, accPerf);   // build104 s8: an accent PERFECT kicks harder
     // a struck hold note becomes an active sustain — it keeps paying out (and the
@@ -4250,6 +4264,7 @@
     // LEVEL FX hook (optional; set by a level overlay e.g. the Skully reactive tarot cards). No-op otherwise.
     try { if (window.RhythmLevelFx && window.RhythmLevelFx.onHit) window.RhythmLevelFx.onHit(kind, lane); } catch (e) {}
     updateHUD();
+    _comboTick();   // build60 FEEL: subtle per-hit combo-number pulse (reduce-motion no-op; never on a miss)
   }
 
   // resolve consecutive HOPO ("flow") notes off a clean hit without a re-strum.
@@ -4293,6 +4308,18 @@
           const g = ac.createGain();
           g.gain.value = (heavy ? 1.1 : kind === 'perfect' ? 0.95 : kind === 'great' ? 0.8 : 0.62) * SFX_LEVEL;   // build104 s8: accent PERFECT chugs hotter
           src.connect(g); g.connect(ac.destination); src.start(now);
+          // build60 FEEL: PERFECT signature — a tiny bright top-end "tick" layered UNDER the chug so a dead-on hit
+          // sounds crisper than a GREAT (non-verbal, on-brand). Very short + quiet + mixer-scaled; never on great/good.
+          if (kind === 'perfect') {
+            try {
+              const to = ac.createOscillator(), tg = ac.createGain();
+              to.type = 'triangle'; to.frequency.setValueAtTime(2100, now); to.frequency.exponentialRampToValueAtTime(1400, now + 0.04);
+              tg.gain.setValueAtTime(0.0001, now);
+              tg.gain.exponentialRampToValueAtTime(Math.min(0.10, SFX_LEVEL * 1.1), now + 0.004);
+              tg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+              to.connect(tg); tg.connect(ac.destination); to.start(now); to.stop(now + 0.07);
+            } catch (e) {}
+          }
         } else {
           // fallback synth blip if the chug sample hasn't decoded yet
           const o = ac.createOscillator(), g = ac.createGain();
@@ -4804,6 +4831,10 @@
   }
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
+    // build60 FEEL: how big was the streak that just died? (peak of the streak, tracked pre-zero.) A high break
+    // hurts more, so the feedback escalates. `combo` is the count still live at entry; _peakCombo is its high.
+    const _brokePeak = Math.max(combo, _peakCombo);
+    const _bigBreak = _brokePeak >= 50;   // escalate only when a real streak was lost — low-combo misses stay identical
     // build122 p1 CLUTCH: snapshot the streak's peak before it zeroes, arm the recovery gate if it
     // qualifies (>=25). Observational only — does not affect scoring.
     if (_peakCombo >= CLUTCH_MIN_BREAK_PEAK) { _lastBreakPeak = _peakCombo; _clutchArmed = true; } else { _clutchArmed = false; }
@@ -4813,13 +4844,21 @@
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
     // a dull "dud" spatter on the missed string (Guitar-Hero "clam" feel).
     stability = Math.max(0, stability - bossDrain(0.04));
-    glitchAmount = Math.min(1, glitchAmount + 0.10);
-    cameraShake = Math.max(cameraShake, 4);
+    glitchAmount = Math.min(1, glitchAmount + (_bigBreak && !reduceMotion ? 0.20 : 0.10));   // build60: a big break glitches harder (motion-gated)
+    cameraShake = Math.max(cameraShake, _bigBreak && !reduceMotion ? 9 : 4);                 // build60: and shakes harder
     registerMissFx(note.lane);
-    playMissSfx();
+    // build60: a heavier crimson screen flash on a big break (motion; matches registerMissFx's reduce-motion gate — it's off when both a11y flags are set)
+    if (_bigBreak && !(reduceMotion && fxLite)) missFlash = Math.min(1.5, missFlash + 0.5);
+    playMissSfx(_bigBreak);   // heavier squelch on a big break (audio — mute/mixer-gated inside)
     spawnMissDud(note.lane);
     emitFx('miss', 'miss', note.lane);
-    flashJudgment('MISS', '#ff1f2e');
+    if (_bigBreak) {
+      // a distinct, EARNED-loss callout + protect it from the next note's plain GREAT (see finding-4 ceremony guard)
+      _armJudgePriority(450);
+      flashJudgment('STREAK BROKEN', '#ff1f2e');
+    } else {
+      flashJudgment('MISS', '#ff1f2e');
+    }
     updateHUD();
   }
   // a dull downward spatter + dead-string snap where a note was missed (no bright burst)
@@ -4853,6 +4892,11 @@
     const rainbow = (combo >= RAINBOW_COMBO || odActive) && !reduced;  // earned RAINBOW burst on a big streak / in Overdrive (shared gate with the strings); off under reduce-motion/lite
     // ── L1 CORE FLASH — the sharpest, brightest single beat of impact (crisp additive disc)
     particles.push({ flash: true, x: laneX, y: hitY, age: 0, life: isPerfect ? 0.12 : 0.09, color: k.core, max: lw * (isPerfect ? 0.7 : isGreat ? 0.55 : 0.42) });
+    // build60 FEEL: PERFECT keeps its word suppressed, but earns a distinct NON-VERBAL signature — a tighter,
+    // WHITE-HOT core spike layered over the (possibly kit-tinted) core disc, so a PERFECT reads crisper than a
+    // GREAT at a glance. On-brand white-hot; a single short additive flash (like L1 itself → drawn even under
+    // reduce-motion, since it's a crisp beat, not ambient motion).
+    if (isPerfect) particles.push({ flash: true, x: laneX, y: hitY, age: 0, life: 0.10, color: '255,252,240', max: lw * 0.5 });
     // ── L2 SHOCKWAVE ring(s) — perfects double up to "crack"
     particles.push({ ring: true, x: laneX, y: hitY, age: 0, life: 0.45, color: k.ring, max: lw * (0.85 + 0.55 * I) });
     if (isPerfect && !reduced) {
@@ -4953,7 +4997,16 @@
   }
 
   let _lastRealJudgeMs = -1e9;   // build89: timestamp of the last NON-whiff judgment, so a whiff dash can't clobber a real hit's callout
-  function flashJudgment(text, color, isWhiff) {
+  // build60 FEEL: CEREMONY PROTECTION. Every callout funnels through the one #judge-flash element, so on a dense
+  // chart a big EARNED callout (GOLDEN MODE!!, OVERDRIVE READY, CLUTCH ×N, N STREAK) was overwritten by the very
+  // next note's GREAT within a frame. Ceremonial call sites arm _judgePriorityUntil; while it's in the future,
+  // flashJudgment refuses to overwrite with a PLAIN per-note judgment (GREAT/GOOD/whiff dash). A MISS still
+  // interrupts (losing your combo must show). Pure display gate — no scoring/timing effect.
+  let _judgePriorityUntil = 0;
+  function _armJudgePriority(ms) { try { _judgePriorityUntil = performance.now() + (ms || 450); } catch (e) {} }
+  function flashJudgment(text, color, isWhiff, plain) {
+    // plain = a low-priority per-note judgment (GREAT/GOOD) or the whiff dash — must not stomp a live ceremony
+    if ((plain || isWhiff) && performance.now() < _judgePriorityUntil) return;
     if (!isWhiff) _lastRealJudgeMs = performance.now();
     const el = $('judge-flash');
     el.textContent = text; el.style.color = color;
@@ -5019,6 +5072,27 @@
       el.classList.add(big ? 'pop-big' : 'pop');
     } catch (e) {}
   }
+  // build60 FEEL: SUBTLE per-hit combo tick. On every successful hit the combo number gives a small 1→1.08→1
+  // scale pop (~120ms) so the count reads as ALIVE, without stealing thunder from the rare tier milestone
+  // (that's the much bigger `tierpop` on #combo-display). Fully self-contained (inline transform + a self-driven
+  // transition → no index.html CSS needed, works in the older desktop engine). reduce-motion → no-op. Never
+  // fires on a miss (only the hit path calls it). Wrapped so it can never throw into the scoring/render loop.
+  let _comboTickTok = 0;
+  function _comboTick() {
+    if (reduceMotion) return;
+    try {
+      const el = $('combo-num'); if (!el) return;
+      const tok = ++_comboTickTok;
+      el.style.transition = 'none';
+      el.style.transform = 'scale(1.08)';
+      void el.offsetWidth;                                   // commit the jump before the ease-back
+      requestAnimationFrame(() => {
+        if (tok !== _comboTickTok) return;                   // a newer tick superseded this one — let it drive
+        el.style.transition = 'transform 120ms cubic-bezier(0.2,0.7,0.3,1)';
+        el.style.transform = 'scale(1)';
+      });
+    } catch (e) {}
+  }
   // build102y step6: BEAT THAT ghost target — DISPLAY-ONLY (a gold HUD pill + one BEAT IT! flash). Zero scoring
   // interaction: nothing but updateHUD ever reads it. catalog.launchTrack sets it on ghost-duel launches and
   // NULLS it on every plain launch (so a stale target can never leak into an unrelated run); endGame clears it
@@ -5079,7 +5153,7 @@
       const odhf = $('hud-od-fill'); if (odhf) odhf.style.width = (overdrive * 100) + '%';
       const odht = $('hud-od-text'); if (odht) odht.textContent = odActive ? 'OVERDRIVE ACTIVE!' : (odReady ? '▸ READY — PRESS SPACE' : 'CHARGING · ' + Math.round(overdrive * 100) + '%'); }
     // announce once when the meter first fills, so players know Space is armed
-    if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; flashJudgment('OVERDRIVE READY', '#ffd98a'); }
+    if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; _armJudgePriority(500); flashJudgment('OVERDRIVE READY', '#ffd98a'); }   // build60: protect the arming cue from the next plain GREAT
     else if (!odReady) odReadyAnnounced = false;
     // build99N (P-06): null-guard these 4 like the rest of updateHUD — a missing id must not throw inside the rAF loop.
     { const _jp = $('jc-perfect'); if (_jp) _jp.textContent = counts.perfect;
@@ -5191,10 +5265,20 @@
     // 'avoided' at the exact window edge (their press-penalty window must not stretch), and HOLD heads keep the exact
     // edge too (sustain-start bookkeeping assumes the head resolves at the old boundary). Mirrored in the P2 scorer.
     const MISS_GRACE = 0.06;
-    for (const n of notes) {
+    // build60 PERF: monotonic miss-sweep cursor. notes are time-sorted ascending; a note is only ever judged
+    // (hit via handleHit, or missed/avoided here) — .judged is terminal and never reverts. So (a) leading notes
+    // that are already judged can never need judging again → advance _missCursor past them (it never rewinds,
+    // since judging only moves forward in time); (b) the EARLIEST miss boundary is n.time+hitWindow (bombs/holds;
+    // taps get +MISS_GRACE on top), so once jt <= n.time+hitWindow for a note, every LATER note is future too →
+    // break. The cursor stops at the first UNJUDGED note (an out-of-order late hit past an earlier still-pending
+    // note leaves that earlier note unjudged, which blocks the cursor there), so it can NEVER skip a miss-able note.
+    while (_missCursor < notes.length && notes[_missCursor].judged) _missCursor++;
+    for (let _i = _missCursor; _i < notes.length; _i++) {
+      const n = notes[_i];
+      if (jt <= n.time + diff.hitWindow) break;   // this note (and all later) still inside their miss window → done
       if (n.judged) continue;
-      if (n.type === 'bomb') { if (jt <= n.time + diff.hitWindow) continue; n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } continue; }   // dodged the hazard — safe, no penalty
-      if (n.type === 'hold') { if (jt <= n.time + diff.hitWindow) continue; missNote(n); continue; }
+      if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } continue; }   // dodged the hazard — safe, no penalty
+      if (n.type === 'hold') { missNote(n); continue; }
       if (jt <= n.time + diff.hitWindow + MISS_GRACE) continue;
       missNote(n);
     }
@@ -5685,7 +5769,15 @@
       const resolving = (n.type === 'hold' && n.dropped && t < n.time + n.hold);
       if (n.judged && n.hit !== 'miss' && !held && !resolving) continue;
       let d = (n.time - t) / approach;
-      if (!held && !resolving && (d > 1.02 || d < -0.12)) continue;
+      // build60 PERF: notes are time-sorted ascending and d is monotonic-decreasing across the array,
+      // so once a note is off-screen-future (d>1.02) EVERY later note is future too → break, don't scan on.
+      // A held/resolving hold sustains NOW (small/negative d) but its sort-key n.time is already PAST t,
+      // so it sorts BEFORE any d>1.02 note and can never be skipped by the break; the guard is belt-and-suspenders.
+      // (Byte-identical to the old combined `continue` — only stops visiting notes that were already skipped.)
+      if (!held && !resolving) {
+        if (d > 1.02) break;
+        if (d < -0.12) continue;
+      }
       if (held || resolving) d = Math.max(0, d);    // pin the struck head on the catcher line
       const sc = depthScale(d);
       const nx = noteX(n.lane, d), ny = noteY(d);
