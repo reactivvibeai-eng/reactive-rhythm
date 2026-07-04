@@ -127,7 +127,7 @@
   var _mySettingsSnapshot = null; // my REAL saved settings, captured right before a matched-settings transient override so teardownMatch can restore them
   var _lastShockCombo = 0;        // highest combo milestone that fired a shock this streak (reset to 0 on a combo break)
   var _lastOdActive = false;      // build100r: OD rising-edge tracker — activating Overdrive ("boost") fires a shock too
-  var SHOCK_COMBO_STEP = 8;       // FIX 3a (P0): combo milestones that SHOCK the rival. Was 30 (never reached), then 15 (still rarely reached in a casual duel where combos stay under 15 → nothing zapped). 8 makes damage LAND in a normal match — the first crossing at combo 8 fires (_lastShockCombo starts 0, floor(8/8)*8=8 > 0). OD trigger + 4s receive cooldown unchanged.
+  var SHOCK_COMBO_STEP = 15;      // combo milestones that SHOCK the rival. Was 30 (never reached); build133 dropped it to 8 to make damage LAND, but owner playtest-5: at 8 you get zapped ~every few seconds — "so much it felt like I wasn't even playing against someone." Back to 15 (build142): a rival must earn more combo before each shock, so hits are meaningful, not a constant strobe. OD trigger + 4s receive cooldown unchanged.
   var _rankRecorded = false;      // guard: record each settled result exactly once (CPU warm-ups never record — oppMeta.bot)
   // build100i: server-authoritative round (Lovable /mp/round/{start,settle}). HOST opens a round at match start + gets a
   // uuid, broadcasts it ('round' event); both peers pass that uuid to /mp/round/settle at song end. All fail-open — the
