@@ -6,11 +6,21 @@ was fixed pre-ship. Here's what to do first, what to test, and what's waiting on
 
 ## 1. Publish the game (1 action)
 All builds are synced to `public/game/` on the Lovable preview but **NOT published** — that's your
-call. Before you click Publish, confirm the preview shows **`?v=432`** (build121, the latest). Builds
-117–119 confirmed synced clean (`?v=431`); the build121 sync for SHA `08f9c85` was dispatched last and
-should have advanced it to `?v=432`. If it shows an older version, re-run the sync for `08f9c85`. Then Publish.
+call. Before you click Publish, confirm the preview shows **`?v=433`** (build124, the latest). If it
+shows an older version, re-run the sync for SHA `eb04e45`. **One extra check for this build:** RIFT
+REPLAY adds a NEW file `replay.js` — confirm `public/game/replay.js` exists (I flagged Lovable to verify
+it synced; if the `<script src="replay.js">` 404s, that one feature won't load — the rest is unaffected).
+Then Publish.
 
 ## 2. What shipped tonight (newest first)
+- **build122–124 — Opus fleet (delighters + perf + RIFT REPLAY)** (`?v=433`): the "outside-the-box" pack
+  you greenlit, all built + reviewed on **Opus 4.8**. **CLUTCH** (combo-recovery celebration — the genre
+  never rewarded recovering; now it does), **ONE NOTE FROM GLORY** (near-miss results stamp), **COME BACK
+  TOMORROW** (surfaces the silent streak-save + a tomorrow reminder), a **byte-verified MP rival-guitar
+  perf cache** (0-diff proven; the bigger backdrop caches were byte-proven to drift and correctly skipped),
+  and **RIFT REPLAY** — a shareable 6-second clip of your hottest run (webm→GIF→PNG), with a "▶ SHARE YOUR
+  RIFT" button on the results screen. CLUTCH is verified to never touch scoring; every hook is guarded.
+  **Try the SHARE YOUR RIFT button + a CLUTCH recovery on a real run — final feel needs your eye.**
 - **build121 — performance** (`?v=432`, shipped + reviewed): zero-behavior-change hot-loop opts (fretGeom
   memoized per frame, vignette gradient cached, Path2D→direct, camera-shake translate skipped at rest,
   ember pow hoisted, O(1) particle removal). No pixel changes — pure CPU/GC reduction. See
