@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=440" />
+<link rel="stylesheet" href="jukebox.css?v=441" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5267,6 +5267,52 @@
   @keyframes hlJolt { 0% { filter: none; transform: none; } 18% { filter: contrast(1.35) brightness(1.18) saturate(1.2); transform: translateX(-4px) skewX(-0.7deg); }
     44% { transform: translateX(4px) skewX(0.6deg); } 72% { transform: translateX(-2px); } 100% { filter: none; transform: none; } }
   html.rr-reduce-motion #horror-lens.hl-jolt { animation: none; }
+  /* ===== GOLDEN BUZZER WINNERS hero (Browse) — flagship gold entry, pinned above AI Flixs + the genres.
+     Reuses the .fh-* inner parts (grain / ic / txt / kicker / badge / sub / cta / count / go) from the Flixs
+     card (jukebox.css) but with a GOLD-dominant shell + crown/laurel motif so it reads as champions, distinct
+     from the crimson Flixs card. Gold is the sanctioned featured accent. NO blue/purple/green; darks warm R>=G>=B. */
+  .gb-hero-card {
+    grid-column: 1 / -1; position: relative; isolation: isolate; overflow: hidden;
+    display: flex; align-items: center; gap: 16px;
+    padding: 18px 20px; text-align: left; cursor: pointer;
+    border: 1px solid rgba(224,169,63,0.62); border-radius: 18px;
+    background:
+      radial-gradient(120% 180% at 100% 0%, rgba(224,169,63,0.30), transparent 56%),
+      radial-gradient(90% 160% at 0% 100%, rgba(255,31,46,0.12), transparent 52%),
+      linear-gradient(152deg, #2a1e08 0%, #1a1206 50%, #100a04 100%);
+    box-shadow:
+      0 18px 44px -20px rgba(0,0,0,0.85),
+      0 0 0 1px rgba(224,169,63,0.18),
+      inset 0 1px 0 rgba(255,236,190,0.10);
+    transition: transform 0.16s cubic-bezier(.22,.8,.22,1), border-color 0.16s ease, box-shadow 0.22s ease;
+  }
+  .gb-hero-card:hover {
+    transform: translateY(-2px); border-color: rgba(224,169,63,0.92);
+    box-shadow: 0 26px 54px -22px rgba(0,0,0,0.9), 0 0 32px -8px rgba(224,169,63,0.55), inset 0 1px 0 rgba(255,236,190,0.16);
+  }
+  .gb-hero-card:active { transform: translateY(0) scale(0.992); }
+  .gb-hero-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  html.rr-reduce-motion .gb-hero-card:hover { transform: none; }
+  .gbh-bloom { position: absolute; z-index: 0; inset: 0; pointer-events: none;
+    background: radial-gradient(58% 120% at 90% 4%, rgba(224,169,63,0.24), transparent 60%); }
+  /* laurel/crown glyph tile — richer gold than the Flixs clapper */
+  .gb-hero-card .gbh-ic {
+    background: radial-gradient(120% 120% at 30% 20%, rgba(224,169,63,0.34), rgba(224,169,63,0.10));
+    border-color: rgba(224,169,63,0.62); box-shadow: inset 0 1px 0 rgba(255,240,200,0.20), 0 0 22px -4px rgba(224,169,63,0.5);
+  }
+  .gb-hero-card .gbh-kicker b { color: var(--gold); animation: fhPulse 1.7s ease-in-out infinite; font-size: 11px; }
+  html.rr-reduce-motion .gb-hero-card .gbh-kicker b { animation: none; }
+  .gb-hero-card .gbh-badge { font-size: 22px; }
+  .gb-hero-card .gbh-go { color: #1a0f04; background: linear-gradient(180deg, #f4cf76, #dca43a); }
+  .gb-hero-card:hover .gbh-go { transform: scale(1.06); box-shadow: 0 0 28px -2px rgba(224,169,63,0.85), inset 0 1px 0 rgba(255,244,210,0.55); }
+  html.rr-reduce-motion .gb-hero-card:hover .gbh-go { transform: none; }
+  /* GOLDEN BUZZER coverflow tab — gold accent so it stands apart from the neutral rails */
+  .jb-tab.jb-tab-gold { color: var(--gold); }
+  .jb-tab.jb-tab-gold.active { color: #1a0f04; background: linear-gradient(180deg, #f4cf76, #dca43a); border-color: rgba(224,169,63,0.7); }
+  @media (max-width: 480px) {
+    .gb-hero-card { gap: 13px; padding: 15px 16px; }
+    .gb-hero-card .gbh-badge { font-size: 19px; }
+  }
 </style>
 </head>
 <body>
@@ -6184,6 +6230,7 @@
           <button class="jb-tab" data-sec="hot" role="tab" aria-selected="false">Hot</button>
           <button class="jb-tab" data-sec="new" role="tab" aria-selected="false">New</button>
           <button class="jb-tab" data-sec="surprise" role="tab" aria-selected="false">Surprise</button>
+          <button class="jb-tab jb-tab-gold" data-sec="golden" role="tab" aria-selected="false" hidden>♔ Golden Buzzer</button>
         </div>
         <div class="jukebox" id="jukebox">
           <div class="jb-stage" id="jb-stage"></div>
@@ -7386,7 +7433,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=440"></script>
+<script src="telemetry.js?v=441"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7565,17 +7612,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=440"></script>
-<script src="game.js?v=440"></script>
-<script src="procbg.js?v=440"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=440"></script>
-<script src="chat.js?v=440"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=440"></script>
-<script src="goals.js?v=440"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=440"></script>
-<script src="share.js?v=440"></script>
-<script src="replay.js?v=440"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=440"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=441"></script>
+<script src="game.js?v=441"></script>
+<script src="procbg.js?v=441"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=441"></script>
+<script src="chat.js?v=441"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=441"></script>
+<script src="goals.js?v=441"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=441"></script>
+<script src="share.js?v=441"></script>
+<script src="replay.js?v=441"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=441"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

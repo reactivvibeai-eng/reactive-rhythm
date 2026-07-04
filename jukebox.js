@@ -305,6 +305,35 @@
     renderTopGenreStrip(named.slice(0, 5));
 
     const gg = $('genre-grid'); gg.innerHTML = '';
+    // ---- GOLDEN BUZZER WINNERS — flagship gold hero (full-width), pinned ABOVE Flixs + the genres.
+    // Shown ONLY when the backend has flagged winners (goldenBuzzerTracks() → [] stays hidden → Browse renders
+    // normally). Mirrors the .flixs-hero-card structure but gold-dominant + a crown motif (distinct from Flixs). ----
+    const gbWinners = RC().goldenBuzzerTracks ? RC().goldenBuzzerTracks() : [];
+    const nGb = gbWinners.length;
+    if (nGb > 0) {
+      const gt = document.createElement('button');
+      gt.className = 'gb-hero-card';
+      gt.innerHTML =
+        '<span class="fh-grain" aria-hidden="true"></span>' +
+        '<span class="gbh-bloom" aria-hidden="true"></span>' +
+        '<span class="fh-ic gbh-ic" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M4 8l4 3 4-6 4 6 4-3-1.6 10.5H5.6L4 8z"></path>' +
+            '<path d="M5.6 18.5h12.8"></path>' +
+          '</svg>' +
+        '</span>' +
+        '<span class="fh-txt">' +
+          '<span class="fh-kicker gbh-kicker"><b>♔</b> CHAMPIONS · GOLDEN BUZZER</span>' +
+          '<span class="fh-badge gbh-badge">GOLDEN BUZZER WINNERS</span>' +
+          '<span class="fh-sub">The tracks that earned the golden buzzer</span>' +
+        '</span>' +
+        '<span class="fh-cta" aria-hidden="true">' +
+          '<span class="fh-count">' + nGb + ' winner' + (nGb !== 1 ? 's' : '') + '</span>' +
+          '<span class="fh-go gbh-go">▶</span>' +
+        '</span>';
+      gt.addEventListener('click', () => openSongs(RC().goldenBuzzerTracks(), 'Golden Buzzer Winners', 'browse'));
+      gg.appendChild(gt);
+    }
     // ---- AI FLIXS — cinematic hero entry (full-width), grouped OUT of the music genres ----
     const nVid = RC().videoCount ? RC().videoCount() : 0;
     if (nVid > 0) {
@@ -822,6 +851,16 @@
       }
     }
     computeCv();
+    // GOLDEN BUZZER coverflow rail: reveal its tab ONLY when the backend has flagged winners (else stays hidden →
+    // no empty rail). Runs on every render (outside the build-once guard) so it lights up if winners arrive post-boot.
+    { const gbTab = $('jb-tabs') && $('jb-tabs').querySelector('[data-sec="golden"]');
+      if (gbTab) {
+        const hasGb = !!(RC().goldenBuzzerTracks && RC().goldenBuzzerTracks().length);
+        gbTab.hidden = !hasGb;
+        // if the hidden golden rail was somehow the active section (winners cleared), fall back to a real one
+        if (!hasGb && sectionKey === 'golden') sectionKey = 'new';
+      }
+    }
     setSection(sectionKey);
     showView('jukebox');
     // catalog count indicator (playable songs; refreshes as the library grows)

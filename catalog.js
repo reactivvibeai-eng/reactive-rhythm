@@ -1058,6 +1058,10 @@
   }
   // ▲▲▲ SWAP-SEAM ▲▲▲
   function musicTracks() { return catalogTracks; }   // catalogTracks is already music-only post-split
+  // Golden Buzzer WINNERS — the flagged subset of music (never videos). Cheap linear filter over the
+  // already-music-only list; returns [] until the backend sets golden_buzzer (graceful-empty). Powers the
+  // dedicated Browse hero + coverflow rail in jukebox.js. Recomputed on demand (small N, ~32 winners).
+  function goldenBuzzerTracks() { return musicTracks().filter(function (t) { return goldenBuzzer(t); }); }
   function videoTracks() { return catalogVideos; }
   function videoCount() { return catalogVideos.length; }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — 16:9 cinema poster for AI Flixs. Lovable should add a LANDSCAPE
@@ -1208,7 +1212,10 @@
     const readyPool = catalogTracks.filter(trackReady);
     const pool = (readyPool.length ? readyPool : catalogTracks).slice();
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }   // build58: unbiased Fisher-Yates (the old comparator shuffle was non-uniform); memoized so Surprise is a STABLE pick per load
-    return { featured, hot, new: fresh, surprise: pool.slice(0, 24) };
+    // GOLDEN BUZZER rail: the flagged winners (ready-first, capped like the others). Empty until the backend
+    // flags any → the 'golden' tab stays hidden (jukebox.js gates the tab on this being non-empty).
+    const golden = readyFirst(catalogTracks.filter(goldenBuzzer)).slice(0, 24);
+    return { featured, hot, new: fresh, surprise: pool.slice(0, 24), golden };
   }
 
   // ---------- preview player (short clip when a song is focused) ---------------
@@ -2065,7 +2072,7 @@
     // data layer for the library UI (jukebox.js)
     allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
-    isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer,
+    isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer, goldenBuzzerTracks,
     playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
     flixBackdrop: _startFlixBackdrop, flixBackdropStop: _stopFlixBackdrop,   // build102z p1.5: multiplayer stages a VIDEO-review backdrop on host+challenger (gated on sel.flixVideo — normal MP never calls these)
     // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.
