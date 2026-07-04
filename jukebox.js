@@ -21,6 +21,15 @@
   function setPal(el, seed) { const p = pal(seed); el.style.setProperty('--c1', p[0]); el.style.setProperty('--c2', p[1]); }
   function gradeClass(g) { return 'g-' + (g || 'D'); }
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
+  // Backend-supplied image URLs (album cover_url is user-authored) → only allow http(s)/protocol-relative,
+  // strip control chars, and escapeHtml for safe interpolation into an src="..." attribute. Blocks
+  // javascript:/data: scheme injection. Empty → '' (caller renders a fallback tile). Mirrors multiplayer.js safeUrl.
+  function safeUrl(u) {
+    var s = String(u == null ? '' : u).replace(/[\s"'<>\`]/g, '').trim();
+    if (!s) return '';
+    if (/^(https?:)?\/\//i.test(s) || s.charAt(0) === '/') return RC().escapeHtml(s);
+    return '';   // reject javascript:, data:, and any other non-http scheme
+  }
 
   // =========================================================================
   // VIEW NAVIGATION
@@ -360,6 +369,63 @@
       // 6th arg = posterMode (poster grid); scope defaults to 'flixs' (videos-only) from isVid
       vt.addEventListener('click', () => openSongs(RC().videoTracks(), 'AI Flixs', 'browse', '', true, true));
       gg.appendChild(vt);
+    }
+    // ---- ALBUM RELEASES — the platform's weekly release parties, below the two heroes + above the genres.
+    // Shown ONLY when the backend returns >=1 party with a loaded/launchable track (releaseParties() → [] stays
+    // hidden until the /release-parties route exists → Browse renders normally). A full-width labeled row of album
+    // cards that scrolls HORIZONTALLY (its own overflow-x container — the page never scrolls sideways). Every
+    // backend string (album_title, artist_display_name) is escaped and every cover_url is safeUrl'd — they are
+    // user-authored. Click → openSongs(albumTracks(id), album_title, 'browse'). ----
+    const parties = RC().releaseParties ? RC().releaseParties() : [];
+    if (parties.length) {
+      const sec = document.createElement('div');
+      sec.className = 'album-shelf';
+      const head = document.createElement('div');
+      head.className = 'album-shelf-head';
+      head.innerHTML =
+        '<span class="ash-kicker"><b>●</b> RELEASE PARTIES</span>' +
+        '<span class="ash-title">Album Releases</span>';
+      sec.appendChild(head);
+      const row = document.createElement('div');
+      row.className = 'album-row';
+      parties.forEach(p => {
+        const total = (typeof p.total_track_count === 'number' && p.total_track_count > 0)
+          ? p.total_track_count : (Array.isArray(p.playable_track_ids) ? p.playable_track_ids.length : p.playableLoaded);
+        const nPlay = p.playableLoaded;
+        const cover = safeUrl(p.cover_url);
+        const title = RC().escapeHtml(p.album_title || 'Untitled Album');
+        const artist = RC().escapeHtml(p.artist_display_name || '');
+        // LIVE badge for in-window parties; else a "NEW ALBUM" tag. p.live is a backend boolean.
+        const badge = p.live
+          ? '<span class="album-badge album-live"><i></i>LIVE THIS WEEK</span>'
+          : '<span class="album-badge album-new">NEW ALBUM</span>';
+        // "N of M playable" only when the album is partially playable in-game (consent/decodable gap).
+        const partial = (typeof total === 'number' && nPlay < total)
+          ? '<span class="album-partial">' + nPlay + ' of ' + total + ' playable</span>' : '';
+        const artInner = cover
+          ? '<img class="album-art-img" src="' + cover + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'album-art-fallback\');" />'
+          : '';
+        const card = document.createElement('button');
+        card.className = 'album-card' + (p.live ? ' is-live' : '');
+        card.innerHTML =
+          '<span class="album-art' + (cover ? '' : ' album-art-fallback') + '" aria-hidden="true">' +
+            artInner +
+            '<span class="album-art-glyph">' + RC().escapeHtml(initial(p.album_title)) + '</span>' +
+          '</span>' +
+          '<span class="album-meta">' +
+            badge +
+            '<span class="album-title">' + title + '</span>' +
+            (artist ? '<span class="album-artist">' + artist + '</span>' : '') +
+            partial +
+          '</span>';
+        card.addEventListener('click', () => {
+          const list = RC().albumTracks(p.id);
+          if (list && list.length) openSongs(list, p.album_title || 'Album', 'browse');
+        });
+        row.appendChild(card);
+      });
+      sec.appendChild(row);
+      gg.appendChild(sec);
     }
     const maxCount = named.length ? named[0].count : 1;   // the biggest genre (sorted desc) → "energy bar" scale
     genres.forEach(g => {

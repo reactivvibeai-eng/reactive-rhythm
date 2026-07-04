@@ -865,6 +865,7 @@
 
   async function loadCatalog() {
     _sectionsCache = null;   // build58: a fresh/grown catalog must recompute the rails (incl. a new Surprise + newest-first New)
+    _releasePartiesTried = false;   // a fresh/reload crawl may add tracks that light up a party → re-attempt the one-shot fetch
     const forceMock = /[?&]mock=1/.test(location.search);
     if (API_BASE && !forceMock) {
       // build127: the paged crawl is NO LONGER one big try/catch. A single flaky page mid-crawl
@@ -966,6 +967,12 @@
         if (crawlErrored && !crawlComplete) {
           try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Some of the library is still loading…', 'neutral'); } catch (e2) {}
         }
+        // Album release parties — fire the one-shot /release-parties fetch (fire-and-forget so it never
+        // blocks the crawl). It 404s until Lovable builds the route → graceful empty shelf. If it DOES return
+        // parties, repaint Browse so the "Album Releases" shelf appears without a manual refresh.
+        fetchReleaseParties().then(function () {
+          try { if (_releaseParties.length && typeof renderHome === 'function') renderHome(); } catch (e2) {}
+        });
         return;
       } else if (!crawlErrored) {
         // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
@@ -1062,6 +1069,72 @@
   // already-music-only list; returns [] until the backend sets golden_buzzer (graceful-empty). Powers the
   // dedicated Browse hero + coverflow rail in jukebox.js. Recomputed on demand (small N, ~32 winners).
   function goldenBuzzerTracks() { return musicTracks().filter(function (t) { return goldenBuzzer(t); }); }
+
+  // ===========================================================================
+  // ALBUM RELEASE PARTIES (Browse "Album Releases" shelf) — the platform runs a
+  // week-long RELEASE PARTY when an artist's album goes live; the game surfaces
+  // the current/recent ones so players can play the album's tracks.
+  //
+  // Data comes from a NEW backend route: GET /release-parties → an array of
+  //   { id, album_id, album_title, artist_display_name, cover_url, status,
+  //     live:boolean, live_until:iso,
+  //     playable_track_ids:[<catalog track ids on this album, in order>],
+  //     total_track_count:int }
+  // playable_track_ids are the SAME ids the engine keys tracks on (track.id).
+  //
+  // RESILIENT BY DESIGN: this endpoint does NOT exist yet → the fetch 404s. We
+  // fire ONE attempt at catalog boot, swallow ANY failure (404 / network / parse)
+  // into an empty cache, and NEVER retry in a loop — a missing route just yields
+  // an empty shelf (hidden), exactly like goldenBuzzer() stays dark until lit up.
+  // Mirrors the goldenBuzzer swap-seam philosophy. See GOLDEN_BUZZER_ALBUM_RELEASES_BRIEF.md.
+  // ===========================================================================
+  let _releaseParties = [];        // raw party metadata from the backend (cached; [] until the route exists)
+  let _releasePartiesTried = false; // one-shot guard: never spam the 404 in a tight loop
+  async function fetchReleaseParties() {
+    if (_releasePartiesTried) return _releaseParties;   // one attempt only (per boot / reload)
+    _releasePartiesTried = true;
+    // Mock/preview has no backend route to hit → nothing to show. Skip the doomed fetch entirely.
+    if (!API_BASE || /[?&]mock=1/.test(location.search)) { _releaseParties = []; return _releaseParties; }
+    try {
+      const rows = await api('/release-parties');
+      _releaseParties = Array.isArray(rows) ? rows : (rows && Array.isArray(rows.parties) ? rows.parties : []);
+    } catch (e) {
+      // 404 (route not built yet) / network blip / bad JSON → graceful empty, NO console spam.
+      _releaseParties = [];
+    }
+    return _releaseParties;
+  }
+  // Map a party's playable_track_ids → the loaded catalog track objects (music only, IN ORDER).
+  // Ids the crawl hasn't loaded (or non-playable) are simply skipped — the shelf shows the
+  // consented∩decodable subset that's actually launchable today.
+  function albumTracks(partyId) {
+    const p = _releaseParties.find(function (x) { return x && String(x.id) === String(partyId); });
+    if (!p || !Array.isArray(p.playable_track_ids)) return [];
+    const byId = {};
+    for (let i = 0; i < catalogTracks.length; i++) { const t = catalogTracks[i]; if (t && t.id != null) byId[String(t.id)] = t; }
+    const out = [];
+    for (let i = 0; i < p.playable_track_ids.length; i++) {
+      const t = byId[String(p.playable_track_ids[i])];
+      if (t) out.push(t);   // only ids that map to a loaded, launchable music track
+    }
+    return out;
+  }
+  // Public getter → parties that currently have >=1 launchable track loaded (else there's nothing
+  // to play, so hide them). Each returned party carries its raw metadata PLUS a resolved
+  // `tracks` array + `playableLoaded` count so jukebox.js can render "N of M playable" without
+  // re-mapping. Recomputed on demand (tiny N — a handful of parties).
+  function releaseParties() {
+    if (!_releaseParties.length) return [];
+    const out = [];
+    for (let i = 0; i < _releaseParties.length; i++) {
+      const p = _releaseParties[i]; if (!p) continue;
+      const tracks = albumTracks(p.id);
+      if (!tracks.length) continue;   // no loaded/launchable track on this album → nothing to play → hide
+      out.push(Object.assign({}, p, { tracks: tracks, playableLoaded: tracks.length }));
+    }
+    return out;
+  }
+
   function videoTracks() { return catalogVideos; }
   function videoCount() { return catalogVideos.length; }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — 16:9 cinema poster for AI Flixs. Lovable should add a LANDSCAPE
@@ -2073,6 +2146,8 @@
     allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
     isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer, goldenBuzzerTracks,
+    // Album release parties (Browse "Album Releases" shelf) — []/empty until the /release-parties route exists (graceful).
+    releaseParties, albumTracks,
     playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
     flixBackdrop: _startFlixBackdrop, flixBackdropStop: _stopFlixBackdrop,   // build102z p1.5: multiplayer stages a VIDEO-review backdrop on host+challenger (gated on sel.flixVideo — normal MP never calls these)
     // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.

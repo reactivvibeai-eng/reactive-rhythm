@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=442" />
+<link rel="stylesheet" href="jukebox.css?v=443" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -5336,6 +5336,81 @@
     .gb-hero-card { gap: 13px; padding: 15px 16px; }
     .gb-hero-card .gbh-badge { font-size: 19px; }
   }
+  /* ===== ALBUM RELEASES shelf (Browse) — the platform's weekly RELEASE PARTIES. A full-width labeled
+     row of album-cover cards that scrolls HORIZONTALLY (its own overflow-x container so the page never
+     scrolls sideways). Album art rides in a WARM/GOLD frame; the LIVE badge is crimson (pulsing). Sits
+     inside #genre-grid (a grid) below the GB + Flixs heroes → grid-column:1/-1 makes it full-width.
+     Hidden entirely until the backend returns parties (jukebox renders nothing). NO blue/purple/green;
+     darks warm R>=G>=B. Reduced-motion: the LIVE pulse is static. ===== */
+  .album-shelf { grid-column: 1 / -1; margin: 2px 0 6px; }
+  .album-shelf-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 11px 2px; flex-wrap: wrap; }
+  .album-shelf-head .ash-kicker {
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--gold); display: inline-flex; align-items: center; gap: 6px;
+  }
+  .album-shelf-head .ash-kicker b { color: var(--crimson); font-size: 8px; line-height: 1; animation: fhPulse 1.7s ease-in-out infinite; }
+  html.rr-reduce-motion .album-shelf-head .ash-kicker b { animation: none; }
+  .album-shelf-head .ash-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 18px; color: var(--ink); letter-spacing: 0.01em; }
+  /* horizontal rail — its OWN scroll container; the page body never scrolls sideways */
+  .album-row {
+    display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px;
+    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+    scrollbar-color: rgba(224,169,63,0.45) transparent;
+  }
+  .album-row::-webkit-scrollbar { height: 8px; }
+  .album-row::-webkit-scrollbar-thumb { background: rgba(224,169,63,0.4); border-radius: 8px; }
+  .album-row::-webkit-scrollbar-track { background: transparent; }
+  .album-card {
+    flex: 0 0 auto; width: 168px; scroll-snap-align: start; position: relative; isolation: isolate; overflow: hidden;
+    display: flex; flex-direction: column; gap: 0; text-align: left; cursor: pointer; padding: 0;
+    border: 1px solid rgba(224,169,63,0.32); border-radius: 15px;
+    background: linear-gradient(168deg, #221708 0%, #160f06 52%, #100a04 100%);
+    box-shadow: 0 14px 34px -20px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,236,190,0.06);
+    transition: transform 0.16s cubic-bezier(.22,.8,.22,1), border-color 0.16s ease, box-shadow 0.22s ease;
+  }
+  .album-card:hover { transform: translateY(-3px); border-color: rgba(224,169,63,0.72);
+    box-shadow: 0 22px 46px -22px rgba(0,0,0,0.9), 0 0 26px -10px rgba(224,169,63,0.5), inset 0 1px 0 rgba(255,236,190,0.12); }
+  .album-card:active { transform: translateY(-1px) scale(0.994); }
+  .album-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  html.rr-reduce-motion .album-card:hover { transform: none; }
+  .album-card.is-live { border-color: rgba(255,31,46,0.5); }
+  .album-card.is-live:hover { border-color: rgba(255,31,46,0.8); box-shadow: 0 22px 46px -22px rgba(0,0,0,0.9), 0 0 28px -10px rgba(255,31,46,0.4), inset 0 1px 0 rgba(255,236,190,0.12); }
+  /* WARM/GOLD framed cover */
+  .album-art {
+    position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; overflow: hidden;
+    background: linear-gradient(150deg, #3a2a10, #180f06);
+    box-shadow: inset 0 0 0 1px rgba(224,169,63,0.22), inset 0 -18px 30px -18px rgba(0,0,0,0.7);
+  }
+  .album-art-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .album-art-glyph {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 44px; color: rgba(224,169,63,0.55);
+  }
+  .album-art.album-art-fallback .album-art-glyph { display: flex; }
+  .album-meta { display: flex; flex-direction: column; gap: 5px; padding: 11px 12px 13px; }
+  .album-badge {
+    align-self: flex-start; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9.5px;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; line-height: 1;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .album-badge.album-live { color: #fff; background: linear-gradient(180deg, var(--crimson), var(--red-deep));
+    box-shadow: 0 0 14px -3px rgba(255,31,46,0.6); }
+  .album-badge.album-live i { width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #fff;
+    animation: albumLivePulse 1.4s ease-in-out infinite; }
+  @keyframes albumLivePulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.72); } }
+  html.rr-reduce-motion .album-badge.album-live i { animation: none; }
+  .album-badge.album-new { color: var(--gold); background: rgba(224,169,63,0.13); border: 1px solid rgba(224,169,63,0.4); }
+  .album-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; line-height: 1.16; color: var(--ink);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .album-artist { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; color: var(--ink-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .album-partial { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.04em; color: var(--gold);
+    margin-top: 1px; opacity: 0.92; }
+  @media (max-width: 480px) {
+    .album-card { width: 146px; }
+    .album-shelf-head .ash-title { font-size: 16px; }
+    .album-title { font-size: 13px; }
+  }
 </style>
 </head>
 <body>
@@ -7456,7 +7531,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=442"></script>
+<script src="telemetry.js?v=443"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7635,17 +7710,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=442"></script>
-<script src="game.js?v=442"></script>
-<script src="procbg.js?v=442"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=442"></script>
-<script src="chat.js?v=442"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=442"></script>
-<script src="goals.js?v=442"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=442"></script>
-<script src="share.js?v=442"></script>
-<script src="replay.js?v=442"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=442"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=443"></script>
+<script src="game.js?v=443"></script>
+<script src="procbg.js?v=443"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=443"></script>
+<script src="chat.js?v=443"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=443"></script>
+<script src="goals.js?v=443"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=443"></script>
+<script src="share.js?v=443"></script>
+<script src="replay.js?v=443"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=443"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
