@@ -59,7 +59,8 @@
     return { date: dayKey(), levels: 0, mp: 0, claimedDaily: false, weekKey: isoWeekKey(), weekLevels: 0, weekMp: 0, claimedWeekly: false };
   }
   function defStreak() {
-    return { count: 0, lastCompleteDate: null, freezeBanked: false, freezeEarnedAtCount: 0, milestonesSeen: [] };
+    // build122 p3: freezeJustUsed — see updateStreakOnDailyClaim's freeze-consumed branch + consumeFreezeJustUsed below.
+    return { count: 0, lastCompleteDate: null, freezeBanked: false, freezeEarnedAtCount: 0, milestonesSeen: [], freezeJustUsed: false };
   }
   function defXp() {
     return { xp: 0, level: 1, log: [] };
@@ -268,6 +269,11 @@
         // freeze auto-consumed silently — flame fully preserved, then this day's play still increments it
         s.freezeBanked = false;
         s.count = (s.count || 0) + 1;
+        // build122 p3 — COME BACK TOMORROW (delighter #3): persist a "just used" marker (survives past this
+        // live event — a reload, or simply not having the toast register in the moment) so the hub can show
+        // a dedicated one-time STREAK SAVED reveal on the player's NEXT return. Cleared by the UI right after
+        // it shows (see index.html maybeShowStreakSaved / RhythmGoals.consumeFreezeJustUsed below).
+        s.freezeJustUsed = true;
         try { document.dispatchEvent(new CustomEvent('rr-streak-freeze-used', { detail: { count: s.count } })); } catch (e) {}
       } else {
         s.count = 1;   // reset to 1, not 0 — today's play still counts (spec §1.3)
@@ -368,6 +374,20 @@
   function claimDaily() { return claimDailyIfEligible(); }
   function claimWeekly() { return claimWeeklyIfEligible(); }
 
+  // build122 p3 — COME BACK TOMORROW: read + one-time-consume the "a freeze was just used" marker.
+  // consumeFreezeJustUsed() returns true exactly once per freeze-consumption event (the UI calls it on
+  // hub-return; if it returns true, show the STREAK SAVED reveal, then it's cleared so it won't show again
+  // on a later visit/reload). Read-only peek (freezeJustUsedPending) is exposed too in case a caller wants
+  // to check without consuming.
+  function freezeJustUsedPending() { return !!loadStreak().freezeJustUsed; }
+  function consumeFreezeJustUsed() {
+    var s = loadStreak();
+    if (!s.freezeJustUsed) return false;
+    s.freezeJustUsed = false;
+    saveStreak(s);
+    return true;
+  }
+
   // XP-to-next-level helper for UI (profile bar, hero card)
   function xpProgress() {
     var x = loadXp();
@@ -386,6 +406,8 @@
     recordMpComplete: recordMpComplete,
     claimDaily: claimDaily,
     claimWeekly: claimWeekly,
+    freezeJustUsedPending: freezeJustUsedPending,   // build122 p3
+    consumeFreezeJustUsed: consumeFreezeJustUsed,   // build122 p3
     xpProgress: xpProgress,
     xpForLevel: xpForLevel,
     levelForXp: levelForXp,

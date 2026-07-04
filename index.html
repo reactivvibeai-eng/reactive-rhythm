@@ -4005,6 +4005,56 @@
     .mgc-toprow { flex-direction: column; align-items: flex-start; }
     .mgc-cta { align-self: stretch; justify-content: center; }
   }
+  /* build122 p3 — COME BACK TOMORROW: slim forward "keep your streak" nudge ribbon under the goals card.
+     Gold/ember, same flame language as .mgc-flame — a quieter, single-line sibling (not a second hero card). */
+  .mh-streak-ribbon {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 10px auto 0; padding: 9px 16px; max-width: 620px;
+    border: 1px solid rgba(224,169,63,0.3); border-radius: 999px;
+    background: linear-gradient(180deg, rgba(224,169,63,0.08), rgba(224,169,63,0.03));
+  }
+  .mh-streak-ribbon[hidden] { display: none; }
+  .mh-streak-ribbon .msr-ico { font-size: 15px; filter: drop-shadow(0 0 5px rgba(224,169,63,0.55)); flex: none; }
+  .mh-streak-ribbon .msr-txt {
+    flex: 1 1 auto; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; letter-spacing: 0.02em;
+    color: var(--ink-dim); text-align: left; min-width: 0;
+  }
+  .mh-streak-ribbon .msr-txt b { color: var(--gold); font-family: 'Oxanium', sans-serif; font-weight: 700; }
+  .mh-streak-ribbon .msr-cal {
+    flex: none; cursor: pointer; text-decoration: none;
+    padding: 5px 12px; border: 1px solid rgba(224,169,63,0.4); border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--gold); background: rgba(224,169,63,0.06);
+    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .mh-streak-ribbon .msr-cal:hover, .mh-streak-ribbon .msr-cal:focus-visible { color: #fff; border-color: var(--gold); box-shadow: 0 0 14px rgba(224,169,63,0.4); outline: none; }
+  @media (max-width: 600px) { .mh-streak-ribbon { flex-direction: column; align-items: stretch; text-align: center; } .mh-streak-ribbon .msr-txt { text-align: center; } .mh-streak-ribbon .msr-cal { align-self: center; } }
+
+  /* build122 p3: STREAK SAVED one-time reveal — a dedicated, more dramatic sibling of #levelup-toast (same
+     gold/crimson visual language + centered-overlay idiom) reserved for the "you missed a day but the freeze
+     covered you" moment discovered on RETURN (as opposed to the live in-session toast). Auto-dismissing,
+     non-blocking (pointer-events:none), shown at most once per freeze-consumption via consumeFreezeJustUsed(). */
+  #streak-saved-reveal {
+    position: fixed; left: 50%; top: 24%; transform: translate(-50%, -12px) scale(0.9);
+    z-index: 2001; pointer-events: none; text-align: center;
+    padding: 22px 40px; border-radius: 20px;
+    background: linear-gradient(180deg, rgba(30,14,10,0.95), rgba(14,7,6,0.97));
+    border: 1px solid rgba(224,169,63,0.65);
+    box-shadow: 0 0 0 1px rgba(255,31,46,0.2) inset, 0 20px 56px rgba(0,0,0,0.65), 0 0 48px rgba(224,169,63,0.4);
+    opacity: 0; transition: opacity .3s cubic-bezier(.2,1,.3,1), transform .34s cubic-bezier(.2,1.4,.3,1);
+  }
+  #streak-saved-reveal.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  #streak-saved-reveal .ssr-flame { font-size: 34px; filter: drop-shadow(0 0 14px rgba(224,169,63,0.7)); }
+  #streak-saved-reveal .ssr-title {
+    font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: clamp(24px, 4.5vw, 38px);
+    letter-spacing: 0.05em; color: #f4d488; margin-top: 6px;
+    text-shadow: 0 0 26px rgba(224,169,63,0.6), 0 2px 0 rgba(0,0,0,0.45);
+  }
+  #streak-saved-reveal .ssr-sub {
+    font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #cdbf9a; margin-top: 8px;
+  }
+  html.rr-reduce-motion #streak-saved-reveal { transition: opacity .2s ease; transform: translate(-50%, 0) scale(1); }
   /* build99L: Skip promoted from a faint text link to a ghost-button (pill/border/hover glow) */
   .mh-skip { margin-top: 18px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
@@ -5247,6 +5297,14 @@
             <span class="mgc-xp-track"><span class="mgc-xp-fill" id="mgc-xp-fill"></span></span>
           </div>
         </div>
+      </div>
+      <!-- build122 p3 — COME BACK TOMORROW (delighter #3): slim forward "keep your streak alive" nudge.
+           Shown whenever the streak is alive (count > 0); gold flame language matches the goals-card flame.
+           Painted by paintStreakRibbon() (called from showHub()). Hidden until painted with data. -->
+      <div class="mh-streak-ribbon" id="mh-streak-ribbon" hidden>
+        <span class="msr-ico" aria-hidden="true">🔥</span>
+        <span class="msr-txt">Streak: <b id="msr-days">0</b> days — play 1 song tomorrow to keep it</span>
+        <a class="msr-cal" id="msr-cal" href="#" title="Add a reminder to your calendar" aria-label="Add a reminder to your calendar">+ REMIND ME</a>
       </div>
       <div class="mh-grid" id="mh-grid">
         <button class="mh-tile primary mh-hero" id="mh-campaign" type="button">
@@ -11422,6 +11480,8 @@
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
     try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
     try { paintGoalsCard(); } catch (e) {}    // build110: "you're back today" XP/streak/goals hero card (render-only; never throws)
+    try { paintStreakRibbon(); } catch (e) {}  // build122 p3: forward "keep your streak" nudge (render-only; never throws)
+    try { maybeShowStreakSaved(); } catch (e) {}  // build122 p3: one-time STREAK SAVED reveal on return (see fn — consumes its own marker)
     try { rollHubQuip(); } catch (e) {}       // build99V: random easter-egg quip under the subtitle
     try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
   }
@@ -11745,6 +11805,76 @@
       var card = $('mh-goalscard'); if (card) card.hidden = true;
     });
   })();
+
+  // ===========================================================================
+  // build122 p3 — COME BACK TOMORROW (delighter #3): forward "keep your streak alive" ribbon.
+  // Render-only against RhythmGoals.streakState() — no new persisted state of its own. Shown whenever the
+  // streak is alive (count > 0), independent of whether today's Daily Goal is already claimed (the ribbon's
+  // job is reminding the player to come back TOMORROW, not today's progress — that's the goals card above).
+  // ===========================================================================
+  function paintStreakRibbon() {
+    var ribbon = $('mh-streak-ribbon'); if (!ribbon) return;
+    var RG = window.RhythmGoals; if (!RG) { ribbon.hidden = true; return; }
+    var days = 0;
+    try { days = RG.streakState().count || 0; } catch (e) {}
+    if (days <= 0) { ribbon.hidden = true; return; }
+    ribbon.hidden = false;
+    var d = $('msr-days'); if (d) d.textContent = String(days);
+  }
+  window.__rrPaintStreakRibbon = paintStreakRibbon;   // dev hook parity with __rrPaintGoalsCard
+
+  // build-a-tiny-.ics reminder for "come back tomorrow" — a single VALARM-less all-day event tomorrow,
+  // built as a data: URI so it needs no backend/permission (Notification API would need a user opt-in
+  // prompt AND doesn't persist across days without a service worker — a calendar file is the simpler,
+  // zero-dependency affordance that actually survives until tomorrow).
+  function buildStreakIcs() {
+    var d = new Date(); d.setDate(d.getDate() + 1);
+    var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
+    var dateStr = y + '' + m + '' + day;
+    var stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    var uid = 'rr-streak-' + dateStr + '@reactivvibe.com';
+    var lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ReactivVibe//Reactive Rhythm//EN',
+      'BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + dateStr, 'DTEND;VALUE=DATE:' + dateStr,
+      'SUMMARY:Play Reactive Rhythm — keep your streak alive', 'DESCRIPTION:One song keeps the flame going. Do not break the streak.',
+      'END:VEVENT', 'END:VCALENDAR'
+    ];
+    return 'data:text/calendar;charset=utf8,' + encodeURIComponent(lines.join('\r\n'));
+  }
+  (function () {
+    var cal = $('msr-cal'); if (!cal) return;
+    cal.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      try {
+        var a = document.createElement('a');
+        a.href = buildStreakIcs(); a.download = 'reactive-rhythm-streak-reminder.ics';
+        document.body.appendChild(a); a.click(); a.remove();
+        try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('Reminder saved — add it to your calendar', 'success'); } catch (e2) {}
+      } catch (e) {}
+    });
+  })();
+
+  // ===========================================================================
+  // build122 p3 — COME BACK TOMORROW: one-time "STREAK SAVED" reveal on RETURN. Distinct from the existing
+  // live 'rr-streak-freeze-used' toast below (which fires the instant the freeze is consumed, mid-session,
+  // right after a run) — this checks the PERSISTED marker goals.js now sets alongside that event, so the
+  // reveal also (or instead) surfaces the next time the player opens the hub, even after a reload/new tab.
+  // consumeFreezeJustUsed() is one-shot (clears the marker), so this can never show twice for one freeze.
+  // ===========================================================================
+  function maybeShowStreakSaved() {
+    var RG = window.RhythmGoals; if (!RG || !RG.consumeFreezeJustUsed) return;
+    if (!RG.consumeFreezeJustUsed()) return;
+    var el = document.getElementById('streak-saved-reveal');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'streak-saved-reveal';
+      el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+      el.innerHTML = '<div class="ssr-flame" aria-hidden="true">🔥</div><div class="ssr-title">STREAK SAVED</div><div class="ssr-sub">You missed a day — your freeze covered you</div>';
+      document.body.appendChild(el);
+    }
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    setTimeout(function () { el.classList.remove('show'); }, 3600);
+  }
 
   // ===========================================================================
   // build110 Phase 3: LEVEL-UP + STREAK-MILESTONE celebration toast.
