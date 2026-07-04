@@ -3207,19 +3207,27 @@
       } }
     // count-up the score & accuracy for a satisfying results reveal — but honor reduce-motion (build99k: this was the
     // only results reveal that ignored it; a reduced-motion player should land on the final numbers instantly)
+    // v[polish]: RESULTS CASCADE — the count-up now DELAYS its start (~420ms) so the number climb is its own beat
+    // AFTER the grade bloom + star pops, instead of rolling up while they punch in and stealing the eye. Duration
+    // and final values are unchanged; only the START is gated behind a timeout. Reduce-motion still lands instantly
+    // (no delay, no climb). The CSS sub-element stagger (.results-summary / breakdown / badges) rides alongside this.
     const scoreEl = $('rs-score'), accEl = $('rs-acc');
     if (document.documentElement.classList.contains('rr-reduce-motion')) {
       scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%';
     } else {
-      const startT = performance.now(), dur = 900;
-      (function tick(now) {
-        const p = Math.min(1, (now - startT) / dur);
-        const e = 1 - Math.pow(1 - p, 3);            // ease-out cubic
-        scoreEl.textContent = Math.floor(results.score * e).toLocaleString();
-        accEl.textContent = (accPct * e).toFixed(1) + '%';
-        if (p < 1) requestAnimationFrame(tick);
-        else { scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%'; }
-      })(startT);
+      const dur = 900, COUNT_DELAY = 420;   // ms after the grade punches in (gradeReveal settles ~700ms) before the tally begins
+      scoreEl.textContent = '0'; accEl.textContent = '0.0%';   // hold at zero through the pre-count beat (no stale prior value flashes)
+      setTimeout(function () {
+        const startT = performance.now();
+        (function tick(now) {
+          const p = Math.min(1, (now - startT) / dur);
+          const e = 1 - Math.pow(1 - p, 3);            // ease-out cubic
+          scoreEl.textContent = Math.floor(results.score * e).toLocaleString();
+          accEl.textContent = (accPct * e).toFixed(1) + '%';
+          if (p < 1) requestAnimationFrame(tick);
+          else { scoreEl.textContent = results.score.toLocaleString(); accEl.textContent = accPct.toFixed(1) + '%'; }
+        })(performance.now());
+      }, COUNT_DELAY);
     }
     $('rs-maxcombo').textContent = results.max_combo;
     $('rs-hit').textContent = results.notes_hit + ' / ' + results.notes_total;
@@ -3318,9 +3326,14 @@
     } catch (e) {}
 
     // judgment composition bar — proportional inline-block segments (fills from 0)
+    // v[polish]: fill the bar as the breakdown section RISES IN (~0.72s in the cascade) rather than at 90ms, so the
+    // segment grow reads inside the newly-visible container instead of completing while it's still faded out. Under
+    // reduce-motion the section appears instantly, so fill immediately (no cascade to sync to).
     const rbTotal = Math.max(1, counts.perfect + counts.great + counts.good + counts.miss);
     ['perfect', 'great', 'good', 'miss'].forEach(j => { const s = $('rb-seg-' + j); if (s) s.style.width = '0'; const c = $('rb-' + j); if (c) c.textContent = counts[j]; });
-    setTimeout(() => { ['perfect', 'great', 'good', 'miss'].forEach(j => { const el = $('rb-seg-' + j); if (el) el.style.width = (counts[j] / rbTotal * 100) + '%'; }); }, 90);
+    const _rbFill = () => { ['perfect', 'great', 'good', 'miss'].forEach(j => { const el = $('rb-seg-' + j); if (el) el.style.width = (counts[j] / rbTotal * 100) + '%'; }); };
+    if (document.documentElement.classList.contains('rr-reduce-motion')) _rbFill();
+    else setTimeout(_rbFill, 760);
 
     // FULL COMBO badge (NEW BEST is added by the catalog layer after the save)
     // build122 p1: CLUTCH badge — only if this run had at least one recovery. Reuses the existing .rbadge

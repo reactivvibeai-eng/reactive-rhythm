@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=441" />
+<link rel="stylesheet" href="jukebox.css?v=442" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -2640,6 +2640,29 @@
   }
   .results-wrap::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
   .results-wrap::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+  /* RESULTS CASCADE — the reveal sequences instead of popping all at once: grade bloom → stars → the
+     score/accuracy tally (its count-up is delayed ~420ms in renderResults) → judgment breakdown + badges.
+     The grade + stars fire first as the opening beat (their own animations, kept). These sub-sections then
+     rise+fade in on a staggered ladder so the eye can follow one thing at a time. Scoped to #results so the
+     multiplayer winner card (its own DOM, showWinner in multiplayer.js) is untouched. */
+  @keyframes resultsSectionIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  #results.active .pre-title,
+  #results.active #results-badges,
+  #results.active #results-blurb,
+  #results.active .results-summary,
+  #results.active .results-breakdown { animation: resultsSectionIn 0.5s cubic-bezier(.2,1,.3,1) both; }
+  #results.active .pre-title        { animation-delay: 0.10s; }   /* // SIGNAL STABILIZED kicker */
+  #results.active #results-badges   { animation-delay: 0.40s; }   /* FULL COMBO / CLUTCH pills follow the stars */
+  #results.active #results-blurb    { animation-delay: 0.48s; }   /* the flavor line settles under the badges */
+  #results.active .results-summary  { animation-delay: 0.55s; }   /* rises in as the count-up tally begins */
+  #results.active .results-breakdown{ animation-delay: 0.72s; }   /* P/G/G/M judgment bar lands last */
+  /* reduce-motion: everything lands INSTANTLY — no delayed entrances, no offset (the count-up is un-delayed in JS too). */
+  html.rr-reduce-motion #results.active .pre-title,
+  html.rr-reduce-motion #results.active #results-badges,
+  html.rr-reduce-motion #results.active #results-blurb,
+  html.rr-reduce-motion #results.active .results-summary,
+  html.rr-reduce-motion #results.active .results-breakdown { animation: none; opacity: 1; transform: none; }
 
   .results-grade {
     font-family: 'Unbounded', sans-serif;
@@ -7433,7 +7456,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=441"></script>
+<script src="telemetry.js?v=442"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7612,17 +7635,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=441"></script>
-<script src="game.js?v=441"></script>
-<script src="procbg.js?v=441"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=441"></script>
-<script src="chat.js?v=441"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=441"></script>
-<script src="goals.js?v=441"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=441"></script>
-<script src="share.js?v=441"></script>
-<script src="replay.js?v=441"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=441"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=442"></script>
+<script src="game.js?v=442"></script>
+<script src="procbg.js?v=442"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=442"></script>
+<script src="chat.js?v=442"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=442"></script>
+<script src="goals.js?v=442"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=442"></script>
+<script src="share.js?v=442"></script>
+<script src="replay.js?v=442"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=442"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
