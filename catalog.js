@@ -941,6 +941,14 @@
   // decodable audio rendition (e.g. After Eve's "Straitjacket MV"), dropping them from the grid/count/search.
   function videoReady(t) { return !!t && (!!videoWatchUrl(t) || !!trackAudioUrl(t)); }
   function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
+  // build126: true when the track carries its OWN decodable (non-HLS) audio_url to chart in-browser — the exact
+  // discriminator the audio launch branch needs, INDEPENDENT of whether the paged live-catalog crawl has finished.
+  // A REVIEW deep-launch (?review=<token>) resolves its own track (with audio_url) in PARALLEL with loadCatalog(), so
+  // the host can hit PLAY while catalogLive is still false — the old `catalogLive &&` gate then dropped that fully-
+  // resolvable track straight to the LUNAR WAVES demo. Mock-catalog rows carry NO audio_url (their has_chart is a
+  // synthetic preview flag), so they fail this and correctly fall to the preview demo; id:'demo' / demo:true are
+  // excluded so the demo track itself still routes to playDemo. Server-charted tracks take the separate chart branch.
+  function isLaunchable(t) { return !!t && t.id && t.id !== 'demo' && !t.demo && !!trackAudioUrl(t); }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — media type (music vs video). Prefer an AUTHORITATIVE backend
   // field (media_type / is_video). When Lovable ships it, ONLY mediaType() changes —
   // isVideo/musicTracks/videoTracks and every caller stay put. Until then, fall back to
@@ -1316,9 +1324,12 @@
         var _stagedEnv = window.RhythmLibrary && window.RhythmLibrary.activeLevel && window.RhythmLibrary.activeLevel();
         if (!(_stagedEnv && _stagedEnv._isEnv) && window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment();
       } catch (e) {}
-      if (liveTrack && hasServerChart(track)) {
+      // build126: route by the track's own playability (isLaunchable), not `catalogLive` — same fix/rationale as
+      // launchTrack(). A track that carries a server chart or a decodable audio_url must play THAT track, never the
+      // demo, even if the catalog crawl hasn't flipped catalogLive yet. Mock rows (no audio_url) still hit playDemo.
+      if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo) {
         window.RhythmGame.play(liveProvider(track.id));               // server chart → scored + leaderboard
-      } else if (liveTrack && trackAudioUrl(track)) {
+      } else if (isLaunchable(track)) {
         window.RhythmGame.playUrl(trackAudioUrl(track), {            // fast path → chart in-browser
           id: track.id,                                             // carry the track id for telemetry (song_start/complete)
           title: track.title,
@@ -1490,16 +1501,23 @@
     // build102y step6: BEAT THAT ghost target — display-only HUD hook (gold pill + BEAT IT! flash in game.js).
     // Set on ghost-duel launches, NULLED on every plain launch so a stale target can't leak into the next run.
     try { if (window.RhythmGame.setGhostTarget) window.RhythmGame.setGhostTarget((opts && opts.targetScore) ? { score: opts.targetScore, name: opts.targetName } : null); } catch (e) {}
-    const liveTrack = catalogLive && track.id && track.id !== 'demo';
-    if (liveTrack && hasServerChart(track)) {
-      window.RhythmGame.play(liveProvider(track.id));
-    } else if (liveTrack && trackAudioUrl(track)) {
-      window.RhythmGame.playUrl(trackAudioUrl(track), {
+    // build126 FIX: route by the TRACK's own playability, NOT `catalogLive`. A review deep-launch resolves its track
+    // (with a decodable audio_url) in parallel with the catalog crawl, so the host can press PLAY before catalogLive
+    // flips true — the old `catalogLive &&` gate then sent that resolvable track to the LUNAR WAVES demo (the P0 the
+    // owner watched live). The audio_url branch (isLaunchable) is now catalog-INDEPENDENT — it plays the track's OWN
+    // decodable url, so a real track (review OR catalog) always wins over the demo. The server-chart branch still
+    // gates on catalogLive||_review: liveProvider() re-fetches /track/:id, meaningless for a fake MOCK-preview row
+    // (id 'm5' with a synthetic has_chart) — so a mock row (catalogLive false, no _review) skips it, finds no
+    // audio_url, and correctly falls to the preview demo, byte-identical to before.
+    if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo && (catalogLive || track._review)) {
+      window.RhythmGame.play(liveProvider(track.id));               // pre-baked chart → scored + leaderboard
+    } else if (isLaunchable(track)) {
+      window.RhythmGame.playUrl(trackAudioUrl(track), {             // decodable audio_url → chart in-browser
         id: track.id,   // carry the track id for telemetry (song_start/complete)
         title: track.title, artist: track.artist_credit_name || track.artist_name, genre: track.genre, artwork: track.artwork_url,
       });
     } else {
-      window.RhythmGame.playDemo();
+      window.RhythmGame.playDemo();                                  // genuinely unplayable (mock preview / demo) → demo
     }
     return true;
   }
