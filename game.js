@@ -3318,6 +3318,40 @@
       badges.innerHTML = (results.full_combo ? '<span class="rbadge fc">Full Combo</span>' : '')
         + ((results.clutch_count > 0) ? '<span class="rbadge clutch">⚡ CLUTCH ×' + results.clutch_count + '</span>' : '');
     }
+    // build122 p2 — ONE NOTE FROM GLORY (delighter #2): a dedicated near-miss stamp when the run barely
+    // missed Full Combo OR barely missed crossing into the next grade. Render-only — reads counts/accPct/
+    // grade that are already computed above; never touches scoring/grade itself. Mirrors the existing
+    // "remove stale element, re-add if it qualifies THIS render" idiom used by results-timing/-sloppy/-autocal.
+    try {
+      const _oldAlmost = document.getElementById('results-almost'); if (_oldAlmost) _oldAlmost.remove();
+      const _rep = $('results-replay'); if (_rep) _rep.classList.remove('brag');
+      if (!results.failed) {
+        const _missCount = counts.miss || 0;
+        let _almostText = null;
+        // near-FC: not already a full combo, but only 1-2 misses stood between this run and one.
+        if (!results.full_combo && _missCount > 0 && _missCount <= 2) {
+          _almostText = (_missCount === 1 ? '1 NOTE' : _missCount + ' NOTES') + ' FROM FULL COMBO';
+        } else {
+          // near grade-up: how far (in accuracy points) from the NEXT grade up FROM THE CURRENT GRADE.
+          // Uses the same thresholds/ladder endGame() just graded against (95/88/75/60/floor D) — grade is
+          // accuracy-based here, not score-based, so the honest "how close" unit is accuracy points, not a
+          // fabricated score delta. Ladder walked low->high so we can find "one step above wherever `grade`
+          // (the FLOORED grade already computed by endGame, e.g. an FC-floored B) actually landed."
+          const _GRADE_LADDER = [['D', -Infinity], ['C', 60], ['B', 75], ['A', 88], ['S', 95]];
+          const _curIdx = _GRADE_LADDER.findIndex(g => g[0] === grade);
+          const _next = (_curIdx >= 0 && _curIdx < _GRADE_LADDER.length - 1) ? _GRADE_LADDER[_curIdx + 1] : null;
+          if (_next) {
+            const _gap = _next[1] - accPct;
+            if (_gap > 0 && _gap <= 1.5) { _almostText = _gap.toFixed(1) + '% FROM A' + ((_next[0] === 'S' || _next[0] === 'A') ? 'N ' : ' ') + _next[0]; }
+          }
+        }
+        if (_almostText) {
+          const _html = '<div id="results-almost">' + _almostText + '</div>';
+          if (badges && badges.insertAdjacentHTML) badges.insertAdjacentHTML('afterend', _html);
+          if (_rep) _rep.classList.add('brag');   // the replay button visually beckons
+        }
+      }
+    } catch (e) {}
     // reset the Bonus-Sparks line each render — the catalog layer (recordLocal) re-paints it for a COMPLETED
     // run; a failed run leaves it cleared so a prior run's "+N BONUS SPARKS" can't linger on this screen.
     { const rb = $('results-bonus'); if (rb) { rb.innerHTML = ''; rb.style.display = 'none'; } }
