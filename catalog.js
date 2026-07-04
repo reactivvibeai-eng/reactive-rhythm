@@ -1327,7 +1327,7 @@
       // build126: route by the track's own playability (isLaunchable), not `catalogLive` — same fix/rationale as
       // launchTrack(). A track that carries a server chart or a decodable audio_url must play THAT track, never the
       // demo, even if the catalog crawl hasn't flipped catalogLive yet. Mock rows (no audio_url) still hit playDemo.
-      if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo) {
+      if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo && (catalogLive || track._review)) {
         window.RhythmGame.play(liveProvider(track.id));               // server chart → scored + leaderboard
       } else if (isLaunchable(track)) {
         window.RhythmGame.playUrl(trackAudioUrl(track), {            // fast path → chart in-browser
