@@ -2133,16 +2133,19 @@
   // may not own the stage — applyEnvironment's ownership backstop would silently split the two players'
   // cosmetics); solo-only cards keep them.
   var _rvEnvSel = null;
-  // build102y step5: challenger SEAT POLICY under GO LIVE — 'artist' (default, today's behavior byte-identical),
-  // 'confirm' (open seat, host still ACCEPTs), 'auto' (FIRST COME — BUILT but DARK per the rollout gate: the chip
-  // only renders on ?dev=1 until one real show soaks; the multiplayer.js auto-accept path ships regardless).
-  var _rvSeatPol = 'artist';
+  // build102y step5: challenger SEAT POLICY under GO LIVE — 'auto' (DEFAULT: OPEN, FIRST COME — the first real
+  // non-host joiner auto-seats as p2 → a real versus without a manual accept), 'confirm' (open seat, host still
+  // ACCEPTs), 'artist' (artist-call-in only, host must accept). P0 fix (owner playtest): hosting from the panel now
+  // means an OPEN VERSUS anyone can join — 'artist' being the silent default was blocking every non-artist joiner and
+  // leaving the host on a solo start. The 'auto' chip is un-gated (was dark behind ?dev=1). The artist path is NOT
+  // removed — it's a subset now: an OPEN seat still lets the original artist take it (via CALL IN THE ARTIST + the
+  // submitter-priority queue in multiplayer.js), the host can still pick 'artist'/'confirm' on the card.
+  var _rvSeatPol = 'auto';
   function _wireSeatPol() {
     var row = _rvEl('rvl-seatpol'); if (!row) return;
-    var devOn = false; try { devOn = /[?&]dev=1/.test(location.search); } catch (e) {}
     row.querySelectorAll('button').forEach(function (b) {
       var pol = b.getAttribute('data-seat');
-      if (pol === 'auto') b.hidden = !devOn;   // rollout gate — FIRST COME stays dark
+      // P0 fix: all three policies render (was `if (pol==='auto') b.hidden = !devOn` — FIRST COME stayed dark).
       b.classList.toggle('active', pol === _rvSeatPol);
       if (!b._wired) {
         b._wired = true;
@@ -2199,7 +2202,7 @@
     // build102y step4 (edge case 2): fresh card = fresh stage — no chip carries over run-to-run, and any env a
     // prior run applied is dropped NOW (mirror of the review-fix-1 "never inherit" pattern).
     _rvEnvSel = null;
-    _rvSeatPol = 'artist';   // build102y step5: seat policy resets with the card too — a new show never inherits OPEN SEAT
+    _rvSeatPol = 'auto';   // P0 fix: a fresh card defaults to OPEN/FIRST-COME (was 'artist') — host-from-panel = open versus; host can still switch to 'confirm'/'artist' on the card
     try { if (window.RhythmLevels && window.RhythmLevels.clearEnvironment) window.RhythmLevels.clearEnvironment(); } catch (e) {}
     var art = _rvEl('rvl-art'); if (art && track.artwork_url) art.src = track.artwork_url;
     var ti = _rvEl('rvl-title'); if (ti) ti.textContent = track.title || 'Untitled';

@@ -2889,7 +2889,9 @@
     // update HUD meta
     $('hud-diff').textContent = DIFFICULTY[difficulty].name;
     if (session.meta) {
-      $('hud-track').textContent = session.meta.title + ' — ' + session.meta.artist;
+      // guard a null/empty artist exactly like the results label (game.js ~3225): only append ' — artist'
+      // when it's truthy, else show just the title (a null artist was printing the literal "Title — null").
+      $('hud-track').textContent = session.meta.artist ? (session.meta.title + ' — ' + session.meta.artist) : session.meta.title;
     }
 
     showScreen('game');

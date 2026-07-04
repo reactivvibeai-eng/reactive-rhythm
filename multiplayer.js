@@ -153,6 +153,9 @@
   var _soloRun = false;           // SNAPSHOT taken at beginMatch: was this a SOLO show run? (security judge BLOCKER: the
                                   // settle/rank gates key on this snapshot, never live room.p2 — a mid-run seat can't flip a
                                   // solo run into a ranked forfeit-W or a phantom YOU-WIN)
+  var _showSoloArm = false;       // P0 fix: host EXPLICITLY chose "start solo anyway" on an OPEN-seat show room. Without
+                                  // this the primary START waits for a challenger (no silent solo). Reset when a seat
+                                  // fills, on a fresh show room, and on teardown so it never leaks into the next room.
   var _specShowSolo = false;      // spectating a SOLO show run → no verdict card; back to the waiting room on 'final'
   var _specShow = false;          // snapshot at spectateMatch entry: is this a SHOW-room spectate? (normal spectate keeps the pre-diff card byte-identical)
   var _specFinals = {}, _specVerdictT = 0;   // show spectate: BOTH finals collected (keyed id||name) before the neutral verdict names the higher score
@@ -862,6 +865,17 @@
     try { renderStageRow(); } catch (e) {}   // v262: keep the stage picker in sync with the broadcast selection
   }
 
+  // P0 fix (owner playtest — silent-solo footgun): a HOST-from-panel show room defaults to an OPEN challenger seat.
+  // While that seat is OPEN and still EMPTY, the primary START must NOT silently run solo — the host is trying to
+  // host a versus. This predicate is the single source of truth for "open seat, nobody in it yet": the START button
+  // shows WAITING (disabled) instead of a solo start, maybeStart refuses to auto-solo, and an EXPLICIT "Start solo
+  // anyway" (arming _showSoloArm) is the only way to solo from an open room. An 'artist'-policy room keeps the legacy
+  // "▶ START (SOLO) — the artist joins between runs" behavior (that's what ARTIST ONLY explicitly opts into).
+  function _showSeatOpenEmpty() {
+    if (!(room.show && room.isHost && !room.p2)) return false;
+    var pol = room.openSeat || 'artist';
+    return pol === 'confirm' || pol === 'auto';
+  }
   // ---- ready check ----
   function refreshReadyEnabled() {
     // build102s: a SHOW-room host can always start (solo run with an empty challenger seat — owner's non-negotiable).
@@ -871,12 +885,21 @@
     // moment a track is picked. Once the match channel exists we fall back to the original oppPresent gate.
     var roomStage = !!(room.id && !matchCh && !room.show);
     var oppHere = roomStage ? (room.isHost ? !!room.p2 : !!room.p1) : oppPresent;
-    var ok = (oppHere || (room.show && room.isHost)) && !!sel.trackId;
+    // P0 fix: an OPEN+EMPTY seat disables the primary START (waiting for a challenger) unless the host explicitly
+    // armed a solo run (_showSoloArm). 'artist' policy is unaffected — it always could start solo, by design.
+    var showBlockedOnOpen = _showSeatOpenEmpty() && !_showSoloArm;
+    var ok = (oppHere || (room.show && room.isHost)) && !!sel.trackId && !showBlockedOnOpen;
     var rb = $('mpx-ready'); if (rb) rb.disabled = !ok;
     var rs = $('mpx-readystate'); if (!rs) return;
     if (room.show) {   // build102s: show-room copy (song is locked to the review, host is never blocked)
-      rs.textContent = room.isHost ? (room.p2 ? 'Challenger seated — START runs the head-to-head.' : 'START plays it solo — the artist can join between runs.')
-                                   : 'The host runs the show — you’re pulled in when the match starts.';
+      if (room.isHost) {
+        if (room.p2) rs.textContent = 'Challenger seated — START runs the head-to-head.';
+        else if (_showSeatOpenEmpty() && !_showSoloArm) rs.textContent = 'Open room — waiting for a challenger to join. Share the room link, or start solo below.';
+        else rs.textContent = _showSoloArm ? 'Solo run armed — START plays it solo (a challenger can still join between runs).'
+                                           : 'START plays it solo — the artist can join between runs.';
+      } else {
+        rs.textContent = 'The host runs the show — you’re pulled in when the match starts.';
+      }
       return;
     }
     var peerReady = matchCh ? oppReady : roomOppReady;   // playtest-3 (Bug D): room-stage peer readiness lives in roomOppReady
@@ -888,7 +911,15 @@
     else rs.textContent = 'Tap READY when you\'re set.';
   }
   function setReadyBtn() { var b = $('mpx-ready'); if (!b) return; b.classList.toggle('armed', meReady);
-    if (room.show && room.isHost) { b.textContent = meReady ? 'STARTING…' : (room.p2 ? '⚔ START VERSUS' : '▶ START (SOLO)'); return; }   // build102s: the show host's button IS the start switch
+    if (room.show && room.isHost) {   // build102s: the show host's button IS the start switch
+      // P0 fix: an OPEN+EMPTY seat reads WAITING (never a silent solo). VERSUS once seated; SOLO only when armed
+      // explicitly or when the policy is 'artist' (the legacy artist-call-in solo start).
+      if (meReady) { b.textContent = 'STARTING…'; return; }
+      if (room.p2) b.textContent = '⚔ START VERSUS';
+      else if (_showSeatOpenEmpty() && !_showSoloArm) b.textContent = '… WAITING FOR A CHALLENGER';
+      else b.textContent = '▶ START (SOLO)';
+      return;
+    }
     b.textContent = meReady ? 'READY ✓' : 'READY'; }
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
@@ -949,7 +980,13 @@
     // synced via the room-channel 'room-ready' handshake) — was gated on oppReady, which only exists on the match
     // channel, so a normal duel could never satisfy it (the "couldn't start the match" deadlock). Show rooms keep the
     // host-readies-alone start. The guest never fires this (isHost false) — it readies and waits for room-start.
-    if (room.id && room.isHost && !matchCh && meReady && (room.show || roomOppReady) && sel.trackId) { startRoomMatch(); return; }
+    // P0 fix: a SHOW host with an OPEN+EMPTY seat must NOT silently solo-start on READY — that's the footgun the owner
+    // hit (hosting a versus, got a solo run). Block the show start while the seat is open+empty and solo isn't armed;
+    // 'artist' policy and a seated challenger (room.p2) and an explicit _showSoloArm all still start as before.
+    if (room.id && room.isHost && !matchCh && meReady && (room.show || roomOppReady) && sel.trackId) {
+      if (room.show && _showSeatOpenEmpty() && !_showSoloArm) { meReady = false; try { setReadyBtn(); } catch (e) {} return; }
+      startRoomMatch(); return;
+    }
     if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
       if (room.show) _showAtMs = atMs;               // build102s: show-snap carries the shared start for late arrivals
@@ -3376,7 +3413,7 @@
     // seated challenger + late joiners inherit it for free; same visibility class as audioUrl, never the token).
     // Only set when present, so an AUDIO review's sel shape is byte-identical to before.
     if (spec.flixVideo) sel.flixVideo = String(spec.flixVideo);
-    _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteAt = 0; _inviteRenotified = false;
+    _soloRun = false; _showSoloArm = false; _showAtMs = 0; _inviteBusy = false; _inviteAt = 0; _inviteRenotified = false;   // P0 fix: a fresh show room never inherits an armed solo
     // fresh watchdog for the ROOM-channel subscribe stage (the internal closeRoom above cancels any prior one);
     // guarded so it can only ever fail THIS show room — never one the host opened later.
     if (_showOpenT) clearTimeout(_showOpenT);
@@ -3445,10 +3482,19 @@
   function startShowHeartbeat() {
     stopShowHeartbeat();
     if (!room.show || !room.isHost) return;
-    var _lmTick = 0;
+    var _lmTick = 0, _advTick = 0;
     _showHbT = setInterval(function () {
       if (!room.id || !room.isHost || !room.show) { stopShowHeartbeat(); return; }
       sendShowSnap(); persistShowRoom();
+      // P0 fix (owner playtest: "others couldn't join even with an open seat"): a room the host opened only
+      // hits the lobby browse list via advertiseRoom's room-meta on open/transition — a browser who opens the
+      // lobby a bit later never sees the stale meta and can't join. Re-advertise the room-meta to the lobby every
+      // ~12s (every 3rd 4s tick) WHILE the seat is genuinely joinable: open policy, not full (no p2), not yet live.
+      // Cheap (one broadcast/12s) and it stops the instant the seat fills, the run goes live, or the room closes.
+      if (++_advTick >= 3) {
+        _advTick = 0;
+        if (!room.p2 && !matchLive && room.openSeat && room.openSeat !== 'artist') { try { advertiseRoom(); } catch (e) {} }
+      }
       // v405: SITE-CHIP KEEPALIVE — the backend now expires an unrefreshed live_match after ~5min (ghost-chip TTL),
       // so the host re-announces every 30th snap tick (= 120s). Idempotent server-side; fire-and-forget in catalog.
       if (++_lmTick >= 30) { _lmTick = 0; try { if (window.RhythmCatalog && window.RhythmCatalog.livematchAnnounce) window.RhythmCatalog.livematchAnnounce(room.id, _lmExtra()); } catch (e) {} }   // build102y step5: keepalive re-sends the chip fields too
@@ -3758,16 +3804,17 @@
     var N = 5, nearY = h * 0.87, farY = h * 0.08, nearSpan = w * 0.74, farSpan = w * 0.28, cx = w / 2;
     var lw = nearSpan / N, zf = 3.2, i;
     var cols = (window.RhythmGame.getLaneColors && window.RhythmGame.getLaneColors()) || null;
-    // dim guitar-art ambiance — decorative only (gems ride the synthetic fan, not the painted strings)
+    // guitar-art ambiance — decorative only (gems ride the synthetic fan, not the painted strings).
+    // P0 fix: raised 0.18 → 0.34 so the board reads clearly (a watcher was seeing a washed-out ghost of the neck).
     var art = window.RhythmGame.getGuitarArt && window.RhythmGame.getGuitarArt();
     if (art && art.img && art.img.width) {
-      try { g.save(); g.globalAlpha = 0.18; var ar = art.img.width / art.img.height, dh = h, dw = dh * ar; g.drawImage(art.img, cx - dw / 2, h - dh, dw, dh); g.restore(); } catch (e) {}
+      try { g.save(); g.globalAlpha = 0.34; var ar = art.img.width / art.img.height, dh = h, dw = dh * ar; g.drawImage(art.img, cx - dw / 2, h - dh, dw, dh); g.restore(); } catch (e) {}
     }
     function laneX(l, u) { var nx = cx - nearSpan / 2 + (l + 0.5) * (nearSpan / N), fx = cx - farSpan / 2 + (l + 0.5) * (farSpan / N); return nx + (fx - nx) * u; }
     function proj(d) { var dd = d < 0 ? 0 : d; var z = 1 + dd * (zf - 1); return (1 - 1 / z) / (1 - 1 / zf); }
-    // strings (far → near)
-    g.lineWidth = Math.max(1, lw * 0.05);
-    g.strokeStyle = 'rgba(220,217,212,0.4)';
+    // strings (far → near) — P0 fix: brighter (0.4 → 0.55) so the lane fan reads on the spectator deck
+    g.lineWidth = Math.max(1, lw * 0.055);
+    g.strokeStyle = 'rgba(224,221,216,0.55)';
     g.beginPath();
     for (i = 0; i < N; i++) { g.moveTo(laneX(i, 1), farY); g.lineTo(laneX(i, 0), nearY); }
     g.stroke();
@@ -3789,7 +3836,7 @@
         continue;
       }
       var lcol = (cols && cols[nn.lane]) ? cols[nn.lane] : '255,60,60';
-      var aGem = 0.6 + 0.4 * (1 - u);
+      var aGem = 0.78 + 0.22 * (1 - u);   // P0 fix: raised floor 0.6 → 0.78 so gems read as solid crimson, not alpha-dimmed
       if (nn.type === 'hold' && nn.hold > 0) {    // hold → lane-colored beam toward the nut
         var d2 = (nn.time + nn.hold - t) / _SPEC_APPROACH; if (d2 > 1.02) d2 = 1.02;
         var u2 = proj(d2);
@@ -3867,7 +3914,8 @@
       // survives across the show→normal room transition. Explicitly re-hide every show-only control here so a
       // normal/battle/quick-match room can NEVER show artist/challenger-seat chrome, independent of DOM nesting.
       ['mpx-show-invite-row', 'mpx-show-invite', 'mpx-show-nudge', 'mpx-show-accept', 'mpx-show-decline',
-       'mpx-show-pend', 'mpx-show-swap', 'mpx-show-take-row', 'mpx-show-take', 'mpx-beat-that', 'mpx-beat-room'
+       'mpx-show-pend', 'mpx-show-swap', 'mpx-show-take-row', 'mpx-show-take', 'mpx-beat-that', 'mpx-beat-room',
+       'mpx-show-open-row'   // P0 fix: the OPEN-seat COPY LINK / start-solo row is show-only too
       ].forEach(function (id) { var el = $(id); if (el) el.hidden = true; });
       return;
     }
@@ -3933,11 +3981,42 @@
       }
       if (nudge) nudge.hidden = !(room.invited && _inviteAt && (Date.now() - _inviteAt > 60000) && !room.p2 && !_inviteRenotified);
     }
+    // P0 fix: OPEN-seat waiting affordances (host-only). While the seat is open+empty and solo isn't armed, the host
+    // sees COPY ROOM LINK (share so a friend can join + auto-seat) + an explicit "Start solo anyway" escape hatch —
+    // so the primary START never silently runs solo. Once armed, the row hides and START (SOLO) takes over.
+    var openRow = $('mpx-show-open-row'), copyBtn = $('mpx-show-copylink'), soloBtn = $('mpx-show-solo');
+    var showOpenRow = _showSeatOpenEmpty() && !_showSoloArm;
+    if (openRow) openRow.hidden = !showOpenRow;
+    if (showOpenRow) {
+      if (copyBtn && !copyBtn._wired) {
+        copyBtn._wired = true;
+        copyBtn.addEventListener('click', function (ev) {
+          if (ev && ev.isTrusted === false) return;
+          try {
+            var link = roomInviteLink(room.id);
+            var done = function () { copyBtn.textContent = 'LINK COPIED ✓'; setTimeout(function () { try { copyBtn.textContent = 'COPY ROOM LINK'; } catch (e) {} }, 1800); };
+            if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(link).then(done, function () { done(); }); }
+            else { done(); }
+          } catch (e) {}
+        });
+      }
+      if (soloBtn && !soloBtn._wired) {
+        soloBtn._wired = true;
+        soloBtn.addEventListener('click', function (ev) {
+          if (ev && ev.isTrusted === false) return;
+          _showSoloArm = true;   // EXPLICIT solo — from here READY starts a solo run (label flips to ▶ START (SOLO))
+          try { refreshReadyEnabled(); } catch (e) {}
+          try { paintRoomWaiting(); } catch (e) {}
+          try { banner('mpx-setup-msg', 'Solo run armed — hit START to play it solo. A challenger can still join between runs.'); } catch (e) {}
+        });
+      }
+    }
     setReadyBtn();   // START (SOLO) / START VERSUS relabel
   }
   function acceptChallenger() {
     if (!room.isHost || !room.show || !room.pendingChal || room.p2) return;
     room.p2 = room.pendingChal; room.pendingChal = null;
+    _showSoloArm = false;   // P0 fix: a real challenger seated — the START button flips back to VERSUS (drop any armed solo)
     room._p2At = Date.now();   // build102y review fix B: freshness stamp — the spec-seat wedge heal never undoes a just-granted seat
     advertiseRoom(); sendShowSnap(); persistShowRoom(); paintRoomWaiting();
     banner('mpx-setup-msg', ((room.members[room.p2] || {}).name || 'Challenger') + ' is seated — START runs the versus.');

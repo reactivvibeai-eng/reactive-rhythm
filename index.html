@@ -28,7 +28,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=436" />
+<link rel="stylesheet" href="jukebox.css?v=437" />
 <style>
   :root {
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
@@ -3343,6 +3343,15 @@
   .mpx-show-invite-state { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); }
   .mpx-show-nudge { background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
   .mpx-show-nudge:hover { color: #eee6e2; }
+  /* P0 fix: OPEN-seat waiting affordances — a prominent COPY ROOM LINK + a low-key explicit solo escape hatch */
+  .mpx-show-open-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .mpx-show-open-row[hidden] { display: none; }
+  .mpx-show-copylink { flex: 1; min-width: 160px; padding: 10px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.12em; cursor: pointer; }
+  .mpx-show-copylink:hover { background: rgba(224,169,63,0.18); }
+  .mpx-show-solo { background: none; border: none; color: rgba(238,230,226,0.5); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.3); }
+  .mpx-show-solo:hover { color: #eee6e2; }
+  .mpx-fo-cell .mpx-show-open-row { justify-content: center; }
+  .mpx-fo-cell .mpx-show-copylink { flex: 0 1 auto; min-width: 0; padding: 6px 12px; font-size: 11px; border-radius: 999px; }
   /* build102t (Phase-2 C2) — SPECTATOR DUAL-DECK STAGE (JS-created by multiplayer.js; absent unless watching a show).
      z-252: above the MP screen (240), below the how-to (260) + the review card (300). Warm darks only. */
   #mpx-spec-stage { position: fixed; inset: 0; z-index: 252; display: flex; flex-direction: column; background: radial-gradient(120% 90% at 50% 0%, rgba(34,15,13,0.96), rgba(10,7,6,0.985) 64%); }
@@ -3355,11 +3364,14 @@
   #mpx-spec-stage .mss-sc { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; color: #f3ece8; }
   #mpx-spec-stage .mss-cb { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 11px; color: var(--gold, #e0a93f); }
   #mpx-spec-stage .mss-live { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.22em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 5px 12px; flex: none; animation: rvlPulse 1.4s ease-in-out infinite; }
-  #mpx-spec-stage .mss-decks { flex: 1; display: flex; gap: 10px; padding: 4px 14px 6px; min-height: 0; opacity: 0; transition: opacity .45s ease; }
+  /* P0 fix: full-bleed decks — near-zero side padding so the fan fills the stage (was letterboxed inside a dark frame) */
+  #mpx-spec-stage .mss-decks { flex: 1; display: flex; gap: 10px; padding: 4px 6px 8px; min-height: 0; opacity: 0; transition: opacity .45s ease; }
   #mpx-spec-stage.ready .mss-decks { opacity: 1; }
-  #mpx-spec-stage .mss-decks canvas { flex: 1; width: 100%; height: 100%; min-width: 0; border-radius: 14px; background: linear-gradient(180deg, rgba(24,12,11,0.6), rgba(12,8,7,0.85)); border: 1px solid rgba(222,216,212,0.10); }
+  /* P0 fix: brighter deck bed + clearer border so the board doesn't read as a washed-out box */
+  #mpx-spec-stage .mss-decks canvas { flex: 1; width: 100%; height: 100%; min-width: 0; border-radius: 14px; background: linear-gradient(180deg, rgba(38,20,18,0.72), rgba(16,10,9,0.9)); border: 1px solid rgba(222,216,212,0.16); }
   #mpx-spec-stage.solo #mss-deck2 { display: none; }
-  #mpx-spec-stage.solo #mss-deck1 { max-width: 62vw; margin: 0 auto; }
+  /* P0 fix: a solo watcher's single deck fills the stage (was capped at 62vw = a narrow letterboxed column) */
+  #mpx-spec-stage.solo #mss-deck1 { max-width: 88vw; margin: 0 auto; }
   #mpx-spec-stage .mss-sync { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); font-family: 'Chakra Petch', monospace; font-size: 13px; letter-spacing: 0.12em; color: var(--gold, #e0a93f); background: rgba(20,11,10,0.85); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 12px 22px; animation: mssShimmer 1.6s ease-in-out infinite; }
   #mpx-spec-stage .mss-sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; }
   @keyframes mssShimmer { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
@@ -5936,6 +5948,12 @@
                   <span class="mpx-show-invite-state" id="mpx-show-invite-state" hidden></span>
                   <button class="mpx-show-nudge" id="mpx-show-nudge" type="button" hidden>NUDGE AGAIN</button>
                 </div>
+                <!-- P0 fix: OPEN-seat rooms wait for a challenger by default. Share the room link, or take the EXPLICIT
+                     solo escape hatch — the primary START never silently runs solo from an open room. -->
+                <div class="mpx-show-open-row" id="mpx-show-open-row" hidden>
+                  <button class="mpx-show-copylink" id="mpx-show-copylink" type="button">COPY ROOM LINK</button>
+                  <button class="mpx-show-solo" id="mpx-show-solo" type="button">Start solo anyway</button>
+                </div>
                 <!-- build102y step5: SWAP IN THE ARTIST (host, gold) + TAKE THE STAGE / WITHDRAW (spectator) — painted in paintShowRoom -->
                 <button class="mpx-show-swap" id="mpx-show-swap" type="button" hidden>SWAP IN THE ARTIST</button>
                 <div class="mpx-show-take-row" id="mpx-show-take-row" hidden>
@@ -6304,12 +6322,13 @@
       <button type="button" class="rvl-play" id="rvl-play" disabled>▶&nbsp;&nbsp;PLAY</button>
       <!-- build102s (Phase-2 C1): host-only GO LIVE — catalog.js unhides it when resolve role==='host' AND RhythmMP.openShowRoom exists -->
       <button type="button" class="rvl-golive" id="rvl-golive" hidden><span class="rvl-live-dot" aria-hidden="true">●</span>&nbsp;GO LIVE — PLAY IT AS A MATCH</button>
-      <div class="rvl-golive-hint" id="rvl-golive-hint" hidden>Opens a live room — the artist gets invited, everyone else can watch.</div>
-      <!-- build102y step5: challenger seat policy (rides with GO LIVE; FIRST COME chip is dark — ?dev=1 only, rollout gate) -->
+      <div class="rvl-golive-hint" id="rvl-golive-hint" hidden>Opens a live room — the first friend to join takes the challenger seat; everyone else can watch.</div>
+      <!-- build102y step5 / P0 fix: challenger seat policy (rides with GO LIVE). DEFAULT is OPEN — FIRST COME (auto-seat
+           the first joiner as p2 = a real versus). Host can switch to CONFIRM (open, host accepts) or ARTIST ONLY. -->
       <div class="rvl-seatpol" id="rvl-seatpol" role="radiogroup" aria-label="Challenger seat policy" hidden>
-        <button type="button" data-seat="artist" class="active">ARTIST ONLY</button>
+        <button type="button" data-seat="auto" class="active">OPEN SEAT — FIRST COME</button>
         <button type="button" data-seat="confirm">OPEN SEAT — I CONFIRM</button>
-        <button type="button" data-seat="auto" hidden>OPEN SEAT — FIRST COME</button>
+        <button type="button" data-seat="artist">ARTIST ONLY</button>
       </div>
       <div class="rvl-note" id="rvl-note">Scored run — counts on the leaderboard.</div>
       <div class="rvl-state" id="rvl-state"></div>
@@ -7342,7 +7361,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=436"></script>
+<script src="telemetry.js?v=437"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7521,17 +7540,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=436"></script>
-<script src="game.js?v=436"></script>
-<script src="procbg.js?v=436"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=436"></script>
-<script src="chat.js?v=436"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=436"></script>
-<script src="goals.js?v=436"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=436"></script>
-<script src="share.js?v=436"></script>
-<script src="replay.js?v=436"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=436"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=437"></script>
+<script src="game.js?v=437"></script>
+<script src="procbg.js?v=437"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=437"></script>
+<script src="chat.js?v=437"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=437"></script>
+<script src="goals.js?v=437"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=437"></script>
+<script src="share.js?v=437"></script>
+<script src="replay.js?v=437"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=437"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
