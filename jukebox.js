@@ -1134,6 +1134,63 @@
   }
 
   // =========================================================================
+  // DAILY-STREAK CHIP (R-4) — an always-on flame + day count pinned in the library
+  // header. The persistent complement to the once-per-session welcome card: the
+  // streak stays visible every time you open the library, not only on return.
+  // READ-ONLY consumer of window.RhythmGoals.streakState() — which returns
+  // { count, lastCompleteDate, freezeBanked, freezeEarnedAtCount, milestonesSeen, freezeJustUsed }
+  // (no alive/atRisk fields), so the visual state is DERIVED here from count +
+  // lastCompleteDate, exactly like _streakAtRisk() does for the welcome card.
+  //   • count ≥ 1, played today (lastCompleteDate === today)      → steady GOLD flame + count
+  //   • count ≥ 1, played yesterday but not today (at risk)       → urgent EMBER pulse + count
+  //   • count 0 / older-so-lost / no RhythmGoals                  → render NOTHING (empty-guarded)
+  // =========================================================================
+  const _STREAK_FLAME = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3.2 3.6 5.4 6.4 5.4 10.2A5.4 5.4 0 0 1 6.6 12.4c0-2 1-3.6 2.3-5-.3 1.6.5 2.7 1.7 3C9.7 7.7 10.6 4.7 12 2z"></path></svg>';
+  function _streakChipState() {
+    // → { count, mode: 'alive' | 'risk' } when there's a live streak worth showing, else null.
+    try {
+      const G = window.RhythmGoals;
+      if (!G || !G.streakState) return null;                 // no streak source → nothing to show
+      const s = G.streakState() || {};
+      const count = s.count | 0;
+      if (count < 1) return null;                            // no streak → empty-guard
+      const today = _todayKey();
+      if (s.lastCompleteDate === today) return { count: count, mode: 'alive' };   // banked today → steady gold
+      if (s.lastCompleteDate === _prevKey(today)) return { count: count, mode: 'risk' };   // alive yesterday, not today → at risk
+      return null;                                           // older / broken → already lost → show nothing
+    } catch (e) { return null; }
+  }
+  function renderStreakChip() {
+    try {
+      const bar = document.querySelector('.lib-bar');
+      if (!bar) return;
+      const st = _streakChipState();
+      let chip = $('rr-streak-chip');
+      if (!st) { if (chip && chip.parentNode) chip.parentNode.removeChild(chip); return; }   // empty-guard: no live streak → no chip
+      if (!chip) {
+        chip = document.createElement('button');
+        chip.id = 'rr-streak-chip';
+        chip.className = 'rr-streak-chip';
+        chip.type = 'button';
+        // mount into the existing action cluster, next to the profile/career icon (falls back gracefully)
+        const actions = bar.querySelector('.lib-actions');
+        const anchor = actions && actions.querySelector('#profile-open');
+        if (actions && anchor) actions.insertBefore(chip, anchor);
+        else if (actions) actions.insertBefore(chip, actions.firstChild);
+        else bar.appendChild(chip);
+        // tap surfaces the streak detail via the career/profile overlay (no-op if that icon is absent)
+        chip.addEventListener('click', () => { try { const p = $('profile-open'); if (p) p.click(); } catch (e) {} });
+      }
+      const risk = st.mode === 'risk';
+      chip.classList.toggle('at-risk', risk);
+      const label = risk ? st.count + '-day streak — play today to keep it alive' : st.count + '-day streak';
+      chip.setAttribute('aria-label', label);
+      chip.setAttribute('title', label);
+      chip.innerHTML = '<span class="rsc-flame" aria-hidden="true">' + _STREAK_FLAME + '</span><span class="rsc-n">' + st.count + '</span>';
+    } catch (e) {}
+  }
+
+  // =========================================================================
   // BOOT / RENDER
   // =========================================================================
   let built = false;
@@ -1213,7 +1270,7 @@
       try {
         const menuEl = $('menu');
         if (menuEl && window.MutationObserver) {
-          const mo = new MutationObserver(() => { if (menuEl.classList.contains('active')) maybeWelcomeCard(); });
+          const mo = new MutationObserver(() => { if (menuEl.classList.contains('active')) { maybeWelcomeCard(); renderStreakChip(); } });
           mo.observe(menuEl, { attributes: true, attributeFilter: ['class'] });
         }
       } catch (e) {}
@@ -1233,6 +1290,7 @@
     showView('jukebox');
     startHubBed();   // build158: begin the ambient hub-bed poll (idempotent; audible only on the library surfaces, ducked under previews/runs)
     maybeWelcomeCard();   // R-2: try once now (covers the case where #menu is already active); the observer catches later activation
+    renderStreakChip();   // R-4: always-on daily-streak chip (self-guards to nothing when there's no live streak)
     // catalog count indicator (playable songs; refreshes as the library grows)
     const lr = $('lib-ready');
     if (lr) {

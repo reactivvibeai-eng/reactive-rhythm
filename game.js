@@ -4128,7 +4128,7 @@
   function _renderResultsExtras(results, accShown, grade, accFrac) {
     // Always clear any prior run's injected lines FIRST — endGame is the sole results path, so a later SUPPRESSED
     // run (practice/MP/demo) must not leave an earlier real run's delighter on screen.
-    ['rr-neargoal', 'rr-trouble', 'rr-pace', 'rr-odstat'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+    ['rr-neargoal', 'rr-trouble', 'rr-pace', 'rr-odstat', 'rr-today-pct'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
     if (!results) return;
 
     var tid = null; try { tid = _ratingsTidFor(results); } catch (e) { tid = null; }
@@ -4268,7 +4268,56 @@
         lb.insertAdjacentHTML('beforebegin', '<div id="rr-odstat" style="margin:12px auto 0;max-width:360px;padding:9px 14px;border-radius:11px;border:1px solid rgba(224,169,63,0.30);background:rgba(26,16,10,0.5);">' + _odRows + '</div>');
       }
     } catch (e) {}
+
+    // ---- Wave-3 : "TOP N% TODAY" social proof — first (usually null) synchronous pass. The real paint happens when
+    // the async play submit resolves and catalog.js fires 'rr:playstats' (wired below). Fully guarded, display-only.
+    try { _renderTodayPct(); } catch (e) {}
   }
+
+  // ---- Wave-3 : "TOP N% TODAY" social-proof pill (REAL backend data, DISPLAY-ONLY) -----------------------------
+  // Reads RhythmCatalog.getLastPlayStats() (populated by catalog.js off the /plays|/score response: today_percentile
+  // 1..100 LOWER=better, plus today_count). The play submit is ASYNC — it resolves AFTER _renderResultsExtras's
+  // synchronous pass — so catalog.js dispatches 'rr:playstats' when the stats land and we repaint here. Same real-solo
+  // gate as the rest of results-extras (practice/preview/MP/demo → _ratingsTidFor null → nothing). Idempotent: it
+  // removes any prior pill first, so the sync pass + the late event can both call it. Never touches score/grade/board.
+  function _renderTodayPct() {
+    var old = document.getElementById('rr-today-pct'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    var res = _lastResults; if (!res || res.failed) return;
+    var tid = null; try { tid = _ratingsTidFor(res); } catch (e) { tid = null; }
+    if (!tid) return;   // SUPPRESSED — practice/preview/MP/demo/no-real-track (same gate as recordLocal + ratings)
+    var st = null;
+    try { st = (window.RhythmCatalog && window.RhythmCatalog.getLastPlayStats && window.RhythmCatalog.getLastPlayStats()) || null; } catch (e) { st = null; }
+    if (!st || typeof st.percentile !== 'number' || !isFinite(st.percentile)) return;   // null / offline / older server → render NOTHING (no empty pill)
+    var pct = Math.max(1, Math.min(100, Math.round(st.percentile)));
+    var cnt = (typeof st.count === 'number' && isFinite(st.count) && st.count > 0) ? Math.round(st.count) : null;
+    var cntTxt = cnt ? cnt.toLocaleString() : null;
+    var anchor = document.getElementById('results-leaderboard');
+    var badges = document.getElementById('results-badges');
+    if (!anchor && !badges) return;
+    var html;
+    if (pct <= 60) {
+      // strong social proof — "TOP 8% TODAY" (+ "of 214 today" when the count is known)
+      html = '<div id="rr-today-pct" style="margin:12px auto 0;max-width:360px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;'
+        + 'padding:8px 14px;border-radius:11px;border:1px solid rgba(224,169,63,0.42);border-left:3px solid #ff1f2e;'
+        + 'background:linear-gradient(90deg,rgba(255,31,46,0.14),rgba(224,169,63,0.10));">'
+        + '<span style="font-family:\'Oxanium\',sans-serif;font-weight:800;font-size:13px;letter-spacing:0.07em;color:#ffe08a;text-shadow:0 0 10px rgba(224,169,63,0.35);">TOP ' + pct + '% TODAY</span>'
+        + (cntTxt ? '<span style="font-family:\'Chakra Petch\',sans-serif;font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;color:#b9b2ac;">of ' + cntTxt + ' today</span>' : '')
+        + '</div>';
+    } else {
+      // worse than ~60th percentile → friendlier climb framing (never a discouraging "bottom X%")
+      html = '<div id="rr-today-pct" style="margin:12px auto 0;max-width:360px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;'
+        + 'padding:8px 14px;border-radius:11px;border:1px solid rgba(224,169,63,0.30);background:rgba(26,16,10,0.5);">'
+        + '<span style="font-family:\'Oxanium\',sans-serif;font-weight:800;font-size:12.5px;letter-spacing:0.05em;color:#e0a93f;">' + (cntTxt ? cntTxt + ' PLAYERS TODAY' : 'IN TODAY’S MIX') + '</span>'
+        + '<span style="font-family:\'Chakra Petch\',sans-serif;font-size:10.5px;letter-spacing:0.10em;text-transform:uppercase;color:#b9b2ac;">climb the board</span>'
+        + '</div>';
+    }
+    try {
+      if (anchor) anchor.insertAdjacentHTML('beforebegin', html);   // sit just above the leaderboard (thematic: "you beat N% today" → the board)
+      else badges.insertAdjacentHTML('afterend', html);
+    } catch (e) {}
+  }
+  // Repaint the pill when the async play submit resolves with today's stats (registered once at module load).
+  try { window.addEventListener('rr:playstats', function () { try { _renderTodayPct(); } catch (e) {} }); } catch (e) {}
 
   // ---------- PAUSE ----------
   let _deferredStart = null;   // build65 (cycle-4): a stashed run-start thunk, set when a pause lands during the lead-in/countdown pre-roll (before the song began); consumed by resumeGame() so we never force-start audio behind a stuck PAUSED overlay.

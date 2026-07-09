@@ -1092,3 +1092,41 @@ html.rr-reduce-motion .rr-shelf-card:hover .rsc-art { transform: none; }
 .rw-x:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
 .rw-x:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 
+/* ===== R-4 daily-streak chip — always-on flame + day count, pinned in the library header
+   action cluster (next to the profile/career icon). The persistent complement to the R-2
+   welcome card. Two live states: steady GOLD (banked today) · urgent EMBER pulse (at risk).
+   Renders nothing when there's no live streak (JS empty-guard). ===== */
+.rr-streak-chip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
+  height: 40px; padding: 0 12px 0 10px; border-radius: 999px; cursor: pointer;
+  font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; line-height: 1;
+  color: var(--gold, #e0a93f);
+  background: linear-gradient(180deg, rgba(42,27,10,0.72), rgba(20,12,6,0.74));
+  border: 1px solid rgba(224,169,63,0.42);
+  box-shadow: 0 0 14px -4px rgba(224,169,63,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  transition: transform 0.12s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  animation: rrFbIn var(--rr-t-std) var(--rr-ease-out) both;
+}
+.rr-streak-chip:hover { transform: translateY(-1px); box-shadow: 0 0 18px -3px rgba(224,169,63,0.55), inset 0 1px 0 rgba(255,255,255,0.06); }
+.rr-streak-chip:active { transform: scale(0.96); }
+.rr-streak-chip:focus-visible { outline: 2px solid var(--gold, #e0a93f); outline-offset: 2px; }
+.rsc-flame { flex: 0 0 auto; display: inline-flex; width: 16px; height: 16px; }
+.rsc-flame svg { width: 16px; height: 16px; filter: drop-shadow(0 0 4px rgba(224,169,63,0.5)); }
+.rsc-n { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+/* at-risk (played yesterday, not yet today) — hotter ember + a breathing glow that nudges the return */
+.rr-streak-chip.at-risk {
+  color: #ff7a1a;
+  border-color: rgba(255,90,20,0.6);
+  background: linear-gradient(180deg, rgba(50,19,8,0.78), rgba(24,9,5,0.8));
+  animation: rrFbIn var(--rr-t-std) var(--rr-ease-out) both, rscEmber 1.5s ease-in-out infinite;
+}
+.rr-streak-chip.at-risk .rsc-flame svg { filter: drop-shadow(0 0 6px rgba(255,90,20,0.72)); }
+@keyframes rscEmber {
+  0%, 100% { box-shadow: 0 0 12px -4px rgba(255,90,20,0.45), inset 0 1px 0 rgba(255,255,255,0.05); }
+  50%      { box-shadow: 0 0 20px 0 rgba(255,90,20,0.75), inset 0 1px 0 rgba(255,255,255,0.06); }
+}
+/* a11y: reduce-motion drops the entrance + collapses the ember pulse to a steady (still-urgent) glow */
+html.rr-reduce-motion .rr-streak-chip { animation: none !important; }
+html.rr-reduce-motion .rr-streak-chip.at-risk { box-shadow: 0 0 16px -3px rgba(255,90,20,0.6), inset 0 1px 0 rgba(255,255,255,0.05); }
+@media (max-width: 900px) { .rr-streak-chip { height: 36px; font-size: 13px; padding: 0 11px 0 9px; } }
+

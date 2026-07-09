@@ -792,6 +792,7 @@
           var _pid = out && (out.play_id || out.id);
           try { if (_pid && currentTrack) currentTrack.play_id = _pid; } catch (e) {}
           _bonusEarnForRun(_pid, null, !!_runDailyRift);
+          try { _capturePlayStats(out, trackId, results && results.difficulty); } catch (e) {}   // Wave-3: TOP N% TODAY (display-only, read off the /plays response)
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + trackId + '?difficulty=' + results.difficulty + '&limit=10')); }
           catch (e) { /* leaderboard optional */ }
@@ -1956,8 +1957,36 @@
   // including in-browser-charted tracks that have no server submit (i.e. all live tracks
   // today). This is what makes the cover-art grade chips + the Career profile reflect your
   // real play instead of only the mock seed. Leaderboard submit (below) stays separate.
+  // ---- Wave-3 "TOP N% TODAY" social proof (display-only side-channel off the play response) --------------------
+  // The POST /plays (and its /score alias) response now carries today_count (distinct users who played this
+  // track×difficulty today UTC, caller included) and today_percentile (integer 1..100 — the caller's rank among
+  // today's players, LOWER is better). We stash the LAST real run's stats so the results screen can READ them via
+  // getLastPlayStats(); nothing else in the game changes. Fully graceful: the stash resets to null at every run
+  // start (below) AND at the top of each capture, and is only populated on a VALID numeric percentile — so an older
+  // server (fields absent), an offline / non-2xx POST (capture never runs), or a failed run (no submit) each leave
+  // getLastPlayStats() === null. This never touches the request, the score payload, or any scoring — it only reads
+  // two extra numbers already present on the response.
+  var _lastPlayStats = null;
+  function getLastPlayStats() { return _lastPlayStats; }
+  function _capturePlayStats(out, trackId, diff) {
+    _lastPlayStats = null;   // this response is the sole source of truth; a missing/invalid field leaves it null
+    try {
+      if (!out || typeof out !== 'object') return;
+      var p = out.today_percentile;
+      if (typeof p !== 'number' || !isFinite(p)) return;
+      var pct = Math.round(p);
+      if (pct < 1 || pct > 100) return;
+      var c = out.today_count;
+      var cnt = (typeof c === 'number' && isFinite(c) && c > 0) ? Math.round(c) : null;
+      _lastPlayStats = { percentile: pct, count: cnt, trackId: trackId || null, difficulty: diff || null };
+      // The play submit is async — it resolves AFTER the results screen's synchronous render — so nudge the UI to repaint the pill.
+      try { window.dispatchEvent(new CustomEvent('rr:playstats')); } catch (e) {}
+    } catch (e) { _lastPlayStats = null; }
+  }
+
   function recordLocal(results) {
     if (!results) return;
+    _lastPlayStats = null;   // Wave-3: each completed run resets the social-proof stash so a prior run's number can't linger
     // PRACTICE MODE hard exclusion — a drill run has ZERO competitive/economy side effects. This single early
     // return gates EVERYTHING downstream in one place: the lifetime career aggregate (block 1), the per-song best
     // + NEW BEST/GRADE UP badges (block 2), the Bonus Sparks earn loop + Daily-Rift ×3 (block 3), the RhythmGoals
@@ -2134,6 +2163,7 @@
           var _pid = out && (out.play_id || out.id);
           try { if (_pid && currentTrack) currentTrack.play_id = _pid; } catch (e) {}
           _bonusEarnForRun(_pid, results, _rift3x);
+          try { _capturePlayStats(out, currentTrack && currentTrack.id, results.difficulty); } catch (e) {}   // Wave-3: TOP N% TODAY (display-only, read off the /score response)
           let board = [];
           try { board = lbRows(await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
@@ -2645,6 +2675,8 @@
 
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
+    getLastPlayStats,  // Wave-3: last real run's {percentile,count,trackId,difficulty} off the /plays|/score response (null when absent/offline/older-server) — read-only, results-screen social proof
+
     submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback
     flushReportsQueue, // build119 p1: drains rr_reports_queue against the live endpoint — call opportunistically (e.g. after boot/getUser)
     rateTrack, ratingFor, flushRatingsQueue,   // D1 (ratings): rateTrack({stars?,felt?}) local-first + POST /ratings (rr_ratings_queue drain mirrors reports); ratingFor = pre-fill; flush drains the queue
