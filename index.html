@@ -374,6 +374,7 @@
   /* RATINGS (Fable v2 D1): inline results feedback — gold stars + semantic difficulty chips. Warm-dark, brand gold. */
   .results-rate { display:flex; flex-direction:column; gap:10px; align-items:center; margin:14px auto 0; padding:14px 18px; max-width:440px;
     background:rgba(20,13,11,0.55); border:1px solid rgba(224,169,63,0.18); border-radius:12px; }
+  .results-rate[hidden] { display: none; }   /* QA: the [hidden] attr must beat the class's own display:flex (author-origin > UA at equal specificity) — same guard as .mgc-row[hidden] etc. Keeps the widget suppressed on practice/preview/MP/demo + before the game.js show-hook exists. */
   .results-rate:not([hidden]) { animation: rrRateIn .5s cubic-bezier(.2,.7,.2,1) both; }
   @keyframes rrRateIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
   .rr-rate-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:center; width:100%; }
