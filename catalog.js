@@ -2814,22 +2814,31 @@
   // build105 STRETCH: own-rows notifications probe (the in-game battle-call ring). A REST select with the USER's
   // JWT (RLS scopes rows to the caller); the FIRST failure of any kind (RLS block, missing table/columns) marks it
   // unavailable for the whole session — the SITE ring already covers every call, so this degrades to silence.
-  var _notifOK = null;
+  // v418 (A3 — un-brick the poll rail): the FIRST failure of any kind used to set a SESSION-PERMANENT `_notifOK=false`,
+  // so one boot-time auth race or one RLS hiccup killed the in-game battle-call ring for the WHOLE session (a real
+  // "call won't go through" contributor). Replace it with a 5-MINUTE cooldown timestamp: a transient failure quiets
+  // the probe briefly, then it recovers on its own. A getToken()==null (signed out) is NOT a failure (no cooldown —
+  // it retries later), and the first onAuthChange clears the cooldown so a just-hydrated session re-probes immediately.
+  var _notifCooldownUntil = 0;
   async function notifRecent() {
     try {
-      if (_notifOK === false) return null;
+      if (_notifCooldownUntil && Date.now() < _notifCooldownUntil) return null;
       var base = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SUPABASE_URL) || '';
       var key = (window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.SUPABASE_KEY) || '';
-      if (!base || !key) { _notifOK = false; return null; }
-      var tk = await getToken(); if (!tk) return null;                    // signed out → try again later (not a hard fail)
+      if (!base || !key) { _notifCooldownUntil = Date.now() + 300000; return null; }
+      var tk = await getToken(); if (!tk) return null;                    // signed out → try again later (NOT a hard fail, no cooldown)
       var since = new Date(Date.now() - 180000).toISOString();           // build113 fix: widened 2min->3min so a call sent while the receiver was mid-song (missed by the 30s poll cadence) still surfaces on return to menus
       var r = await fetch(base.replace(/\/$/, '') + '/rest/v1/notifications?select=*&type=eq.live_match_invite&created_at=gte.' + encodeURIComponent(since) + '&order=created_at.desc&limit=3',
         { headers: { apikey: key, Authorization: 'Bearer ' + tk } });
-      if (!r.ok) { if (_notifOK === null) _notifOK = false; return null; }
-      _notifOK = true;
+      if (!r.ok) { _notifCooldownUntil = Date.now() + 300000; return null; }   // transient — 5-min cooldown, NOT a session-permanent brick
+      _notifCooldownUntil = 0;                                            // success clears any cooldown
       return await r.json();
-    } catch (e) { if (_notifOK === null) _notifOK = false; return null; }
+    } catch (e) { _notifCooldownUntil = Date.now() + 300000; return null; }
   }
+  // v418 (A3c): the first auth-state change (guest → hydrated signed-in session) drops any cooldown so the very next
+  // ring poll re-probes immediately instead of waiting out a 5-min window set by a pre-auth 401.
+  var _notifAuthRetried = false;
+  try { onAuthChange(function () { if (!_notifAuthRetried) { _notifAuthRetried = true; _notifCooldownUntil = 0; } }); } catch (e) {}
   // ---- results auto-return ("Returning to the show in Ns") — armed only while the review track is current ----
   var _rvTimer = 0, _rvPill = null;
   function _cancelReturnCountdown() { if (_rvTimer) { clearInterval(_rvTimer); _rvTimer = 0; } if (_rvPill) { try { _rvPill.remove(); } catch (e) {} _rvPill = null; } }
