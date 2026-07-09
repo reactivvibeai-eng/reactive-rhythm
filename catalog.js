@@ -139,7 +139,7 @@
       // build119 p1: opportunistic drain of any queued reports (offline/failed submitReport calls) — only
       // worth trying once we know someone is actually signed in (the POST is authed either way). Fire-and-forget:
       // flushReportsQueue is itself fully guarded and never throws, so this can't affect admin resolution above.
-      if (u) { try { flushReportsQueue(); } catch (e) {} }
+      if (u) { try { flushReportsQueue(); } catch (e) {} try { flushRatingsQueue(); } catch (e) {} }   // D1: same opportunistic drain for the rr_ratings_queue (mirror of the reports drain)
     } catch (e) { _isAdmin = false; }
     return _isAdmin;
   }
@@ -1462,6 +1462,9 @@
     const moodOrGenre = track.mood || cleanGenre(track.genre);   // mood falls back to genre until populated
     const metaBits = [moodOrGenre, track.bpm ? track.bpm + ' BPM' : '', fmtDur(track.duration_seconds)].filter(Boolean).join('  ·  ');
     $('sheet-meta').textContent = metaBits;
+    // D1 (ratings): community rating line under the meta — DEFENSIVE (renders nothing until the backend ships
+    // the aggregate). ★★★★☆ 4.2 (18) · FEEL: <chip> for the selected difficulty tier (falls back to overall).
+    _renderSheetRating(track);
     if (catalogLive && track.id && track.id !== 'demo') logUse(track.id, 'loaded');
 
     const liveTrack = catalogLive && track.id && track.id !== 'demo';
@@ -1566,6 +1569,52 @@
     setupPracticePanel(track, (vid || !ready || !isLaunchable(track)));
 
     sheet.classList.add('open');
+  }
+
+  // D1 (ratings): render/refresh the community rating line inside the track sheet. DEFENSIVE end-to-end —
+  // reads track.rating_avg / .rating_count / .felt_median off the track object (all ABSENT until Lovable ships
+  // the aggregate → renders nothing, never throws, never shows "0 ratings"). n>=3 display threshold (owner-locked).
+  // Creates a #sheet-rating sibling of #sheet-meta once (JS-only, no index.html markup change) and reuses it.
+  function _renderSheetRating(track) {
+    try {
+      var host = $('sheet-meta'); if (!host || !host.parentNode) return;
+      var line = document.getElementById('sheet-rating');
+      if (!line) {
+        line = document.createElement('div');
+        line.id = 'sheet-rating';
+        line.style.cssText = 'font-family:\'Chakra Petch\',sans-serif;font-size:11px;letter-spacing:0.06em;margin-top:6px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;';
+        host.parentNode.insertBefore(line, host.nextSibling);
+      }
+      while (line.firstChild) line.removeChild(line.firstChild);
+      var avg = Number(track && track.rating_avg), cnt = Number(track && track.rating_count);
+      var hasAgg = isFinite(avg) && isFinite(cnt) && cnt >= 3;
+      // felt_median chip uses the tier the player has selected in the sheet, falling back to overall (_feltMedian).
+      var tier = null;
+      try { var ab = document.querySelector('#diff-grid .diff-btn.active'); tier = ab && ab.getAttribute('data-diff'); } catch (e) {}
+      var feelTxt = _feelLabel(_feltMedian(track && track.felt_median, tier));
+      if (!hasAgg && !feelTxt) { line.style.display = 'none'; return; }
+      line.style.display = 'flex';
+      if (hasAgg) {
+        var full = Math.max(0, Math.min(5, Math.round(avg)));
+        var stars = document.createElement('span');
+        stars.style.cssText = 'color:#e0a93f;letter-spacing:1px;';
+        var s = ''; for (var i = 1; i <= 5; i++) s += (i <= full ? '★' : '☆');
+        stars.textContent = s;
+        line.appendChild(stars);
+        var num = document.createElement('span');
+        num.style.cssText = 'font-family:Oxanium,sans-serif;color:#e0a93f;font-weight:600;';
+        num.textContent = avg.toFixed(1) + ' (' + cnt + ')';
+        line.appendChild(num);
+      }
+      if (feelTxt) {
+        if (hasAgg) { var sep = document.createElement('span'); sep.style.cssText = 'color:var(--ink-dim,#8a807a);'; sep.textContent = '·'; line.appendChild(sep); }
+        var lab = document.createElement('span'); lab.style.cssText = 'color:var(--ink-dim,#8a807a);'; lab.textContent = 'FEEL:'; line.appendChild(lab);
+        var chip = document.createElement('span');
+        chip.style.cssText = 'font-family:Oxanium,sans-serif;font-weight:700;color:#ece7e3;background:rgba(60,54,50,0.55);border:1px solid rgba(224,169,63,0.4);border-radius:6px;padding:1px 7px;letter-spacing:0.08em;';
+        chip.textContent = feelTxt;
+        line.appendChild(chip);
+      }
+    } catch (e) {}
   }
 
   // ===== PRACTICE MODE — song-sheet panel =====
@@ -2287,6 +2336,131 @@
     finally { _flushingReports = false; }
   }
 
+  // ===========================================================================
+  // TRACK RATINGS (MECHANICS_DIRECTION_v2 §D1) — local-first, offline/signed-out safe.
+  // ---------------------------------------------------------------------------
+  // Store: localStorage 'rr_ratings' = { [track_id]: {stars, felt, difficulty, acc, ts} }.
+  // LAST-WRITE-WINS, MERGE-writes (a player may set stars OR felt independently — never clobber
+  // the other). This holds only THIS device's own rating (results pre-fill + optimistic display).
+  // The COMMUNITY aggregates (rating_avg / rating_count / felt_median) do NOT live here — they ride
+  // the catalog payload (GET /tracks, GET /track/:id) and are read DEFENSIVELY at the render sites
+  // (absent until the backend ships → render nothing; never throw; never show "0 ratings").
+  //
+  // The offline queue (rr_ratings_queue) + drain MIRROR submitReport / rr_reports_queue EXACTLY: a
+  // failed/offline POST queues locally; flushRatingsQueue() drains it on the next opportunity (called
+  // beside flushReportsQueue in refreshAdmin after a real sign-in). Held-safe: pure additive UI + a new
+  // localStorage key — NO score / economy / launch path touched.
+  // ===========================================================================
+  var RATINGS_KEY = 'rr_ratings';
+  function _loadRatings() {
+    try { var o = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}'); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; }
+    catch (e) { return {}; }
+  }
+  function _saveRatings(o) { try { localStorage.setItem(RATINGS_KEY, JSON.stringify(o || {})); } catch (e) {} }
+  // { stars, felt } for pre-filling the results widget; null if this device never rated the track.
+  function ratingFor(trackId) {
+    if (!trackId) return null;
+    try {
+      var r = _loadRatings()[trackId];
+      if (!r) return null;
+      return { stars: (r.stars != null ? r.stars : null), felt: (r.felt != null ? r.felt : null) };
+    } catch (e) { return null; }
+  }
+  // felt_difficulty 1..5 → semantic FEEL label (owner wording). Out-of-range → '' (render nothing).
+  var FEEL_LABELS = ['', 'CHILL', 'FAIR', 'TESTED ME', 'BRUTAL', 'UNFAIR'];
+  function _feelLabel(n) { n = Math.round(Number(n)); return (n >= 1 && n <= 5) ? FEEL_LABELS[n] : ''; }
+  // felt_median may be a bare number OR a per-tier map ({easy,medium,hard,rift,overall}). Pick the selected
+  // tier, falling back to overall/all, then any numeric value. null when absent/unusable.
+  function _feltMedian(fm, tier) {
+    if (fm == null) return null;
+    if (typeof fm === 'number') return isFinite(fm) ? fm : null;
+    if (typeof fm === 'object') {
+      if (tier && fm[tier] != null && isFinite(fm[tier])) return Number(fm[tier]);
+      if (fm.overall != null && isFinite(fm.overall)) return Number(fm.overall);
+      if (fm.all != null && isFinite(fm.all)) return Number(fm.all);
+      for (var k in fm) { if (fm[k] != null && isFinite(fm[k])) return Number(fm[k]); }
+    }
+    return null;
+  }
+  var RATINGS_QUEUE_KEY = 'rr_ratings_queue';
+  var RATINGS_QUEUE_MAX = 50;   // local safety cap — mirrors REPORTS_QUEUE_MAX
+  function _loadRatingsQueue() {
+    try { var a = JSON.parse(localStorage.getItem(RATINGS_QUEUE_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+  }
+  function _saveRatingsQueue(a) {
+    try { localStorage.setItem(RATINGS_QUEUE_KEY, JSON.stringify(a.slice(-RATINGS_QUEUE_MAX))); } catch (e) {}
+  }
+  // Merge-write the local store, then POST to game-catalog /ratings when the API is reachable AND the user is
+  // signed in; on network failure QUEUE the payload (rr_ratings_queue) — same live-first-then-queue shape as
+  // submitReport. Returns { ok, queued, rating_avg?, rating_count?, felt_median? } — the fresh aggregate the
+  // backend echoes is surfaced AND stashed on the track object so the UI can update instantly.
+  async function rateTrack(trackId, opts) {
+    opts = opts || {};
+    if (!trackId) return { ok: false, error: 'missing-track' };
+    // 1) LOCAL-FIRST merge (last write wins per field — stars and felt independent, never clobber the other).
+    var o = _loadRatings();
+    var prev = o[trackId] || {};
+    var rec = {
+      stars: (opts.stars != null ? (opts.stars | 0) : (prev.stars != null ? prev.stars : null)),
+      felt:  (opts.felt  != null ? (opts.felt  | 0) : (prev.felt  != null ? prev.felt  : null)),
+      difficulty: (opts.difficulty != null ? opts.difficulty : (prev.difficulty != null ? prev.difficulty : null)),
+      acc:   (opts.acc   != null ? opts.acc   : (prev.acc   != null ? prev.acc   : null)),
+      ts: Date.now()
+    };
+    o[trackId] = rec;
+    _saveRatings(o);
+    // POST body — matches the D2 contract { track_id, stars?, felt?, difficulty, accuracy? }. We queue/POST the
+    // MERGED state (not just this delta) so a drain is idempotent regardless of the server's upsert-merge semantics.
+    var body = { track_id: trackId, difficulty: rec.difficulty || null };
+    if (rec.stars != null) body.stars = rec.stars;
+    if (rec.felt  != null) body.felt  = rec.felt;
+    if (rec.acc   != null) body.accuracy = rec.acc;
+    // 2) Guests / no API → local-only (no anon endpoint by design — anti-abuse for free).
+    if (!API_BASE) return { ok: true, queued: false, local: true };
+    var tk = null;
+    try { tk = await getToken(); } catch (e) { tk = null; }
+    if (!tk) return { ok: true, queued: false, local: true };
+    try {
+      var out = await api('/ratings', { method: 'POST', body: body, auth: true });   // { ok, rating_avg, rating_count, felt_median? }
+      if (out) {
+        try {
+          var t = catalogTracks.find(function (x) { return x.id === trackId; });
+          if (t) {
+            if (out.rating_avg   != null) t.rating_avg = out.rating_avg;
+            if (out.rating_count != null) t.rating_count = out.rating_count;
+            if (out.felt_median  != null) t.felt_median = out.felt_median;
+          }
+        } catch (e) {}
+      }
+      return { ok: true, queued: false, rating_avg: out && out.rating_avg, rating_count: out && out.rating_count, felt_median: out && out.felt_median };
+    } catch (postErr) {
+      var q = _loadRatingsQueue(); q.push(body); _saveRatingsQueue(q);
+      return { ok: true, queued: true };
+    }
+  }
+  // Drains rr_ratings_queue by POSTing each entry to /ratings; an entry is dropped only on a confirmed success,
+  // anything still failing stays queued for the next opportunity. Safe to call often — no-ops when empty/offline.
+  // MIRRORS flushReportsQueue exactly.
+  var _flushingRatings = false;
+  async function flushRatingsQueue() {
+    if (_flushingRatings) return { flushed: 0, remaining: 0 };
+    _flushingRatings = true;
+    try {
+      var q = _loadRatingsQueue();
+      if (!q.length) return { flushed: 0, remaining: 0 };
+      var remaining = [];
+      var flushed = 0;
+      for (var i = 0; i < q.length; i++) {
+        try { await api('/ratings', { method: 'POST', body: q[i], auth: true }); flushed++; }
+        catch (e) { remaining.push(q[i]); }
+      }
+      _saveRatingsQueue(remaining);
+      return { flushed: flushed, remaining: remaining.length };
+    } catch (e) { return { flushed: 0, remaining: 0 }; }
+    finally { _flushingRatings = false; }
+  }
+
   // build119 p1: SANCTIONS client — GET /game-catalog/sanctions/me (authed, derives user from the JWT, no
   // params). Returns the sanction/mute/pending_notices object described in the backend contract, or null when
   // signed out / unreachable / anything hiccups — this must NEVER throw, and a null/empty result must be
@@ -2314,6 +2488,8 @@
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
     submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback
     flushReportsQueue, // build119 p1: drains rr_reports_queue against the live endpoint — call opportunistically (e.g. after boot/getUser)
+    rateTrack, ratingFor, flushRatingsQueue,   // D1 (ratings): rateTrack({stars?,felt?}) local-first + POST /ratings (rr_ratings_queue drain mirrors reports); ratingFor = pre-fill; flush drains the queue
+
     getSanctions, ackNotice,   // build119 p1: moderation — GET /sanctions/me + POST /notifications/:id/ack (both authed, fail-soft to null/false)
     // identity + Sparks shell (UI reads these; real /sparks API later)
     getUser, onAuthChange, getSparks, isAdmin, refreshAdmin,

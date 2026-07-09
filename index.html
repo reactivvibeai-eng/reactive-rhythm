@@ -371,6 +371,25 @@
   .diff-btn[data-diff="rift"].active .lvl { color: #e0a93f; }
   .diff-btn.locked { opacity: 0.45; cursor: not-allowed; }
   .diff-btn.locked .lvl { color: var(--ink-dim); }
+  /* RATINGS (Fable v2 D1): inline results feedback — gold stars + semantic difficulty chips. Warm-dark, brand gold. */
+  .results-rate { display:flex; flex-direction:column; gap:10px; align-items:center; margin:14px auto 0; padding:14px 18px; max-width:440px;
+    background:rgba(20,13,11,0.55); border:1px solid rgba(224,169,63,0.18); border-radius:12px; }
+  .results-rate:not([hidden]) { animation: rrRateIn .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rrRateIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .rr-rate-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:center; width:100%; }
+  .rr-rate-label { font-family:'Chakra Petch',sans-serif; font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:var(--ink-dim); min-width:118px; text-align:right; }
+  .rr-stars { display:flex; gap:4px; }
+  .rr-star { font-size:24px; line-height:1; background:none; border:none; cursor:pointer; color:#4a4340; padding:2px; transition:color .12s, transform .12s; }
+  .rr-star:hover, .rr-star.on { color:#e0a93f; }
+  .rr-star:hover { transform:scale(1.15); }
+  .rr-star:focus-visible { outline:2px solid #e0a93f; outline-offset:2px; border-radius:4px; }
+  .rr-feel { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+  .rr-chip { font-family:'Chakra Petch',sans-serif; font-size:10px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;
+    padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,0.02); color:var(--ink-dim); transition:all .12s; }
+  .rr-chip:hover { color:var(--ink); border-color:rgba(224,169,63,0.4); }
+  .rr-chip.on { color:#0f0a09; background:#e0a93f; border-color:#e0a93f; font-weight:600; }
+  .rr-chip:focus-visible { outline:2px solid #e0a93f; outline-offset:2px; }
+  @media (max-width:520px){ .rr-rate-label{ min-width:0; text-align:center; } .rr-rate-row{ flex-direction:column; gap:6px; } }
   /* ============ ENVIRONMENT PICKER (build6) — choose a LEVEL/ENVIRONMENT for the picked song ============ */
   .env-row { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 8px;
     scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
@@ -7523,6 +7542,29 @@
       <div class="results-grade-scale" id="results-grade-scale" aria-hidden="true" style="font-family:'Oxanium',sans-serif;font-size:11px;letter-spacing:0.22em;color:#6e6661;margin-top:-2px;"></div>
       <div class="results-stars" id="results-stars" aria-hidden="true"></div>
       <div class="results-badges" id="results-badges"></div>
+      <!-- RATINGS (D1, Fable v2): inline, non-modal, un-hidden by game.js ~1.2s after the grade on a real (non-practice/preview/MP/demo) run. Two optional rows; zero required interaction. -->
+      <div class="results-rate" id="results-rate" hidden>
+        <div class="rr-rate-row">
+          <span class="rr-rate-label">Rate this track</span>
+          <div class="rr-stars" id="rr-rate-stars" role="radiogroup" aria-label="Rate this track, 1 to 5 stars">
+            <button type="button" class="rr-star" data-v="1" role="radio" aria-checked="false" aria-label="1 star">★</button>
+            <button type="button" class="rr-star" data-v="2" role="radio" aria-checked="false" aria-label="2 stars">★</button>
+            <button type="button" class="rr-star" data-v="3" role="radio" aria-checked="false" aria-label="3 stars">★</button>
+            <button type="button" class="rr-star" data-v="4" role="radio" aria-checked="false" aria-label="4 stars">★</button>
+            <button type="button" class="rr-star" data-v="5" role="radio" aria-checked="false" aria-label="5 stars">★</button>
+          </div>
+        </div>
+        <div class="rr-rate-row">
+          <span class="rr-rate-label">How did it feel?</span>
+          <div class="rr-feel" id="rr-rate-feel" role="radiogroup" aria-label="How did this difficulty feel?">
+            <button type="button" class="rr-chip" data-v="1" role="radio" aria-checked="false">Chill</button>
+            <button type="button" class="rr-chip" data-v="2" role="radio" aria-checked="false">Fair</button>
+            <button type="button" class="rr-chip" data-v="3" role="radio" aria-checked="false">Tested me</button>
+            <button type="button" class="rr-chip" data-v="4" role="radio" aria-checked="false">Brutal</button>
+            <button type="button" class="rr-chip" data-v="5" role="radio" aria-checked="false">Unfair</button>
+          </div>
+        </div>
+      </div>
       <!-- v253 (#84): ENCORE moment — on a strong finish (S/A or Full Combo) the crowd "wants more", inviting another run. -->
       <div class="results-encore" id="results-encore" hidden>
         <span class="enc-chant">ENCORE!</span>

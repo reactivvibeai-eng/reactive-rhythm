@@ -21,6 +21,20 @@
   function setPal(el, seed) { const p = pal(seed); el.style.setProperty('--c1', p[0]); el.style.setProperty('--c2', p[1]); }
   function gradeClass(g) { return 'g-' + (g || 'D'); }
   function initial(s) { return (s || '?').trim().charAt(0).toUpperCase(); }
+  // D1 (ratings): compact community-rating chip (★ 4.2, gold) for song rows. DEFENSIVE — reads
+  // t.rating_avg / t.rating_count off the track (absent until the backend ships → returns null). Shows ONLY
+  // at rating_count >= 3 (below threshold: nothing — no "no ratings" noise, no cold-start shame).
+  function ratingChip(t) {
+    try {
+      var avg = Number(t && t.rating_avg), cnt = Number(t && t.rating_count);
+      if (!isFinite(avg) || !isFinite(cnt) || cnt < 3) return null;
+      var el = document.createElement('span');
+      el.className = 'sc-rating';
+      el.style.cssText = 'display:inline-flex;align-items:center;gap:2px;font-family:Oxanium,sans-serif;font-size:11px;font-weight:600;color:#e0a93f;letter-spacing:0.02em;';
+      el.textContent = '★ ' + avg.toFixed(1);
+      return el;
+    } catch (e) { return null; }
+  }
   // Backend-supplied image URLs (album cover_url is user-authored) → only allow http(s)/protocol-relative,
   // strip control chars, and escapeHtml for safe interpolation into an src="..." attribute. Blocks
   // javascript:/data: scheme injection. Empty → '' (caller renders a fallback tile). Mirrors multiplayer.js safeUrl.
@@ -140,12 +154,17 @@
     const bc = el.querySelector('.cover-badges');
     if (bc) {
       bc.innerHTML = '';
-      const badges = Array.isArray(t.badges) ? t.badges : [];
+      const badges = Array.isArray(t.badges) ? t.badges.slice() : [];
+      // D1 (ratings): the community rating rides the EXISTING badges pipeline as {type:'rating',avg,count} (n>=3),
+      // reusing the chip layout — no new system. Prepend onto a COPY (never mutate t.badges — covers are pooled/re-filled).
+      { const _ra = Number(t.rating_avg), _rn = Number(t.rating_count);
+        if (isFinite(_ra) && isFinite(_rn) && _rn >= 3) badges.unshift({ type: 'rating', avg: _ra, count: _rn }); }
       badges.slice(0, 3).forEach(b => {
         if (!b || !b.type) return;
         const chip = document.createElement('span');
         let cls = 'cbadge', txt = '';
         if (b.type === 'golden_buzzer') { return; }   /* Golden Buzzer now has its OWN dedicated treatment (ring/crown/tag below) driven by the golden_buzzer field — skip the badges-array chip so there's one source of truth, no double-mark */
+        else if (b.type === 'rating') { cls += ' rating'; txt = '★ ' + (isFinite(Number(b.avg)) ? Number(b.avg).toFixed(1) : ''); chip.style.color = '#e0a93f'; chip.style.fontWeight = '600'; }
         else if (b.type === 'judge_grade') { cls += ' jg ' + gradeClass(b.tier); txt = b.tier || b.label || ''; }
         else if (b.type === 'hot') { cls += ' hot'; txt = b.label || 'HOT'; }
         else { cls += ' pick'; txt = b.label || ''; }
@@ -641,6 +660,8 @@
     }
     // right — status pill (not ready) · grade badge · or chevron
     const right = document.createElement('span'); right.className = 'sc-right';
+    // D1 (ratings): community rating (★ 4.2) leads the right cluster, before the sc-grade chip. Defensive (n>=3 or nothing).
+    { const _rc = ratingChip(t); if (_rc) right.appendChild(_rc); }
     const ready = RC().trackReady(t);
     if (!ready) {
       card.classList.add('not-ready');
