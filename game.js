@@ -408,6 +408,9 @@
     countdown: $('countdown-screen'), results: $('results'),
   };
   function showScreen(name) {
+    // D1 RATINGS: leaving the results screen re-hides + resets the ratings widget so the next run starts clean
+    // (also cancels any pending ~1.2s show timer). Guarded — a no-op before the widget/state exist.
+    if (name !== 'results') { try { _resetRatingsWidget(); } catch (e) {} }
     // clear any per-level visual theme ONLY when truly leaving gameplay (back to library or results).
     // NOT on 'loading' — loading happens AFTER launchLevel() applies the theme/backdrop/reactive cards,
     // so clearing here wiped the level's whole identity mid-launch (it played plain). Bug fixed.
@@ -2209,6 +2212,41 @@
         n._sub = (per > 0 && sub > 0) ? (function () { const m = ((Math.round((n.time - ph) / sub) % 4) + 4) % 4; return m === 0 ? 0 : m === 2 ? 1 : 2; })() : 0;
       }
     })();
+    // ---- T7 FIRST-ENCOUNTER TEACHING post-pass (spec C1/C2) — DRIFT (Easy) ONLY, never Med/Hard/RIFT, never MP.
+    // (1) ISOLATE the first hold + first rail: ≥1.5s of clear air before and after, by DROPPING ONLY invented `_fill`
+    //     notes in the bubble (never a real onset). This is the DRIFT on-ramp — one mechanic at a time.
+    // (2) TAG up to the first 2 not-yet-learned heads PER MECHANIC with n._teach='hold'|'rail' (read from the
+    //     per-profile rr_hints store) so drawNote can show a one-time in-world "HOLD"/"SLIDE ▸" chip. The chart
+    //     decides, the render obeys — no per-frame store reads. The counter is bumped on a CLEAN completion (see
+    //     _teachCredit) and, at 2, a rebuilt chart emits 0 tags (retired forever). Held-safe: Easy-only tags + filler
+    //     trims; P2 never reads _teach for scoring, and its own hold path never bumps the counter.
+    (function () {
+      try {
+        if (difficulty !== 'easy') return;
+        if (window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()) return;   // never in MP
+        const AIR = 1.5;
+        const _isolate = (h) => {
+          if (!h) return;
+          const t0 = h.time, t1 = h.time + (h.hold || 0);
+          for (let i = notes.length - 1; i >= 0; i--) {
+            const n = notes[i];
+            if (n === h || !n._fill) continue;
+            if ((n.time >= t0 - AIR && n.time < t0 - 1e-6) || (n.time > t1 + 1e-6 && n.time <= t1 + AIR)) notes.splice(i, 1);
+          }
+        };
+        _isolate(notes.find(n => n.type === 'hold'));
+        _isolate(notes.find(n => n.type === 'rail'));
+        // tag heads from the per-profile counters (cap 2 per mechanic; only the not-yet-learned remainder is tagged)
+        let hints = { hold: 0, rail: 0 };
+        try { const s = JSON.parse(localStorage.getItem('rr_hints') || '{}'); if (s && typeof s === 'object') { hints.hold = s.hold | 0; hints.rail = s.rail | 0; } } catch (e) {}
+        let tagHold = Math.max(0, 2 - hints.hold), tagRail = Math.max(0, 2 - hints.rail);
+        for (const n of notes) {
+          if (tagHold <= 0 && tagRail <= 0) break;
+          if (n.type === 'rail' && tagRail > 0) { n._teach = 'rail'; tagRail--; }
+          else if (n.type === 'hold' && tagHold > 0) { n._teach = 'hold'; tagHold--; }
+        }
+      } catch (e) {}
+    })();
     try {
       window.__rrChartStats = {
         notes: notes.length,
@@ -3525,6 +3563,117 @@
     setTimeout(() => { if (!runFailed || state !== 'playing') return; _endingLock = false; endGame(); }, 550);
   }
 
+  // ---------- RATINGS show-hook (Fable v2 D1) ------------------------------------------------------------------
+  // The #results-rate widget (markup + CSS live in index.html) is un-hidden ~1.2s AFTER the grade ceremony lands,
+  // on a REAL run ONLY — the SAME real-run gate catalog.recordLocal uses: NOT practice, NOT preview, NOT an MP round,
+  // and a real catalog trackId (the demo / no-track runs return null). Practice/preview/MP/demo keep it hidden.
+  // Held-safe: pure additive UI — persistence is delegated to RhythmCatalog.rateTrack (local-first, POSTs when signed
+  // in). It NEVER touches score/grade/leaderboard. Handlers are bound ONCE (delegated on the two radiogroups).
+  var _ratingsBound = false, _ratingsShowT = 0;
+  var _rateTid = null, _rateDiff = null, _rateAcc = null;
+  // eligibility → the trackId to rate, or null to SUPPRESS (mirrors recordLocal's real-run gate).
+  function _ratingsTidFor(results) {
+    try {
+      if (!results) return null;
+      if (results.practice || results.isPractice) return null;                                   // practice drill
+      if (results.preview || results._preview) return null;                                       // host-review PREVIEW (recordLocal early-returns on it)
+      if (window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()) return null;      // MP round
+      var tid = (window.RhythmCatalog && window.RhythmCatalog.currentTrackId && window.RhythmCatalog.currentTrackId()) || null;
+      return tid || null;                                                                          // demo / no real track → null
+    } catch (e) { return null; }
+  }
+  function _rrRateEl(id) { try { return document.getElementById(id); } catch (e) { return null; } }
+  function _paintStars(v) {
+    var wrap = _rrRateEl('rr-rate-stars'); if (!wrap) return;
+    wrap.querySelectorAll('.rr-star').forEach(function (b) {
+      var on = (parseInt(b.getAttribute('data-v'), 10) || 0) <= v;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+  function _paintFeel(v) {
+    var wrap = _rrRateEl('rr-rate-feel'); if (!wrap) return;
+    wrap.querySelectorAll('.rr-chip').forEach(function (b) {
+      var on = (parseInt(b.getAttribute('data-v'), 10) || 0) === v;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+  // one small gold pulse on the just-selected control (Web Animations API — no CSS dependency; self-cleaning; guarded).
+  function _goldPulse(el) {
+    try {
+      if (!el || !el.animate) return;
+      el.animate(
+        [ { transform: 'scale(1)', filter: 'brightness(1)' },
+          { transform: 'scale(1.28)', filter: 'brightness(1.55) drop-shadow(0 0 6px rgba(224,169,63,0.9))', offset: 0.4 },
+          { transform: 'scale(1)', filter: 'brightness(1)' } ],
+        { duration: 340, easing: 'cubic-bezier(.2,.7,.2,1)' }
+      );
+    } catch (e) {}
+  }
+  function _submitRating(opts, el) {
+    var out = null;
+    try {
+      if (_rateTid && window.RhythmCatalog && window.RhythmCatalog.rateTrack) {
+        out = window.RhythmCatalog.rateTrack(_rateTid, Object.assign({ difficulty: _rateDiff, acc: _rateAcc }, opts));
+      }
+    } catch (e) {}
+    _goldPulse(el);
+    try { _tlog('rating_submit', { stars: (opts && opts.stars) || null, felt: (opts && opts.felt) || null, acc: _rateAcc }); } catch (e) {}   // T9
+    return out;
+  }
+  function _wireRatingsOnce() {
+    if (_ratingsBound) return;
+    var starWrap = _rrRateEl('rr-rate-stars'), feelWrap = _rrRateEl('rr-rate-feel');
+    if (!starWrap || !feelWrap) return;   // markup absent (shouldn't happen) — retry on the next results show
+    _ratingsBound = true;
+    starWrap.addEventListener('click', function (e) {
+      var b = (e.target && e.target.closest) ? e.target.closest('.rr-star') : null; if (!b) return;
+      var v = parseInt(b.getAttribute('data-v'), 10) || 0; if (!v) return;
+      _paintStars(v); _submitRating({ stars: v }, b);
+    });
+    feelWrap.addEventListener('click', function (e) {
+      var b = (e.target && e.target.closest) ? e.target.closest('.rr-chip') : null; if (!b) return;
+      var v = parseInt(b.getAttribute('data-v'), 10) || 0; if (!v) return;
+      _paintFeel(v); _submitRating({ felt: v }, b);
+    });
+    // keyboard: arrow keys ROVE focus within each radiogroup (Enter/Space activate natively on the <button>). Scoped
+    // to the group's own buttons — never a global key, so the existing results Enter/Esc flow is untouched.
+    function _rove(wrap, sel) {
+      wrap.addEventListener('keydown', function (e) {
+        var k = e.key;
+        if (k !== 'ArrowRight' && k !== 'ArrowLeft' && k !== 'ArrowUp' && k !== 'ArrowDown') return;
+        var btns = Array.prototype.slice.call(wrap.querySelectorAll(sel));
+        var i = btns.indexOf(document.activeElement); if (i < 0) i = 0;
+        var dir = (k === 'ArrowRight' || k === 'ArrowDown') ? 1 : -1;
+        var ni = Math.max(0, Math.min(btns.length - 1, i + dir));
+        if (btns[ni]) { btns[ni].focus(); e.preventDefault(); }
+      });
+    }
+    _rove(starWrap, '.rr-star'); _rove(feelWrap, '.rr-chip');
+  }
+  function _resetRatingsWidget() {
+    try { if (_ratingsShowT) { clearTimeout(_ratingsShowT); _ratingsShowT = 0; } } catch (e) {}
+    var panel = _rrRateEl('results-rate');
+    if (panel) panel.setAttribute('hidden', '');
+    try { _paintStars(0); _paintFeel(0); } catch (e) {}
+  }
+  function _maybeShowRatings(results, accFrac) {
+    _resetRatingsWidget();                                   // always start clean (cancels any pending show + clears selections)
+    var tid = _ratingsTidFor(results);
+    if (!tid) return;                                        // suppressed — the panel stays hidden
+    _rateTid = tid; _rateDiff = difficulty; _rateAcc = (typeof accFrac === 'number' ? accFrac : null);
+    _wireRatingsOnce();
+    _ratingsShowT = setTimeout(function () {
+      _ratingsShowT = 0;
+      if (state !== 'results') return;                       // left the screen during the delay — don't pop it in
+      try {
+        var prev = (window.RhythmCatalog && window.RhythmCatalog.ratingFor) ? window.RhythmCatalog.ratingFor(tid) : null;
+        if (prev) { if (prev.stars) _paintStars(prev.stars | 0); if (prev.felt) _paintFeel(prev.felt | 0); }   // pre-lit: tap to change
+      } catch (e) {}
+      var panel = _rrRateEl('results-rate');
+      if (panel) panel.removeAttribute('hidden');            // the CSS :not([hidden]) entrance animation plays
+    }, 1200);
+  }
+
   async function endGame() {
     // build108: re-entry guard — failRun()'s deferred endGame() (550ms wipeout beat) plus any other caller
     // (player.onended, the song-duration check, the __rrDebug.endRun dev hook) must never run the results/
@@ -3600,6 +3749,9 @@
     }
     // recordLocal just set results._newBest/_gradeUp — pulse the SHARE button if this run is a brag.
     try { if (!results.failed) pulseShareIfBrag(results, grade); } catch (e) {}
+    // D1 RATINGS: un-hide #results-rate ~1.2s after the grade, on a REAL run only (practice/preview/MP/demo keep it
+    // hidden). Same eligibility gate as recordLocal's real-run path; pre-fills a prior rating. Held-safe (UI only).
+    try { _maybeShowRatings(results, accFrac); } catch (e) {}
 
     // telemetry: song_complete (finished) vs run_fail (Fail Mode ended early). NON-PII — ids/numbers only.
     try {
@@ -4072,9 +4224,40 @@
     const cap = _tp.comboCap + 1;                       // overdrive adds one tier above the base cap
     return Math.min(MAX_MULT, Math.min(odActive ? cap : _tp.comboCap, odActive ? ct + 1 : ct));   // v258: hard-clamp to MAX_MULT (=4) — the 'tight' profile's comboCap:5 + overdrive could reach 6× and bust the notes_total*1500 ceiling
   }
+  // T9 telemetry — generic swap-seam-safe sink (consent-gated + fire-and-forget inside RhythmTelemetry). Adds the
+  // live trackId + difficulty to every mechanic event. Never throws; a missing/absent telemetry module is a no-op.
+  function _tlog(name, props) {
+    try {
+      if (!(window.RhythmTelemetry && window.RhythmTelemetry.event)) return;
+      var tid = null;
+      try { tid = (session && (session.trackId || (session.meta && session.meta.id))) || null; } catch (e) { tid = null; }
+      var row = { trackId: tid, difficulty: difficulty };
+      if (props) for (var k in props) row[k] = props[k];
+      window.RhythmTelemetry.event(name, row);
+    } catch (e) {}
+  }
+  // T7 teaching counter — per-profile rr_hints {hold, rail}, capped at 2. Read by buildNotes to decide tags; bumped
+  // here on a CLEAN completion so the glyph retires forever once the mechanic is learned. Never throws.
+  function _bumpHint(kind) {
+    try {
+      const s = JSON.parse(localStorage.getItem('rr_hints') || '{}');
+      const o = { hold: (s && s.hold | 0) || 0, rail: (s && s.rail | 0) || 0 };
+      if ((kind === 'hold' || kind === 'rail') && o[kind] < 2) o[kind]++;
+      localStorage.setItem('rr_hints', JSON.stringify(o));
+    } catch (e) {}
+  }
+  // Credit a taught head's clean completion exactly once. A rail counts only when ALL transfers were made (the captured
+  // segment index reached the waypoint count). P2 never calls this (it uses its own P.holdNote path) → never-for-P2.
+  function _teachCredit(hn, seg) {
+    if (!hn || !hn._teach || hn._teachDone) return;
+    if (hn._teach === 'rail') { const need = hn.rail ? hn.rail.length : 1; if ((seg || 0) < need) return; }
+    hn._teachDone = true;
+    _bumpHint(hn._teach);
+  }
   // sustain reached its tail end while held — pay any remaining fraction + a release pop
   function completeHold(lane) {
     const hn = holdNote[lane]; if (!hn) return;
+    const _seg = holdRailSeg[lane] || 0;   // T7: capture the rail segment BEFORE the reset below (all-transfers check)
     const rem = Math.max(0, 1 - holdScored[lane]);
     if (rem > 0.001) score += rem * holdTotalFor(hn) * curMult();
     holdScored[lane] = 1; holdNote[lane] = null; holdRailSeg[lane] = 0;
@@ -4083,6 +4266,8 @@
     emitFx('holdend', 'hold', lane);   // build8c: sustain banked — column pulse up the lane
     flashJudgment('HOLD!', '#e0a93f');
     if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    try { _teachCredit(hn, _seg); } catch (e) {}                                                    // T7: clean completion → learn
+    _tlog('hold_banked', { lane: lane, type: hn.type, banked: 1, via: 'complete' });                // T9
     updateHUD();
   }
   // let go before the tail — build104 s6d: THREE release bands (a binary cliff at 0.75 made a 74% hold feel
@@ -4095,6 +4280,7 @@
     const hn = holdNote[lane]; if (!hn) return;
     const GRACE = 0.75;                 // held at least this far → the release is forgiven (tail grace)
     const SLIP = 0.45;                  // held most of it → keep the streak, forfeit the rest of the payout
+    const _seg0 = holdRailSeg[lane] || 0, _bankAt = holdScored[lane] || 0;   // T7/T9: capture before the reset below
     holdNote[lane] = null; holdRailSeg[lane] = 0;   // SLIDE RAILS: a rail resolves through these SAME bands (banked fraction is path-global)
     if (holdScored[lane] >= GRACE) {    // home stretch → count it as a clean hold
       const rem = Math.max(0, 1 - holdScored[lane]);
@@ -4104,12 +4290,16 @@
       spawnHitParticles(lane, 'great');
       flashJudgment('HOLD!', '#e0a93f');
       if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+      try { _teachCredit(hn, _seg0); } catch (e) {}                                                 // T7: GRACE band is a clean bank → learn
+      _tlog('hold_banked', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3), via: 'grace' });   // T9
     } else if (holdScored[lane] >= SLIP) {   // SLIP band — soft landing, no combo break, no squelch, no stability hit
       hn.dropped = true;                // the remaining beam dims (render's 'resolving' state)
       lanePluckT[lane] = 9;             // the string settles
       flashJudgment('SLIP', '#dad7d2');
+      _tlog('hold_slipped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
+      _tlog('hold_dropped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
       // build122 review: this is the THIRD combo-break site — the miss/bomb sites snapshot the CLUTCH state
       // but this one omitted it, so a dropped-hold peak could leak stale-high across the broken streak and
       // spuriously arm a CLUTCH the player never earned. Mirror the miss/bomb reset (observational only).
@@ -4146,6 +4336,7 @@
     flashJudgment('SLIDE ▸', '#e0a93f');
     try { spawnHitParticles(toLane, 'great'); emitFx('hit', 'great', toLane); } catch (e) {}
     if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
+    _tlog('rail_transfer', { from: fromLane, to: toLane, seg: nextSeg, made: true });   // T9: transfer MADE (juice only, no score)
   }
   // per-frame liveness + transfer for the active rail in lane `lane`. Returns 'pay' (fall through to the shared sustain
   // payout on this lane), 'migrated' (slot moved this frame → skip payout here), or 'drop' (resolved via endHoldEarly's
@@ -4160,8 +4351,10 @@
       if (jt <= w1) {                                                                               // inside window: dest down → transfer; else either-down keeps alive
         if (laneDown[newLane]) { _railMigrate(lane, newLane, note, seg + 1); return 'migrated'; }
         if (laneDown[lane]) return 'pay';
+        _tlog('rail_transfer', { from: lane, to: newLane, seg: seg, made: false, banked: +(holdScored[lane] || 0).toFixed(3) });   // T9: transfer MISSED (neither lane down in-window)
         endHoldEarly(lane); return 'drop';                                                          // neither down inside the window
       }
+      _tlog('rail_transfer', { from: lane, to: newLane, seg: seg, made: false, banked: +(holdScored[lane] || 0).toFixed(3) });     // T9: transfer MISSED (window closed)
       endHoldEarly(lane); return 'drop';                                                            // window closed, transfer missed → bands
     }
     if (!laneDown[lane]) { endHoldEarly(lane); return 'drop'; }                                     // past all transfers → hold-like on the last segment
@@ -4208,7 +4401,10 @@
       // is not viable in a throttled tab).
       seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
       beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
-      notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0, rail: (n.type === 'rail' && n.rail) ? n.rail.map(w => [Math.round(w.t * 1000) / 1000, w.lane]) : 0 })),   // build104 s5/6 diag (strip at freeze)
+      notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0, teach: n._teach || 0, rail: (n.type === 'rail' && n.rail) ? n.rail.map(w => [Math.round(w.t * 1000) / 1000, w.lane]) : 0 })),   // build104 s5/6 diag (strip at freeze); teach = T7 head glyph tag
+      // T7 teaching (strip at freeze): the per-profile learn counters (capped at 2 each). buildNotes tags heads only while a counter is < 2.
+      hints: () => { try { const s = JSON.parse(localStorage.getItem('rr_hints') || '{}'); return { hold: (s.hold | 0) || 0, rail: (s.rail | 0) || 0 }; } catch (e) { return { hold: 0, rail: 0 }; } },
+      setHints: (h, r) => { try { localStorage.setItem('rr_hints', JSON.stringify({ hold: h | 0, rail: r | 0 })); } catch (e) {} return window.__rrDebug.hints(); },   // T7 test lever: seed/clear the learn counters
       // ---- SLIDE RAILS dev hooks (spec A2.5 / A1.3 / A3.3; strip at content-freeze) --------------------------------
       railsOn: (v) => { if (v === undefined) return RAILS_ON(); try { localStorage.setItem('rr_rails', v ? '1' : '0'); } catch (e) {} return RAILS_ON(); },
       rail: () => {   // live state of the active rail (the migrating slot)
@@ -5567,6 +5763,7 @@
       spawnMissDud(note.lane);
       _armJudgePriority(420);
       flashJudgment('◆ SAVED', '#e0a93f');                 // ...but the combo LIVES — a crimson-gold dopamine beat, not a mercy
+      _tlog('flow_shield', { lane: note.lane, combo: combo, odLeft: +overdrive.toFixed(3), shields: _flowShieldCount });   // T9
       updateHUD();
       return;                                              // combo / comboTierCur deliberately NOT reset
     }
@@ -6585,15 +6782,28 @@
         ctx.restore();
         continue;
       }
-      // CHORD BAR — a glowing rail connecting the simultaneous notes ("hit the bar together")
+      // CHORD CROSSBAR (T6 grammar, spec B1) — a CHROME CAPSULE joining the simultaneous gems so the silhouette
+      // reads as ONE object (a dumbbell: bar + two gem heads), "hit together". Rebuilt from the old additive glow
+      // into a solid source-over metal bar: a near-black under-rim (the object edge), a brushed-chrome body
+      // (vertical light→dark gradient), and a warm-white top sheen. Round caps land UNDER each gem centre so the
+      // bar flares into the gem rims. Drawn under the gems (this block precedes drawNote). Renders under fxLite/
+      // reduceMotion (readability, not juice). Visual-only — judging/tap-zones/sizes untouched.
       if (n.chordLead && n.chordLanes && n.chordLanes.length > 1 && !n.judged) {
         let x0 = Infinity, x1 = -Infinity;
         for (let c = 0; c < n.chordLanes.length; c++) { const xx = noteX(n.chordLanes[c], d); if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; }
-        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
-        ctx.strokeStyle = 'rgba(255,150,70,' + (0.28 * sc) + ')'; ctx.lineWidth = lw * 0.42 * sc; ctx.shadowColor = '#ff2a30'; ctx.shadowBlur = 12 * sc;
+        const capW = lw * 0.30 * sc;                                   // capsule thickness (the crossbar height)
+        ctx.save(); ctx.lineCap = 'round';
+        // 1) dark under-rim — a near-black stroke slightly wider than the body = the object's silhouette edge
+        ctx.strokeStyle = 'rgba(8,5,4,0.92)'; ctx.lineWidth = capW + Math.max(2, lw * 0.16 * sc);
         ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,235,210,' + (0.6 * sc) + ')'; ctx.lineWidth = Math.max(1.2, lw * 0.1 * sc); ctx.shadowBlur = 6 * sc;
+        // 2) brushed-chrome body — a vertical light→dark gradient across the thickness = metal, not glow
+        const cg = ctx.createLinearGradient(0, ny - capW * 0.5, 0, ny + capW * 0.5);
+        cg.addColorStop(0, '#f3efe9'); cg.addColorStop(0.4, '#d8d2cb'); cg.addColorStop(0.5, '#ece7e3'); cg.addColorStop(0.62, '#b7b0a8'); cg.addColorStop(1, '#6f6862');
+        ctx.strokeStyle = cg; ctx.lineWidth = capW;
         ctx.beginPath(); ctx.moveTo(x0, ny); ctx.lineTo(x1, ny); ctx.stroke();
+        // 3) warm-white sheen along the top edge
+        ctx.strokeStyle = 'rgba(255,250,244,0.75)'; ctx.lineWidth = Math.max(1, capW * 0.18);
+        ctx.beginPath(); ctx.moveTo(x0, ny - capW * 0.28); ctx.lineTo(x1, ny - capW * 0.28); ctx.stroke();
         ctx.restore();
       }
       // build29: lane-colored comet trail streaming up the string behind the MARBLE (approaching only) — matches
@@ -6726,6 +6936,9 @@
         }
       }
       if (!resolving && !(n.type === 'rail' && held)) {   // SLIDE RAILS: a struck rail's head has retracted — the ribbon + catcher glow carry it (no gem at the old lane)
+        // T6 grammar: stash the head's live hold state so drawNote can render the grip-ring + draining arc (banked
+        // fraction = holdScored on the head lane; 0 while still approaching). Render-only; judging never reads these.
+        if (n.type === 'hold' || n.type === 'rail') { n._hheld = held; n._hres = resolving; n._hbank = (held || resolving) ? (holdScored[n.lane] || 0) : 0; }
         // build109 s2 Step D: travel-axis angle for the approach squash/stretch (visual only — drawNote
         // reads d/angle purely for the transform; hit-judgment geometry stays keyed to nx/ny/note.time
         // elsewhere and is untouched by this). Cheap: one extra noteY sample already using cached fn refs.
@@ -7468,25 +7681,98 @@
       ctx.beginPath(); ctx.arc(cx, y, w * 0.62, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
+    // ---- T6 GRAMMAR: ACCENT SPIKE-RING (spec B3) — 8 short dark-outlined, lane-colored triangular spikes on the
+    // rim = a gear/sunburst silhouette vs the tap's smooth circle. The IDENTITY read (the soft accent aura stays as
+    // juice under its own gate). Tips sit ~1.12× the gem-body radius (well within the existing glow footprint —
+    // silhouette growth stays ≤ +10%). Renders under fxLite/reduceMotion (readability). Visual-only.
+    if (note.type === 'accent' && !note.judged) {
+      const _arc = (LANE_COLORS[note.lane] && LANE_COLORS[note.lane].rgb) || '255,90,60';
+      const rr0 = w * GEM_K * 0.42, rr1 = w * GEM_K * 0.56;   // inner base → outer tip
+      ctx.save(); ctx.translate(cx, y); ctx.lineJoin = 'round';
+      ctx.fillStyle = 'rgba(' + _arc + ',0.95)'; ctx.strokeStyle = 'rgba(8,5,4,0.9)'; ctx.lineWidth = Math.max(1, w * 0.05);
+      for (let s = 0; s < 8; s++) {
+        const a = s / 8 * Math.PI * 2 + Math.PI / 8, bx = Math.cos(a), by = Math.sin(a), px = -by, py = bx, bw = rr0 * 0.34;
+        ctx.beginPath();
+        ctx.moveTo(bx * rr0 + px * bw, by * rr0 + py * bw);
+        ctx.lineTo(bx * rr1, by * rr1);
+        ctx.lineTo(bx * rr0 - px * bw, by * rr0 - py * bw);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // ---- T6 GRAMMAR: HOLD GRIP-RING + DRAIN ARC + 75% GRACE NOTCH (spec B2) — the head gem gains a concentric ring
+    // (dark rim + lane-color inner edge). While sustaining, the lane-color arc DRAINS from full → empty as the core
+    // banks (tracks holdScored, stashed as note._hbank in the render loop). A gold NOTCH marks the 0.75 GRACE point:
+    // once the draining edge reaches it you've banked enough to release clean — the grace made wordless. The ring
+    // hugs the gem (r ≈ 1.16× gem-body radius, a thin stroke within the existing glow → silhouette growth ≤ +10%).
+    // Renders under fxLite/reduceMotion (readability). Visual-only — judging/holdScored are read, never written.
+    if ((note.type === 'hold' || note.type === 'rail') && !note.judged) {
+      const banked = (note._hheld || note._hres) ? Math.max(0, Math.min(1, note._hbank || 0)) : 0;
+      const remaining = 1 - banked, rr = w * GEM_K * 0.58, a0 = -Math.PI / 2;
+      const _hrc = (LANE_COLORS[note.lane] && LANE_COLORS[note.lane].rgb) || '255,90,60';
+      ctx.save(); ctx.translate(cx, y); ctx.lineCap = 'round';
+      // dark rim (the ring's outer silhouette edge)
+      ctx.lineWidth = Math.max(2, w * 0.14); ctx.strokeStyle = 'rgba(8,5,4,0.85)';
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.stroke();
+      // lane-color DRAIN arc — the un-banked remainder, clockwise from 12 o'clock
+      ctx.lineWidth = Math.max(1.4, w * 0.09); ctx.strokeStyle = 'rgba(' + _hrc + ',0.95)';
+      ctx.beginPath(); ctx.arc(0, 0, rr, a0, a0 + Math.PI * 2 * remaining); ctx.stroke();
+      // 0.75 GRACE notch — a gold tick where the draining edge lands at banked=0.75 (i.e. remaining=0.25)
+      const gA = a0 + Math.PI * 2 * 0.25;
+      ctx.strokeStyle = 'rgba(224,169,63,0.95)'; ctx.lineWidth = Math.max(1.4, w * 0.06);
+      ctx.beginPath(); ctx.moveTo(Math.cos(gA) * (rr - w * 0.10), Math.sin(gA) * (rr - w * 0.10)); ctx.lineTo(Math.cos(gA) * (rr + w * 0.10), Math.sin(gA) * (rr + w * 0.10)); ctx.stroke();
+      ctx.restore();
+    }
+    // ---- T7 FIRST-ENCOUNTER TEACHING (spec C2) — a one-time in-world head chip ("HOLD" / "SLIDE ▸") riding the
+    // gem on approach, tagged by buildNotes on Easy only (never Med/Hard/RIFT, never MP; the tag is absent otherwise).
+    // Chakra Petch ~10px warm-white on a near-black rounded chip; fades in as the head nears (d < 0.6). Retired for
+    // good once the mechanic is learned (the tag stops being emitted at 2 successes). Renders under fxLite/reduceMotion.
+    if (note._teach && !note.judged && typeof _d === 'number' && _d < 0.6 && _d >= -0.05) {
+      const _ta = Math.max(0, Math.min(1, (0.6 - _d) / 0.5));
+      let _tlabel = 'HOLD';
+      if (note._teach === 'rail') { let dir = 1; try { if (note.rail && note.rail.length >= 2) dir = (note.rail[1].lane >= note.rail[0].lane) ? 1 : -1; } catch (e) {} _tlabel = dir >= 0 ? 'SLIDE ▸' : '◂ SLIDE'; }
+      ctx.save();
+      ctx.font = '600 10px "Chakra Petch", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const _tw = Math.max(28, ctx.measureText(_tlabel).width + 12), _th = 15, _tcy = y - w * GEM_K * 0.5 - 12;
+      ctx.globalAlpha = _ta;
+      ctx.fillStyle = 'rgba(10,7,6,0.82)'; roundRect(ctx, cx - _tw / 2, _tcy - _th / 2, _tw, _th, 5); ctx.fill();
+      ctx.strokeStyle = 'rgba(224,169,63,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = 'rgba(244,239,233,0.9)'; ctx.fillText(_tlabel, cx, _tcy + 0.5);
+      ctx.restore();
+    }
   }
-  // hazard "bomb": a dark orb with a pulsing red warning halo + a bright ✕ — clearly DON'T hit
+  // hazard "bomb" (T6 grammar, spec B5): the ONLY DIM / DESATURATED object on the board — it must RECEDE, not pop, so
+  // its "don't hit" silhouette is unmistakable. Matte near-greyscale warm fill (R≥G≥B, brand-safe), a THIN ember
+  // outline, hazard chevrons framing the ✕. The old bright accent halo is replaced by a faint ember breath. Bombs are
+  // already EXCLUDED from the note dark-halo/rim lift by construction (they never route through drawNote — the render
+  // loop draws them here and `continue`s). Fuse/warn flipbook FX are untouched (drawn separately in the render loop).
   function drawBomb(cx, y, r) {
     const tt = performance.now() / 1000;
     const pulse = 0.5 + 0.5 * Math.sin(tt * 9);
     ctx.save();
+    // faint ember BREATH (much dimmer than the old accent halo — the bomb recedes into the board)
     ctx.globalCompositeOperation = 'lighter';
-    // build9: bombs adopt the level accent (Skully violet etc.) so hazards read as part of the world;
-    // default (no accent) is byte-identical crimson-ember.
-    ctx.fillStyle = 'rgba(' + (levelAccentRGB || '255,46,24') + ',' + (0.10 + 0.14 * pulse) + ')';
-    ctx.beginPath(); ctx.arc(cx, y, r * 1.9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(120,60,40,' + (0.05 + 0.06 * pulse) + ')';
+    ctx.beginPath(); ctx.arc(cx, y, r * 1.6, 0, Math.PI * 2); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
+    // matte, DESATURATED warm-grey orb (the dead / dim object)
     const g = ctx.createRadialGradient(cx - r * 0.3, y - r * 0.32, r * 0.1, cx, y, r);
-    g.addColorStop(0, '#3a1216'); g.addColorStop(1, '#080304');
+    g.addColorStop(0, '#33302c'); g.addColorStop(1, '#0b0a09');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, y, r, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = Math.max(1.5, r * 0.12); ctx.strokeStyle = 'rgba(' + (levelAccentRGB || '255,64,40') + ',' + (0.55 + 0.45 * pulse) + ')';
+    // THIN ember outline
+    ctx.lineWidth = Math.max(1, r * 0.07); ctx.strokeStyle = 'rgba(200,90,60,' + (0.5 + 0.35 * pulse) + ')';
     ctx.beginPath(); ctx.arc(cx, y, r, 0, Math.PI * 2); ctx.stroke();
-    // the ✕ (do-not-hit)
-    ctx.strokeStyle = 'rgba(255,216,190,0.95)'; ctx.lineWidth = Math.max(1.6, r * 0.16); ctx.lineCap = 'round';
+    // HAZARD CHEVRONS framing the ✕ — four inward-pointing warning ticks at N/E/S/W, just inside the rim
+    ctx.strokeStyle = 'rgba(210,120,80,' + (0.5 + 0.3 * pulse) + ')'; ctx.lineWidth = Math.max(1, r * 0.09); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let q = 0; q < 4; q++) {
+      const a = q * Math.PI / 2, ox = cx + Math.cos(a) * r * 0.82, oy = y + Math.sin(a) * r * 0.82;
+      const pa = a + Math.PI, wx = Math.cos(pa + 0.55), wy = Math.sin(pa + 0.55), vx = Math.cos(pa - 0.55), vy = Math.sin(pa - 0.55);
+      ctx.beginPath();
+      ctx.moveTo(ox + wx * r * 0.2, oy + wy * r * 0.2); ctx.lineTo(ox, oy); ctx.lineTo(ox + vx * r * 0.2, oy + vy * r * 0.2);
+      ctx.stroke();
+    }
+    // the ✕ (do-not-hit) — a dimmer warm-white than before so the whole object stays recessive
+    ctx.strokeStyle = 'rgba(210,190,175,0.8)'; ctx.lineWidth = Math.max(1.5, r * 0.15); ctx.lineCap = 'round';
     const s = r * 0.5;
     ctx.beginPath();
     ctx.moveTo(cx - s, y - s); ctx.lineTo(cx + s, y + s);
