@@ -115,6 +115,7 @@
   var oppPanel = null, oppRaf = 0, _lastSend = 0;
   var pendingOut = null;          // {toId,mid} a challenge I sent, awaiting answer
   var _chalT = null;              // build58: challenge-timeout — a crashed/ignoring opponent must not leave a permanent "WAITING…"
+  var _chalRetry = null;          // build145: re-emit the outgoing 'challenge' broadcast a few times (a single dropped packet = a dead 12s "No response")
   var incoming = {};              // id -> {mid} (challenges TO me)
   var activeNow = false;          // is #multiplayer-screen currently .active
   // ---- v254: P-vs-P COMBAT state (the MP ranked-record model lives just below the helpers) ----
@@ -647,10 +648,24 @@
   function sendChallenge(toId) {
     if (!lobbyCh || !toId || (lobby[toId] && lobby[toId].inMatch)) return;
     pendingOut = { toId: toId, mid: newMatchId() };
-    lobbyCh.send({ type: 'broadcast', event: 'challenge', payload: { fromId: ME.id, fromName: ME.name, toId: toId, mid: pendingOut.mid } });
+    var _mid = pendingOut.mid;
+    var _sendChal = function () { try { lobbyCh.send({ type: 'broadcast', event: 'challenge', payload: { fromId: ME.id, fromName: ME.name, toId: toId, mid: _mid } }); } catch (e) {} };
+    _sendChal();
     banner('mpx-lobby-msg', 'Challenge sent — waiting for a reply…');
     if (_chalT) clearTimeout(_chalT);   // build58: auto-clear a dead challenge so the lobby never locks on a stuck WAITING…
     _chalT = setTimeout(function () { if (pendingOut && pendingOut.toId === toId) { pendingOut = null; banner('mpx-lobby-msg', 'No response — try another player.'); onLobbySync(); } }, 12000);
+    // build145 (MP-reliability #3a): re-emit the 'challenge' a few more times, mirroring acceptChallenge's challenge-ans
+    // retry. A single dropped 'challenge' broadcast used to leave the target never seeing the invite → a full 12s "No
+    // response" (the tester's "calling people in, sometimes they don't connect"). SELF-CANCELS the instant the target
+    // answers (onChallengeAns nulls pendingOut on accept AND decline), the challenge is superseded (mid changes), the
+    // match goes live, or after ~8s (bounded, inside the 12s window). Idempotent on the receiver — onChallenge just
+    // re-sets incoming[fromId]={mid} for the same mid, so a re-received challenge can't double-open anything.
+    if (_chalRetry) clearInterval(_chalRetry);
+    var _ct = 0;
+    _chalRetry = setInterval(function () {
+      if (!lobbyCh || !pendingOut || pendingOut.mid !== _mid || matchLive || ++_ct > 4) { clearInterval(_chalRetry); _chalRetry = null; return; }
+      _sendChal();
+    }, 2000);
     onLobbySync();
   }
   function onChallenge(p) {
