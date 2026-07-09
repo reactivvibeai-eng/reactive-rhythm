@@ -85,6 +85,12 @@
   var meReady = false, oppReady = false;
   var roomOppReady = false;   // playtest-3 (Bug D): the opponent's readiness during the ROOM-waiting stage (before the match channel exists). Match-channel readiness stays in oppReady.
   var _readyRebcT = 0;        // v416 (symmetric-ready): re-broadcast MY room-stage READY every 2s until the start fires, so a single dropped 'room-ready' broadcast can't deadlock the "both READY → GO" handshake.
+  var _matchReadyRebcT = 0;   // MP-reliability FIX #2: the MATCH-channel mirror of _readyRebcT — re-broadcast MY 'ready' until the opponent readies or the match goes live, so a dropped ready on the room→match handoff can't hang the start ("won't start").
+  var _fromRoomArm = false;   // MP-reliability FIX #2: this match came from a room where both sides already readied → keep auto-arming READY until the opponent presence actually lands on the match channel (the old 350ms one-shot missed the softPresence warmup race under load).
+  var _startedAtMs = 0;       // MP-reliability FIX #3: the atMs of the 'start' we already began — a re-emitted 'start' with the same atMs must never re-run beginMatch (idempotent receiver for the start re-emit).
+  var _startRebcT = 0;        // MP-reliability FIX #3: self-cancelling re-emit of the host's 'start' broadcast (a single dropped packet used to strand a late-subscribed guest at the setup screen).
+  var _roomStartRebcT = 0;    // MP-reliability FIX #3: self-cancelling re-emit of 'room-start' (idempotent on the receiver via _roomStartMid).
+  var _roomStartMid = null;   // MP-reliability FIX #3: last handled room-start mid — makes onRoomStart idempotent so a re-emit can't tear down + rebuild the match channel.
   var matchLive = false, finishedLocal = false;
   // build114: AUTHORITATIVE MP CHART — the guest's inbox for the host's broadcast note array (see resolveAndStart /
   // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
@@ -770,6 +776,7 @@
     if (_fromRoom) {
       if (_fromRoom.sel) { sel = _fromRoom.sel; paintSelection(); }
       var fr = _fromRoom; _fromRoom = null;
+      if (!fr.solo) _fromRoomArm = true;   // MP-reliability FIX #2: keep trying to auto-ready until the opponent presence lands (see onMatchPeers) — not just this one 350ms shot.
       setTimeout(function () {
         try {
           // build102s SOLO SHOW START: the host begins with an EMPTY challenger seat — broadcast the real 'start'
@@ -783,11 +790,8 @@
             beginMatch(soloAt, sel);
             return;
           }
-          if (matchRole === 'host' && sel.trackId) broadcastSong();
-          if (sel.trackId && oppPresent) { meReady = true; setReadyBtn();
-            if (matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } });
-            maybeStart();
-          }
+          if (matchRole === 'host' && sel.trackId) broadcastSong();   // deliver the locked song to the guest (idempotent — onSong's 'same' guard won't un-ready an already-armed READY)
+          _armMatchReadyFromRoom();   // FIX #2: arm now if the opponent is already present; otherwise onMatchPeers arms it on the present edge
         } catch (e) {}
       }, 350);   // let opponent presence land on the new channel
     }
@@ -806,6 +810,7 @@
       oppLeft = false;
       if (matchRole === 'host' && sel.trackId && !wasPresent) broadcastSong();   // late-join catch-up
       if (!wasPresent) paintWaitStatus(oppName + ' joined — ' + (matchRole === 'host' ? 'pick a track and hit READY.' : 'the host is choosing a track.'));   // build60: announce the arrival
+      if (!wasPresent) _armMatchReadyFromRoom();   // MP-reliability FIX #2: opponent presence just landed — arm the room→match auto-ready the 350ms one-shot may have missed under load
     } else if (wasPresent) {
       oppLeft = true;
       if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
@@ -853,8 +858,14 @@
     if (matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: _pl }); else if (room && room.id && room.isHost && room.ch) room.ch.send({ type: 'broadcast', event: 'song', payload: _pl }); }
   function onSong(p) {
     if (!p) return;
+    // MP-reliability FIX #2: only UN-READY when the selection actually CHANGED. The room→match handoff catch-up and
+    // onMatchPeers' late-join re-send both RE-broadcast the ALREADY-LOCKED track; that used to zero an already-armed
+    // READY on the peer → the "won't start" deadlock. A genuine re-pick (different track / difficulty / stage) still
+    // un-readies BOTH sides exactly as before (playtest-3 Bug D — stale guest-ready can't auto-start a new track).
+    var _same = !!(sel && sel.trackId && p.trackId === sel.trackId && (p.difficulty || '') === (sel.difficulty || '') && (p.env || '') === (sel.env || ''));
     sel = p; paintSelection();
-    meReady = false; oppReady = false; roomOppReady = false; setReadyBtn(); refreshReadyEnabled();
+    if (!_same) { meReady = false; oppReady = false; roomOppReady = false; }
+    setReadyBtn(); refreshReadyEnabled();
     var rs = $('mpx-readystate'); if (rs) rs.textContent = amPicker() ? 'Track locked. Hit READY.' : 'Host locked a track. Hit READY when set.';
   }
   // v262: the room STAGE (level/environment) options — Arena + every FINISHED level the player OWNS. No Random in MP (the host
@@ -985,6 +996,33 @@
     try { if (room.id && room.ch && !room.show) room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id, settings: mySettings || null } }); } catch (e) {}
   }
   function _stopReadyRebc() { if (_readyRebcT) { clearInterval(_readyRebcT); _readyRebcT = 0; } }
+  // MP-reliability FIX #2/#3: self-cancelling re-emit timers for the room→match handoff.
+  function _stopMatchReadyRebc() { if (_matchReadyRebcT) { clearInterval(_matchReadyRebcT); _matchReadyRebcT = 0; } }
+  function _stopStartRebc() { if (_startRebcT) { clearInterval(_startRebcT); _startRebcT = 0; } }
+  function _stopRoomStartRebc() { if (_roomStartRebcT) { clearInterval(_roomStartRebcT); _roomStartRebcT = 0; } }
+  // FIX #2: the MATCH-channel mirror of the room-stage _readyRebcT — re-broadcast MY 'ready' until the opponent
+  // readies or the match goes live, so a single dropped 'ready' on the handoff can't hang the host waiting on
+  // oppReady forever. Self-cancels; hard-capped so it can never loop unbounded.
+  function _startMatchReadyRebc() {
+    _stopMatchReadyRebc();
+    var _n = 0;
+    _matchReadyRebcT = setInterval(function () {
+      if (!meReady || !matchCh || oppReady || matchLive || ++_n > 15) { _stopMatchReadyRebc(); return; }
+      try { matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } }); } catch (e) {}
+    }, 1800);
+  }
+  // FIX #2: auto-arm READY for a room→match handoff the moment the opponent presence lands on the match channel. The
+  // old handoff armed ONCE at 350ms; if the opponent's first match-channel heartbeat hadn't arrived yet (a normal
+  // softPresence warmup race under load) it NEVER armed and the start deadlocked. _fromRoomArm persists the intent so
+  // BOTH the 350ms attempt AND onMatchPeers' present-edge can arm it. Idempotent (guards on !meReady).
+  function _armMatchReadyFromRoom() {
+    if (!_fromRoomArm || !matchCh || matchLive) return;
+    if (!sel.trackId || !oppPresent || meReady) return;
+    meReady = true; try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {}
+    try { matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } }); } catch (e) {}
+    _startMatchReadyRebc();
+    maybeStart();
+  }
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
@@ -1061,7 +1099,7 @@
       if (room.show && _showSeatOpenEmpty() && !_showSoloArm) { meReady = false; try { setReadyBtn(); } catch (e) {} return; }
       startRoomMatch(); return;
     }
-    if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh) {
+    if (meReady && oppReady && sel.trackId && matchRole === 'host' && matchCh && !matchLive) {   // MP-reliability FIX #3: !matchLive — the guest's new match-ready re-broadcast (FIX #2) can deliver a late 'ready' AFTER we've started; without this guard onReady→maybeStart would re-fire 'start' + beginMatch a second time.
       var atMs = Date.now() + VS_LEADIN_MS;          // lead-in so both schedule together (room for a visible 3·2·1)
       if (room.show) _showAtMs = atMs;               // build102s: show-snap carries the shared start for late arrivals
       matchCombat = (room.id && room.isHost) ? !!room.combat : !!combatOn;   // build69: a ROOM match uses the room's FIXED modifier (every match in the room is consistent); quick-match/challenge uses the host's default
@@ -1077,8 +1115,19 @@
         startSel = Object.assign({}, startSel, { _matchedScroll: 1, _matchedFail: false, _matchedChart: 'musical' });   // canonical fair defaults — never the host's personal scroll/fail/chart
         try { _mySettingsSnapshot = window.RhythmGame.getSettings(); window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
       }
-      matchCh.send({ type: 'broadcast', event: 'start', payload: { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings } });
+      var _startPl = { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings };
+      var _sendStart = function () { try { if (matchCh) matchCh.send({ type: 'broadcast', event: 'start', payload: _startPl }); } catch (e) {} };
+      _sendStart();
       beginMatch(atMs, startSel);
+      // MP-reliability FIX #3: re-emit 'start' a few times so a guest whose match channel subscribed a beat late still
+      // catches it (a single dropped 'start' used to hang the guest at the setup screen). Idempotent on the receiver —
+      // onStart dedupes by atMs, so beginMatch runs exactly once per start. Bounded (~3 re-emits over ~3.6s).
+      _stopStartRebc();
+      var _sn = 0;
+      _startRebcT = setInterval(function () {
+        if (++_sn > 3 || !matchCh) { _stopStartRebc(); return; }
+        _sendStart();
+      }, 1200);
       // build100i: HOST opens the SERVER round (Lovable /mp/round/start) so both peers can settle against a shared uuid
       // for the trustworthy global MP ladder. Fire-and-forget; broadcast the uuid to the peer. Human matches only;
       // _roundStartFired guards re-entry (maybeStart can fire more than once before the round goes live).
@@ -1101,6 +1150,7 @@
   }
   function onStart(p) {
     if (!(p && p.atMs)) return;
+    if (p.atMs === _startedAtMs) return;   // MP-reliability FIX #3: already began this start (a re-emitted 'start') — never double-run beginMatch
     matchCombat = !!p.combat;   // v254: adopt the host's combat mode
     // build116 p3: MP SETTINGS FAIRNESS (guest side) — hostSettings is the awareness pill's source (always sent).
     // When the host's room forced matched settings, p.matched is true and p.sel carries the canonical fair
@@ -1765,6 +1815,8 @@
   }
 
   function beginMatch(atMs, s) {
+    _startedAtMs = atMs;                          // MP-reliability FIX #3: mark this start handled so a re-emitted 'start' (same atMs) is deduped in onStart
+    _fromRoomArm = false; _stopMatchReadyRebc();  // MP-reliability FIX #2: the room→match handoff auto-ready is done once we're live
     sel = s || sel;
     // build102s (security judge BLOCKER): snapshot the solo-show flag NOW — the settle path keys on this,
     // never on live room.p2, so a challenger seating mid-run can't flip the run into a ranked versus.
@@ -2349,6 +2401,7 @@
 
   function resetForRematch() {
     _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
+    _stopMatchReadyRebc(); _stopStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: a rematch is a fresh handshake — clear the prior round's handoff re-emit timers/arm
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
@@ -2397,6 +2450,7 @@
     _vsActive = false; _vsMode = false; unmountVsHud();
     try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}   // build109 s1: leaving the match shouldn't leave a stray winner-confetti canvas alive
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false; _stopReadyRebc();
+    _stopMatchReadyRebc(); _stopStartRebc(); _stopRoomStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: kill any live handoff re-emit timers so a torn-down match can't leak an interval
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
@@ -2668,6 +2722,7 @@
   // so the callee lands IN the room even if the URL deep-link was flaky. Deduped by notification_id (shared with the
   // poll via _ringSeen) so the same call never double-fires across the broadcast, the row, and the poll.
   var _bcUserCh = null, _bcUserId = null, _bcNotifSeen = {};
+  var _bcUserLive = false, _bcOpening = false, _bcResubT = 0, _bcResubN = 0;   // MP-reliability FIX #1: track the OBSERVED SUBSCRIBED state (not just "the channel object exists") + a bounded re-subscribe for the PRIVATE bc:user battle-call channel.
   var _pendingInvite = null;   // v417 review-fix F1: an inbound battle-call that arrives DURING a live run is stashed here (never auto-joined mid-song) and consumed on the next return-to-menus edge.
   function _bcInviteKey(p) {
     var k = (p && (p.notification_id || p.notif_id || p.id)) || (p && p.room ? ('room:' + p.room) : null);
@@ -2698,39 +2753,81 @@
       _pendJoin(rid, { role: role, asSpec: false, label: 'Battle call — joining the room…', notificationId: _nid });
     } catch (e) {}
   }
+  // MP-reliability FIX #1: read the LIVE session JWT (async — may hit storage/refresh). Always resolves (null on any
+  // failure) so a caller can never wedge on it.
+  function _bcGetToken() {
+    try {
+      if (!supa || !supa.auth || !supa.auth.getSession) return Promise.resolve(null);
+      return supa.auth.getSession().then(function (r) {
+        return (r && r.data && r.data.session && r.data.session.access_token) || null;
+      }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  // MP-reliability FIX #1: bounded, backing-off re-subscribe. Fired from the subscribe callback on a non-SUBSCRIBED
+  // terminal status. One pending attempt at a time; capped so it can never loop unbounded (the notifRecent poll +
+  // URL deep-link still cover the call if realtime never converges).
+  function _bcScheduleResub() {
+    if (_bcResubT || _bcResubN > 30) return;
+    _bcResubN++;
+    var delay = Math.min(2500 * _bcResubN, 20000);
+    _bcResubT = setTimeout(function () { _bcResubT = 0; try { _bcUserSubscribe(); } catch (e) {} }, delay);
+  }
   function _bcUserSubscribe() {
     try {
-      if (!supa || !ME.signedIn || !ME.id) return;                 // need a real authed uuid (bc:user is keyed on it)
-      if (_bcUserCh && _bcUserId === ME.id) return;                // already subscribed for this identity
-      if (_bcUserCh) { try { supa.removeChannel(_bcUserCh); } catch (e) {} _bcUserCh = null; }
+      if (!supa || !ME.signedIn || !ME.id) return;                        // need a real authed uuid (bc:user is keyed on it)
+      if (_bcUserCh && _bcUserId === ME.id && _bcUserLive) return;         // already LIVE (observed SUBSCRIBED) for this identity — NOT merely "the channel object exists"
+      if (_bcOpening) return;                                             // a subscribe is already in flight — never double-open
+      _bcOpening = true;
+      if (_bcUserCh) { try { supa.removeChannel(_bcUserCh); } catch (e) {} _bcUserCh = null; }   // tear down a stale/errored channel (identity change, or a prior attempt that never reached SUBSCRIBED)
+      _bcUserLive = false;
       _bcUserId = ME.id;
-      var ch;
-      try { ch = supa.channel('bc:user:' + ME.id, { config: { private: true } }); }
-      catch (e) { ch = supa.channel('bc:user:' + ME.id); }        // older supabase-js: no private flag → plain channel (still works if backend allows)
-      _bcUserCh = ch;
-      ch.on('broadcast', { event: 'live_match_invite' }, function (m) { _routeBattleInvite(m && m.payload, 'bc'); });
-      // durable fallback: postgres_changes on the notifications row addressed to me (INSERT). Fail-open — if the
-      // client/backend doesn't support it or RLS blocks it, the broadcast + the notifRecent poll still cover the call.
-      try {
-        ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + ME.id }, function (m) {
+      var _idAtOpen = ME.id;
+      // FIX #1 ROOT CAUSE: bc:user is a PRIVATE channel — a private topic needs the AUTHED JWT on the realtime socket
+      // AT JOIN. supabase-js wires the session token LAZILY (after _adoptSiteSession), so the first subscribe() often
+      // joined before the token landed → CHANNEL_ERROR → the invite path stayed dead all session. Set the socket auth
+      // to the live JWT FIRST, THEN join. This is a socket-global token refresh that only ever UPGRADES anon→authed,
+      // so the PUBLIC lobby/room/match/tour channels (which bypass realtime.messages RLS) keep working exactly as
+      // before; it's never called for a guest (the signedIn guard above) so signed-out anon channels are untouched.
+      _bcGetToken().then(function (tok) {
+        try {
+          if (_bcUserId !== _idAtOpen) { _bcOpening = false; return; }   // identity changed while fetching the token — abort this open (the re-key path will re-run)
+          if (tok) { try { if (supa.realtime && supa.realtime.setAuth) supa.realtime.setAuth(tok); } catch (e) {} }
+          var ch;
+          try { ch = supa.channel('bc:user:' + _idAtOpen, { config: { private: true } }); }
+          catch (e) { ch = supa.channel('bc:user:' + _idAtOpen); }        // older supabase-js: no private flag → plain channel (still works if backend allows)
+          _bcUserCh = ch;
+          ch.on('broadcast', { event: 'live_match_invite' }, function (m) { _routeBattleInvite(m && m.payload, 'bc'); });
+          // durable fallback: postgres_changes on the notifications row addressed to me (INSERT). Fail-open — if the
+          // client/backend doesn't support it or RLS blocks it, the broadcast + the notifRecent poll still cover the call.
           try {
-            var row = m && m.new; if (!row) return;
-            if (row.type && String(row.type) !== 'live_match_invite') return;
-            var d = row.data || row.payload || row.meta || {};
-            if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
-            d.notification_id = d.notification_id || row.id;
-            _routeBattleInvite(d, 'pg');
+            ch.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + _idAtOpen }, function (m) {
+              try {
+                var row = m && m.new; if (!row) return;
+                if (row.type && String(row.type) !== 'live_match_invite') return;
+                var d = row.data || row.payload || row.meta || {};
+                if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                d.notification_id = d.notification_id || row.id;
+                _routeBattleInvite(d, 'pg');
+              } catch (e) {}
+            });
           } catch (e) {}
-        });
-      } catch (e) {}
-      ch.subscribe(function (status) { try { console.warn('[mp] bc:user status:', status); } catch (e) {} });
-    } catch (e) {}
+          ch.subscribe(function (status) {
+            _bcOpening = false;   // FIX #1 hardening: release the in-flight guard HERE (open attempt concluded), not synchronously after subscribe(), so the 2.5s retry can't tear down a channel still mid-join
+            try { console.warn('[mp] bc:user status:', status); } catch (e) {}
+            if (status === 'SUBSCRIBED') { _bcUserLive = true; _bcResubN = 0; if (_bcResubT) { clearTimeout(_bcResubT); _bcResubT = 0; } }   // FIX #1: only NOW is the channel usable
+            else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') { _bcUserLive = false; _bcScheduleResub(); }   // FIX #1: don't stay dead — re-subscribe with bounded backoff
+          });
+          setTimeout(function () { if (_bcOpening && _bcUserId === _idAtOpen && !_bcUserLive) _bcOpening = false; }, 9000);   // FIX #1 hardening: safety — if the subscribe callback never fires, don't wedge _bcOpening forever
+        } catch (e) { _bcOpening = false; }
+      });
+    } catch (e) { _bcOpening = false; }
   }
   // subscribe as soon as identity resolves, and re-subscribe on auth change (guest → signed-in re-keys the channel).
   try { _bcUserSubscribe(); } catch (e) {}
-  try { if (window.RhythmCatalog && window.RhythmCatalog.onAuthChange) window.RhythmCatalog.onAuthChange(function () { setTimeout(_bcUserSubscribe, 250); }); } catch (e) {}
-  // identity can land a beat after boot (getUser session-restore race) — retry a few times until signed in.
-  (function _bcRetry(n) { if (_bcUserCh && _bcUserId === ME.id) return; if (n > 12) return; setTimeout(function () { try { _bcUserSubscribe(); } catch (e) {} _bcRetry(n + 1); }, 2500); })(0);
+  try { if (window.RhythmCatalog && window.RhythmCatalog.onAuthChange) window.RhythmCatalog.onAuthChange(function () { _bcUserLive = false; setTimeout(_bcUserSubscribe, 250); }); } catch (e) {}
+  // identity can land a beat after boot (getUser session-restore race) — retry until an OBSERVED SUBSCRIBED (FIX #1:
+  // was "until the channel object exists", which stopped the instant an ERRORED join created a dead channel).
+  (function _bcRetry(n) { if (_bcUserLive && _bcUserId === ME.id) return; if (n > 12) return; setTimeout(function () { try { _bcUserSubscribe(); } catch (e) {} _bcRetry(n + 1); }, 2500); })(0);
   // v415 review fix: a ring shown moments before the player launches a song must DIE on game start — _ringPoll only
   // gates NEW rings on _inMenus(); an already-mounted card (looping audio + ACCEPT/Decline) would otherwise survive
   // over live gameplay for up to 45s. Watch #game/#loading for the 'active' class (mirrors the syncActive observer
@@ -3076,7 +3173,7 @@
       }
     });
   }
-  function leaveRoomChannel() { _stopReadyRebc(); _clearPendJoin(); try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval.
+  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval.
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -3118,6 +3215,7 @@
     } else if (room.isHost) {
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
+      if (p2) room._lastP2 = p2;   // MP-reliability FIX #3: remember the seated opponent so a transient presence lull at start-time can be recovered (startRoomMatch)
       if (p2 !== room.p2) { room.p2 = p2; advertiseRoom(); }
     } else if (!room.p1) {
       // v416 (join-reliability): a DIRECT-joined guest with an unknown host — learn room.p1 from presence (the
@@ -3137,20 +3235,38 @@
   }
   // host launches: tells both seats to spin up the SAME match channel; spectators get the mid too.
   function startRoomMatch() {
-    if (!room.isHost || (!room.p2 && !room.show)) return;   // build102s: a SHOW host may start with an EMPTY challenger seat (solo run); normal rooms keep the p2 guard
+    if (!room.isHost) return;
+    // MP-reliability FIX #3: a transient softPresence lull can momentarily null room.p2 right at the start moment
+    // (onRoomPeers recomputes p2 from the live roster) → the old hard `!room.p2` bail dropped a real versus. If a room
+    // opponent is actively READY (roomOppReady, re-broadcast every 2s) and we cached their seat, recover it. NEVER
+    // fabricates a seat — requires BOTH a prior seat AND a live ready. Show rooms untouched (they legitimately solo).
+    if (!room.p2 && !room.show && roomOppReady && room._lastP2) room.p2 = room._lastP2;
+    if (!room.p2 && !room.show) return;   // build102s: a SHOW host may start with an EMPTY challenger seat (solo run); normal rooms keep the p2 guard
     var mid = 'm' + room.id.slice(1) + Date.now().toString(36).slice(-3);
-    room.ch.send({ type: 'broadcast', event: 'room-start', payload: { mid: mid, p1Id: room.p1, p2Id: room.p2 || null } });
-    onRoomStart({ mid: mid, p1Id: room.p1, p2Id: room.p2 || null });
+    var payload = { mid: mid, p1Id: room.p1, p2Id: room.p2 || null };
+    var _rs = function () { try { if (room.ch) room.ch.send({ type: 'broadcast', event: 'room-start', payload: payload }); } catch (e) {} };
+    _rs();
+    onRoomStart(payload);
+    // MP-reliability FIX #3: re-emit 'room-start' briefly so a peer that subscribed late still catches it. Idempotent —
+    // onRoomStart dedupes by mid, so a re-received room-start never tears down + rebuilds the match channel. Bounded.
+    _stopRoomStartRebc();
+    var _rn = 0;
+    _roomStartRebcT = setInterval(function () {
+      if (++_rn > 4 || !room.ch || !room.id || matchLive) { _stopRoomStartRebc(); return; }
+      _rs();
+    }, 1500);
   }
   function onRoomStart(p) {
     if (!p || !p.mid) return;
+    if (_roomStartMid === p.mid) return;   // MP-reliability FIX #3: idempotent — a re-emitted room-start with the same mid must not re-run the handoff (tear down + rebuild the match channel / re-mount a spectator deck)
     try { if (window.RhythmChat && window.RhythmChat.hideRoomChat) window.RhythmChat.hideRoomChat(); } catch (e) {}   // build111 s2: match/live view has no chat — hide (not teardown) the panel the instant a real room-start fires
     try { if (window.RhythmChat && window.RhythmChat.hideLobbyChat) window.RhythmChat.hideLobbyChat(); } catch (e) {}   // build111 review: also hide the FIXED lobby drawer (z-520) so its "CHAT ▲" pill doesn't float over the note highway / overlap the battle-call ring ACCEPT for the whole song
     // build102y review fix C: a live BEAT THAT ghost run parks ALL room-start handling — spectateMatch would
     // mount the dual-deck stage + second audio over the live run, and a hand-raised ghost-runner accepted
     // mid-solo-run must not be match-started either. The onShowSnap heartbeat re-offers the run (mid rides
     // every 4s snap) once the ghost run resolves and clears the flag.
-    if (_ghostRunActive) return;
+    if (_ghostRunActive) return;   // parked (live ghost run) — do NOT mark handled; a re-emit after the run ends can still land the handoff
+    _roomStartMid = p.mid;   // MP-reliability FIX #3: mark handled only once we actually process it, so a re-emit is deduped from here on
     var oppId = (ME.id === p.p1Id) ? p.p2Id : p.p1Id;
     var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
     if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) {
