@@ -88,6 +88,8 @@
   var _matchReadyRebcT = 0;   // MP-reliability FIX #2: the MATCH-channel mirror of _readyRebcT — re-broadcast MY 'ready' until the opponent readies or the match goes live, so a dropped ready on the room→match handoff can't hang the start ("won't start").
   var _fromRoomArm = false;   // MP-reliability FIX #2: this match came from a room where both sides already readied → keep auto-arming READY until the opponent presence actually lands on the match channel (the old 350ms one-shot missed the softPresence warmup race under load).
   var _startedAtMs = 0;       // MP-reliability FIX #3: the atMs of the 'start' we already began — a re-emitted 'start' with the same atMs must never re-run beginMatch (idempotent receiver for the start re-emit).
+  var _lastStartPl = null;    // review-fix BUG3: the exact 'start' payload the host last emitted (SAME atMs) — re-broadcast to a guest that un-readied (A6 watchdog) then re-READYs AFTER the host already went matchLive, so a re-readied guest can still join a match in progress (onStart's atMs-dedupe keeps it idempotent). Cleared on teardown/rematch.
+  var _lateStartResends = 0;  // review-fix BUG3: bounded budget for the above late-join 'start' re-sends (reset each beginMatch + on teardown/rematch) so a re-readied guest is re-delivered the start a few times, never spammed.
   var _startRebcT = 0;        // MP-reliability FIX #3: self-cancelling re-emit of the host's 'start' broadcast (a single dropped packet used to strand a late-subscribed guest at the setup screen).
   var _roomStartRebcT = 0;    // MP-reliability FIX #3: self-cancelling re-emit of 'room-start' (idempotent on the receiver via _roomStartMid).
   var _roomStartMid = null;   // MP-reliability FIX #3: last handled room-start mid — makes onRoomStart idempotent so a re-emit can't tear down + rebuild the match channel.
@@ -127,6 +129,7 @@
   // ---- v418: MP RELIABILITY + LEGIBILITY (connection chip §4.2 / call lifecycle A2 / both-ready watchdog A6) ----
   var _conn = { lobby: null, room: null, match: null };   // per-channel OBSERVED realtime status: null=not open · 'live'=SUBSCRIBED · 'resub'=reconnecting · 'dead'=errored (tap to retry)
   var _connResubT = { lobby: 0, room: 0, match: 0 }, _connResubN = { lobby: 0, room: 0, match: 0 };   // A5: bounded backoff re-subscribe handles/counters — ALL cleared in teardownMatch/leaveRoomChannel/leaveAll (B8)
+  var _roomResubActive = false;   // review-fix BUG1: true only while _doChannelResub('room') is REBUILDING the room channel — leaveRoomChannel skips _clearConnResub('room') so the bounded ≤20 attempt counter SURVIVES the rebuild (the room path used to zero it every cycle → an infinite 2s reconnect loop that never surfaced the OFFLINE dead state). Reset on SUBSCRIBED / genuine user leave, exactly like lobby/match.
   var _matchSubbedOnce = false;   // A5: enterSetup() runs on the FIRST match SUBSCRIBED only — a mid-setup re-subscribe keeps the current step
   var _callState = null;          // A2: the outbound battle-call in flight — { uid, name, phase:'ringing'|'accepted'|'in_room'|'declined'|'missed', at, rid }
   var _callWatchT = 0;            // A2: poll-fallback tick (presence-truth accept + 45s MISSED) — cleared in leaveRoomChannel/teardownMatch/resetForRematch (B8)
@@ -812,7 +815,7 @@
       oppLeft = true;
       if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
       if (matchLive) { markOppGone(); settleIfReady(); }
-      else { oppReady = false; banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }
+      else { oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
     } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…'); }
     refreshReadyEnabled();
   }
@@ -1073,6 +1076,16 @@
   function onReady(p) {
     oppReady = !!(p && p.ready);
     if (p && p.settings) _oppSettings = p.settings;   // build116 p3: awareness — the peer's raw scroll/failMode/chartMode, painted on the vs HUD once the match mounts
+    // BUG3 fix (residual R1 companion): a guest whose 'start' packets ALL dropped un-readies (A6 watchdog) then re-READYs.
+    // By then the host is already matchLive, so maybeStart's `!matchLive` guard (line ~1118) refuses to re-emit 'start'
+    // → nothing ever re-delivers the start and the guest loops the "couldn't sync" card forever while the host plays on.
+    // Receiving a fresh ready:true AFTER we've gone live is exactly that signal — re-broadcast the SAME start (idempotent
+    // via onStart's atMs-dedupe: a guest who already began ignores it; a stuck guest joins the match in progress).
+    // Bounded per match so a normal guest's stray late ready can never spam.
+    if (oppReady && matchLive && matchRole === 'host' && matchCh && _lastStartPl && _lateStartResends < 4) {
+      _lateStartResends++;
+      try { matchCh.send({ type: 'broadcast', event: 'start', payload: _lastStartPl }); } catch (e) {}
+    }
     // build60: make the opponent's READY visibly land so the wait never reads as frozen.
     var oppName = (oppMeta && oppMeta.name) || 'Opponent';
     if (oppReady && !meReady) paintWaitStatus(oppName + ' is READY — tap READY to start.', true);
@@ -1132,6 +1145,7 @@
         try { _mySettingsSnapshot = window.RhythmGame.getSettings(); window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
       }
       var _startPl = { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings };
+      _lastStartPl = _startPl;   // BUG3 fix: remember the exact start payload (SAME atMs) so onReady can re-deliver it to a guest that un-readied (A6) then re-READYs AFTER we went matchLive — onStart's atMs-dedupe keeps that idempotent.
       var _sendStart = function () { try { if (matchCh) matchCh.send({ type: 'broadcast', event: 'start', payload: _startPl }); } catch (e) {} };
       _sendStart();
       beginMatch(atMs, startSel);
@@ -1832,6 +1846,7 @@
 
   function beginMatch(atMs, s) {
     _startedAtMs = atMs;                          // MP-reliability FIX #3: mark this start handled so a re-emitted 'start' (same atMs) is deduped in onStart
+    _lateStartResends = 0;                        // BUG3 fix: fresh budget for late-join 'start' re-sends this match (host re-delivers 'start' to a re-readied guest a bounded few times)
     _fromRoomArm = false; _stopMatchReadyRebc();  // MP-reliability FIX #2: the room→match handoff auto-ready is done once we're live
     _stopBothReadyWd(); clearFailCard();          // A6: the start fired — kill the both-ready watchdog + any "couldn't sync" card
     sel = s || sel;
@@ -2419,6 +2434,7 @@
   function resetForRematch() {
     _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
     _stopMatchReadyRebc(); _stopStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: a rematch is a fresh handshake — clear the prior round's handoff re-emit timers/arm
+    _roomStartMid = null;   // BUG2 fix: each new round re-arms — a stale _roomStartMid from the prior round would make _armBothReadyWd early-return forever (treating it as "already started"), so the 2nd+ room match's both-ready watchdog never armed → a silent hang if that round's start dropped. onRoomStart re-asserts the fresh mid AFTER its teardown, so per-mid re-emit idempotency (line ~3608) is preserved.
     _stopBothReadyWd(); _stopCallWatch();   // v418 (B8): a rematch is a fresh start handshake — clear the both-ready watchdog + any stale call-watch
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
@@ -2469,6 +2485,7 @@
     try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}   // build109 s1: leaving the match shouldn't leave a stray winner-confetti canvas alive
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false; _stopReadyRebc();
     _stopMatchReadyRebc(); _stopStartRebc(); _stopRoomStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: kill any live handoff re-emit timers so a torn-down match can't leak an interval
+    _roomStartMid = null; _lastStartPl = null; _lateStartResends = 0;   // BUG2 fix: null the handled room-start mid so the NEXT room match's both-ready watchdog re-arms (onRoomStart re-asserts the fresh mid AFTER this teardown, which startMatchChannel calls as its safety — so per-mid idempotency survives). BUG3: drop the stored late-join start payload + budget with the match.
     _stopBothReadyWd(); _stopCallWatch(); _matchSubbedOnce = false; _clearConnResub('match');   // v418 (B8): both-ready watchdog + call-watch + match re-subscribe timer die with the match; reset the first-subscribe gate
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
@@ -2948,7 +2965,12 @@
     } else if (which === 'room') {
       if (!room.id || matchLive) { if (matchLive) _setConnState('room', 'live'); return; }
       var seat = room.seat || (room.isHost ? 'p1' : 'p2');
-      joinRoomChannel(room.id, seat);           // leaveRoomChannel() inside tears down the old handle first (state preserved on the module-level `room`)
+      // BUG1 fix: mark this as a RESUB rebuild so joinRoomChannel's inner leaveRoomChannel() does NOT zero the bounded
+      // attempt counter (_connResubN.room). Without this the ≤20 cap + growing backoff never engaged — the counter reset
+      // to 0 every cycle → an infinite 2s reconnect loop that never surfaced the OFFLINE dead state. joinRoomChannel is
+      // synchronous through the leaveRoomChannel() call, so clearing the flag right after is safe (no re-emit interleaves).
+      _roomResubActive = true;
+      try { joinRoomChannel(room.id, seat); } finally { _roomResubActive = false; }   // leaveRoomChannel() inside tears down the old handle first (state preserved on the module-level `room`)
       try { enterRoomWaiting(); } catch (e) {}
       if (meReady && room.id && room.ch && !matchCh && !room.show) { try { _sendRoomReady(); } catch (e) {} }   // re-assert my READY (the 2s rebroadcast interval was cleared by the teardown)
     } else if (which === 'match') {
@@ -3058,17 +3080,29 @@
   }
   function _stopCallWatch() { if (_callWatchT) { clearInterval(_callWatchT); _callWatchT = 0; } }
   function _onCallAnswered(p) {
-    if (!p || !_callState) return;   // only meaningful for a call WE placed (bc:user is keyed to us) — also dedupes stale broadcasts
+    if (!p || !_callState) return;   // only meaningful for a call WE placed (bc:user is keyed to us)
+    // review-fix (call-lifecycle): the guard above was DEAD as a de-dupe — _callState was never nulled, so a stale or
+    // duplicate battle_call_accepted/declined broadcast always re-processed. Two real failures it caused:
+    //  (a) CROSS-CALL HIJACK — a LATE decline/accept from a PRIOR callee (we've since called someone else) would
+    //      _stopCallWatch() + paint a fail card for the WRONG call, killing the current in-flight call. Guard on
+    //      callee_id: a broadcast whose callee doesn't match the call we currently hold is ignored (the 45s-missed
+    //      self-call passes _callState.uid, so it always matches).
+    //  (b) POST-RESOLVE / OUT-OF-ORDER re-process — a duplicate accepted, or an accepted arriving AFTER presence
+    //      already landed (in_room), would flip a resolved call back to "JOINING…". Guard on the terminal/in_room
+    //      phases, and null _callState once terminal so any later stale broadcast hits the !_callState guard.
+    if (_callState.phase === 'in_room') return;                                                   // opponent already joined — nothing can undo it
+    if (p.callee_id && _callState.uid && String(p.callee_id) !== String(_callState.uid)) return;  // a prior callee's late accept/decline must not hijack the current call
+    if (p.accepted && _callState.phase === 'accepted') return;                                     // duplicate accepted — already showing JOINING
     var uid = p.callee_id || _callState.uid, nm = _callState.name || p.callee_name || 'They';
     if (p.declined) {
       _callSetPhase('declined', uid, nm);
       if (uid) _setRow(uid, '', 'CHALLENGE', 0);
-      _stopCallWatch();
+      _stopCallWatch(); _callState = null;   // terminal — a later duplicate/stale decline/accept now hits the !_callState guard
       showFailCard({ head: 'CALL DECLINED', reason: nm + ' declined the battle.', actions: [{ label: 'BACK TO PLAYERS', primary: true, fn: function () { clearFailCard(); backToLobby(); } }] });
     } else if (p.missed) {
       _callSetPhase('missed', uid, nm);
       if (uid) _setRow(uid, '', 'CHALLENGE', 0);
-      _stopCallWatch();
+      _stopCallWatch(); _callState = null;   // terminal — see above (the card's action closures already captured uid/nm)
       showFailCard({ head: 'NO ANSWER', reason: nm + ' didn’t pick up. They’ll see a missed call in their game.',
         actions: [{ label: 'CALL AGAIN', primary: true, fn: function () { clearFailCard(); _recall(uid, nm); } }, { label: 'CALL SOMEONE ELSE', fn: function () { clearFailCard(); backToLobby(); } }] });
     } else {   // accepted
@@ -3520,7 +3554,7 @@
       }
     });
   }
-  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval.
+  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -3563,7 +3597,8 @@
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
       if (p2) room._lastP2 = p2;   // MP-reliability FIX #3: remember the seated opponent so a transient presence lull at start-time can be recovered (startRoomMatch)
-      if (p2 !== room.p2) { room.p2 = p2; advertiseRoom(); }
+      if (p2 !== room.p2) { if (!p2 && room.p2 && !matchLive) { roomOppReady = false; _stopBothReadyWd(); }   // review-fix (teardown): the seated opponent left the room PRE-match — clear their stale READY + disarm the A6 watchdog so it can't fire the misleading "COULDN'T SYNC" card ~14s later (mirrors the match-channel opp-leave path)
+        room.p2 = p2; advertiseRoom(); }
     } else if (!room.p1) {
       // v416 (join-reliability): a DIRECT-joined guest with an unknown host — learn room.p1 from presence (the
       // host advertises seat 'p1'; fall back to the earliest-joined peer) so READY enables even if the host's
@@ -3613,20 +3648,25 @@
     // mid-solo-run must not be match-started either. The onShowSnap heartbeat re-offers the run (mid rides
     // every 4s snap) once the ghost run resolves and clears the flag.
     if (_ghostRunActive) return;   // parked (live ghost run) — do NOT mark handled; a re-emit after the run ends can still land the handoff
-    _roomStartMid = p.mid;   // MP-reliability FIX #3: mark handled only once we actually process it, so a re-emit is deduped from here on
+    // BUG2 fix: _roomStartMid is now nulled in teardownMatch/resetForRematch so each new room match re-arms the A6
+    // watchdog. But startMatchChannel + spectateMatch both call teardownMatch() as a safety FIRST — so marking the mid
+    // handled BEFORE those calls would be immediately nulled, breaking the re-emit idempotency (line ~3618). Assert it
+    // AFTER those synchronous calls instead (JS is single-threaded — no re-emit can interleave), so a re-emitted
+    // room-start with the same mid is still deduped from here on, and each fresh mid still re-arms the watchdog.
     _stopBothReadyWd();      // A6: the room-start fired — kill the both-ready watchdog on both seats
     var oppId = (ME.id === p.p1Id) ? p.p2Id : p.p1Id;
     var oppMetaLocal = room.members[oppId] || lobby[oppId] || null;
     if (room.seat === 'spec' || (ME.id !== p.p1Id && ME.id !== p.p2Id)) {
       _specShowSolo = !!(room.show && !p.p2Id);   // build102s: watching a SOLO show run → no verdict card at song end
       if (room.show) { _specIds = { p1: p.p1Id, p2: p.p2Id || null }; }   // build102t: deck seat assignment for the dual-deck stage
-      spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); return;
+      spectateMatch(p.mid, room.members[p.p1Id], room.members[p.p2Id]); _roomStartMid = p.mid; return;   // BUG2: mark handled AFTER spectateMatch's internal teardownMatch nulled it
     }
     var role = (ME.id === p.p1Id) ? 'host' : 'guest';
     if (room.show) spectating = false;   // build102s: a seated show player may have WATCHED the prior run (spectateMatch flips the flag) — they're a player now, so the rank/settle gates must see them as one
     // build102s: fr.solo → the host starts the match channel with no guest handshake (empty seat)
     _fromRoom = { sel: (sel.trackId ? Object.assign({}, sel) : null), solo: !!(room.show && !p.p2Id && ME.id === p.p1Id) };   // carry host's locked track
     startMatchChannel(p.mid, role, oppMetaLocal);
+    _roomStartMid = p.mid;   // BUG2: mark handled AFTER startMatchChannel's internal teardownMatch nulled it — so a re-emit is deduped from here on
   }
 
   // ===================== v416: UNIFIED ROBUST JOIN (join-reliability) =====================
