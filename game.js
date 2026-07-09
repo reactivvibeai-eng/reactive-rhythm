@@ -2284,12 +2284,23 @@
     $('loading-stage').textContent = funnyStage();
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
     if (!buf) {
-      setLoading('Fetching track', 8);
-      const arr = await fetchAudio(url, { mode: 'cors' });
-      setLoading('Decoding waveform', 25);
-      const ac = new (window.AudioContext || window.webkitAudioContext)();
-      try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // build65 (cycle-4): ALWAYS release the throwaway decode context, even when decodeAudioData REJECTS (a corrupt/retried track would otherwise leak a context every attempt → Chromium's ~6-context cap silently kills all audio)
-      lastDecoded = { url: url, buf: buf };
+      try {
+        setLoading('Fetching track', 8);
+        const arr = await fetchAudio(url, { mode: 'cors' });
+        setLoading('Decoding waveform', 25);
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // build65 (cycle-4): ALWAYS release the throwaway decode context, even when decodeAudioData REJECTS (a corrupt/retried track would otherwise leak a context every attempt → Chromium's ~6-context cap silently kills all audio)
+        lastDecoded = { url: url, buf: buf };
+      } catch (_derr) {
+        // build144: a dead / HLS-only / corrupt / CORS-blocked track used to surface the RAW DOMException
+        // ("EncodingError: Unable to decode audio data") or a fetch error straight into the play() error toast.
+        // Rethrow a friendly, actionable message instead — the play() catch renders it + returns to menu. The raw
+        // cause still logs for debugging. Success path is untouched (this catch only runs on fetch/decode failure).
+        try { console.warn('[rr] track fetch/decode failed:', url, _derr); } catch (e) {}
+        var _fe = new Error("This track can't be played right now — try another one.");
+        try { _fe.cause = _derr; } catch (e) {}
+        throw _fe;
+      }
     }
     const beats = await analyzeChart(buf);
     return {
