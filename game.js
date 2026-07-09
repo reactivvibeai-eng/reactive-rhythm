@@ -132,8 +132,13 @@
   let _practiceOn = false;        // is the CURRENT run a practice run
   let _practiceSection = null;    // { start, end } in song-buffer seconds (clamped to the song), or null = full song
   let _practiceRate = 1;          // playback speed multiplier applied to BOTH note approach and audio (0.5..1.5)
+  let _practicePreroll = 0;       // build141: seconds of musical count-in seeked BEFORE a section's start so the first section note approaches from the TOP of the highway (else it spawns already at the strike line — unplayable). Computed once per launch in beginPlay's lead-in pass; reused verbatim by every re-arm.
   let _practiceArming = false;    // re-arm guard so the section-loop / wipeout auto-retry can't stack beginPlay()s
   function _practiceSpeedMul() { return _practiceOn ? (_practiceRate || 1) : 1; }   // note-approach divisor factor (mirrors _levelSpeedMul)
+  // build141: the effective top-of-highway travel time (seconds) for the CURRENT run — the exact `approach` the
+  // render loop uses. A note at song-time T first appears at the top of the highway at real-time (T − approach);
+  // used to guarantee the FIRST note has a full runway instead of spawning already at the strike line.
+  function _runApproach() { return DIFFICULTY[difficulty].approach / (userScroll * _levelSpeedMul() * _practiceSpeedMul()); }
   function _fmtT(s) { s = Math.max(0, s | 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   // PRACTICE HUD tag: an unmistakable "this run isn't scored" badge + the active section/speed. Toggled on the
   // #practice-tag element (built in index.html); pure DOM, no per-frame cost (called once per (re)arm from beginPlay).
@@ -1373,7 +1378,7 @@
       // build59: Medium dialed back from 0.235 (≈4.3 notes/sec) — playtesters found Medium too rapid/scattered.
       // CHANGE 3a — raise every floor (was {0.45,0.33,0.155}) so the baseline chart is sparser and more readable
       // across the board; the "barrage" complaint was largely Hard packing ~6.4 nps. Now ≈ 2 / 2.5 / 4.5 nps.
-      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.22 };   // v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. Easy/Hard unchanged.
+      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.30 };   // v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. build141 (beta data): Hard 0.22→0.30 — 0 of 22 Hard runs cleared 90%, max-combo only ~6% of chart; 0.22 packed ~4.5 onsets/s = an unsustainable wall. 0.30 caps ~3.3/s so a competent player can actually hold a streak. Easy/Medium unchanged.
       // v253 (research): a CAMPAIGN BOSS stage is "Hard-MINUS", not raw Hard — the boss complaint ("I shouldn't be crying at
       // the end of the level") is no-release + density, not speed (we're already ~5× below GH-boss NPS). When the LAUNCHED
       // level is a boss (_levelCtx.boss, set by launchLevel→setLevelContext), widen the Hard min-gap and lower the sustained
@@ -1429,7 +1434,7 @@
       // CHANGE 3c — SLIDING-WINDOW NPS CAP: even after the min-gap, a busy bar can spike past readability. In any 1.0 s
       // window exceeding the per-difficulty cap, drop the weakest onsets (off-grid first, then lowest effective strength)
       // until the window is within budget. This is what actually flattens the "barrage" peaks.
-      const _npsBase = { hard: 5, medium: 3, easy: 2 }[difficulty] || 3;
+      const _npsBase = { hard: 4, medium: 3, easy: 2 }[difficulty] || 3;   // build141 (beta data): Hard 5→4 — a 5-nps ceiling let busy choruses spike into an unholdable barrage (the "combo breaks every ~15 notes" wall). Medium/Easy unchanged.
       const npsCap = _bossStage ? Math.max(2, _npsBase - 1) : _npsBase;   // build62: Hard 5 NPS = teeth. v253/v258: ANY campaign boss clamps the ceiling down one notch (Hard 5→4, Medium 3→2) so a boss is never raw density.
       if (filtered.length > npsCap) {
         const WIN = 1.0;
@@ -1509,7 +1514,7 @@
         // were a big part of the "scattered/unreadable" complaint). Preserve the up/down direction, just bound the leap:
         // Easy ±1, Medium ±2, Hard ±3 strings.
         if (last >= 0) {
-          const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
+          const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 2;   // build141 (beta data): Hard 3→2 — unclamped 3-string leaps were a top combo-break source; a ±2 clamp keeps runs holdable while density/speed keep Hard clearly harder than Medium
           if (lane > last + maxJump) lane = last + maxJump;
           else if (lane < last - maxJump) lane = last - maxJump;
           lane = Math.max(laneBase, Math.min(laneBase + span - 1, lane));
@@ -1628,14 +1633,14 @@
       // would have produced on this same chart (keeps totals within the v1 band; the scoring epoch already moves
       // with this batch). Partner lanes still prefer the REAL co-fired bands; the mechanical +2 fan is only the
       // fallback for a chosen lead without a measured stack.
-      const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : difficulty === 'hard' ? 5 : 7) : (difficulty === 'medium' ? 14 : 8);
+      const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : difficulty === 'hard' ? 11 : 7) : (difficulty === 'medium' ? 14 : difficulty === 'hard' ? 16 : 8);   // build141 (beta data): Hard chord budget halved (gap 5→11 / 8→16) — ~195 chord-partner notes on a Hard chart were the #1 combo-break source on a strum controller; Medium/Easy unchanged
       const chordMod = noteVariety ? (difficulty === 'medium' ? 4 : 3) : (difficulty === 'medium' ? 6 : 4);
       let budget = 0;
       { let lc = -99; for (let i = 0; i < base.length; i++) { const n = base[i]; if ((n.type === 'tap' || n.type === 'accent') && (i - lc) >= chordGapMin && i % chordMod === 0) { budget++; lc = i; } } }
       const durAll = beats.length ? (beats[beats.length - 1].t || 0) : 0;
       let eMaxC = 0, sMaxC = 0;
       for (const n of base) { if ((n._energy || 0) > eMaxC) eMaxC = n._energy || 0; if ((n.strength || 1) > sMaxC) sMaxC = n.strength || 1; }
-      const floorBase = difficulty === 'hard' ? 2.0 : 3.5;
+      const floorBase = difficulty === 'hard' ? 3.0 : 3.5;   // build141 (beta data): Hard chord time-floor 2.0→3.0s — space chords further apart so a Hard run reads as single-note melody with occasional stabs, not a chord wall
       const floorFor = (n) => {
         const e = eMaxC > 0 ? (n._energy || 0) / eMaxC : 0.5;
         let f = floorBase * (2.0 - 1.2 * e);
@@ -1681,13 +1686,13 @@
         if (n._hotBands && n._hotBands.length >= 2) {
           const set = {}; set[n.lane] = 1;
           n._hotBands.forEach(function (bnd) { set[inSpan(laneBase + Math.max(0, Math.min(span - 1, bnd)))] = 1; });
-          const cap = difficulty === 'hard' ? 3 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord
+          const cap = difficulty === 'hard' ? 2 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord · build141 (beta data): Hard 3→2 — 3-finger chords were an unfair combo-break; 2-note stabs stay satisfying without the wall
           if (lanes.length < 2) { let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl); }
         } else {
           lanes = [n.lane];
           let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
           // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
-          if ((difficulty === 'hard' && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && i % 9 === 0)) {
+          if ((difficulty === 'hard' && i % 30 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && difficulty !== 'hard' && i % 9 === 0)) {   // build141 (beta data): Hard 3-note fan i%12→i%30, and Hard opts out of the noteVariety i%9 fan — fewer 3-note stabs so Hard holds a streak
             let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
           }
         }
@@ -1704,7 +1709,7 @@
     // ---- BOMBS: hazards in the gaps — DON'T hit this lane while one is at the bridge ----
     // CHANGE 4 — scattered single bombs are now HARD-ONLY (Infinity on Medium too, was 15). Random mid-gap bombs were
     // non-musical clutter on Medium; the telegraphed bomb-ROWS path (noteVariety) is the intended "dodge this" moment.
-    const bombGap = difficulty === 'hard' ? 11 : Infinity;   // Hard only — Medium/Easy stay clean
+    const bombGap = difficulty === 'hard' ? 48 : Infinity;   // Hard only — Medium/Easy stay clean · build141 (beta data): scattered bombs 11→48 apart — an accidentally-struck bomb is a combo-break; the softened (sparser) Hard chart opens MORE >0.7s gaps, so the spacing had to widen a lot to actually thin bombs below baseline
     // grid-snap helper (CHANGE 4): land a hazard ON the pulse so even bombs read musically. Falls back to the raw time.
     const _per = (beats._period || 0), _ph = (beats._phase || 0), _sub = _per / 4;
     const snapGrid = (t) => { if (_per > 0 && _sub > 0) { const g = _ph + Math.round((t - _ph) / _sub) * _sub; if (Math.abs(t - g) < _per * 0.25) return Math.round(g * 1000) / 1000; } return t; };
@@ -1728,9 +1733,9 @@
     // auto-avoid exist), adds NO scored notes, placed ONLY in a clean rest gap, never shares a time
     // with a real note. Default (flag off) → none, chart byte-identical. ----
     if (noteVariety && difficulty !== 'easy') {
-      const rowEveryT = difficulty === 'hard' ? 14 : 22;   // min seconds between rows
+      const rowEveryT = difficulty === 'hard' ? 20 : 22;   // min seconds between rows · build141 (beta data): Hard 14→20 — rarer walls
       const leadIn = 0.85, restAfter = 0.85;
-      const rowLanes = Math.min(LANE_COUNT, difficulty === 'hard' ? 4 : 3);
+      const rowLanes = Math.min(LANE_COUNT, difficulty === 'hard' ? 3 : 3);   // build141 (beta data): Hard 4→3 — a narrower wall is a cleaner dodge (one open lane), fewer bomb notes to fat-finger
       let lastRowT = -999;
       for (let i = 0; i < notes.length - 1; i++) {
         const a = notes[i], b = notes[i + 1];
@@ -2953,7 +2958,40 @@
     }
     // ---- PRACTICE section filter (AFTER buildNotes so the chart is unchanged; only WHICH notes are live differs).
     // Never runs on a normal launch (_practiceOn false) → default path byte-identical.
+    // build141 P0 (tester: a ~10s section "failed to start the match"): CLAMP the requested section to the ACTUAL
+    // decoded buffer (songDuration) FIRST. The practice panel clamps to track.duration_seconds METADATA, which can
+    // exceed the real decoded length (a truncated / preview audio_url). A start past the buffer made DemoPlayer.play()
+    // clamp the seek offset to the tail 50ms → the source ended instantly → practiceRearm() → a rapid re-arm STORM
+    // that never visibly starts. Clamp end into the buffer, keep the start ≥1s inside it, and if the window collapses
+    // (section was essentially past the song) fall back to whole-song practice — never storm, never throw.
+    if (_practiceOn && _practiceSection && songDuration > 0) {
+      const _pEnd = Math.min(_practiceSection.end, songDuration);
+      const _pStart = Math.max(0, Math.min(_practiceSection.start, _pEnd - 1.0));
+      _practiceSection = (_pEnd - _pStart >= 1.0) ? { start: _pStart, end: _pEnd } : null;
+    }
     if (_practiceOn && _practiceSection) _applyPracticeSection();
+    // build141 (tester: "first notes already down at the start"): LEAD-IN RUNWAY — guarantee the first note APPROACHES
+    // from the top of the highway instead of spawning mid-screen at the strike line. The note clock is welded to audio
+    // time, so a note at song-time T can't get runway unless the clock is already ~`approach` seconds ahead of it.
+    //  • SECTIONED practice: PRE-ROLL the audio a hair before the section start (a musical count-in) so the section's
+    //    first note falls the full highway. No section note is dropped. (_practicePreroll consumed by _go/practiceRearm.)
+    //  • NORMAL local runs (+ whole-song practice) start the clock at 0 and CAN'T seek before it — so drop any note inside
+    //    the opening runway window; the intro then plays while the first surviving note travels the full runway. Most charts
+    //    already open later than this, so the common path is untouched. Never empties a <runway-length clip.
+    // MP SAFETY: the drop is SKIPPED for an injected (host-authoritative) chart and any live MP run — the runway depends on
+    // the LOCAL userScroll, which can differ per peer, so dropping would desync the two seats' charts (the note-gap bug).
+    // MP first-note runway is the host's problem to bake; here we only guard peer byte-identity.
+    _practicePreroll = 0;
+    const _mpLiveNow = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive());
+    if (notes.length) {
+      const _runway = _runApproach() + 0.35;   // full top-of-highway travel + a hair so the first gem eases in from the very top
+      if (_practiceOn && _practiceSection) {
+        _practicePreroll = Math.min(_runway, _practiceSection.start);   // seek back this far (clamped so it never goes below buffer 0)
+      } else if (!_useInjected && !_mpLiveNow && notes[0].time < _runway) {
+        let _i = 0; while (_i < notes.length && notes[_i].time < _runway) _i++;
+        if (_i > 0 && _i < notes.length) notes = notes.slice(_i);   // keep everything from the first runway-clear note on (chords share a time → never split)
+      }
+    }
     resetScoring();
 
     // update HUD meta
@@ -3018,7 +3056,7 @@
       // PRACTICE: seek the audio to the section start (DemoPlayer.play(offset) is the existing spectator seek
       // primitive; getTime() stays absolute song-buffer time because _start is back-dated by the offset). A normal
       // run passes no offset (undefined) → play() starts at 0, byte-identical.
-      const _pOff = (_practiceOn && _practiceSection) ? _practiceSection.start : undefined;
+      const _pOff = (_practiceOn && _practiceSection) ? Math.max(0, _practiceSection.start - _practicePreroll) : undefined;   // build141: seek to a hair BEFORE the section (musical count-in) so the first note approaches from the top
       player.play(_pOff);
       state = 'playing';
       // build104 s1b: SEED audio-latency compensation for devices that never calibrated. Chrome reports the real
@@ -3244,7 +3282,7 @@
         await runCountdownShort(myGen);
         if (myGen !== _playGen) return;        // superseded during the lead-in → do not start a stale source/loop
         muteUntil = -1; curGain = 1; applyGate();
-        const off = (_practiceSection ? _practiceSection.start : undefined);
+        const off = (_practiceSection ? Math.max(0, _practiceSection.start - _practicePreroll) : undefined);   // build141: same count-in seek on every re-arm so each rep's opening note has full runway
         try { if (player.setRate) player.setRate(_practiceRate); } catch (e) {}
         // re-arm onended → loop again on the next natural end (fresh closure over this player instance).
         player.onended = () => { if (state === 'playing') { if (_practiceOn) practiceRearm(); else endGame(); } };
@@ -6582,7 +6620,7 @@
   }
 
   function buildGameSprites(lw) {
-    const base = Math.round(Math.min(lw * 0.92, 82));
+    const base = Math.round(Math.min(lw * 1.15, 108));   // build141: bake at a higher resolution (was lw*0.92, cap 82) so the larger GEM_K (1.8) draws crisp, not upscaled/soft. One-time bake on resize — no per-frame cost.
     // build28: cache the BRIGHT per-lane faceted gems (GH-style: lane color + white core + dark ring + glow)
     // and the gold surge star. These are the high-contrast notes that pop on ANY guitar (replacing the dark
     // obsidian sphere + the blend-into-guitar theme tint). Rebuilt on resize/profile change; LANE_COLORS is
@@ -6850,10 +6888,10 @@
     const gem = gfx && (note.type === 'star' ? gfx.star : (gfx.gems && gfx.gems[note.lane]));
     // target on-screen gem diameter ≈ 1.55× the lane note width (clearly readable); the cached canvas holds the
     // gem within S=base*~2.7 of padding/glow, so scale the whole canvas by (S/base) to land the gem at that size.
-    let GEM_K = 1.55;
+    let GEM_K = 1.8;   // build141 (tester: "notes are too small to track"): base gem scale 1.55→1.8 (~+16% diameter, +35% area) so gems read across the room
     if (note.type === 'accent') GEM_K *= 1.12;
     const _emph = (typeof note._emph === 'number') ? note._emph : 0.5;   // build75: music-driven emphasis (0..1)
-    GEM_K *= (0.88 + 0.34 * _emph);   // strong onsets render BIGGER (~0.88x weak → ~1.22x strong) so the chart looks like the song
+    GEM_K *= (0.9 + 0.26 * _emph);   // build141: tighter emphasis span (was 0.88..1.22) — RAISE the smallest/weakest gems (the hardest to see: 0.9 floor vs 0.88) while keeping the strong-note peak under lane-overlap; chart still "looks like the song"
     if (gem && gfx.base) {
       const Sd = w * GEM_K * (gem.S / gfx.base);
       // build109 s2 Step B: a live specular rotation so the highlight visibly sweeps as the note falls —
@@ -6861,6 +6899,17 @@
       // a static stamped disc into a "rolling ball" for free. Per-lane phase offset so lanes don't sync.
       ctx.save();
       ctx.translate(cx, y);
+      // build141 (tester: "red notes get lost on red levels + at the corners"): a DARK RIM + soft dark HALO drawn
+      // UNDER the gem so its silhouette separates from ANY backdrop — regardless of lane color or level theme. The
+      // gem keeps its lane color (green-on-fret-1 is an intentional brand keep); this is a CONTRAST fix, not a hue
+      // change. Drawn on a clean (un-stretched) transform so it stays a true circle. Alloc-free (bare ctx ops, no
+      // gradients) → hot-loop safe. Always on (a readability floor, not a motion/perf frill).
+      const _gr = w * GEM_K * 0.5;   // on-screen gem body radius
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = Math.max(3, _gr * 0.85);   // subtle dark outer glow = the halo that lifts a matching-color gem off the backdrop
+      ctx.fillStyle = 'rgba(6,3,3,0.9)';                                               // near-black matte; only the thin annulus outside the gem body shows = a crisp dark outline
+      ctx.beginPath(); ctx.arc(0, 0, _gr * 1.05, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
       // build109 s2 Step D (optional, last): mild anisotropic stretch along the travel axis for the
       // closest ~25% of travel (d < 0.25 — small d IS near the catcher in this engine's convention:
       // depthScale(d)=1-0.7d peaks at d=0, so "closest" is the LOW end of d, not d>0.75 as a naive literal
