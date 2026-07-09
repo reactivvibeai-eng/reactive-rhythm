@@ -965,11 +965,14 @@
         // ONLY show songs that actually play — no dead taps, ever. THE chokepoint:
         // split videos OUT of the music catalog here, so every music surface (rails,
         // browse, search, pickers) is music-only for free; videos go to their own bucket.
-        var ready = all.filter(trackReady);
+        // content-cleanup: drop dev/test junk rows (see isJunkTrack) BEFORE splitting into music/video, so they
+        // never reach the playable catalog, the rails, browse, or search. Game-side only — no DB writes.
+        var clean = all.filter(function (t) { return !isJunkTrack(t); });
+        var ready = clean.filter(trackReady);
         catalogTracks = ready.filter(function (t) { return !isVideo(t); });
         // build99N: videos gate on WATCHABILITY, not the music chartability gate (trackReady). A film can
         // always be watched even with no decodable audio to chart — recovers ~30 of 142 films that were hidden.
-        catalogVideos = all.filter(function (t) { return isVideo(t) && videoReady(t); });
+        catalogVideos = clean.filter(function (t) { return isVideo(t) && videoReady(t); });
         catalogLive = true;   // server-charted launches unblocked, even on a partial library
         // build127: a partial crawl is still LIVE — just quietly note more is loading, don't cry "samples".
         if (crawlErrored && !crawlComplete) {
@@ -993,9 +996,10 @@
     catalogLive = false;
     const mock = buildMockCatalog(1000);
     catalogRawCount = mock.length;
-    var readyM = mock.filter(trackReady);   // preview also shows only playable
+    var cleanM = mock.filter(function (t) { return !isJunkTrack(t); });   // content-cleanup: same junk gate as the live path (mock has none, but keep the surfaces identical)
+    var readyM = cleanM.filter(trackReady);   // preview also shows only playable
     catalogTracks = readyM.filter(function (t) { return !isVideo(t); });
-    catalogVideos = mock.filter(function (t) { return isVideo(t) && videoReady(t); });
+    catalogVideos = cleanM.filter(function (t) { return isVideo(t) && videoReady(t); });
   }
 
   // re-fetch the catalog (the library grows constantly on the platform)
@@ -1038,12 +1042,16 @@
   // excluded so the demo track itself still routes to playDemo. Server-charted tracks take the separate chart branch.
   function isLaunchable(t) { return !!t && t.id && t.id !== 'demo' && !t.demo && !!trackAudioUrl(t); }
   // ▼▼▼ SWAP-SEAM ▼▼▼ — media type (music vs video). Prefer an AUTHORITATIVE backend
-  // field (media_type / is_video). When Lovable ships it, ONLY mediaType() changes —
-  // isVideo/musicTracks/videoTracks and every caller stay put. Until then, fall back to
-  // a genre/title heuristic. Mirrors the BONUS-SPARKS seam. See VIDEO_SEPARATION_BRIEF.md.
+  // field (media_type / is_video). This is now the PRIMARY signal: game-catalog SHIPS the
+  // field (CONFIRMED LIVE 2026-07 — every /tracks row carries media_type ∈ {'audio','video'}
+  // PLUS an is_video boolean; tally over the full library = 1255 audio / 158 video). The
+  // genre/title heuristic below is now a DORMANT fallback, kept only for any legacy/edge row
+  // that somehow lacks the field. isVideo/musicTracks/videoTracks + every caller stay put.
+  // Mirrors the BONUS-SPARKS seam. See VIDEO_SEPARATION_BRIEF.md.
   // NOTE: the backend match is deliberately FUZZY (/video|film|^mv$/i) so a plausible value
   // like 'music_video' / 'mv' / 'video/mp4' still classifies as video — an exact === 'video'
   // would let such a value read as music (field present → heuristic skipped → silent re-leak).
+  // 'audio' (the DB's music value) contains none of those tokens → correctly reads as music.
   function mediaType(t) {
     if (!t) return 'music';
     if (typeof t.media_type === 'string' && t.media_type) {        // backend field #1 (preferred)
@@ -1153,6 +1161,46 @@
     return t.poster_url || t.thumbnail_url || t.first_frame_url || t.artwork_url || '';
   }
   // ▲▲▲ SWAP-SEAM ▲▲▲
+  // ---------- dev/test junk exclusion (content cleanup) ----------
+  // The owner's account seeds a few pure DEV TEST rows into the LIVE catalog (real analytics-confirmed
+  // titles: "test" / "test00" / "E2E Test Song - My new track about summer vibes" / "ReactivVibeAI.com").
+  // These must NEVER reach the playable catalog OR any discovery rail (Featured/Hot/New/Surprise/Browse/
+  // search) — a dead/junk pick burns a first impression. Game-side filter ONLY: no DB writes, nothing here
+  // touches prod data. Applied at the ONE chokepoint in loadCatalog(), so every downstream surface (rails,
+  // browse, search, daily rift, release parties) inherits the exclusion for free.
+  //
+  // TIGHT title patterns ONLY — match on TITLE SHAPE, never artist_name. (The owner's REAL songs share the
+  // 'Reactivvibeai' artist — "Blood Moon", "Backroom Bop", "Uplifting Summer Rain" — so an artist filter
+  // would nuke real content; and the live "ReactivVibeAI.com" junk row is actually filed under a DIFFERENT
+  // artist ('County Cold'), so artist matching would miss it anyway.) The $-anchors keep real songs safe:
+  // "Test Drive"/"Testament" do NOT match /^test\s*\d*$/. Add new junk shapes to _JUNK_TITLE to extend.
+  const _JUNK_TITLE = [
+    /^test\s*\d*$/i,          // exactly "test", "test00", "test 5" — trailing digits/space only, $-anchored
+    /^e2e\s+test\b/i,         // "E2E Test Song - …" (any E2E-test placeholder)
+    /^reactivvibeai\.com$/i,  // the literal site-URL placeholder row
+  ];
+  function isJunkTrack(t) {
+    if (!t) return false;
+    var title = String(t.title || '').split('\n')[0].trim();   // loadCatalog already single-lines/trims; belt-and-suspenders
+    if (!title) return false;
+    for (var i = 0; i < _JUNK_TITLE.length; i++) if (_JUNK_TITLE[i].test(title)) return true;
+    return false;
+  }
+
+  // ---------- discovery confidence (bias, not a gate) ----------
+  // A track we're CONFIDENT will actually chart + play well — used ONLY to BIAS the random/curated rails
+  // (Surprise / Featured / Hot) so a first impression isn't burned on a likely-dead pick (per prod analytics:
+  // chart_status='failed' + un-decodable rows complete poorly). Prefers a real decodable in-browser audio_url
+  // OR a pre-baked server chart, and avoids chart_status='failed'. This only REORDERS rails (floats confident
+  // tracks to the head / front-loads the Surprise pool) — it NEVER removes anything, so no rail can be emptied.
+  // Videos are already excluded from these music rails upstream (catalogTracks is music-only), so flix levels
+  // are untouched.
+  function _discoverConfident(t) {
+    if (!t) return false;
+    if (t.chart_status === 'failed') return false;        // server charting gave up → historically low completion
+    return !!(hasServerChart(t) || isLaunchable(t) || t.demo);   // pre-baked chart, decodable audio_url, or the demo
+  }
+
   function trackReady(t) {
     if (!t) return false;
     if (t.demo) return true;
@@ -1279,20 +1327,31 @@
     // a couple of ready leads (stable) so each rail keeps its OWN distinct order instead of collapsing to
     // the same playable few — the 4 rails must show DIFFERENT songs even when metadata is sparse.
     const readyFirst = (arr) => arr.slice().sort((x, y) => (trackReady(y) ? 1 : 0) - (trackReady(x) ? 1 : 0));
+    // content-cleanup: like readyFirst, but floats the highest-CONFIDENCE tracks to the head (see _discoverConfident)
+    // — biases Featured/Hot away from likely-dead picks. Stable + non-destructive: it only REORDERS, never drops.
+    const confidentFirst = (arr) => arr.slice().sort((x, y) => (_discoverConfident(y) ? 1 : 0) - (_discoverConfident(x) ? 1 : 0));
     // SALTED per-track hash (stable across reloads) → each rail gets an INDEPENDENT permutation, so the
     // rails stay distinct even when created_at/play_count are all empty (different salt = different order).
     const hsh = (t, salt) => { var s = salt + String(t.id || t.title || ''), h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h; };
     const dateOf = (t) => (typeof t.created_at === 'number' ? t.created_at : Date.parse(t.created_at)) || 0;   // build58: created_at is already normalized to ms (loadCatalog/mock) — Date.parse(number) was NaN→0, collapsing "New" to the hash order (a fresh upload never surfaced first)
     const feat = catalogTracks.filter(t => t.featured);
-    // FEATURED: real featured flags first; fallback = a curated slice on the 'F' permutation.
-    const featured = readyFirst((feat.length ? feat : catalogTracks.slice()).sort((a, b) => hsh(a, 'F') - hsh(b, 'F'))).slice(0, 24);
-    // HOT: play_count desc, then the 'H' permutation (distinct from Featured/New).
-    const hot = readyFirst(catalogTracks.slice().sort((a, b) => ((b.play_count || 0) - (a.play_count || 0)) || (hsh(a, 'H') - hsh(b, 'H')))).slice(0, 24);
-    // NEW: newest-first by created_at, then the 'N' permutation when dates tie.
+    // FEATURED: real featured flags first; fallback = a curated slice on the 'F' permutation. confidence-first
+    // so a curated card isn't a likely-dead pick.
+    const featured = confidentFirst((feat.length ? feat : catalogTracks.slice()).sort((a, b) => hsh(a, 'F') - hsh(b, 'F'))).slice(0, 24);
+    // HOT: play_count desc, then the 'H' permutation (distinct from Featured/New). confidence-first.
+    const hot = confidentFirst(catalogTracks.slice().sort((a, b) => ((b.play_count || 0) - (a.play_count || 0)) || (hsh(a, 'H') - hsh(b, 'H')))).slice(0, 24);
+    // NEW: newest-first by created_at, then the 'N' permutation when dates tie. Intentionally keeps readyFirst
+    // (NOT confidence-first) — "New" must stay chronological; a fresh upload is usually chart_status:'pending',
+    // not 'failed', so confidence-biasing would only fight its whole purpose.
     const fresh = readyFirst(catalogTracks.slice().sort((a, b) => (dateOf(b) - dateOf(a)) || (hsh(a, 'N') - hsh(b, 'N')))).slice(0, 24);
+    // SURPRISE: front-load CONFIDENT picks (a dead Surprise burns first impressions) WITHOUT thinning the rail —
+    // shuffle confident + the rest independently (unbiased Fisher-Yates), then confident-first. Falls back to the
+    // full pool when nothing is confident, so the rail is never emptied. Memoized in _sectionsCache so Surprise
+    // stays STABLE per load (no re-roll on tab-back).
     const readyPool = catalogTracks.filter(trackReady);
-    const pool = (readyPool.length ? readyPool : catalogTracks).slice();
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }   // build58: unbiased Fisher-Yates (the old comparator shuffle was non-uniform); memoized so Surprise is a STABLE pick per load
+    const basePool = (readyPool.length ? readyPool : catalogTracks).slice();
+    const _shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
+    const pool = _shuf(basePool.filter(_discoverConfident)).concat(_shuf(basePool.filter(function (t) { return !_discoverConfident(t); })));
     // GOLDEN BUZZER rail: the flagged winners (ready-first, capped like the others). Empty until the backend
     // flags any → the 'golden' tab stays hidden (jukebox.js gates the tab on this being non-empty).
     const golden = readyFirst(catalogTracks.filter(goldenBuzzer)).slice(0, 24);
