@@ -46,6 +46,54 @@
   }
 
   // =========================================================================
+  // RETENTION / DISCOVERY RENDERING (Wave 2) — renders the derived read-only
+  // getters Wave 1 added to RhythmCatalog (forYouTracks / freshSince / dailyPicks /
+  // getCollectionStats / chaseTheS + getBest). HARD RULE: every shelf/card here
+  // HIDES when its getter is empty, and every read is guarded, so a brand-new
+  // player (no history) sees nothing extra. Gold ♔ is the one sanctioned
+  // non-crimson accent (owner-ratified via the Golden-Buzzer / green-fret precedent).
+  // =========================================================================
+  // day-key helpers — MATCH goals.js/catalog.js exactly (YYYY-MM-DD, prefers RC().dailyRiftToday()).
+  function _todayKey() {
+    try { if (RC().dailyRiftToday) return RC().dailyRiftToday(); } catch (e) {}
+    var d = new Date(), mm = ('0' + (d.getMonth() + 1)).slice(-2), dd = ('0' + d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+  function _prevKey(k) {
+    try { var p = String(k || '').split('-'); var d = new Date(+p[0], (+p[1] || 1) - 1, +p[2] || 1); d.setDate(d.getDate() - 1);
+      var mm = ('0' + (d.getMonth() + 1)).slice(-2), dd = ('0' + d.getDate()).slice(-2); return d.getFullYear() + '-' + mm + '-' + dd; }
+    catch (e) { return null; }
+  }
+  // "away N days / hours" phrasing from lastVisitAgeHours() (null → '').
+  function _agoPhrase(h) {
+    if (h == null || !isFinite(h)) return '';
+    if (h < 1) return 'Just now';
+    if (h < 24) { var n = Math.round(h); return 'Away ' + n + (n === 1 ? ' hour' : ' hours'); }
+    var d = Math.round(h / 24); return 'Away ' + d + (d === 1 ? ' day' : ' days');
+  }
+
+  // ---- Near-miss micro-tags (#17): candidate SET from chaseTheS (played-but-not-S),
+  // LABEL/threshold from getBest. Rebuilt per songs/shelf render; empty for a new player. ----
+  var nearMiss = {};   // trackId(str) -> 'SO CLOSE' | '1 TO S'
+  function _nearMissTag(best) {
+    if (!best || best.grade === 'S') return '';
+    var acc = (typeof best.accuracy === 'number') ? best.accuracy : 0;   // 0..1
+    if (acc >= 0.97) return 'SO CLOSE';       // a handful of notes from a clean run
+    if (best.grade === 'A') return '1 TO S';  // one grade below S
+    return '';
+  }
+  function rebuildNearMiss() {
+    nearMiss = {};
+    try {
+      var list = RC().chaseTheS ? (RC().chaseTheS(80) || []) : [];
+      for (var i = 0; i < list.length; i++) {
+        var t = list[i]; if (!t || t.id == null) continue;
+        var tag = _nearMissTag(RC().getBest(t.id)); if (tag) nearMiss[String(t.id)] = tag;
+      }
+    } catch (e) {}
+  }
+
+  // =========================================================================
   // VIEW NAVIGATION
   // =========================================================================
   let songsReturn = 'jukebox';
@@ -157,6 +205,9 @@
     const gc = el.querySelector('.cover-grade');
     if (best) { gc.style.display = 'flex'; gc.textContent = best.grade; gc.className = 'cover-grade ' + gradeClass(best.grade); }
     else gc.style.display = 'none';
+    // R-3 mastery crown: an S-grade best earns a gold ♔ over the grade chip. Pooled/recycled covers →
+    // toggle a class (the crown is a pure-CSS ::after, so it add/removes with the class — no stray node).
+    el.classList.toggle('mastered', !!(best && best.grade === 'S'));
     // AI-radio badges (Golden Buzzer / judge grade / hot) — from the backend `badges` field (BADGES_BACKEND_BRIEF.md).
     // Renders nothing until the backend ships the field; chips are built as DOM nodes (textContent → injection-safe).
     const bc = el.querySelector('.cover-badges');
@@ -371,6 +422,7 @@
   const UNCAT_LABEL = 'Uncategorized'; // friendlier display label
 
   function renderBrowse() {
+    renderRetentionShelves();   // Wave 2: For You / Fresh / Daily shelves at the top (each hides when its getter is empty)
     // ---- genres: count desc, Uncategorized pinned LAST ----
     const all = RC().genreList().slice();
     const uncat = [], named = [];
@@ -496,6 +548,9 @@
       gg.appendChild(sec);
     }
     const maxCount = named.length ? named[0].count : 1;   // the biggest genre (sorted desc) → "energy bar" scale
+    // R-3 collection meters: per-genre S-mastery from getCollectionStats() (built off saved bests). {} for a
+    // new player → no meter shows anywhere (quiet). Keyed by cleanGenre(t.genre), same key genreList() uses.
+    let colStats = {}; try { colStats = (RC().getCollectionStats && RC().getCollectionStats()) || {}; } catch (e) { colStats = {}; }
     genres.forEach(g => {
       const isUncat = g.name === UNCAT_GENRE;
       const label = isUncat ? UNCAT_LABEL : g.name;
@@ -508,6 +563,12 @@
       // a fill fraction (0..1) for the relative-size "energy" rail under the count — bigger genre = fuller bar.
       const frac = Math.max(0.16, Math.min(1, g.count / (maxCount || 1)));
       t.style.setProperty('--gt-fill', (frac * 100).toFixed(0) + '%');
+      // quiet S-mastery meter — "12/40 S". Shown ONLY once you've S-ranked a track in this genre (else nothing).
+      const cs = colStats[g.name];
+      const sN = cs ? (cs.sCount | 0) : 0;
+      const meterHtml = sN > 0
+        ? '<span class="gt-collect"><b aria-hidden="true">♔</b>' + sN + '/' + (cs.total | 0 || g.count) + ' S</span>'
+        : '';
       t.innerHTML =
         '<span class="gt-watermark" aria-hidden="true">' + RC().escapeHtml(initial(label)) + '</span>' +
         '<span class="gt-glow" aria-hidden="true"></span>' +
@@ -518,6 +579,7 @@
             '<span class="gt-unit">track' + (g.count !== 1 ? 's' : '') + '</span>' +
           '</span>' +
           '<span class="gt-rail" aria-hidden="true"><i></i></span>' +
+          meterHtml +
         '</span>';
       t.addEventListener('click', () => openSongs(RC().byGenre(g.name), label, 'browse'));
       gg.appendChild(t);
@@ -717,6 +779,11 @@
     } else {
       const best = RC().getBest(t.id);
       if (best) {
+        // #17 near-miss micro-tag — leads the cluster so the nudge reads before the grade
+        const nm = nearMiss[String(t.id)];
+        if (nm) { const chip = document.createElement('span'); chip.className = 'sc-nearmiss' + (nm === 'SO CLOSE' ? ' soclose' : ''); chip.textContent = nm; right.appendChild(chip); }
+        // R-3 mastery crown — S-grade earns a gold ♔ alongside the grade chip
+        if (best.grade === 'S') { card.classList.add('mastered'); const cr = document.createElement('span'); cr.className = 'sc-crown'; cr.textContent = '♔'; cr.setAttribute('aria-hidden', 'true'); right.appendChild(cr); }
         const g = document.createElement('span'); g.className = 'sc-grade ' + gradeClass(best.grade); g.textContent = best.grade;
         right.appendChild(g);
       } else {
@@ -849,6 +916,7 @@
     const host = $('song-list');
     host.innerHTML = '';
     songsRendered = 0;
+    rebuildNearMiss();   // #17: refresh the near-miss (1-TO-S / SO-CLOSE) lookup for this list render
     songsList = currentSongs();
     $('songs-count').textContent = songsList.length + '';
     // keep the in-field clear-× in sync with the current query (also covers openSongs seeding a query)
@@ -914,6 +982,155 @@
     for (let i = songsRendered; i < end; i++) frag.appendChild(songsPoster ? videoCard(songsList[i]) : songCard(songsList[i]));
     host.appendChild(frag);
     songsRendered = end;
+  }
+
+  // =========================================================================
+  // RETENTION SHELVES (For You / Fresh Since / Daily Picks) — quiet horizontal
+  // rails at the top of Browse. Every shelf HIDES when its getter returns []; the
+  // whole block hides if all three are empty. Cards reuse the getBest grade / #17
+  // near-miss / R-3 mastery-crown pipeline.
+  // =========================================================================
+  function shelfCard(t) {
+    const card = document.createElement('button');
+    card.className = 'rr-shelf-card'; card.type = 'button';
+    // art (thumbnail → full → branded initial; mirrors songCard/fillCover fallback chain)
+    const art = document.createElement('span'); art.className = 'rsc-art';
+    if (t.artwork_url) {
+      const im = document.createElement('img'); im.loading = 'lazy'; im.alt = '';
+      const _tu = thumb(t.artwork_url, 240);
+      im.onerror = function () { if (im.dataset.full !== '1' && _tu !== t.artwork_url) { im.dataset.full = '1'; im.src = t.artwork_url; } else { im.remove(); art.classList.add('rsc-noart'); setPal(art, t.id); art.textContent = initial(t.title); } };
+      im.dataset.full = ''; im.src = _tu; art.appendChild(im);
+    } else { art.classList.add('rsc-noart'); setPal(art, t.id); art.textContent = initial(t.title); }
+    card.appendChild(art);
+    // R-3 mastery crown (S) or grade chip; #17 near-miss chip — all off the SAME getBest/chaseTheS data
+    const best = RC().getBest(t.id);
+    if (best && best.grade === 'S') { card.classList.add('mastered'); const cr = document.createElement('span'); cr.className = 'rsc-crown'; cr.textContent = '♔'; cr.setAttribute('aria-hidden', 'true'); card.appendChild(cr); }
+    else if (best) { const g = document.createElement('span'); g.className = 'rsc-grade ' + gradeClass(best.grade); g.textContent = best.grade; card.appendChild(g); }
+    const nm = nearMiss[String(t.id)];
+    if (nm) { const chip = document.createElement('span'); chip.className = 'rsc-nm' + (nm === 'SO CLOSE' ? ' soclose' : ''); chip.textContent = nm; card.appendChild(chip); }
+    // caption
+    const cap = document.createElement('span'); cap.className = 'rsc-cap';
+    cap.innerHTML = '<span class="rsc-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
+                    '<span class="rsc-sub">' + RC().escapeHtml(t.artist_name || '') + '</span>';
+    card.appendChild(cap);
+    card.addEventListener('click', () => RC().openSheet(t));
+    return card;
+  }
+  function buildShelf(key, label, sub, tracks) {
+    if (!tracks || !tracks.length) return null;   // EMPTY-GUARD → this shelf never renders
+    const sec = document.createElement('section');
+    sec.className = 'rr-shelf'; sec.dataset.shelf = key;
+    const head = document.createElement('div'); head.className = 'rr-shelf-head';
+    head.innerHTML = '<span class="rsh-title">' + RC().escapeHtml(label) + '</span>' +
+                     (sub ? '<span class="rsh-sub">' + RC().escapeHtml(sub) + '</span>' : '') +
+                     '<span class="rsh-count">' + tracks.length + '</span>';
+    sec.appendChild(head);
+    const row = document.createElement('div'); row.className = 'rr-shelf-row';
+    tracks.forEach(t => { if (t) row.appendChild(shelfCard(t)); });
+    sec.appendChild(row);
+    return sec;
+  }
+  function renderRetentionShelves() {
+    const scroll = document.querySelector('#view-browse .browse-scroll');
+    if (!scroll) return;
+    let host = $('rr-shelves');
+    if (!host) { host = document.createElement('div'); host.id = 'rr-shelves'; host.className = 'rr-shelves'; scroll.insertBefore(host, scroll.firstChild); }
+    host.innerHTML = '';
+    rebuildNearMiss();
+    let foryou = [], fresh = [], daily = [];
+    try { foryou = (RC().forYouTracks ? RC().forYouTracks(24) : []) || []; } catch (e) {}
+    try { fresh = (RC().freshSince ? RC().freshSince() : []) || []; } catch (e) {}
+    try { daily = (RC().dailyPicks ? RC().dailyPicks(12) : []) || []; } catch (e) {}
+    let ageH = null; try { ageH = RC().lastVisitAgeHours ? RC().lastVisitAgeHours() : null; } catch (e) {}
+    const freshSub = fresh.length ? _agoPhrase(ageH) : '';
+    const shelves = [
+      buildShelf('fresh', 'Fresh since you were here', freshSub, fresh.slice(0, 18)),
+      buildShelf('foryou', 'For you', 'From what you play', foryou.slice(0, 18)),
+      buildShelf('daily', 'Daily picks', "Today's rotation", daily),
+    ];
+    let any = false;
+    shelves.forEach(s => { if (s) { host.appendChild(s); any = true; } });
+    host.style.display = any ? '' : 'none';   // no shelves → the whole block collapses (no empty header/gap)
+  }
+
+  // =========================================================================
+  // WELCOME-BACK CARD (R-2) — ONE proactive warm-dark hub card on library open,
+  // by priority: streak-at-risk → fresh-since count. Dismiss = gone for the day.
+  // At most ONE per session; YIELDS if a first-run/calibration coach is showing.
+  // =========================================================================
+  function _streakAtRisk() {
+    try {
+      const G = window.RhythmGoals;
+      if (!G || !G.streakState) return 0;      // no streak source → skip this branch (per spec)
+      const s = G.streakState() || {};
+      const count = s.count | 0;
+      if (count < 1) return 0;
+      const today = _todayKey();
+      if (s.lastCompleteDate === today) return 0;          // already safe today
+      if (s.lastCompleteDate === _prevKey(today)) return count;   // alive (done yesterday), not yet today → at risk
+      return 0;                                            // older / broken → not "at risk" (already lost)
+    } catch (e) { return 0; }
+  }
+  function _coachVisible() {
+    // YIELD to a first-run / calibration surface so we never stack a second proactive card
+    try {
+      const ids = ['calib-screen', 'howto-screen', 'ryo-intro-screen', 'ryo-intro'];
+      for (let i = 0; i < ids.length; i++) { const el = $(ids[i]); if (el && (el.classList.contains('active') || el.classList.contains('show'))) return true; }
+      if (document.querySelector('.first-run-coach, .coach-card.show, #tap-zones.coach, [data-first-run].show')) return true;
+    } catch (e) {}
+    return false;
+  }
+  function _dismissWelcome(card, today) {
+    try { localStorage.setItem('rr_welcome_dismiss', today); } catch (e) {}
+    if (card && card.parentNode) card.parentNode.removeChild(card);
+  }
+  function maybeWelcomeCard() {
+    try {
+      const menu = $('menu');
+      if (!(menu && menu.classList.contains('active'))) return;   // library not on screen yet (observer re-fires on activation)
+      if (sessionStorage.getItem('rr_welcome_shown')) return;     // one proactive card per session
+      if (_coachVisible()) return;                                // YIELD — don't stack on a first-run nudge
+      const today = _todayKey();
+      let dismissed = ''; try { dismissed = localStorage.getItem('rr_welcome_dismiss') || ''; } catch (e) {}
+      if (dismissed === today) return;                            // dismissed today → stay gone for the day
+
+      const risk = _streakAtRisk();
+      let fresh = []; try { fresh = (RC().freshSince ? RC().freshSince() : []) || []; } catch (e) {}
+      let mode, title, sub, cta, onCta;
+      if (risk > 0) {
+        mode = 'streak';
+        title = 'Keep your ' + risk + '-day streak alive';
+        sub = 'Play a track today so it doesn’t reset.';
+        cta = 'Play now';
+        onCta = () => { try { const d = RC().dailyPicks(1); if (d && d[0]) RC().openSheet(d[0]); } catch (e) {} };
+      } else if (fresh.length > 0) {
+        mode = 'fresh';
+        let ageH = null; try { ageH = RC().lastVisitAgeHours(); } catch (e) {}
+        const ago = _agoPhrase(ageH);
+        title = fresh.length + ' new since you were here';
+        sub = (ago ? ago + ' · ' : '') + 'Fresh drops in your library.';
+        cta = 'See what’s new';
+        onCta = () => { try { openSongs(RC().freshSince(), 'Fresh since your last visit', 'jukebox'); } catch (e) {} };
+      } else {
+        return;   // nothing worth saying → no card (empty-guard)
+      }
+      try { sessionStorage.setItem('rr_welcome_shown', '1'); } catch (e) {}
+      const view = $('view-jukebox'); if (!view) return;
+      const old = $('rr-welcome'); if (old) old.remove();
+      const card = document.createElement('div');
+      card.id = 'rr-welcome'; card.className = 'rr-welcome rr-welcome-' + mode; card.setAttribute('role', 'status');
+      const icon = mode === 'streak'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 4.2 4 7a4 4 0 0 1-8 0c0-1 .4-1.8 1-2.5C9.6 9 10 10 11 10.4 10.2 8 12 6 12 3z"></path><path d="M8.5 15a3.5 3.5 0 0 0 7 0"></path></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-3.6 3 1.1 4.8L12 14.5 8 16.8l1.1-4.8L5.5 9l4.6-1.4L12 3z"></path></svg>';
+      card.innerHTML =
+        '<span class="rw-ic" aria-hidden="true">' + icon + '</span>' +
+        '<span class="rw-txt"><span class="rw-title">' + RC().escapeHtml(title) + '</span><span class="rw-sub">' + RC().escapeHtml(sub) + '</span></span>' +
+        '<button class="rw-cta" type="button">' + RC().escapeHtml(cta) + '</button>' +
+        '<button class="rw-x" type="button" aria-label="Dismiss">✕</button>';
+      card.querySelector('.rw-cta').addEventListener('click', () => { _dismissWelcome(card, today); if (onCta) onCta(); });
+      card.querySelector('.rw-x').addEventListener('click', () => _dismissWelcome(card, today));
+      view.insertBefore(card, view.firstChild);
+    } catch (e) {}
   }
 
   // =========================================================================
@@ -991,6 +1208,15 @@
         });
         ro.observe(jukebox);
       }
+      // R-2 welcome-back card: fire when the library screen (#menu) becomes active — robust to the
+      // hub→library nav path where render() ran on catalog-boot (before #menu was on screen).
+      try {
+        const menuEl = $('menu');
+        if (menuEl && window.MutationObserver) {
+          const mo = new MutationObserver(() => { if (menuEl.classList.contains('active')) maybeWelcomeCard(); });
+          mo.observe(menuEl, { attributes: true, attributeFilter: ['class'] });
+        }
+      } catch (e) {}
     }
     computeCv();
     // GOLDEN BUZZER coverflow rail: reveal its tab ONLY when the backend has flagged winners (else stays hidden →
@@ -1006,6 +1232,7 @@
     setSection(sectionKey);
     showView('jukebox');
     startHubBed();   // build158: begin the ambient hub-bed poll (idempotent; audible only on the library surfaces, ducked under previews/runs)
+    maybeWelcomeCard();   // R-2: try once now (covers the case where #menu is already active); the observer catches later activation
     // catalog count indicator (playable songs; refreshes as the library grows)
     const lr = $('lib-ready');
     if (lr) {

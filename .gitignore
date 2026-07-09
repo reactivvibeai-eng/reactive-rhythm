@@ -13,3 +13,5 @@ assets/mp/_*_draft.png
 assets/guitars/_*.png
 assets/guitars/_*.jpg
 assets/guitars/_rerender/
+# alarm-clock traveling-level scratch (anchors, extracted frames, montages, the process helper) — runtime uses only ach-*.mp4/.jpg
+assets/levels/_*

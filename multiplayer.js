@@ -93,6 +93,7 @@
   var _startRebcT = 0;        // MP-reliability FIX #3: self-cancelling re-emit of the host's 'start' broadcast (a single dropped packet used to strand a late-subscribed guest at the setup screen).
   var _roomStartRebcT = 0;    // MP-reliability FIX #3: self-cancelling re-emit of 'room-start' (idempotent on the receiver via _roomStartMid).
   var _roomStartMid = null;   // MP-reliability FIX #3: last handled room-start mid — makes onRoomStart idempotent so a re-emit can't tear down + rebuild the match channel.
+  var _lateRoomStartResends = 0;  // MP FIX #20: bounded budget for the HOST-WATCHDOG re-emit of 'room-start' to a guest that missed the ~6s start burst and is STILL re-broadcasting room-ready after we went live (reconstructed from _roomStartMid + seats; self-limiting — the guest stops pinging the instant it opens the match channel). Reset each startRoomMatch + on teardown/rematch.
   var matchLive = false, finishedLocal = false;
   // build114: AUTHORITATIVE MP CHART — the guest's inbox for the host's broadcast note array (see resolveAndStart /
   // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
@@ -104,6 +105,7 @@
     _pendingChart = { key: p.key, notes: p.notes };
   }
   var myFinal = null, oppFinal = null;
+  var _oppGoneGraceT = 0;   // MP FIX #21: opp-presence-drop forfeit-grace handle — a MY-side flap (or the fresh softPresence after a mid-run read-side rebuild) drops the opp from the roster; don't one-shot the forfeit. Cleared in teardownMatch/resetForRematch.
   var lastOppTick = null;
   var lastOppState = null;        // versus P2: latest opponent render frame (ghost deck source)
   var _lastStateSend = 0, _vsActive = false;   // _vsActive: gate the high-rate 'state' stream (P4 turns it on)
@@ -973,14 +975,19 @@
     if (oppPresent) {
       if (dot) { dot.setAttribute('data-state', 'here'); dot.textContent = oppName.slice(0, 12); }
       oppLeft = false;
+      if (_oppGoneGraceT) _unmarkOppGone();   // MP FIX #21: restore the LIVE deck label if a pending grace had flipped it to LEFT
+      _clearOppGoneGrace();   // MP FIX #21: the opp re-heartbeated (recovered blip / rebuilt read-side converged) — cancel any pending forfeit-grace
       if (matchRole === 'host' && sel.trackId && !wasPresent) broadcastSong();   // late-join catch-up
       if (!wasPresent) paintWaitStatus(oppName + ' joined — ' + (matchRole === 'host' ? 'pick a track and hit READY.' : 'the host is choosing a track.'));   // build60: announce the arrival
       if (!wasPresent) _armMatchReadyFromRoom();   // MP-reliability FIX #2: opponent presence just landed — arm the room→match auto-ready the 350ms one-shot may have missed under load
     } else if (wasPresent) {
-      oppLeft = true;
       if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
-      if (matchLive) { markOppGone(); settleIfReady(); }
-      else { oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
+      // MP FIX #21: mid-run, DON'T latch oppLeft + settle on the first empty roster — a MY-side flap (or the fresh
+      // softPresence after a read-side rebuild) reads the opp as gone even though they're still playing. Arm the grace;
+      // it forfeits only if the opp is still absent after the window (and the 8s settle-safety backstops a genuine leave
+      // once I've finished). Pre-match, the old immediate path stands (no live run to protect).
+      if (matchLive) { _armOppGoneGrace(); }
+      else { oppLeft = true; oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
     } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…', false, true); }   // FIX 2.4: escalate the opponent-join wait (elapsed count + 20s/60s copy)
     refreshReadyEnabled();
   }
@@ -1295,7 +1302,25 @@
   // any match channel). Track it in roomOppReady (distinct from match-channel oppReady); the host auto-starts once
   // BOTH are ready (maybeStart), so neither player needs a separate START button (owner's "each readies → auto-start").
   function onRoomReady(p) {
-    if (matchCh) return;   // match channel is up → its 'ready' is authoritative; ignore stale room-stage echoes
+    if (matchCh) {
+      // MP FIX #20 (room-start deadlock): I'm the host and already STARTED (matchCh live), but a guest is STILL
+      // re-broadcasting room-ready every 2s — they missed the ~6s room-start burst and are stranded at the room stage.
+      // The MP-2 room-state snapshot does NOT self-heal this: it carries a `started` bool, but onRoomState never
+      // consumes it AND the snapshot has no `mid` to open the match channel. So act as a HOST WATCHDOG: re-emit the
+      // room-start (reconstructed from the live mid + seats) so the guest catches up. Idempotent on the guest
+      // (onRoomStart dedupes by mid); self-limiting (their room-ready re-broadcast stops the instant matchCh opens);
+      // bounded as a backstop. NORMAL rooms only — show-room seats catch up via the show-snap (which carries the mid).
+      // RAW send (NOT _critSend): matches startRoomMatch's raw room-start burst. room-start is deliberately kept out of
+      // the crit-queue — a queued snapshot carrying THIS round's mid could survive a settle and flush into a later
+      // round, re-stranding the guest on a dead match channel. The guest's 2s room-ready re-broadcast already IS the
+      // retry cadence here, so the crit-queue's independent retry buys nothing and only adds that cross-round hazard.
+      if (room.isHost && !room.show && !spectating && _roomStartMid && room.ch && p && p.ready && p.id &&
+          (p.id === room.p2 || p.id === room._lastP2) && _lateRoomStartResends < 6) {
+        _lateRoomStartResends++;
+        try { room.ch.send({ type: 'broadcast', event: 'room-start', payload: { mid: _roomStartMid, p1Id: room.p1, p2Id: room.p2 || room._lastP2 || p.id } }); } catch (e) {}
+      }
+      return;   // match channel is up → its 'ready' is authoritative; ignore stale room-stage echoes
+    }
     roomOppReady = !!(p && p.ready);
     if (p && p.settings) _oppSettings = p.settings;   // build116 p3: awareness (room-stage handshake mirror of onReady)
     var oppName = (room._p2Name) || 'Your opponent';
@@ -2313,6 +2338,25 @@
   }
   function unmountOppPanel() { if (oppPanel && oppPanel.parentNode) oppPanel.parentNode.removeChild(oppPanel); }
   function markOppGone() { var l = oppPanel && oppPanel.querySelector('#mo-live'); if (l) { l.textContent = 'LEFT'; l.classList.add('gone'); } }
+  function _unmarkOppGone() { var l = oppPanel && oppPanel.querySelector('#mo-live'); if (l) { l.textContent = 'LIVE'; l.classList.remove('gone'); } }   // MP FIX #21: the opp can now RETURN within the forfeit-grace (a MY-side blip) — restore the deck's LIVE label that a premature markOppGone() flipped to LEFT
+  // MP FIX #21: opp-presence-drop forfeit GRACE. softPresence keeps a peer for 75s on a passive flap, but a MID-RUN
+  // channel rebuild (the read-side reopen) starts a FRESH softPresence with an empty roster — its first emit reads the
+  // opp as "gone". A single websocket blip must NOT one-shot a forfeit. On a mid-run drop, arm a short grace instead of
+  // settling immediately: if the opp re-heartbeats (their 10s beat, or my rebuilt read-side converges) the grace is
+  // cancelled; only a still-absent opp after the window forfeits (the 8s settle-safety independently backstops a genuine
+  // no-show once I've finished, so a real leave still resolves promptly). Cleared in teardownMatch / resetForRematch.
+  function _clearOppGoneGrace() { if (_oppGoneGraceT) { clearTimeout(_oppGoneGraceT); _oppGoneGraceT = 0; } }
+  function _armOppGoneGrace() {
+    markOppGone();                     // UI hint (deck label) — NOT a commitment to forfeit
+    if (_oppGoneGraceT) return;        // a grace is already counting down
+    _oppGoneGraceT = setTimeout(function () {
+      _oppGoneGraceT = 0;
+      if (!matchLive) return;          // already settled/torn down while we waited
+      if (oppPresent) return;          // opp came back within the grace — no forfeit
+      oppLeft = true;                  // confirmed absence → now it's a real leave
+      settleIfReady();
+    }, 12000);
+  }
 
   function startTick() {
     stopTick();
@@ -2394,7 +2438,11 @@
       score: results.score, combo: results.max_combo, acc: Math.round((results.accuracy || 0) * 1000) / 10, grade: results.grade
     } : (window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : { score: 0, combo: 0, acc: 0, grade: 'D' });
     myFinal = s;
-    if (matchCh) matchCh.send({ type: 'broadcast', event: 'final', payload: Object.assign({ name: ME.name }, s) });
+    // MP FIX #21: route MY final through the MP-5 retry queue (dedupe id 'final'; onFinal is idempotent — a
+    // re-delivered final overwrites oppFinal with the same value and settleIfReady no-ops once matchLive is false).
+    // A raw one-shot send that fell in a mid-run socket flap left the RIVAL waiting on the 8s safety → a hollow
+    // forfeit W against a player who actually finished. Queued, it re-flushes on the match channel's next SUBSCRIBED.
+    if (matchCh) _critSend('match', 'final', Object.assign({ name: ME.name }, s), 'final');
     // build102s (security judge BLOCKER): a SOLO show run has nothing to pair — never the normal settle (no 8s
     // safety wait, no hollow YOU-WIN, no recordMpResult forfeit-W, no mpSettle round row). The run itself was already
     // recorded as a scored single by the engine (recordLocal + /score — the Phase-1 path). Keyed on the beginMatch
@@ -2636,8 +2684,9 @@
   function resetForRematch() {
     _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
     _stopMatchReadyRebc(); _stopStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: a rematch is a fresh handshake — clear the prior round's handoff re-emit timers/arm
-    _roomStartMid = null;   // BUG2 fix: each new round re-arms — a stale _roomStartMid from the prior round would make _armBothReadyWd early-return forever (treating it as "already started"), so the 2nd+ room match's both-ready watchdog never armed → a silent hang if that round's start dropped. onRoomStart re-asserts the fresh mid AFTER its teardown, so per-mid re-emit idempotency (line ~3608) is preserved.
+    _roomStartMid = null; _lateRoomStartResends = 0;   // BUG2 fix: each new round re-arms — a stale _roomStartMid from the prior round would make _armBothReadyWd early-return forever. MP FIX #20: fresh round → fresh host-watchdog budget (treating it as "already started"), so the 2nd+ room match's both-ready watchdog never armed → a silent hang if that round's start dropped. onRoomStart re-asserts the fresh mid AFTER its teardown, so per-mid re-emit idempotency (line ~3608) is preserved.
     _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc();   // v418 (B8): a rematch is a fresh start handshake — clear the both-ready watchdog + any stale call-watch. FIX 2.4: + the waiting-escalation interval
+    _clearOppGoneGrace();   // MP FIX #21: a rematch is a fresh round — drop any pending opp-gone forfeit grace
     _stopRoomStateBeat(); _stopCritSweep(); _critQ = [];   // MP-2/MP-5 (B8): a rematch is a fresh round on the same channels — stop the snapshot beat + drop every in-doubt critical send; both re-arm below (beat) / on the next _critSend (queue).
     _lastRematchMid = null;   // MP-5 dedupe: the fresh round can be rematched again
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
@@ -2698,8 +2747,9 @@
     try { if (window.RhythmGame && window.RhythmGame.stopCelebration) window.RhythmGame.stopCelebration(); } catch (e) {}   // build109 s1: leaving the match shouldn't leave a stray winner-confetti canvas alive
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false; _stopReadyRebc();
     _stopMatchReadyRebc(); _stopStartRebc(); _stopRoomStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: kill any live handoff re-emit timers so a torn-down match can't leak an interval
-    _roomStartMid = null; _lastStartPl = null; _lateStartResends = 0;   // BUG2 fix: null the handled room-start mid so the NEXT room match's both-ready watchdog re-arms (onRoomStart re-asserts the fresh mid AFTER this teardown, which startMatchChannel calls as its safety — so per-mid idempotency survives). BUG3: drop the stored late-join start payload + budget with the match.
+    _roomStartMid = null; _lastStartPl = null; _lateStartResends = 0; _lateRoomStartResends = 0;   // BUG2 fix: null the handled room-start mid so the NEXT room match's both-ready watchdog re-arms. MP FIX #20: drop the host-watchdog re-emit budget too (onRoomStart re-asserts the fresh mid AFTER this teardown, which startMatchChannel calls as its safety — so per-mid idempotency survives). BUG3: drop the stored late-join start payload + budget with the match.
     _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _matchSubbedOnce = false; _clearConnResub('match');   // v418 (B8): both-ready watchdog + call-watch + match re-subscribe timer die with the match; reset the first-subscribe gate. FIX 2.4: + the waiting-escalation interval
+    _clearOppGoneGrace();   // MP FIX #21 (B8): the opp-gone forfeit grace dies with the match
     _stopRoomStateBeat(); _stopCritSweep(); _dropCritScope('match');   // MP-2/MP-5 (B8): the room-state snapshot beat + the critical-send sweep die with the match; drop any in-doubt MATCH-scope sends. The beat re-starts below if the host is still in an open room.
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
@@ -2928,12 +2978,16 @@
         if (_ringSeen[ridKey] && (Date.now() - _ringSeen[ridKey]) < 60000) continue;   // build113 review: dedupe by ROOM but with a ~60s TTL. Was set permanently (`=1`), which silently ate EVERY later call to the same room for the whole session — a real "call won't go through" contributor (a caller reusing a still-open private room to rematch, or to ring a different player, got no ring). 60s still absorbs the retried-/challenge (new nid, same room, within seconds) case this dedupe was built for.
         _ringSeen[ridKey] = Date.now();
         var from = d.from_name || d.caller_name || d.sender_name || nrow.title || 'A rival';
-        _showRing(String(from).slice(0, 22), String(rid).replace(/[^a-z0-9]/gi, ''));
+        // MP FIX #22: thread the REAL notification row id into the ring so its ACCEPT records+consumes the
+        // notification (POST /challenge/accept + /ack), exactly like the bc:user rail — otherwise the poll rail's
+        // accept never told the server, and the unread notification re-rang on the next reload.
+        var _realNid = (nrow.id != null ? nrow.id : null);
+        _showRing(String(from).slice(0, 22), String(rid).replace(/[^a-z0-9]/gi, ''), _realNid);
         break;
       }
     }).catch(function () {});
   }
-  function _showRing(name, rid) {
+  function _showRing(name, rid, nid) {
     if (_ringUp || !rid) return;
     _ringUp = true;
     _setPhase('ringing', 'incoming_ring');   // MP-4 (observe-only): an inbound battle-call is ringing
@@ -2973,9 +3027,14 @@
     acc.addEventListener('click', function (ev) {
       if (ev && ev.isTrusted === false) return;
       _dismissRing();
+      // MP FIX #22: consume the durable notification so it can't re-ring after a reload (mirrors the bc:user rail's
+      // ackNotice at accept time). Fire-and-forget; a null nid / missing endpoint is a no-op.
+      try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice && nid != null) window.RhythmCatalog.ackNotice(nid); } catch (e) {}
       // v416 (join-reliability): the same UNIFIED path the ?mproom deep-link + bc:user broadcast take — raise MP,
       // fast-path on the host's meta, then DIRECT-join the late host so an ACCEPT never dead-ends on the menu.
-      _pendJoin(rid, { role: 'guest', asSpec: false, label: 'Joining the battle room…' });
+      // MP FIX #22: pass notificationId so _pendJoin POSTs /challenge/accept (flips the caller's room-status +
+      // records the accept server-side) — the bc:user rail already did this; the poll rail silently didn't.
+      _pendJoin(rid, { role: 'guest', asSpec: false, label: 'Joining the battle room…', notificationId: (nid != null ? nid : undefined) });
     });
     dec.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; _dismissRing(); });
   }
@@ -3174,7 +3233,9 @@
     try { _paintConnChip(); } catch (e) {}
   }
   function _scheduleChannelResub(which) {
-    if (which === 'match' && matchLive) { _setConnState('match', 'resub'); return; }   // never rebuild a channel mid-run — chip only
+    // MP FIX #21: the match channel now rebuilds mid-run too (was chip-only). _rebuildMatchChannel reuses the A5
+    // shared handlers + softPresence and never calls teardownMatch, so sel/ready/matchId survive — it only reopens
+    // the read side so the rival's ticks/final resume and the crit-queue (incl. my FINAL) can flush on SUBSCRIBED.
     _setConnState(which, 'resub');
     if (_connResubT[which]) return;                          // one attempt already in flight
     if (_connResubN[which] >= 20) { _setConnState(which, 'dead'); return; }   // bounded — give up LOUD (chip → OFFLINE, tap to retry)
@@ -3200,8 +3261,8 @@
       try { enterRoomWaiting(); } catch (e) {}
       if (meReady && room.id && room.ch && !matchCh && !room.show) { try { _sendRoomReady(); } catch (e) {} }   // re-assert my READY (the 2s rebroadcast interval was cleared by the teardown)
     } else if (which === 'match') {
-      if (!matchId || matchLive) { if (matchLive) _setConnState('match', 'live'); return; }
-      _rebuildMatchChannel();
+      if (!matchId) return;
+      _rebuildMatchChannel();   // MP FIX #21: rebuilds mid-run too — reopens the read side so a live match survives a socket blip instead of freezing the rival + hollow-forfeiting
     }
   }
   function _connRetry() {   // §4.2: tapping the OFFLINE chip forces an immediate re-subscribe cycle on every open channel
@@ -3230,20 +3291,24 @@
     if (status === 'SUBSCRIBED') {
       _connResubN.match = 0; if (_connResubT.match) { clearTimeout(_connResubT.match); _connResubT.match = 0; }
       _setConnState('match', 'live');
-      _flushCritQ('match');   // MP-5: the match socket recovered — re-send any in-doubt critical broadcasts (song / un-ready) from the flap gap
+      _flushCritQ('match');   // MP-5: the match socket recovered — re-send any in-doubt critical broadcasts (song / un-ready / MP FIX #21 mid-run FINAL) from the flap gap
       try { if (matchSP) matchSP.start(); } catch (e) {}
       if (!_matchSubbedOnce) { _matchSubbedOnce = true; enterSetup(); }
-      else {   // A5 re-subscribe: keep the current step; re-assert my READY + (host) re-deliver the locked song so a mid-setup blip can't deadlock the start
+      else if (!matchLive) {   // A5 re-subscribe (SETUP phase only): re-assert my READY + (host) re-deliver the locked song so a mid-setup blip can't deadlock the start. MP FIX #21: gated off mid-run — 'ready'/'song' are setup messages; a live-run rebuild must not spray them (the read-side reopen + crit-flush above is all a mid-run recovery needs).
         try { if (meReady && matchCh) matchCh.send({ type: 'broadcast', event: 'ready', payload: { ready: true, id: ME.id } }); } catch (e) {}
         try { if (matchRole === 'host' && sel.trackId && matchCh) matchCh.send({ type: 'broadcast', event: 'song', payload: _songPayload() }); } catch (e) {}
       }
     } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-      if (!matchLive) { banner('mpx-setup-msg', 'Reconnecting to the match…'); _scheduleChannelResub('match'); }
-      else _setConnState('match', 'resub');   // mid-run: chip only, don't rebuild
+      // MP FIX #21: reopen the READ-side even mid-run. Chip-only used to leave a live match's read side dead after a
+      // websocket blip — the rival deck froze (no ticks) and my queued/late FINAL never converged, so the 8s safety
+      // one-shot a hollow forfeit. _scheduleChannelResub now rebuilds the match channel (bounded backoff) during a
+      // live run too; the opp's presence/ticks/final resume, and _onMatchSubStatus's SUBSCRIBED flush re-sends my FINAL.
+      if (!matchLive) banner('mpx-setup-msg', 'Reconnecting to the match…');   // the setup banner isn't visible mid-run; the conn chip surfaces the live-run reconnect
+      _scheduleChannelResub('match');
     }
   }
   function _rebuildMatchChannel() {
-    if (!supa || !matchId || matchLive) return;
+    if (!supa || !matchId) return;   // MP FIX #21: no matchLive guard — a live-run rebuild is exactly what reopens the read side after a blip (the fresh softPresence's empty first-emit is absorbed by onMatchPeers' opp-gone grace, so it never one-shots a forfeit)
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = supa.channel('rr-match-' + matchId, { config: { broadcast: { self: false } } });
     matchSP = softPresence(matchCh, function () { return Object.assign({ id: ME.id, name: ME.name, role: matchRole, at: Date.now() }, _cosmeticFields()); }, onMatchPeers);
@@ -3287,12 +3352,22 @@
   // ===================== v418: OUTBOUND BATTLE-CALL LIFECYCLE (A2) =====================
   // The caller used to see "✓ RINGING" and then NOTHING — delivered/never-delivered/declined/accepted all looked
   // identical for 60s. Consume the server's battle_call_accepted / battle_call_declined broadcasts (bc:user), AND a
-  // presence poll-fallback (room.p2 landing = accepted, truth even if the broadcast drops); a 45s no-answer = MISSED.
+  // presence poll-fallback (room.p2 landing = accepted, truth even if the broadcast drops); a no-answer over the full
+  // accept→join budget (_CALL_MISSED_MS, MP FIX #23) = MISSED.
   function _callSetPhase(phase, uid, nm) {
     if (!_callState) _callState = { uid: uid || null, name: nm || 'They', at: Date.now(), rid: room.id || null };
     _callState.phase = phase;
     if (uid) _callState.uid = uid; if (nm) _callState.name = nm;
   }
+  // MP FIX #23: the caller's ringing→MISSED window must cover the callee's FULL accept→join budget, not just the ring's
+  // visible lifetime. The callee's ring shows for up to 45s, and _pendJoin then gives the join itself up to ~45s
+  // (maxTries 18 × 2.5s) to converge presence (room.p2). A flat 45s here declared a false NO ANSWER for a late-but-real
+  // arrival whose join was still in flight — worst when the callee is on the poll/deep-link rail (or the
+  // battle_call_accepted broadcast dropped), so phase never flips to 'accepted' to gate the miss off. 90s covers
+  // ring(45s)+join(45s). NOTE: once the accept broadcast DOES land, phase→'accepted' and the miss check below is skipped
+  // entirely (the watch then waits on presence with NO deadline), so this longer flat window only ever governs the
+  // no-signal tail — it never delays a call the callee visibly engaged with.
+  var _CALL_MISSED_MS = 90000;
   function _startCallWatch(uid, nm, rid) {
     _stopCallWatch();
     _callState = { uid: uid || null, name: nm || 'They', phase: 'ringing', at: Date.now(), rid: rid || room.id || null };
@@ -3304,7 +3379,10 @@
         clearFailCard(); try { paintRoomPanel(); } catch (e) {}
         _stopCallWatch(); return;
       }
-      if (_callState.phase === 'ringing' && Date.now() - _callState.at >= 45000) {
+      // MP FIX #23: only the still-'ringing' (no engagement signal) tail declares MISSED, and only after the full
+      // accept→join budget. A join already in progress surfaces as phase 'accepted' (broadcast) or room.p2 (presence),
+      // both handled above/gated here, so this never one-shots NO ANSWER over a live arrival.
+      if (_callState.phase === 'ringing' && Date.now() - _callState.at >= _CALL_MISSED_MS) {
         _onCallAnswered({ missed: true, callee_id: _callState.uid, callee_name: _callState.name });
       }
     }, 1500);
@@ -3870,6 +3948,7 @@
     // fabricates a seat — requires BOTH a prior seat AND a live ready. Show rooms untouched (they legitimately solo).
     if (!room.p2 && !room.show && roomOppReady && room._lastP2) room.p2 = room._lastP2;
     if (!room.p2 && !room.show) return;   // build102s: a SHOW host may start with an EMPTY challenger seat (solo run); normal rooms keep the p2 guard
+    _lateRoomStartResends = 0;   // MP FIX #20: fresh room match → fresh host-watchdog re-emit budget
     var mid = 'm' + room.id.slice(1) + Date.now().toString(36).slice(-3);
     var payload = { mid: mid, p1Id: room.p1, p2Id: room.p2 || null };
     var _rs = function () { try { if (room.ch) room.ch.send({ type: 'broadcast', event: 'room-start', payload: payload }); } catch (e) {} };

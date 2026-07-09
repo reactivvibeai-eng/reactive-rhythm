@@ -14,6 +14,20 @@
       "port": 8790
     },
     {
+      "name": "rr-verify-b",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8791", "--bind", "127.0.0.1", "--directory", "D:/sunoai music plan/animev1/veo 3 round 2/can i pet that dog/cloudcode/v2"],
+      "port": 8791
+    },
+    {
+      "name": "toe-gameplay-verify",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["serve.py"],
+      "cwd": "D:/sunoai music plan/animev1/veo 3 round 2/can i pet that dog/cloudcode/v2/.claude/worktrees/toe-gameplay/tails-of-ember",
+      "port": 8788,
+      "autoPort": false
+    },
+    {
       "name": "crew-lab",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8766", "--bind", "127.0.0.1", "--directory", "C:/Users/tjean/OneDrive/Documents/Claude/NeuralBrain"],

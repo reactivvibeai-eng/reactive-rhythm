@@ -8,10 +8,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="theme-color" content="#0a0706" />
-<!-- SHARE / SEO: a link to /play unfurls as a text card. build66 (launch-audit P2): the og:image/twitter:image pointed at
-     assets/share-card.png which does NOT exist (a blank 404 card). Dropped the image refs + switched to a 'summary' card so the
-     unfurl is clean. TO UPGRADE: generate a branded 1200×630 assets/share-card.png, add it to the deploy allowlist, then restore
-     og:image + twitter:image (pointing to it) and set twitter:card back to 'summary_large_image'. -->
+<!-- SHARE / SEO (P-6): a pasted /game link (MP invites, share cards) unfurls as a BRANDED large-image card.
+     og:image/twitter:image point at the existing 1300×552 title wordmark (assets/title-wordmark.png) — a real
+     shipped asset, so no 404 blank card (the old refs pointed at a non-existent share-card.png). DEPLOY NOTE:
+     keep assets/title-wordmark.png on the sync-game allowlist so the absolute og:image URL resolves under
+     reactivvibeai.com/game/assets/. To upgrade later, drop in a purpose-built 1200×630 card at the same path. -->
 <meta name="description" content="Reactive Rhythm — a Guitar-Hero-style rhythm game in your browser. Shred real ReactivVibe tracks across a neon guitar neck. Free to play." />
 <link rel="canonical" href="https://reactivvibeai.com/game" />
 <meta property="og:type" content="website" />
@@ -19,16 +20,24 @@
 <meta property="og:title" content="Reactive Rhythm — play the music" />
 <meta property="og:description" content="A Guitar-Hero-style rhythm game in your browser. Shred real ReactivVibe tracks across a neon guitar neck. Free to play." />
 <meta property="og:url" content="https://reactivvibeai.com/game" />
-<meta name="twitter:card" content="summary" />
+<meta property="og:image" content="https://reactivvibeai.com/game/assets/title-wordmark.png" />
+<meta property="og:image:secure_url" content="https://reactivvibeai.com/game/assets/title-wordmark.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1300" />
+<meta property="og:image:height" content="552" />
+<meta property="og:image:alt" content="Reactive Rhythm — chrome-and-crimson metal wordmark over a blood-red moon" />
+<meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Reactive Rhythm — play the music" />
 <meta name="twitter:description" content="A Guitar-Hero-style rhythm game in your browser. Shred real ReactivVibe tracks. Free to play." />
+<meta name="twitter:image" content="https://reactivvibeai.com/game/assets/title-wordmark.png" />
+<meta name="twitter:image:alt" content="Reactive Rhythm — chrome-and-crimson metal wordmark over a blood-red moon" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0706'/><path d='M18 4 8 18h6l-2 10 12-16h-7l1-8z' fill='%23ff1f2e'/></svg>" />
 <link rel="apple-touch-icon" href="assets/app-icon-180.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=457" />
+<link rel="stylesheet" href="jukebox.css?v=458" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -75,6 +84,17 @@
     --line: var(--rr-hairline);     /* muted CRIMSON hairline — a light line over the
                                             crimson bg-glow blended to pink/"purple", so the
                                             dividers are now red-family and can never read purple */
+    /* ── LANE IDENTITY (U-14): ONE canonical 5-lane color language ─────────────
+       Single source of truth for every lane-colored UI surface (keycap legend,
+       key-remap caps, input-test pips). Mirrors game.js LANE_COLORS for the
+       5-lane GH profile so the chrome never contradicts the highway notes.
+       (Lane-0 green is the sanctioned GH fret exception; the brand no-green rule
+       governs decorative chrome, not this functional lane legend.) */
+    --lane-0: #3ad15a;   /* fret 1 — GH green  */
+    --lane-1: #ff3c3c;   /* fret 2 — red       */
+    --lane-2: #ffd23c;   /* fret 3 — yellow    */
+    --lane-3: #ece7e3;   /* fret 4 — chrome    */
+    --lane-4: #ff8a2b;   /* fret 5 — orange    */
     /* build91: shared easing tokens — one house "arrival" curve (settle), a spring for pops, a bar fill */
     --ease-settle: var(--rr-ease-out);
     --ease-spring: cubic-bezier(.2, 1.4, .3, 1);
@@ -454,8 +474,8 @@
   .env-chip .ec-body { position: relative; padding: 7px 9px 9px; }
   .env-chip .ec-name { font-weight: 800; font-size: 12px; letter-spacing: 0.04em; line-height: 1.15;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
-  .env-chip .ec-tag { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 8.5px;
-    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ec, var(--ink-dim)); margin-top: 2px; }
+  .env-chip .ec-tag { font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--ec, var(--ink-dim)); margin-top: 2px; }
   .env-chip .ec-lock { position: absolute; top: 5px; left: 6px; z-index: 2; font-size: 11px; opacity: 0.9; }
   .env-chip.locked { opacity: 0.55; }
   .env-chip.locked:hover { transform: none; }
@@ -487,10 +507,13 @@
     color: var(--ink);
     box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4), 0 2px 0 rgba(0,0,0,0.6);
   }
-  .keycap[data-lane="0"] { color: var(--crimson); border-color: rgba(255,31,46,0.35); }
-  .keycap[data-lane="1"] { color: var(--red-deep); border-color: rgba(163,6,15,0.35); }
-  .keycap[data-lane="2"] { color: var(--silver); border-color: rgba(224,218,214,0.35); }
-  .keycap[data-lane="3"] { color: var(--gold); border-color: rgba(224,169,63,0.35); }
+  /* U-14: keycap legend rides the canonical lane tokens (was crimson/red-deep/silver/gold —
+     a language that neither matched the highway nor covered the 5th lane). */
+  .keycap[data-lane="0"] { color: var(--lane-0); border-color: color-mix(in srgb, var(--lane-0) 42%, transparent); }
+  .keycap[data-lane="1"] { color: var(--lane-1); border-color: color-mix(in srgb, var(--lane-1) 42%, transparent); }
+  .keycap[data-lane="2"] { color: var(--lane-2); border-color: color-mix(in srgb, var(--lane-2) 42%, transparent); }
+  .keycap[data-lane="3"] { color: var(--lane-3); border-color: color-mix(in srgb, var(--lane-3) 42%, transparent); }
+  .keycap[data-lane="4"] { color: var(--lane-4); border-color: color-mix(in srgb, var(--lane-4) 42%, transparent); }
   .keys-help {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -532,7 +555,7 @@
     animation: pulse 1s ease-in-out infinite;
   }
   .loading-text {
-    font-family: 'Chakra Petch', monospace;
+    font-family: 'Chakra Petch', sans-serif;
     font-size: 14px;
     letter-spacing: 0.3em;
     text-transform: uppercase;
@@ -642,7 +665,7 @@
   .howto-screen { z-index: 260; background: radial-gradient(ellipse at 50% 32%, rgba(120,12,20,0.55), transparent 62%), #0a0706; backdrop-filter: blur(18px); }
   .howto-card { width: min(580px, 92vw); max-height: 92vh; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 10px; text-align: center; }   /* build65 (cycle-5): scroll on short viewports so the CALIBRATE / GOT-IT CTAs never clip off-screen (mirrors the Settings panel) */
   .howto-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 40px; letter-spacing: 0.05em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); }
-  .howto-sub { font-family: 'Chakra Petch', monospace; color: var(--ink-dim); font-size: 13px; line-height: 1.7; margin: 0; }
+  .howto-sub { font-family: 'Chakra Petch', sans-serif; color: var(--ink-dim); font-size: 13px; line-height: 1.7; margin: 0; }
   .howto-sub kbd { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--chrome); background: rgba(255,255,255,0.05); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; margin: 0 2px; }
   .howto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; text-align: left; }
   .howto-item { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); }
@@ -659,7 +682,7 @@
   .ho-star { font-family: 'Oxanium', sans-serif; font-size: 26px; line-height: 1; color: var(--gold); background: radial-gradient(circle at 40% 32%, #2a1d08, #0c0703); border: 1px solid rgba(224,169,63,0.6); box-shadow: 0 0 16px rgba(224,169,63,0.5); border-radius: 50%; text-shadow: 0 0 10px rgba(255,212,128,0.85); }
   .howto-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .howto-txt b { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
-  .howto-txt span { font-family: 'Chakra Petch', monospace; font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
+  .howto-txt span { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
   .howto-txt kbd, .results-keys kbd { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--chrome); background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
   .results-keys { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--ink-dim); text-transform: uppercase; }
   .howto-txt em { color: var(--crimson); font-style: normal; font-weight: 700; }
@@ -699,7 +722,7 @@
   .ps-levelbg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,6,7,0.42), rgba(8,5,6,0.86) 92%); }
   @media (max-width: 880px) { .profile-card { flex-direction: column; align-items: center; } .profile-showcase { flex: none; width: 100%; max-width: 360px; min-height: 380px; } .profile-guitar img { max-height: 34vh; } }
   .profile-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
-  .profile-rank { font-family: 'Chakra Petch', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: #e0a93f; text-shadow: 0 0 16px rgba(224,169,63,0.4); }
+  .profile-rank { font-family: 'Chakra Petch', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: #e0a93f; text-shadow: 0 0 16px rgba(224,169,63,0.4); }
   .profile-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; margin-top: 8px; }
   .ps-cell { display: flex; flex-direction: column; gap: 5px; padding: 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.02); }
   /* build99L: Lifetime Score = the trophy — span-2, first position, gold/crimson frame, larger number */
@@ -709,10 +732,10 @@
     box-shadow: inset 0 0 0 1px rgba(224,169,63,0.18), 0 0 22px rgba(224,169,63,0.12); }
   .ps-cell.ps-hero .ps-l { color: var(--gold); }
   .ps-cell.ps-hero .ps-n { font-size: 34px; color: #fff; text-shadow: 0 0 22px rgba(224,169,63,0.4); }
-  .ps-l { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
+  .ps-l { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
   .ps-n { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 26px; color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,42,48,0.22); }
   .profile-grades-wrap { width: 100%; margin-top: 4px; }
-  .pg-head { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
+  .pg-head { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 9px; display: flex; align-items: center; gap: 8px; }
   .pg-head::before { content: '◆'; font-size: 8px; color: var(--crimson); }
   /* build99L: grade distribution = horizontal bars (width = count/max). S gets a faint inset gold glow + bigger letter. */
   .profile-grades { display: flex; flex-direction: column; gap: 7px; }
@@ -764,22 +787,22 @@
   .profile-xpfeed { display: flex; flex-direction: column; gap: 6px; }
   .pxf-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); }
-  .pxf-label { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--ink); }
+  .pxf-label { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--ink); }
   .pxf-amt { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; color: #e0a93f; white-space: nowrap; }
-  .profile-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; display: none; }
+  .profile-empty { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; display: none; }
   .profile-screen.is-empty .profile-empty { display: block; }
   .profile-screen.is-empty .profile-stats, .profile-screen.is-empty .profile-grades-wrap { opacity: 0.5; }
   /* CAMPAIGN BADGES — one medal per beaten level (brand crimson/chrome/gold; theme-tinted rings, no blue/purple) */
   .profile-badges-wrap { margin-top: 16px; }
   .pb-count { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 400; letter-spacing: 0.08em; color: var(--amber, #e0a93f); text-transform: none; margin-left: auto; }
   .profile-badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 10px; }
-  .pb-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); }
+  .pb-empty { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink-dim); }
   .pb-badge { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.02); text-align: center; }
   .pb-medal { position: relative; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid var(--crimson); box-shadow: 0 0 12px rgba(255,31,46,0.3); background: linear-gradient(150deg, #2a0d10, #120607); }
   .pb-medal img { width: 100%; height: 100%; object-fit: cover; }
   .pb-grade { position: absolute; bottom: -1px; right: -1px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; color: #fff; background: var(--crimson); border-radius: 6px 0 8px 0; padding: 0 4px; line-height: 1.4; }
-  .pb-boss { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-family: 'Chakra Petch', monospace; font-size: 7px; font-weight: 700; letter-spacing: 0.1em; color: #ffe9a8; background: rgba(0,0,0,0.6); padding: 1px 4px; border-radius: 4px; }
-  .pb-name { font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; color: var(--ink); line-height: 1.15; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pb-boss { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #ffe9a8; background: rgba(0,0,0,0.6); padding: 1px 5px; border-radius: 4px; }
+  .pb-name { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; color: var(--ink); line-height: 1.15; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .pb-stars { font-size: 10px; letter-spacing: 1px; color: #e0a93f; }
   .pb-badge.t-ember .pb-medal { border-color: #ff7a4a; box-shadow: 0 0 12px rgba(255,122,74,0.32); }
   .pb-badge.t-gold .pb-medal, .pb-badge.boss .pb-medal { border-color: #e0a93f; box-shadow: 0 0 14px rgba(224,169,63,0.4); }
@@ -789,7 +812,7 @@
   .pb-badge.pb-tier .pb-medal { border-color: #e0a93f; background: linear-gradient(150deg, #3a2a08, #1a1204); box-shadow: 0 0 16px rgba(224,169,63,0.45); }
   .pb-tiermark { font-size: 24px; color: #ffe9a8; text-shadow: 0 0 10px rgba(224,169,63,0.7); }
   .pb-badge.pb-tier .pb-name { color: #ffe9a8; }
-  .pb-badge.pb-tier .pb-stars { color: #e0a93f; letter-spacing: 0.1em; font-family: 'Chakra Petch', monospace; font-weight: 700; }
+  .pb-badge.pb-tier .pb-stars { color: #e0a93f; letter-spacing: 0.1em; font-family: 'Chakra Petch', sans-serif; font-weight: 700; }
   .profile-screen.is-empty .profile-badges-wrap { opacity: 0.5; }
   /* Guitar Loadout (profile) — equip any unlocked skin; the choice carries into levels + multiplayer */
   .profile-loadout-wrap { margin-top: 16px; }
@@ -799,10 +822,10 @@
   .pl-tile:hover { transform: translateY(-2px); border-color: var(--crimson); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
   .pl-thumb { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506); }
   .pl-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center 70%; }
-  .pl-name { font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; color: var(--ink); text-align: center; line-height: 1.1; }
+  .pl-name { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; color: var(--ink); text-align: center; line-height: 1.1; }
   .pl-tile.on { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 6px 18px rgba(255,31,46,0.28); }
   .pl-tile.on .pl-thumb { box-shadow: inset 0 0 0 2px rgba(255,31,46,0.55); }
-  .pl-on { font-family: 'Chakra Petch', monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.1em; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-radius: 5px; padding: 2px 6px; }
+  .pl-on { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-radius: 5px; padding: 2px 6px; }
   /* build99N (P-01): locked = paid skin not yet owned — dimmed + desaturated, gold LOCKED pill, click routes to Store */
   .pl-tile.locked .pl-thumb img { filter: grayscale(0.5) brightness(0.78); transition: filter 0.12s ease; }
   .pl-tile.locked:hover .pl-thumb img { filter: grayscale(0.12) brightness(0.94); }
@@ -876,7 +899,7 @@
   .levels-screen { z-index: 261; background: radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.55), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
   .levels-card { width: min(880px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px 10px; text-align: center; }
   .levels-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 48px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
-  .levels-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 0 0 8px; max-width: 520px; }
+  .levels-sub { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 0 0 8px; max-width: 520px; }
   /* v253 (#89): the player's equipped guitar as a top-right FLAIR on the campaign card (identity only — levels play their
      own themed guitar). Self-heals (onerror hides). */
   .lv-guitar-flair { position: absolute; top: 14px; right: 16px; height: 58px; width: auto; max-width: 72px; object-fit: contain; opacity: 0.92; z-index: 3; pointer-events: none; transform: rotate(-12deg); filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6)) drop-shadow(0 0 14px rgba(255,31,46,0.28)); }
@@ -885,10 +908,10 @@
   .lv-tier { width: 100%; }
   .lv-tier-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px; }
   .lv-tier-head .t-n { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.12em; color: var(--ink); }
-  .lv-tier-head .t-d { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
+  .lv-tier-head .t-d { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; }
   .lv-tier-head .t-d.easy { color: var(--chrome); } .lv-tier-head .t-d.medium { color: #e0a93f; } .lv-tier-head .t-d.hard { color: var(--crimson); }   /* easy was mint-green (brand violation in UI chrome) → chrome; ramp reads chrome→gold→crimson */
-  .lv-tier-head .t-tierlock { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.06em; color: var(--crimson); padding: 2px 9px; border: 1px solid rgba(255,31,46,0.42); border-radius: 999px; white-space: nowrap; }
-  .lv-tier-head .t-tierclear { font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #e0a93f; }
+  .lv-tier-head .t-tierlock { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.06em; color: var(--crimson); padding: 2px 9px; border: 1px solid rgba(255,31,46,0.42); border-radius: 999px; white-space: nowrap; }
+  .lv-tier-head .t-tierclear { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: #e0a93f; }
   .lv-tier.tier-locked .lv-grid { opacity: 0.55; }
   .lv-tier-head .t-line { flex: 1; height: 1px; background: var(--line); }
   .lv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -901,21 +924,21 @@
   .lv-grade { position: absolute; top: 6px; right: 7px; min-width: 24px; height: 24px; padding: 0 4px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; background: rgba(10,7,6,0.72); border: 1px solid currentColor; }
   .lv-grade.g-S { color: #e0a93f; } .lv-grade.g-A { color: #ff6b78; } .lv-grade.g-B { color: var(--chrome); } .lv-grade.g-C { color: var(--ink-dim); } .lv-grade.g-D { color: #8a5a3a; }
   .lv-meta { padding: 9px 10px 11px; }
-  .lv-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lv-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lv-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .levels-empty { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); padding: 30px; line-height: 1.6; }
+  .levels-empty { font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: var(--ink-dim); padding: 30px; line-height: 1.6; }
   @media (max-width: 720px) { .lv-grid { grid-template-columns: repeat(2, 1fr); } .levels-title { font-size: 38px; } }
   .lv-card.locked { cursor: not-allowed; opacity: 0.58; filter: saturate(0.55); }
   .lv-card.locked:hover { transform: none; border-color: var(--line); box-shadow: none; }
-  .lv-soon { position: absolute; top: 6px; right: 7px; font-family: 'Chakra Petch', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--crimson); background: rgba(10,7,6,0.78); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 7px; }
-  .lv-lockbadge { display: inline-block; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--crimson); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; margin: 0 0 6px; }
+  .lv-soon { position: absolute; top: 6px; right: 7px; font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--crimson); background: rgba(10,7,6,0.78); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 7px; }
+  .lv-lockbadge { display: inline-block; font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--crimson); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; margin: 0 0 6px; }
   .lv-lockbadge.dev { color: var(--chrome); border-color: rgba(218,215,210,0.4); }
   /* campaign progression UI */
   .lv-progress { display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 16px; }
   .lv-prog-bar { flex: 1; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
   .lv-prog-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--crimson), #e0a93f); border-radius: 999px; transition: width 0.45s cubic-bezier(.2,.8,.2,1); }
   .lv-prog-txt { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: #e0a93f; letter-spacing: 0.05em; white-space: nowrap; }
-  .lv-devbtn { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--chrome); background: rgba(218,215,210,0.08); border: 1px solid rgba(218,215,210,0.4); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+  .lv-devbtn { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.08em; color: var(--chrome); background: rgba(218,215,210,0.08); border: 1px solid rgba(218,215,210,0.4); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
   .lv-devbtn:hover { background: rgba(218,215,210,0.16); }
   .lv-tier-head .t-stars { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; color: #e0a93f; letter-spacing: 0.04em; }
   .lv-stars { display: flex; gap: 3px; margin-top: 6px; }
@@ -971,7 +994,7 @@
   .rs-art .rs-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 78px; color: color-mix(in srgb, var(--rs-accent, #ff1f2e) 80%, #fff); text-shadow: 0 0 28px color-mix(in srgb, var(--rs-accent,#ff1f2e) 55%, transparent); }
   .rs-art::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 30%, transparent 52%, rgba(0,0,0,0.42)); }
   .rs-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 30px; line-height: 1.04; letter-spacing: 0.02em; color: var(--ink); text-shadow: 0 0 26px color-mix(in srgb, var(--rs-accent,#ff1f2e) 45%, transparent); }
-  .rs-sub  { font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--ink-dim); }
+  .rs-sub  { font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.06em; color: var(--ink-dim); }
   .rs-boss { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.18em; color: #ffd9c2; background: rgba(20,5,7,0.82); border: 1px solid var(--crimson); border-radius: 7px; padding: 3px 9px; box-shadow: 0 0 14px rgba(255,31,46,0.5); }
   .rs-skip { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-dim); opacity: 0.8; margin-top: 2px; }
   .rs-bar  { width: 150px; height: 3px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.08); }
@@ -1061,7 +1084,7 @@
     background: linear-gradient(180deg, rgba(8,4,5,0.5), rgba(20,11,12,0.4));
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.45), inset 0 -1px 0 rgba(255,238,232,0.05);
     -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-  .lbd-tab { font-family: 'Chakra Petch', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 8px 22px; cursor: pointer; transition: all 0.15s ease; }
+  .lbd-tab { font-family: 'Chakra Petch', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 8px 22px; cursor: pointer; transition: all 0.15s ease; }
   .lbd-tab:hover { color: var(--ink); }
   .lbd-tab.active { color: #fff; background-image: linear-gradient(180deg, rgba(255,255,255,0.26), rgba(255,255,255,0) 48%), var(--cglass-fill); border-color: rgba(255,80,90,0.5); box-shadow: var(--cglass-bevel), 0 6px 18px -4px rgba(255,31,46,0.5); }
   .lbd-songbar { width: 100%; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
@@ -1072,19 +1095,19 @@
   .lbd-pick-art { width: 42px; height: 42px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 18px; color: rgba(255,255,255,0.7); background: linear-gradient(150deg, #c2182a, #1e0407); overflow: hidden; }
   .lbd-pick-art img { width: 100%; height: 100%; object-fit: cover; }
   .lbd-pick-txt { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-  .lbd-pick-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-pick-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-pick-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-pick-chev { font-size: 22px; color: var(--ink-dim); flex: none; }
   .lbd-diff-row { width: 100%; display: flex; justify-content: center; }
   .lbd-diff-row[hidden] { display: none; }
   .lbd-diff { align-self: center; }
-  .lbd-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
+  .lbd-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
     box-shadow: inset 0 1px 0 rgba(255,238,200,0.18), 0 10px 26px -16px rgba(0,0,0,0.55), 0 0 18px -10px rgba(224,169,63,0.4);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .lbd-banner b { color: #e0a93f; font-weight: 700; }
   .lbd-board { width: 100%; display: flex; flex-direction: column; gap: 2px; min-height: 240px; }   /* build99L: 60→240 so an empty board doesn't collapse to a void */
-  .lb-head-tag { font-family: 'Chakra Petch', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; }
+  .lb-head-tag { font-family: 'Chakra Petch', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 1px 7px; margin-left: 8px; vertical-align: middle; }
   .lbd-board .lb-row.lb-you-claim { margin-top: 8px; opacity: 0.92; }
   .lbd-board .lb-row.lb-you-claim .lb-rank { color: var(--ink-dim); }
   .lbd-board .lb-head { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--silver); margin-bottom: 8px; text-align: left; }
@@ -1124,7 +1147,7 @@
   .lbd-board .lb-pod.r1 .lb-pod-medal { font-size: 28px; }
   .lbd-board .lb-pod-av { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 17px; color: #fff; background: linear-gradient(150deg, #c2182a, #1e0407); border: 1px solid rgba(255,255,255,0.14); }
   .lbd-board .lb-pod.r1 .lb-pod-av { position: relative; width: 48px; height: 48px; font-size: 20px; background: linear-gradient(150deg, #e0a93f, #b8801a); color: #2a1602; }
-  .lbd-board .lb-pod-name { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; color: var(--ink); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-board .lb-pod-name { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; color: var(--ink); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-board .lb-pod.r1 .lb-pod-name { color: #ffe9a8; }
   .lbd-board .lb-pod-score { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; color: var(--ink); font-variant-numeric: tabular-nums; }
   .lbd-board .lb-pod.r1 .lb-pod-score { font-size: 20px; color: #e0a93f; }
@@ -1151,7 +1174,7 @@
   .lbd-board .lb-row.lvl .lb-champ { color: #e0a93f; font-weight: 700; }
   /* build99L: centered empty state with a PLAY A SONG CTA (was a bare faint line over a void) */
   .lbd-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-    min-height: 200px; text-align: center; font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+    min-height: 200px; text-align: center; font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
   .lbd-empty[hidden] { display: none; }
   .lbd-empty-ico { font-size: 30px; color: var(--crimson); opacity: 0.7; filter: drop-shadow(0 0 12px rgba(255,31,46,0.4)); }
   .lbd-empty-txt { max-width: 340px; }
@@ -1252,7 +1275,7 @@
   .lbd-res-row:hover { border-color: var(--crimson); }
   .lbd-res-art { width: 32px; height: 32px; flex: none; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 14px; color: rgba(255,255,255,0.7); overflow: hidden; }
   .lbd-res-art img { width: 100%; height: 100%; object-fit: cover; }
-  .lbd-res-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbd-res-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbd-res-a { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); }
   @media (max-width: 560px) { .lbd-title { font-size: 36px; } .lbd-board .lb-row { grid-template-columns: 34px 1fr auto auto auto; gap: 8px; font-size: 12px; } .lbd-board .lb-podium { gap: 5px; } .lbd-board .lb-pod { padding: 9px 4px; } .lbd-board .lb-pod-name { font-size: 10px; } }
   /* OVERLAY FIT (ALL widths) — levels/leaderboard/profile/store cards can exceed the viewport (esp. the
@@ -1272,7 +1295,7 @@
     border: 1px solid rgba(255,42,48,0.45); box-shadow: 0 18px 60px rgba(0,0,0,0.7), 0 0 30px rgba(255,31,46,0.18), inset 0 1px 0 rgba(255,176,80,0.10);
     opacity: 0; pointer-events: none; transition: opacity .35s ease, transform .35s cubic-bezier(.2,1,.3,1); }
   #rr-consent.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-  #rr-consent .rrc-copy { flex: 1 1 280px; min-width: 240px; font-family: 'Chakra Petch', monospace; font-size: 12.5px; line-height: 1.5; letter-spacing: 0.02em; color: var(--ink, #f6eef0); }
+  #rr-consent .rrc-copy { flex: 1 1 280px; min-width: 240px; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; line-height: 1.5; letter-spacing: 0.02em; color: var(--ink, #f6eef0); }
   #rr-consent .rrc-copy a { color: var(--gold, #ffb050); text-decoration: underline; text-underline-offset: 2px; }
   #rr-consent .rrc-actions { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
   #rr-consent button { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
@@ -1293,7 +1316,7 @@
   .store-bal { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 13px; border-radius: 999px; background: linear-gradient(180deg, rgba(255,31,46,0.12), rgba(163,6,15,0.10)); border: 1px solid rgba(255,31,46,0.42); box-shadow: inset 0 0 0 1px rgba(255,122,74,0.10); }
   .store-bal .spk-glyph { width: 17px; height: 17px; flex: none; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 4px rgba(255,122,74,0.6)); }
   .store-bal-val { font-family: 'Oxanium', monospace; font-weight: 800; font-size: 18px; color: var(--chrome); line-height: 1; font-variant-numeric: tabular-nums; }
-  .store-bal-label { font-family: 'Chakra Petch', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
+  .store-bal-label { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
   .store-bal[data-state="guest"] { opacity: 0.55; border-color: var(--line); background: rgba(255,255,255,0.03); box-shadow: none; }
   .store-bal[data-state="guest"] .spk-glyph { color: var(--ink-dim); filter: none; }
   .store-bal[data-state="guest"] .store-bal-val { color: var(--ink-dim); }
@@ -1307,11 +1330,11 @@
   /* Bonus-Sparks chip — gold accent (earned currency), distinct from the crimson real-Sparks chip */
   .store-bal-bonus { background: linear-gradient(180deg, rgba(224,169,63,0.16), rgba(184,128,26,0.10)); border-color: rgba(224,169,63,0.45); box-shadow: inset 0 0 0 1px rgba(224,169,63,0.12); opacity: 1; }
   .store-bal-bonus .spk-glyph { color: var(--gold, #e0a93f); filter: drop-shadow(0 0 4px rgba(224,169,63,0.55)); }
-  .store-getmore { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 18px; border-radius: 999px; cursor: pointer; font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #1a0608; background: linear-gradient(180deg, #ffb35a, #e0a93f); border: none; box-shadow: 0 6px 20px rgba(224,169,63,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: box-shadow 0.15s ease, transform 0.1s ease; }
+  .store-getmore { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 18px; border-radius: 999px; cursor: pointer; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #1a0608; background: linear-gradient(180deg, #ffb35a, #e0a93f); border: none; box-shadow: 0 6px 20px rgba(224,169,63,0.35), inset 0 1px 0 rgba(255,255,255,0.4); transition: box-shadow 0.15s ease, transform 0.1s ease; }
   .store-getmore:hover, .store-getmore:focus-visible { box-shadow: 0 8px 26px rgba(224,169,63,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
   .store-getmore:active { transform: translateY(1px); }
   .store-getmore svg { width: 15px; height: 15px; }
-  .store-banner { width: 100%; font-family: 'Chakra Petch', monospace; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
+  .store-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
     box-shadow: inset 0 1px 0 rgba(255,238,200,0.18), 0 10px 26px -16px rgba(0,0,0,0.55), 0 0 18px -10px rgba(224,169,63,0.4);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
@@ -1330,11 +1353,11 @@
   .store-item:hover .store-art img { transform: scale(1.045); }
   .store-art .si-initial { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 40px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 14px rgba(0,0,0,0.55); }
   .store-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 72% 14%, rgba(255,122,74,0.20), transparent 58%), linear-gradient(180deg, transparent 58%, rgba(8,4,4,0.55)); pointer-events: none; }
-  .store-type { position: absolute; top: 8px; left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--chrome); background: rgba(8,5,5,0.6); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; }
+  .store-type { position: absolute; top: 8px; left: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--chrome); background: rgba(8,5,5,0.6); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; }
   .store-item.owned .store-art { filter: saturate(0.85); }
   .store-item.owned .store-art::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px rgba(224,169,63,0.5); pointer-events: none; z-index: 1; }
   .store-body { display: flex; flex-direction: column; gap: 4px; padding: 14px 15px 15px; flex: 1; }
-  .store-item-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 14.5px; letter-spacing: 0.01em; color: var(--ink); line-height: 1.2; }
+  .store-item-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: 0.01em; color: var(--ink); line-height: 1.2; }
   .store-item-d { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); line-height: 1.5; min-height: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .store-foot { display: flex; flex-direction: column; align-items: stretch; gap: 7px; margin-top: auto; padding-top: 11px; border-top: 1px solid rgba(255,255,255,0.05); }
   .store-payline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1355,10 +1378,10 @@
   .store-item.soon:hover { transform: none; border-color: var(--line); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
   .store-item.soon .store-art img { filter: grayscale(0.72) brightness(0.46); }
   .store-item.soon .store-art::before { content: ''; position: absolute; inset: 0; background: rgba(8,5,5,0.5); pointer-events: none; z-index: 1; }
-  .store-soon { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 3; font-family: 'Chakra Petch', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; color: var(--crimson); background: rgba(10,7,6,0.82); border: 1px solid var(--crimson); border-radius: 8px; padding: 5px 10px; white-space: nowrap; }
+  .store-soon { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 3; font-family: 'Chakra Petch', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.13em; color: var(--crimson); background: rgba(10,7,6,0.82); border: 1px solid var(--crimson); border-radius: 8px; padding: 5px 10px; white-space: nowrap; }
   .store-price.soon-px { color: var(--ink-dim); font-style: italic; font-weight: 600; font-size: 12px; }
   /* raised crimson GLASS BUY — glossy top highlight (baked into the bg so it never covers the label) + confident depth */
-  .store-buy { font-family: 'Chakra Petch', monospace; font-weight: 800; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #fff;
+  .store-buy { font-family: 'Chakra Petch', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #fff;
     background-image: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0) 44%), var(--cglass-fill);
     border: 1px solid rgba(255,80,90,0.5); border-radius: 11px; padding: 10px 17px; cursor: pointer;
     box-shadow: var(--cglass-bevel), 0 6px 16px -4px rgba(255,31,46,0.42); transition: box-shadow 0.15s ease, transform 0.12s var(--ease-settle), filter 0.14s ease, opacity 0.15s ease; }
@@ -1368,7 +1391,7 @@
   .store-buy.is-busy { opacity: 0.7; cursor: progress; }
   .store-buy.owned { background: rgba(224,169,63,0.10); color: #e0a93f; border: 1px solid rgba(224,169,63,0.6); box-shadow: none; cursor: default; }
   .store-buy.getmore { background: linear-gradient(180deg, #ffb35a, #e0a93f); color: #1a0608; box-shadow: 0 4px 14px rgba(224,169,63,0.35); }
-  .store-empty { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
+  .store-empty { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 0; }
   .store-buy.equip { background-image: linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0) 44%), var(--cglass-fill); color: #fff; border: 1px solid rgba(255,80,90,0.5); box-shadow: var(--cglass-bevel), 0 6px 16px -4px rgba(255,31,46,0.42); }
   .store-buy.equip:hover, .store-buy.equip:focus-visible { box-shadow: var(--cglass-bevel), 0 10px 24px -4px rgba(255,31,46,0.6); }
   .store-buy.equipped { background: linear-gradient(180deg, rgba(224,169,63,0.20), rgba(224,169,63,0.09)); color: #ffdf95; border: 1px solid rgba(224,169,63,0.55); box-shadow: inset 0 1px 0 rgba(255,238,200,0.18); cursor: pointer; }
@@ -1419,13 +1442,13 @@
   #store-hero.is-cover .sh-guitar{ max-height:60vh; max-width:84%; object-fit:cover; border-radius:14px; box-shadow:0 26px 64px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.12); }
   #store-hero.is-cover .sh-reflect{ object-fit:cover; border-radius:14px; }
   .sh-info{ flex:1 1 44%; display:flex; flex-direction:column; gap:15px; padding-left:clamp(16px,3vw,40px); max-width:520px; border-left:1px solid var(--line, rgba(160,40,46,.32)); background:linear-gradient(100deg, rgba(255,31,46,.05), transparent 60%); }
-  .sh-eyebrow{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); display:flex; align-items:center; gap:8px; }
+  .sh-eyebrow{ font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--gold); display:flex; align-items:center; gap:8px; }
   .sh-eyebrow-sep{ opacity:.5; }
   .sh-info .r-gem{ width:12px; height:12px; color:var(--r-gem,var(--gold)); }
   .sh-name{ margin:0; font-family:'Unbounded',sans-serif; font-weight:800; font-size:clamp(30px,4.2vw,46px); line-height:1.04; color:var(--ink); letter-spacing:-.01em; position:relative; padding-bottom:12px; }
   .sh-name::after{ content:''; position:absolute; left:0; bottom:0; width:46px; height:2px; background:linear-gradient(90deg, var(--crimson), transparent); box-shadow:0 0 10px rgba(255,31,46,.6); }
   .sh-rule{ height:1px; border:0; width:100%; margin:0; opacity:.6; background:linear-gradient(90deg, var(--gold), rgba(224,169,63,0)); }
-  .sh-lore{ margin:0; font-family:'Chakra Petch',monospace; font-weight:500; font-size:15px; line-height:1.6; color:var(--ink-dim); max-width:46ch; }
+  .sh-lore{ margin:0; font-family:'Chakra Petch',sans-serif; font-weight:500; font-size:15px; line-height:1.6; color:var(--ink-dim); max-width:46ch; }
   .sh-traits{ display:flex; flex-wrap:wrap; gap:8px; }
   .sh-trait{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.04em; color:var(--chrome); padding:6px 12px; border:1px solid var(--glass-line); border-radius:999px;
     background:var(--glass-fill); box-shadow:var(--glass-bevel), 0 4px 12px -8px rgba(0,0,0,.55); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
@@ -1434,15 +1457,15 @@
     background:linear-gradient(180deg, rgba(255,238,200,.07), rgba(0,0,0,.24));
     box-shadow:inset 0 1.5px 0 rgba(255,236,196,.18), var(--glass-sheen), 0 14px 34px -14px rgba(0,0,0,.4), 0 0 22px -12px rgba(224,169,63,.4);
     -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
-  .sh-price-label{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); }
+  .sh-price-label{ font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-dim); }
   .sh-price-row{ display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 14px; }
   .sh-price{ display:inline-flex; align-items:center; gap:8px; font-family:'Oxanium',monospace; font-weight:800; font-size:38px; font-variant-numeric:tabular-nums; color:var(--chrome); line-height:1; text-shadow:0 0 22px rgba(255,122,74,.18); }
   .sh-price .spk-glyph{ width:26px; height:26px; color:var(--ember,#ff7a4a); filter:drop-shadow(0 0 6px rgba(255,122,74,.55)); }
   .sh-price.bonus{ color:var(--gold); font-size:30px; }
   .sh-price.bonus .bonus-px-glyph{ width:22px; height:22px; color:var(--gold); filter:drop-shadow(0 0 5px rgba(224,169,63,.5)); }
   .sh-usd{ font-family:'Oxanium',monospace; font-weight:700; font-size:17px; letter-spacing:.01em; color:var(--gold); font-variant-numeric:tabular-nums; }
-  .sh-price-or{ font-family:'Chakra Petch',monospace; font-size:11px; letter-spacing:.18em; color:var(--ink-dim); text-transform:uppercase; align-self:center; }
-  .sh-owned-line{ font-family:'Chakra Petch',monospace; font-weight:700; font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:8px; }
+  .sh-price-or{ font-family:'Chakra Petch',sans-serif; font-size:11px; letter-spacing:.18em; color:var(--ink-dim); text-transform:uppercase; align-self:center; }
+  .sh-owned-line{ font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); display:inline-flex; align-items:center; gap:8px; }
   .sh-owned-line .ic{ width:16px; height:16px; }
   .sh-actions{ display:flex; flex-direction:column; gap:10px; align-items:stretch; }
   .sh-actions .store-payline{ display:flex; gap:12px; align-items:stretch; }
@@ -1510,7 +1533,7 @@
   @keyframes rLegendSheen{ 0%,100%{background-position:0 0,0% 50%} 50%{background-position:0 0,100% 50%} }
   html.rr-reduce-motion .store-item[data-rarity="legendary"] .store-art::after{ animation:none; }
   .store-art .r-gem{ position:absolute; top:9px; right:9px; z-index:3; width:14px; height:14px; color:var(--r-gem); }
-  .store-art .si-flag{ position:absolute; top:9px; left:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; font-family:'Chakra Petch',monospace; font-weight:700; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#fff; padding:4px 9px 4px 8px; border-radius:7px; box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18); }
+  .store-art .si-flag{ position:absolute; top:9px; left:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#fff; padding:4px 9px 4px 8px; border-radius:7px; box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18); }
   .store-art .si-flag.new{ background:linear-gradient(180deg,#ff2a38,#b3121f); }
   .store-art .si-flag.featured{ color:#1a0f08; background:linear-gradient(180deg,#ffd98a,#e0a93f); }
   .store-art .si-flag .ic{ width:10px; height:10px; }
@@ -1519,11 +1542,11 @@
   html.rr-reduce-motion .store-art .si-flag.new::before{ animation:none; opacity:.85; }
   .store-item.owned .store-art{ filter:none; }
   .store-item.owned .store-art::before{ box-shadow:inset 0 0 0 2px rgba(224,169,63,.6); }
-  .store-item.owned .si-owned-tab{ position:absolute; bottom:9px; right:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:7px; font-family:'Chakra Petch',monospace; font-weight:700; font-size:9px; letter-spacing:.12em; color:var(--gold); background:rgba(26,15,8,.78); border:1px solid rgba(224,169,63,.5); }
+  .store-item.owned .si-owned-tab{ position:absolute; bottom:9px; right:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:7px; font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:9px; letter-spacing:.12em; color:var(--gold); background:rgba(26,15,8,.78); border:1px solid rgba(224,169,63,.5); }
   .store-item.owned .si-owned-tab .ic{ width:11px; height:11px; }
   .store-item.equipped{ border-color:var(--gold); box-shadow:0 10px 30px rgba(0,0,0,.5), 0 0 22px rgba(224,169,63,.3); }
   .store-item.equipped .store-art::before{ box-shadow:inset 0 0 0 2px var(--gold), inset 0 0 26px rgba(224,169,63,.25); }
-  .store-item.equipped .si-equip-banner{ position:absolute; left:0; right:0; bottom:0; z-index:3; text-align:center; font-family:'Chakra Petch',monospace; font-weight:800; font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:#1a0f08; padding:5px 0; background:linear-gradient(180deg,#ffd98a,#e0a93f); box-shadow:0 -2px 12px rgba(224,169,63,.5); }
+  .store-item.equipped .si-equip-banner{ position:absolute; left:0; right:0; bottom:0; z-index:3; text-align:center; font-family:'Chakra Petch',sans-serif; font-weight:800; font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:#1a0f08; padding:5px 0; background:linear-gradient(180deg,#ffd98a,#e0a93f); box-shadow:0 -2px 12px rgba(224,169,63,.5); }
   .store-item.equipped .si-equip-banner .ic{ width:10px; height:10px; vertical-align:-1px; margin-right:5px; }
   .ic{ display:inline-block; width:1em; height:1em; color:currentColor; vertical-align:-2px; }
   .store-buy.equipped .ic{ width:13px; height:13px; margin-right:6px; }
@@ -1536,7 +1559,7 @@
   .lv-ring .lv-ring-of { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: var(--ink-dim); letter-spacing: 0.12em; margin-top: 2px; }
   .lv-hero-text { flex: 1; text-align: left; min-width: 0; }
   .lv-hero-rank { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 18px rgba(255,42,48,0.4); line-height: 1.1; }
-  .lv-hero-sub { font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim); margin-top: 4px; }
+  .lv-hero-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.08em; color: var(--ink-dim); margin-top: 4px; }
   .lv-hero-pct { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #e0a93f; }
   /* per-tier completion bar inside the tier head */
   .lv-tier-head .t-bar { flex: 0 0 96px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; }
@@ -1561,7 +1584,7 @@
   .lv-card.boss .lv-art::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, rgba(255,31,46,0.30), transparent 62%); pointer-events: none; }
   .lv-bossbadge { position: absolute; left: 8px; bottom: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.16em; color: #ffd9c2; background: rgba(20,5,7,0.82); border: 1px solid var(--crimson); border-radius: 6px; padding: 3px 7px; box-shadow: 0 0 12px rgba(255,31,46,0.45); }
   .lv-paid { position: absolute; top: 6px; left: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.12em; color: #160606; background: var(--gold); border-radius: 6px; padding: 2px 6px; box-shadow: 0 0 12px rgba(224,169,63,0.5); }
-  .lv-mod { display: inline-block; margin-right: 5px; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 5px; padding: 1px 5px; }
+  .lv-mod { display: inline-block; margin-right: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(224,169,63,0.4); border-radius: 5px; padding: 1px 5px; }
   .lv-mods { display: flex; flex-wrap: wrap; gap: 0; margin-top: 6px; }
   #game.rr-lvl-themed[data-rrtheme="ember"]  { --rr-lvl-accent: #ff7a4a; }
   #game.rr-lvl-themed[data-rrtheme="gold"]   { --rr-lvl-accent: #e0a93f; }
@@ -2229,11 +2252,11 @@
     pointer-events: none;
   }
   .mhud .m-score-wrap { display: flex; flex-direction: column; gap: 1px; }
-  .mhud .m-score-lab { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.25em; color: var(--ink-dim); text-transform: uppercase; }
+  .mhud .m-score-lab { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.22em; color: var(--silver); text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.85); }
   .mhud .m-score { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 26px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
   .mhud .m-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .mhud .m-acc { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; color: var(--silver); font-variant-numeric: tabular-nums; }
-  .mhud .m-acc-lab { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.25em; color: var(--ink-dim); text-transform: uppercase; }
+  .mhud .m-acc-lab { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.22em; color: var(--silver); text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.85); }
   .mhud .m-right { display: flex; justify-content: flex-end; padding-right: 46px; }   /* build71: clear the 40px round pause button (top-right) so the live combo number + label don't sit under it */
 
   /* round pause button — top right, thumb-reachable */
@@ -2378,7 +2401,7 @@
   }
   #tap-zones.coach::before {
     content: "TAP THE LANES"; position: absolute; left: 0; right: 0; top: -34px; text-align: center;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 13px; letter-spacing: 0.18em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 13px; letter-spacing: 0.18em;
     color: var(--ink); text-shadow: 0 0 12px rgba(255,42,48,0.7); pointer-events: none;
     animation: rrTapCoachLbl 0.95s ease-in-out infinite;
   }
@@ -2490,7 +2513,7 @@
   /* ============ GAME-HUD TYPE SYSTEM (instrument fonts, not web fonts) ============ */
   /* readouts use Oxanium ("the scoreboard of a video game"); labels use Chakra Petch */
   .hud-block .label, .jc .lab, .gauge-lab,
-  .mhud .m-score-lab, .mhud .m-acc-lab { font-family: 'Chakra Petch', monospace; }
+  .mhud .m-score-lab, .mhud .m-acc-lab { font-family: 'Chakra Petch', sans-serif; }
   .hud-block .val, .jc .num, #hud-score, #hud-combo,
   .gauge-badge, .mhud .m-score, .mhud .m-acc { font-family: 'Oxanium', sans-serif; letter-spacing: 0.005em; }
   #judge-flash { font-family: 'Oxanium', sans-serif; font-weight: 800; letter-spacing: 0.02em; }
@@ -2797,7 +2820,9 @@
   @keyframes encoreIn { from { opacity: 0; transform: translateY(-16px) scale(0.82); } to { opacity: 1; transform: none; } }
   @keyframes encoreChant { from { transform: scale(1); } to { transform: scale(1.05); } }
   /* PLAY AGAIN becomes the pulsing ENCORE call-to-action on a strong finish */
-  .ghost-btn.encore-armed { color: #0a0706; background: linear-gradient(180deg, #f4cf6a, #d89b2c); border-color: rgba(224,169,63,0.7); box-shadow: 0 0 0 1px rgba(224,169,63,0.4), 0 8px 26px rgba(224,169,63,0.34); animation: encoreBtn 1.2s ease-in-out infinite alternate; }
+  /* U-13: static gold CTA (dropped the infinite encoreBtn pulse). The .enc-chant above is the ONE
+     encore hero pulse — the button stays the obvious next action via its gold fill, not a competing loop. */
+  .ghost-btn.encore-armed { color: #0a0706; background: linear-gradient(180deg, #f4cf6a, #d89b2c); border-color: rgba(224,169,63,0.7); box-shadow: 0 0 0 1px rgba(224,169,63,0.5), 0 9px 30px rgba(224,169,63,0.45); }
   @keyframes encoreBtn { from { box-shadow: 0 0 0 1px rgba(224,169,63,0.4), 0 8px 26px rgba(224,169,63,0.30); } to { box-shadow: 0 0 0 1px rgba(224,169,63,0.6), 0 10px 34px rgba(224,169,63,0.55); } }
   html.rr-reduce-motion .results-encore.show, html.rr-reduce-motion .enc-chant, html.rr-reduce-motion .ghost-btn.encore-armed { animation: none; }
   .results-badges:empty { display: none; }
@@ -2811,25 +2836,29 @@
   /* build122 p1: CLUTCH badge — combo-recovery celebration stat (crimson, matches the in-run flash color) */
   .rbadge.clutch { color: #ff1f2e; box-shadow: 0 0 20px rgba(255,31,46,0.4); }
   .rbadge.fail { color: #ff1f2e; box-shadow: 0 0 22px rgba(255,31,46,0.5); }
-  .rbadge.best { color: var(--crimson); box-shadow: 0 0 22px rgba(255,31,46,0.45); animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both, odpulse 1.1s ease-in-out infinite 0.5s; }
-  .rbadge.gradeup { color: #e0a93f; box-shadow: 0 0 22px rgba(224,169,63,0.5); animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both, odpulse 1.1s ease-in-out infinite 0.4s; }
+  /* U-13: NEW BEST / GRADE UP keep only the one-shot badgePop entrance (dropped the infinite odpulse).
+     They stay reward-bright via their static glow, but no longer pulse against the grade climax. */
+  .rbadge.best { color: var(--crimson); box-shadow: 0 0 22px rgba(255,31,46,0.45); animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both; }
+  .rbadge.gradeup { color: #e0a93f; box-shadow: 0 0 22px rgba(224,169,63,0.5); animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both; }
   @keyframes badgePop { 0% { opacity: 0; transform: scale(0.6) translateY(8px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
 
   /* build122 p2: ONE NOTE FROM GLORY — near-miss "almost" stamp (delighter #2). Render-only; reuses the
      .rbadge crimson/chrome pill language + a chrome hairline underline so it reads as a stat, not a nag.
-     Pulses gently to draw the eye toward the (also-pulsing) replay button below it. */
+     U-13: pops in once then sits still (its steady pulse was one of the competing results loops). */
   #results-almost {
     display: inline-block; margin-top: 14px; padding: 7px 16px;
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700;
     letter-spacing: 0.18em; text-transform: uppercase; color: #ff7a4a;
     border-top: 1px solid rgba(218,215,210,0.3); border-bottom: 1px solid rgba(218,215,210,0.3);
-    animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both, resultsAlmostPulse 1.6s ease-in-out 0.5s infinite;
+    /* U-13: one-shot entrance only (dropped the infinite resultsAlmostPulse) — the chrome hairline already
+       reads it as a stat, so it no longer needs a steady loop competing with the grade/replay cues. */
+    animation: badgePop 0.5s cubic-bezier(.2,1.4,.3,1) both;
   }
   @keyframes resultsAlmostPulse { 0%,100% { opacity: 0.82; } 50% { opacity: 1; text-shadow: 0 0 14px rgba(255,122,74,0.55); } }
   html.rr-reduce-motion #results-almost { animation: none; opacity: 1; }
-  /* the replay button "beckons" — same gold pulse language as the ENCORE call-to-action button, just a
-     lighter-weight cue (no color swap) so it doesn't fight the ENCORE state when both could apply. */
-  #results-replay.brag { animation: bragPulse 1.3s ease-in-out infinite; }
+  /* U-13: the replay "beckon" is now a STATIC crimson ring (was an infinite bragPulse). With the badges
+     and grade already carrying the reward, a persistent glow reads the next action without a 5th loop. */
+  #results-replay.brag { box-shadow: 0 0 0 1px rgba(255,31,46,0.5), 0 0 20px rgba(255,31,46,0.42); }
   @keyframes bragPulse { 0%,100% { box-shadow: 0 0 0 1px rgba(255,31,46,0.25); } 50% { box-shadow: 0 0 0 1px rgba(255,31,46,0.55), 0 0 22px rgba(255,31,46,0.45); } }
   html.rr-reduce-motion #results-replay.brag { animation: none; }
 
@@ -3314,7 +3343,7 @@
   .rr-sparks:hover { border-color: rgba(255,31,46,0.7); box-shadow: 0 0 14px rgba(255,31,46,0.28); }
   .rr-sparks .spk-glyph { width: 15px; height: 15px; flex: none; color: var(--ember, #ff7a4a); filter: drop-shadow(0 0 4px rgba(255,122,74,0.6)); }
   .rr-sparks .spk-val { font-family: 'Oxanium', monospace; font-weight: 700; font-size: 14px; letter-spacing: 0.02em; color: var(--chrome); line-height: 1; min-width: 1ch; }
-  .rr-sparks .spk-label { font-family: 'Chakra Petch', monospace; font-size: 9px; letter-spacing: 0.18em; color: var(--ink-dim); text-transform: uppercase; margin-left: 1px; }
+  .rr-sparks .spk-label { font-family: 'Chakra Petch', sans-serif; font-size: 9px; letter-spacing: 0.18em; color: var(--ink-dim); text-transform: uppercase; margin-left: 1px; }
   .rr-sparks[data-state="guest"] { opacity: 0.55; border-color: var(--line); background: rgba(255,255,255,0.03); box-shadow: none; }
   .rr-sparks[data-state="guest"] .spk-glyph { color: var(--ink-dim); filter: none; }
   .rr-sparks[data-state="guest"] .spk-val { color: var(--ink-dim); }
@@ -3323,7 +3352,7 @@
     height: 36px; padding: 0 12px;
     background: rgba(255,255,255,0.03); border: 1px solid var(--line);
     border-radius: 999px; color: var(--ink-dim); cursor: pointer;
-    font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.04em;
+    font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.04em;
     transition: all 0.15s ease; max-width: 190px;
   }
   .rr-id:hover, .rr-id:focus-visible { color: var(--ink); border-color: rgba(224,218,214,0.35); }
@@ -3335,7 +3364,7 @@
     box-shadow: 0 0 0 1px rgba(255,31,46,0.4); overflow: hidden;
   }
   .rr-id .rr-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .rr-id .rr-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink); }
+  .rr-id .rr-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink); }
   .rr-id[data-state="guest"] .rr-signin-ico { width: 16px; height: 16px; flex: none; }
   .rr-id[data-state="signedin"] .rr-signin-ico { display: none; }
   .rr-id[data-state="guest"] .rr-avatar,
@@ -3456,7 +3485,7 @@
   #review-launch .rvl-badge { display: inline-flex; align-items: center; gap: 7px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.22em; color: var(--gold, #e0a93f); border: 1px solid rgba(224,169,63,0.5); background: rgba(224,169,63,0.08); border-radius: 999px; padding: 6px 14px; margin-bottom: 16px; }
   #review-launch .rvl-art { width: 132px; height: 132px; border-radius: 16px; object-fit: cover; margin: 0 auto 14px; display: block; border: 1px solid rgba(222,216,212,0.14); box-shadow: 0 14px 40px rgba(0,0,0,0.6); background: #1a100e; }
   #review-launch .rvl-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 22px; color: #f3ece8; line-height: 1.2; margin-bottom: 4px; overflow-wrap: anywhere; }
-  #review-launch .rvl-artist { font-family: 'Chakra Petch', monospace; font-size: 13px; color: rgba(238,230,226,0.62); margin-bottom: 18px; }
+  #review-launch .rvl-artist { font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: rgba(238,230,226,0.62); margin-bottom: 18px; }
   #review-launch .rvl-diff { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
   #review-launch .rvl-diff button { flex: 1; max-width: 118px; padding: 11px 0; border-radius: 12px; border: 1px solid rgba(222,216,212,0.16); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.6); font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; transition: border-color .12s ease, color .12s ease, transform .12s ease; }
   #review-launch .rvl-diff button:hover { transform: translateY(-1px); border-color: rgba(224,218,214,0.4); color: #eee6e2; }
@@ -3464,21 +3493,21 @@
   #review-launch .rvl-play { width: 100%; padding: 16px 0; border-radius: 14px; border: 1px solid rgba(255,42,48,0.65); background: linear-gradient(180deg, #ff2a30, #b3121c); color: #fff; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.16em; cursor: pointer; box-shadow: 0 12px 34px -10px rgba(255,31,46,0.65); transition: transform .12s ease, box-shadow .12s ease; }
   #review-launch .rvl-play:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 18px 44px -10px rgba(255,31,46,0.8); }
   #review-launch .rvl-play:disabled { opacity: 0.45; cursor: default; }
-  #review-launch .rvl-note { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); margin-top: 12px; letter-spacing: 0.05em; }
-  #review-launch .rvl-state { display: none; font-family: 'Chakra Petch', monospace; font-size: 13px; line-height: 1.6; color: rgba(238,230,226,0.78); padding: 8px 4px 0; }
+  #review-launch .rvl-note { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--gold, #e0a93f); margin-top: 12px; letter-spacing: 0.05em; }
+  #review-launch .rvl-state { display: none; font-family: 'Chakra Petch', sans-serif; font-size: 13px; line-height: 1.6; color: rgba(238,230,226,0.78); padding: 8px 4px 0; }
   /* build102y step4: stage-picker chip strip — one scrollable line, zero card-height blowout */
   #review-launch .rvl-stage-row { display: flex; gap: 7px; overflow-x: auto; padding: 2px 2px 6px; margin: -8px 0 10px; scrollbar-width: thin; }
   #review-launch .rvl-stage-row[hidden] { display: none; }
-  .rvl-stage-chip { flex: 0 0 auto; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.7); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; white-space: nowrap; transition: border-color .12s ease, color .12s ease; }
+  .rvl-stage-chip { flex: 0 0 auto; padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.7); font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.08em; cursor: pointer; white-space: nowrap; transition: border-color .12s ease, color .12s ease; }
   .rvl-stage-chip:hover { border-color: var(--ec, rgba(224,218,214,0.4)); color: #eee6e2; }
   .rvl-stage-chip.sel { border-color: var(--crimson, #ff2a30); color: #fff; background: rgba(255,42,48,0.14); box-shadow: 0 0 14px -6px rgba(255,42,48,0.55); }
   .rvl-stage-chip .paid-tick { color: var(--gold, #e0a93f); margin-left: 5px; }
-  #review-launch .rvl-stage-name { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); margin: -4px 0 10px; letter-spacing: 0.05em; }
+  #review-launch .rvl-stage-name { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--gold, #e0a93f); margin: -4px 0 10px; letter-spacing: 0.05em; }
   #review-launch .rvl-stage-name[hidden] { display: none; }
   /* build102y step5: challenger seat-policy chips (with GO LIVE) */
   #review-launch .rvl-seatpol { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
   #review-launch .rvl-seatpol[hidden] { display: none; }
-  #review-launch .rvl-seatpol button { padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.62); font-family: 'Chakra Petch', monospace; font-size: 10.5px; letter-spacing: 0.08em; cursor: pointer; transition: border-color .12s ease, color .12s ease; }
+  #review-launch .rvl-seatpol button { padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.62); font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.08em; cursor: pointer; transition: border-color .12s ease, color .12s ease; }
   #review-launch .rvl-seatpol button:hover { border-color: rgba(224,169,63,0.5); color: #eee6e2; }
   #review-launch .rvl-seatpol button.active { border-color: var(--gold, #e0a93f); color: var(--gold, #e0a93f); background: rgba(224,169,63,0.10); }
   /* build102y step5: SWAP IN THE ARTIST (gold pill) + TAKE THE STAGE row on the show seat card */
@@ -3487,28 +3516,28 @@
   .mpx-show-take-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .mpx-show-take-btn { padding: 8px 13px; border-radius: 999px; cursor: pointer; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.1em; color: #fff; background: rgba(255,42,48,0.14); border: 1px solid rgba(255,42,48,0.65); }
   .mpx-show-take-btn:hover { background: rgba(255,42,48,0.22); }
-  .mpx-show-takeq { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--ink-dim, #a0938f); }
+  .mpx-show-takeq { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--ink-dim, #a0938f); }
   /* build102y step5: LIVE NOW show billboard bits */
   .mpx-rc-thumb { width: 38px; height: 38px; border-radius: 9px; object-fit: cover; flex: none; border: 1px solid rgba(222,216,212,0.16); background: #1a100e; }
   .mpx-rc-tag.open { color: var(--gold, #e0a93f); border-color: rgba(224,169,63,0.55); }
   .mpx-rc-join.seat { border-color: rgba(255,42,48,0.7); background: rgba(255,42,48,0.16); color: #fff; margin-right: 6px; }
-  #review-launch .rvl-back { margin-top: 14px; background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 12px; letter-spacing: 0.08em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
+  #review-launch .rvl-back { margin-top: 14px; background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.08em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
   #review-launch .rvl-back:hover { color: #eee6e2; }
   /* build102s (Phase-2 C1) — GO LIVE: gold-outline secondary CTA under the crimson PLAY (brand: black/crimson/gold, no purple/blue) */
   #review-launch .rvl-golive { width: 100%; margin-top: 10px; padding: 13px 0; border-radius: 14px; border: 1px solid rgba(224,169,63,0.55); background: rgba(224,169,63,0.08); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.14em; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }
   #review-launch .rvl-golive:hover { transform: translateY(-1px); background: rgba(224,169,63,0.14); box-shadow: 0 10px 30px -12px rgba(224,169,63,0.55); }
   #review-launch .rvl-live-dot { color: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; display: inline-block; }
   @keyframes rvlPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-  #review-launch .rvl-golive-hint { font-family: 'Chakra Petch', monospace; font-size: 10.5px; color: rgba(238,230,226,0.55); margin-top: 7px; letter-spacing: 0.05em; }
+  #review-launch .rvl-golive-hint { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; color: rgba(238,230,226,0.55); margin-top: 7px; letter-spacing: 0.05em; }
   /* build102s — LIVE SHOW room chrome (mpx-step-setup; hidden unless room.show). Warm darks only (R>=G>=B). */
   .mpx-show-banner { display: flex; align-items: center; gap: 12px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(26,16,12,0.55)); border: 1px solid rgba(224,169,63,0.4); }
   .mpx-show-banner .msb-art { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(222,216,212,0.16); background: #1a100e; flex: none; }
   .mpx-show-banner .msb-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
   .mpx-show-banner .msb-badge { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9.5px; letter-spacing: 0.22em; color: var(--gold, #e0a93f); }
   .mpx-show-banner .msb-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; color: #f3ece8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mpx-show-banner .msb-artist { font-family: 'Chakra Petch', monospace; font-size: 11px; color: rgba(238,230,226,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mpx-show-banner .msb-artist { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: rgba(238,230,226,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mpx-show-banner .msb-diff { margin-left: auto; flex: none; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.16em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 4px 10px; }
-  .mpx-show-seat { display: flex; flex-direction: column; gap: 8px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,0.025); border: 1px dashed rgba(224,169,63,0.35); font-family: 'Chakra Petch', monospace; font-size: 12px; color: #cdbfae; text-align: left; }
+  .mpx-show-seat { display: flex; flex-direction: column; gap: 8px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: rgba(255,255,255,0.025); border: 1px dashed rgba(224,169,63,0.35); font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: #cdbfae; text-align: left; }
   .mpx-show-seat b { color: var(--gold, #e0a93f); }
   .mpx-show-pend { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(224,169,63,0.09); border: 1px solid rgba(224,169,63,0.5); }
   .mpx-show-pend .msp-txt.artist b { color: #fff2cd; }
@@ -3521,15 +3550,15 @@
   .mpx-show-invite-btn { flex: 1; min-width: 200px; padding: 11px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12.5px; letter-spacing: 0.12em; cursor: pointer; }
   .mpx-show-invite-btn:hover:not(:disabled) { background: rgba(224,169,63,0.18); }
   .mpx-show-invite-btn:disabled { opacity: 0.55; cursor: default; }
-  .mpx-show-invite-state { font-family: 'Chakra Petch', monospace; font-size: 11px; color: var(--gold, #e0a93f); }
-  .mpx-show-nudge { background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
+  .mpx-show-invite-state { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--gold, #e0a93f); }
+  .mpx-show-nudge { background: none; border: none; color: rgba(238,230,226,0.55); font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.35); }
   .mpx-show-nudge:hover { color: #eee6e2; }
   /* P0 fix: OPEN-seat waiting affordances — a prominent COPY ROOM LINK + a low-key explicit solo escape hatch */
   .mpx-show-open-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .mpx-show-open-row[hidden] { display: none; }
   .mpx-show-copylink { flex: 1; min-width: 160px; padding: 10px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.12em; cursor: pointer; }
   .mpx-show-copylink:hover { background: rgba(224,169,63,0.18); }
-  .mpx-show-solo { background: none; border: none; color: rgba(238,230,226,0.5); font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.3); }
+  .mpx-show-solo { background: none; border: none; color: rgba(238,230,226,0.5); font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.06em; cursor: pointer; text-decoration: underline dotted rgba(238,230,226,0.3); }
   .mpx-show-solo:hover { color: #eee6e2; }
   .mpx-fo-cell .mpx-show-open-row { justify-content: center; }
   .mpx-fo-cell .mpx-show-copylink { flex: 0 1 auto; min-width: 0; padding: 6px 12px; font-size: 11px; border-radius: 999px; }
@@ -3541,7 +3570,7 @@
   #mpx-spec-stage .mss-plate.p2 { flex-direction: row-reverse; text-align: right; }
   #mpx-spec-stage.solo .mss-plate.p2 { display: none; }
   #mpx-spec-stage .mss-av { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,31,46,0.18) center/cover no-repeat; border: 1px solid rgba(255,31,46,0.4); display: inline-flex; align-items: center; justify-content: center; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; color: #ffd9db; flex: none; }
-  #mpx-spec-stage .mss-name { font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.1em; color: #cdbfae; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mpx-spec-stage .mss-name { font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.1em; color: #cdbfae; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #mpx-spec-stage .mss-sc { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; color: #f3ece8; }
   #mpx-spec-stage .mss-cb { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 11px; color: var(--gold, #e0a93f); }
   #mpx-spec-stage .mss-live { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.22em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 5px 12px; flex: none; animation: rvlPulse 1.4s ease-in-out infinite; }
@@ -3553,16 +3582,16 @@
   #mpx-spec-stage.solo #mss-deck2 { display: none; }
   /* P0 fix: a solo watcher's single deck fills the stage (was capped at 62vw = a narrow letterboxed column) */
   #mpx-spec-stage.solo #mss-deck1 { max-width: 88vw; margin: 0 auto; }
-  #mpx-spec-stage .mss-sync { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); font-family: 'Chakra Petch', monospace; font-size: 13px; letter-spacing: 0.12em; color: var(--gold, #e0a93f); background: rgba(20,11,10,0.85); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 12px 22px; animation: mssShimmer 1.6s ease-in-out infinite; }
+  #mpx-spec-stage .mss-sync { position: absolute; left: 50%; top: 46%; transform: translate(-50%,-50%); font-family: 'Chakra Petch', sans-serif; font-size: 13px; letter-spacing: 0.12em; color: var(--gold, #e0a93f); background: rgba(20,11,10,0.85); border: 1px solid rgba(224,169,63,0.4); border-radius: 999px; padding: 12px 22px; animation: mssShimmer 1.6s ease-in-out infinite; }
   #mpx-spec-stage .mss-sync-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; }
   @keyframes mssShimmer { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
   #mpx-spec-stage .mss-verdict { position: absolute; left: 50%; top: 42%; transform: translate(-50%,-50%); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(22px, 4.4vw, 40px); letter-spacing: 0.04em; color: var(--chrome, #dad7d2); text-shadow: 0 0 34px rgba(224,169,63,0.4); background: rgba(16,9,9,0.82); border: 1px solid rgba(224,169,63,0.45); border-radius: 18px; padding: 18px 30px; white-space: nowrap; }
-  #mpx-spec-stage .mss-foot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 16px 14px; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.08em; color: #b9b2ac; }
+  #mpx-spec-stage .mss-foot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 8px 16px 14px; font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.08em; color: #b9b2ac; }
   #mpx-spec-stage .mss-foot #mss-watchn { color: var(--gold, #e0a93f); }
   /* review results: auto-return pill ("Returning to the show in Ns") */
-  #rvl-return { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 210; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(180deg,#1b0d0e,#120a0c); border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 16px 44px rgba(0,0,0,0.65); font-family: 'Chakra Petch', monospace; font-size: 13px; color: #eee6e2; white-space: nowrap; }
+  #rvl-return { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 210; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(180deg,#1b0d0e,#120a0c); border: 1px solid rgba(224,169,63,0.4); box-shadow: 0 16px 44px rgba(0,0,0,0.65); font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: #eee6e2; white-space: nowrap; }
   #rvl-return b { font-family: 'Oxanium', sans-serif; color: var(--gold, #e0a93f); }
-  #rvl-return button { border-radius: 999px; border: 1px solid rgba(222,216,212,0.25); background: rgba(255,255,255,0.04); color: #eee6e2; font-family: 'Chakra Petch', monospace; font-size: 11px; letter-spacing: 0.1em; padding: 7px 13px; cursor: pointer; }
+  #rvl-return button { border-radius: 999px; border: 1px solid rgba(222,216,212,0.25); background: rgba(255,255,255,0.04); color: #eee6e2; font-family: 'Chakra Petch', sans-serif; font-size: 11px; letter-spacing: 0.1em; padding: 7px 13px; cursor: pointer; }
   #rvl-return button.go { border-color: rgba(255,42,48,0.6); background: rgba(255,42,48,0.15); }
 
   .song-sheet {
@@ -3973,15 +4002,15 @@
   .mh-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: clamp(40px, 7vw, 68px);
     letter-spacing: 0.03em; line-height: 0.96; color: var(--ink);
     text-shadow: 0 0 34px rgba(255,42,48,0.5); margin: 4px 0 2px; }
-  .mh-sub { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim);
+  .mh-sub { font-family: 'Chakra Petch', sans-serif; font-size: 12px; color: var(--ink-dim);
     letter-spacing: 0.04em; line-height: 1.5; margin: 0 0 8px; max-width: 540px; }
   /* build99V: random easter-egg quip under the subtitle — a dose of chaos each launch */
-  .mh-quip { font-family: 'Chakra Petch', monospace; font-size: 12px; font-style: italic; color: var(--gold, #e0a93f);
+  .mh-quip { font-family: 'Chakra Petch', sans-serif; font-size: 12px; font-style: italic; color: var(--gold, #e0a93f);
     opacity: 0.88; letter-spacing: 0.03em; line-height: 1.4; margin: 0 0 18px; max-width: 560px; min-height: 1.1em; }
   /* build99V: menu Sign In — sits to the left of the gear, opens the website login (mirrors the library Sign in) */
   #menu-hub .mh-signin { position: absolute; top: 16px; right: 62px; height: 38px; display: inline-flex; align-items: center; gap: 7px;
     padding: 0 15px; border-radius: 19px; cursor: pointer; color: #f0ebe7; background: linear-gradient(180deg, rgba(255,42,48,0.34), rgba(120,10,14,0.46));
-    border: 1px solid rgba(255,42,48,0.6); font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+    border: 1px solid rgba(255,42,48,0.6); font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
     transition: filter .15s ease, transform .15s ease, box-shadow .15s ease; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
   #menu-hub .mh-signin:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,31,46,0.32); }
   #menu-hub .mh-signin svg { width: 15px; height: 15px; }
@@ -3989,7 +4018,7 @@
   /* v413: back-to-website (owner ask) — chrome/neutral pill top-left (navigation, not a CTA; crimson stays for actions) */
   #menu-hub .mh-backsite { position: absolute; top: 16px; left: 16px; height: 38px; display: inline-flex; align-items: center; gap: 7px;
     padding: 0 15px; border-radius: 19px; cursor: pointer; color: #cdc4c1; text-decoration: none; background: rgba(10,7,6,0.55);
-    border: 1px solid var(--line, rgba(218,215,210,0.22)); font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
+    border: 1px solid var(--line, rgba(218,215,210,0.22)); font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase;
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
   #menu-hub .mh-backsite:hover { color: #f0ebe7; border-color: rgba(218,215,210,0.45); box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
   #menu-hub .mh-backsite svg { width: 15px; height: 15px; }
@@ -4064,7 +4093,7 @@
   .mh-tile:hover .mh-ico, .mh-tile:focus-visible .mh-ico { transform: translateY(-2px) scale(1.08); }
   .mh-tile .mh-ico svg { width: 100%; height: 100%; }
   .mh-tile .mh-t { position: relative; z-index: 1; font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; }
-  .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 10.5px;
+  .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 10.5px;
     letter-spacing: 0.06em; color: var(--ink-dim); text-transform: uppercase; }
   /* per-tile accent identity (the six instruments). IDs match the markup. */
   #mh-campaign    { --ta: var(--crimson); }   /* hero path — crimson */
@@ -4078,7 +4107,7 @@
   .mh-tile.mh-hero .mh-d { font-size: 12px; margin-top: 4px; }
   .mh-hero-textcol { display: flex; flex-direction: column; align-items: flex-start; position: relative; z-index: 1; }
   .mh-hero-chip { position: absolute; top: 12px; right: 16px; z-index: 2;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 10px; letter-spacing: 0.16em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.16em;
     text-transform: uppercase; color: #fff;
     background: linear-gradient(180deg, rgba(255,31,46,0.92), rgba(190,18,28,0.92));
     border: 1px solid rgba(255,90,98,0.7); border-radius: 999px; padding: 4px 11px;
@@ -4106,14 +4135,14 @@
   .mh-tile.mh-daily::before { background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(224,169,63,0) 55%); }
   .mh-tile.mh-daily .mh-ico { color: #e0a93f; filter: drop-shadow(0 0 10px rgba(224,169,63,0.55)); }
   .mh-tile.mh-daily .mh-daily-tags { position: relative; z-index: 1; margin-top: 5px;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9.5px; letter-spacing: 0.14em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9.5px; letter-spacing: 0.14em;
     text-transform: uppercase; color: #f0c86e; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
   .mh-tile.mh-daily .mh-daily-pct { position: relative; z-index: 1; margin-top: 3px;
-    font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 9px; letter-spacing: 0.08em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 0.08em;
     text-transform: uppercase; color: #c9b48a; }
   .mh-tile.mh-daily .mh-daily-pct[hidden] { display: none; }
   .mh-tile.mh-daily .mh-daily-done { position: relative; z-index: 1; margin-top: 4px;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.08em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.08em;
     text-transform: uppercase; color: #8fd39a; }   /* green is allowed on functional state chips, not UI chrome */
   .mh-tile.mh-daily.is-done .mh-ico { opacity: 0.7; }
   /* when the gold art lands, .has-art (shared loader) hides the SVG icon + dims the gradient so the painting reads */
@@ -4150,7 +4179,7 @@
   html.rr-reduce-motion #menu-hub .mh-brand img, body.rr-fx-lite #menu-hub .mh-brand img { animation: none; }
   html.rr-reduce-motion #menu-hub .mh-tile.primary::before, body.rr-fx-lite #menu-hub .mh-tile.primary::before { animation: none; opacity: 0.7; }
 
-  .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', monospace;
+  .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', sans-serif;
     font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold);
     border: 1px solid rgba(224,169,63,0.45); border-radius: 999px; padding: 3px 8px; }
   /* build99L: slim "me" status strip — avatar · rank · Sparks/Bonus · CONTINUE last level */
@@ -4163,11 +4192,11 @@
     border-radius: 50%; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; color: #fff;
     background: linear-gradient(150deg, #3a1216, #1a0809); border: 1px solid rgba(255,60,70,0.5); overflow: hidden; }
   .mh-status-av img { width: 100%; height: 100%; object-fit: cover; }
-  .mh-status-rank { font-family: 'Chakra Petch', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
+  .mh-status-rank { font-family: 'Chakra Petch', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.18em;
     text-transform: uppercase; color: var(--gold); }
   .mh-status-spark { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: var(--ink-dim); }
   .mh-status-spark b { color: var(--gold); font-weight: 700; }
-  .mh-status-cont { font-family: 'Chakra Petch', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  .mh-status-cont { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
   .mh-status-cont::before { content: '▶'; color: var(--crimson); font-size: 8px; }
   .mh-status-cont[hidden], .mh-status-spark[hidden] { display: none; }
@@ -4193,7 +4222,7 @@
     pointer-events: none;
   }
   .mgc-eyebrow { position: absolute; top: -1px; left: 18px; transform: translateY(-50%); z-index: 2;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.18em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.18em;
     text-transform: uppercase; color: #2a1012;
     background: linear-gradient(180deg, #f4cf6a, #d89b2c);
     border-radius: 999px; padding: 3px 10px;
@@ -4260,7 +4289,7 @@
     display: inline-flex; align-items: center; gap: 6px;
     padding: 8px 16px; border: 1px solid rgba(255,31,46,0.55); border-radius: 999px;
     background: linear-gradient(180deg, rgba(255,31,46,0.16), rgba(163,6,15,0.12));
-    font-family: 'Chakra Petch', monospace; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+    font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--ink); white-space: nowrap;
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .15s ease; }
   .mgc-cta:hover, .mgc-cta:focus-visible { color: #fff; border-color: var(--crimson);
@@ -4319,7 +4348,7 @@
   }
   .mh-weekly .mwk-eyebrow {
     position: absolute; top: 10px; left: 18px; z-index: 1;
-    font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.2em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.2em;
     text-transform: uppercase; color: #f0c86e; text-shadow: 0 1px 6px rgba(0,0,0,0.8);
   }
   .mh-weekly .mwk-art {
@@ -4339,7 +4368,7 @@
   }
   .mh-weekly .mwk-meta {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-family: 'Chakra Petch', monospace; font-size: 10.5px; letter-spacing: 0.06em;
+    font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink-dim);
   }
   .mh-weekly .mwk-best { color: #f0c86e; font-family: 'Oxanium', sans-serif; font-weight: 700; }
@@ -4862,7 +4891,7 @@
   @keyframes qmPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,42,48,0.0); } 50% { box-shadow: 0 0 16px 1px rgba(255,42,48,0.28); } }
   html.rr-reduce-motion .mpx-qm-pill.searching { animation: none; }
   /* build102y step3: rivalry ledger — head-to-head line (winner step) + crimson REVENGE chip + pulsing challenge */
-  .mpx-h2h { font-family: 'Chakra Petch', monospace; font-size: 12.5px; color: var(--ink-dim, #a0938f); margin: -6px 0 10px; }
+  .mpx-h2h { font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; color: var(--ink-dim, #a0938f); margin: -6px 0 10px; }
   .mpx-h2h b { color: var(--ink, #f3eceb); }
   .mpx-revenge { display: inline-block; padding: 1px 7px; border-radius: 6px; margin-left: 6px; vertical-align: 1px;
     font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.08em; color: #fff;
@@ -5196,7 +5225,7 @@
   #mp-opp .mo-spec { display: none; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.18em; color: var(--gold, #e0a93f); }
   #mp-opp.spectate .mo-spec { display: flex; }
   #mp-opp .mo-spec-eye { font-size: 12px; }
-  #mp-opp .mo-spec-next { margin-left: auto; font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink, #f4eef0); background: rgba(255,31,46,0.18); border: 1px solid rgba(255,31,46,0.5); border-radius: 7px; padding: 4px 9px; cursor: pointer; }
+  #mp-opp .mo-spec-next { margin-left: auto; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink, #f4eef0); background: rgba(255,31,46,0.18); border: 1px solid rgba(255,31,46,0.5); border-radius: 7px; padding: 4px 9px; cursor: pointer; }
   #mp-opp .mo-spec-next:hover { background: rgba(255,31,46,0.32); }
   html.rr-reduce-motion .mpx-actionbar .mpx-act:hover { transform: none; }
   @media (max-width: 760px) { .mpx-actionbar { grid-template-columns: 1fr; } }
@@ -5311,7 +5340,7 @@
   .mpx-tour-bracket .brk-lines { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; overflow: visible; }
   .mpx-tour-bracket .brk-lines path { fill: none; stroke-width: 1.6; stroke-linecap: round; }
   .brk-tier { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 9px 14px; width: 100%; }
-  .brk-tier .bt-lbl { width: 100%; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 8px;
+  .brk-tier .bt-lbl { width: 100%; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 10px;
     letter-spacing: 0.2em; color: rgba(201,162,90,0.78); margin-bottom: 1px; }
   .brk-av { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 52px; position: relative; }
   .brk-av .ba-face { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
@@ -5408,7 +5437,7 @@
   #mpx-tour-invite:hover { border-color: var(--gold, #e0a93f); color: #ffd98c; }
   #mpx-tour-invite.copied { border-color: rgba(218,215,210,0.5); color: var(--chrome, #dad7d2); }
   .mpx-devbar { margin-top: 10px; padding: 9px 11px; border-radius: 11px; border: 1px dashed rgba(218,215,210,0.32); background: rgba(20,12,10,0.10); }   /* was blue (banned hue) → warm chrome */
-  .mpx-devbar-lbl { display: block; font-family: 'JetBrains Mono', monospace; font-size: 8.5px; letter-spacing: 0.16em; color: #9c918e; margin-bottom: 7px; text-align: left; }
+  .mpx-devbar-lbl { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #9c918e; margin-bottom: 7px; text-align: left; }
   .mpx-devbar-row { display: flex; gap: 7px; flex-wrap: wrap; }
   .mpx-devbar-row .rh-refresh { flex: 1 1 auto; }
   #mpx-dev-spectate.on { border-color: rgba(218,215,210,0.55); color: var(--chrome, #dad7d2); }
@@ -5422,7 +5451,7 @@
   @media (max-width: 760px) { .mpx-tour-grid { grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); } }
   .mp-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.03em;
     color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 4px 0 0; line-height: 1; }
-  .mp-sub { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim);
+  .mp-sub { font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: var(--ink-dim);
     line-height: 1.7; max-width: 440px; margin: 4px auto 10px; text-align: center; text-wrap: balance; }
   @media (max-width: 760px) {
     .mh-grid { grid-template-columns: repeat(2, 1fr); }
@@ -6837,7 +6866,7 @@
     .set-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
     /* build99L: labeled section header — a Chakra-Petch eyebrow over a hairline divider so Settings reads in chunks */
     .set-section { display: flex; align-items: center; gap: 10px; margin: 22px 0 2px;
-      font-family: 'Chakra Petch', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.26em;
+      font-family: 'Chakra Petch', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.26em;
       text-transform: uppercase; color: var(--crimson); }
     .set-section::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 8px rgba(255,31,46,0.5); flex: 0 0 auto; }
     .set-section::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,31,46,0.32), var(--line) 40%, transparent); }
@@ -6875,8 +6904,13 @@
       font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 17px; color: var(--ink);
       cursor: pointer; transition: all 0.12s ease; box-shadow: inset 0 -2px 0 rgba(0,0,0,0.4);
     }
-    .set-keys .keycap:nth-child(odd)  { color: var(--crimson); border-color: rgba(255,31,46,0.4); }
-    .set-keys .keycap:nth-child(even) { color: var(--chrome);  border-color: rgba(224,218,214,0.32); }
+    /* U-14: remap caps ride the SAME per-lane tokens as the legend (was crimson/chrome odd-even —
+       a third lane-color language). Keyed by data-lane so #set-pad's interleaved "+" caps stay correct. */
+    .set-keys .keycap[data-lane="0"] { color: var(--lane-0); border-color: color-mix(in srgb, var(--lane-0) 45%, transparent); }
+    .set-keys .keycap[data-lane="1"] { color: var(--lane-1); border-color: color-mix(in srgb, var(--lane-1) 45%, transparent); }
+    .set-keys .keycap[data-lane="2"] { color: var(--lane-2); border-color: color-mix(in srgb, var(--lane-2) 45%, transparent); }
+    .set-keys .keycap[data-lane="3"] { color: var(--lane-3); border-color: color-mix(in srgb, var(--lane-3) 45%, transparent); }
+    .set-keys .keycap[data-lane="4"] { color: var(--lane-4); border-color: color-mix(in srgb, var(--lane-4) 45%, transparent); }
     .set-keys .keycap:hover { border-color: var(--silver); transform: translateY(-1px); }
     .set-keys .keycap.listening { background: rgba(255,31,46,0.2); border-color: var(--crimson); color: #fff; animation: odpulse 0.7s ease-in-out infinite; }
     /* build100q: "+" add-a-button (narrow, neutral) + Overdrive cap (gold). After the nth-child rules so they win. */
@@ -6894,7 +6928,14 @@
     .dev-v.ok { color: #dad7d2; }
     .set-test-pips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
     .set-test-pips span { height: 30px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.08s ease; }
-    .set-test-pips span.lit { background: var(--crimson); border-color: var(--crimson); box-shadow: 0 0 20px rgba(255,31,46,0.85); transform: translateY(-2px); }
+    /* U-14: a lit pip glows its OWN lane color (was all-crimson) — pip index === lane, so the
+       input test now reads as the same 5-lane legend as the caps above it. */
+    .set-test-pips span.lit { transform: translateY(-2px); }
+    .set-test-pips span:nth-child(1).lit { background: var(--lane-0); border-color: var(--lane-0); box-shadow: 0 0 20px color-mix(in srgb, var(--lane-0) 82%, transparent); }
+    .set-test-pips span:nth-child(2).lit { background: var(--lane-1); border-color: var(--lane-1); box-shadow: 0 0 20px color-mix(in srgb, var(--lane-1) 82%, transparent); }
+    .set-test-pips span:nth-child(3).lit { background: var(--lane-2); border-color: var(--lane-2); box-shadow: 0 0 20px color-mix(in srgb, var(--lane-2) 82%, transparent); }
+    .set-test-pips span:nth-child(4).lit { background: var(--lane-3); border-color: var(--lane-3); box-shadow: 0 0 20px color-mix(in srgb, var(--lane-3) 82%, transparent); }
+    .set-test-pips span:nth-child(5).lit { background: var(--lane-4); border-color: var(--lane-4); box-shadow: 0 0 20px color-mix(in srgb, var(--lane-4) 82%, transparent); }
 
     /* ===== Controller / Guitar setup (lead with the wizard) ===== */
     .ctrl-setup { gap: 12px; }
@@ -6917,7 +6958,7 @@
     }
     .gh-badge-ic { font-size: 26px; line-height: 1; }
     .gh-badge-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .gh-badge-txt strong { font-family: 'Chakra Petch', monospace; font-size: 13px; letter-spacing: 0.05em; color: #ffd23c; text-transform: uppercase; }
+    .gh-badge-txt strong { font-family: 'Chakra Petch', sans-serif; font-size: 13px; letter-spacing: 0.05em; color: #ffd23c; text-transform: uppercase; }
     .gh-badge-name { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
     .ctrl-adv-toggle {
       align-self: flex-start; margin-top: 4px; padding: 7px 0; background: none; border: none; cursor: pointer;
@@ -7376,7 +7417,7 @@
 
         <!-- build100q: HIT MODE — Strum (authentic GH) vs Press-to-hit. Lets a player whose strum bar isn't detected still play. -->
         <div class="set-row" id="set-strum-row" style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span class="set-label" style="font-family:'Chakra Petch',monospace;font-size:12px;color:var(--ink-dim);letter-spacing:0.06em;">HIT MODE (guitar)</span>
+          <span class="set-label" style="font-family:'Chakra Petch',sans-serif;font-size:12px;color:var(--ink-dim);letter-spacing:0.06em;">HIT MODE (guitar)</span>
           <div class="set-seg" id="set-strum-mode" role="radiogroup" aria-label="Guitar hit mode">
             <button data-strum="on" type="button" class="active">Strum to hit</button>
             <button data-strum="off" type="button">Press to hit</button>
@@ -7395,7 +7436,7 @@
           <span style="font-size:22px;flex:0 0 auto;line-height:1;">🎸</span>
           <span style="display:flex;flex-direction:column;gap:2px;min-width:0;">
             <b style="font-family:'Oxanium',sans-serif;font-size:12px;letter-spacing:0.05em;color:var(--gold);">WANT THE REAL GUITAR HERO FEEL?</b>
-            <span style="font-family:'Chakra Petch',monospace;font-size:11px;line-height:1.45;color:rgba(255,255,255,0.7);">We recommend the <b style="color:#fff;">PDP Riffmaster — Xbox / Windows model</b>: 5 frets + strum + whammy, its own USB dongle (no adapter). Plug it in and it auto-maps to the lanes.</span>
+            <span style="font-family:'Chakra Petch',sans-serif;font-size:11px;line-height:1.45;color:rgba(255,255,255,0.7);">We recommend the <b style="color:#fff;">PDP Riffmaster — Xbox / Windows model</b>: 5 frets + strum + whammy, its own USB dongle (no adapter). Plug it in and it auto-maps to the lanes.</span>
           </span>
           <span style="flex:0 0 auto;font-family:'Oxanium',sans-serif;font-weight:800;font-size:11px;color:var(--gold);white-space:nowrap;">FIND IT ›</span>
         </a>
@@ -7435,7 +7476,7 @@
       </div>
       <!-- build99M (launch): support / report-a-chart channel — a tester (or a player) can flag a broken chart or a failed purchase. -->
       <div style="margin-top:18px;text-align:center;">
-        <a href="mailto:reactivvibeai@gmail.com?subject=Reactive%20Rhythm%20%E2%80%94%20report&amp;body=What%20happened%3A%0A%0ASong%2Flevel%3A%0ADevice%2Fbrowser%3A%0A" style="font-family:'Chakra Petch',monospace;font-size:11.5px;color:var(--ink-dim);text-decoration:none;border-bottom:1px solid var(--line);">Found a bug or a broken chart? Report it →</a>
+        <a href="mailto:reactivvibeai@gmail.com?subject=Reactive%20Rhythm%20%E2%80%94%20report&amp;body=What%20happened%3A%0A%0ASong%2Flevel%3A%0ADevice%2Fbrowser%3A%0A" style="font-family:'Chakra Petch',sans-serif;font-size:11.5px;color:var(--ink-dim);text-decoration:none;border-bottom:1px solid var(--line);">Found a bug or a broken chart? Report it →</a>
       </div>
     </div>
 
@@ -7851,7 +7892,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=457"></script>
+<script src="telemetry.js?v=458"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8030,17 +8071,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=457"></script>
-<script src="game.js?v=457"></script>
-<script src="procbg.js?v=457"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=457"></script>
-<script src="chat.js?v=457"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=457"></script>
-<script src="goals.js?v=457"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=457"></script>
-<script src="share.js?v=457"></script>
-<script src="replay.js?v=457"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=457"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=458"></script>
+<script src="game.js?v=458"></script>
+<script src="procbg.js?v=458"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=458"></script>
+<script src="chat.js?v=458"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=458"></script>
+<script src="goals.js?v=458"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=458"></script>
+<script src="share.js?v=458"></script>
+<script src="replay.js?v=458"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=458"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

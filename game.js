@@ -198,6 +198,20 @@
   let odBurst = 0;                              // one-shot OD-ignition shockwave (1→0 over ~0.6s, render-only)
   let odReadyAnnounced = false;                // one-shot "OVERDRIVE READY" cue per fill
   let lastMult = 1;                             // last applied score multiplier (HUD)
+  // ---- Wave-3 (Fable SCORING_RULINGS_v1) render/FX/stats-only state. NONE of these is ever read by any
+  // `score +=`, curMult/mult, OD-charge, OD-timer, or accuracy path — they are pure DISPLAY/derived-read (verified
+  // in the ruling's proof obligation). See findings 1-4. Reset with the run boundary in resetScoring().
+  let odOvercharge = 0;          // finding 3: cosmetic reservoir of full-meter charge the clamp discards (0..1). NEVER re-banked into `overdrive`.
+  let _odScoreAtFire = 0;        // finding 2: Math.round(score) snapshot when OD fires — the end-tally DIFFS this (derived read).
+  let _odHitsAtFire = 0;         // finding 2: notes-hit snapshot at OD fire (for the "notes covered" results stat).
+  let _odLastGain = 0;           // finding 2: last OD window's banked total (display).
+  let _odTotalGain = 0;          // finding 2: Σ score banked across all OD windows this run (results stat).
+  let _odBestGain = 0;           // finding 2: best single OD window banked (results stat).
+  let _odNotesTotal = 0;         // finding 2: notes covered across OD windows (results stat).
+  let _holdCleanN = 0;           // finding 4: clean hold completions this run (stat/FX only).
+  let _holdAttemptM = 0;         // finding 4: hold/rail heads struck this run (stat denominator).
+  let _cleanHoldStreak = 0;      // finding 4: consecutive clean holds — drives the escalating HOLD!→CLEAN!→RIDE MASTER callout.
+  let _feverEl = null;           // finding 1: lazily-injected FEVER readout node inside #mult-gauge (index.html untouched).
   const OD_DURATION = 8;                        // how long an activation lasts
   // build148 T1 (Fable FLOW SHIELD): while Overdrive is LIVE a missed note keeps your combo — it burns this
   // fraction of the OD meter (≈2s of OD time) instead. Bombs are never shielded; a shielded note still scores 0
@@ -3167,7 +3181,9 @@
     _frets.clear();   // GH require-strum: clear held-fret state at every run boundary so a stale fret can't carry into the next run (B78-1)
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0); holdRailSeg = Array(LANE_COUNT).fill(0);
     odActive = false; odTimer = 0; odIgniteT = 0; lastMult = 1; odReadyAnnounced = false; _flowShieldCount = 0;   // build109 s3: a run boundary must not leave the OD wind-up armed to fire into the next run · build148: reset Flow-Shield tally
-    { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
+    odOvercharge = 0; _odScoreAtFire = 0; _odHitsAtFire = 0; _odLastGain = 0; _odTotalGain = 0; _odBestGain = 0; _odNotesTotal = 0;   // Wave-3 finding 2/3: render+stats trackers fresh per run
+    _holdCleanN = 0; _holdAttemptM = 0; _cleanHoldStreak = 0;   // Wave-3 finding 4: clean-hold trackers fresh per run
+    { const odf = $('od-flame'); if (odf) { odf.classList.remove('ready', 'active'); odf.style.boxShadow = ''; } }
     updateHUD();
     // build85 (Phase 3.1): light the BEST chip from the stored per-song best (the thing to chase)
     try {
@@ -4112,7 +4128,7 @@
   function _renderResultsExtras(results, accShown, grade, accFrac) {
     // Always clear any prior run's injected lines FIRST — endGame is the sole results path, so a later SUPPRESSED
     // run (practice/MP/demo) must not leave an earlier real run's delighter on screen.
-    ['rr-neargoal', 'rr-trouble', 'rr-pace'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+    ['rr-neargoal', 'rr-trouble', 'rr-pace', 'rr-odstat'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
     if (!results) return;
 
     var tid = null; try { tid = _ratingsTidFor(results); } catch (e) { tid = null; }
@@ -4233,6 +4249,23 @@
             dbtn.addEventListener('click', function () { try { play(provider, { mode: 'practice', section: { start: _ds, end: _de }, speed: 0.75 }); } catch (e) {} });
           }
         }
+      }
+    } catch (e) {}
+
+    // ---- Wave-3 : OVERDRIVE banked + CLEAN HOLDS end-tally (DERIVED reads only — diffs numbers existing sites already
+    // paid / counts already tracked; never touches score, grade, accuracy, or leaderboard submit) ------------------
+    try {
+      var _odRows = '';
+      if (_odTotalGain > 0) {
+        _odRows += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-family:\'Oxanium\',sans-serif;font-size:12px;color:#ffd98a;">'
+          + '<span style="letter-spacing:0.06em;">◆ OVERDRIVE BANKED</span><span style="font-weight:800;">+' + Math.round(_odTotalGain).toLocaleString() + '</span></div>';
+        if (_odBestGain > 0) _odRows += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-family:\'Oxanium\',sans-serif;font-size:10.5px;color:#b9b2ac;margin-top:2px;"><span>best window · ' + (_odNotesTotal | 0) + ' notes covered</span><span>+' + Math.round(_odBestGain).toLocaleString() + '</span></div>';
+      }
+      if (_holdAttemptM > 0) {
+        _odRows += '<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-family:\'Oxanium\',sans-serif;font-size:12px;color:#e0a93f;margin-top:' + (_odTotalGain > 0 ? '7px' : '0') + ';"><span style="letter-spacing:0.06em;">CLEAN HOLDS</span><span style="font-weight:800;">' + (_holdCleanN | 0) + ' / ' + (_holdAttemptM | 0) + '</span></div>';
+      }
+      if (_odRows && lb) {
+        lb.insertAdjacentHTML('beforebegin', '<div id="rr-odstat" style="margin:12px auto 0;max-width:360px;padding:9px 14px;border-radius:11px;border:1px solid rgba(224,169,63,0.30);background:rgba(26,16,10,0.5);">' + _odRows + '</div>');
       }
     } catch (e) {}
   }
@@ -4434,6 +4467,27 @@
     hn._teachDone = true;
     _bumpHint(hn._teach);
   }
+  // Wave-3 finding 4 (render/SFX/stats ONLY — no score touched; completion already banked its sustain above): a
+  // cleanly-completed sustain earns CEREMONY, not money. Consecutive clean holds escalate the callout
+  // (HOLD! → CLEAN! → RIDE MASTER) and the burn-off up the string. Called from completeHold + the GRACE band of
+  // endHoldEarly. `_holdCleanN`/`_cleanHoldStreak` are never read by any scoring/grade path.
+  function _cleanHoldCeremony(lane) {
+    _holdCleanN++; _cleanHoldStreak++;
+    const s = _cleanHoldStreak;
+    const label = s >= 5 ? 'RIDE MASTER' : (s >= 3 ? 'CLEAN!' : 'HOLD!');
+    const color = s >= 5 ? '#fff6ec' : (s >= 3 ? '#ffd98a' : '#e0a93f');
+    if (s >= 3) { try { _armJudgePriority(s >= 5 ? 520 : 460); } catch (e) {} }   // a milestone clean-ride headlines over the next plain GREAT
+    flashJudgment(label, color);
+    // burn-off beam up the completed string + a fuller sweep as the streak climbs (house FX; motion-gated)
+    try {
+      if (fx && !reduceMotion && !fxLite) {
+        const g = fretGeom(), k = (g.lw / 128) * FX_GLOBAL;
+        emitStringSurge(lane, 'note-comet', 0, k, g);
+        if (s >= 3) { scanT = scanDur = Math.min(0.5, 0.34 + s * 0.02); scanTier = Math.min(4, 2 + Math.floor(s / 3)); }
+      }
+    } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(s >= 5 ? [14, 20, 22] : (s >= 3 ? [12, 16] : 12)); } catch (e) {} }
+  }
   // sustain reached its tail end while held — pay any remaining fraction + a release pop
   function completeHold(lane) {
     const hn = holdNote[lane]; if (!hn) return;
@@ -4444,8 +4498,7 @@
     laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
     spawnHitParticles(lane, 'great');
     emitFx('holdend', 'hold', lane);   // build8c: sustain banked — column pulse up the lane
-    flashJudgment('HOLD!', '#e0a93f');
-    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+    _cleanHoldCeremony(lane);          // Wave-3 finding 4: escalating clean-hold ceremony (render/SFX only)
     try { _teachCredit(hn, _seg); } catch (e) {}                                                    // T7: clean completion → learn
     _tlog('hold_banked', { lane: lane, type: hn.type, banked: 1, via: 'complete' });                // T9
     updateHUD();
@@ -4468,17 +4521,18 @@
       holdScored[lane] = 1;
       laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
       spawnHitParticles(lane, 'great');
-      flashJudgment('HOLD!', '#e0a93f');
-      if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+      _cleanHoldCeremony(lane);          // Wave-3 finding 4: GRACE band is a clean bank → same escalating ceremony
       try { _teachCredit(hn, _seg0); } catch (e) {}                                                 // T7: GRACE band is a clean bank → learn
       _tlog('hold_banked', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3), via: 'grace' });   // T9
     } else if (holdScored[lane] >= SLIP) {   // SLIP band — soft landing, no combo break, no squelch, no stability hit
       hn.dropped = true;                // the remaining beam dims (render's 'resolving' state)
       lanePluckT[lane] = 9;             // the string settles
-      flashJudgment('SLIP', '#dad7d2');
+      _cleanHoldStreak = 0;             // Wave-3 finding 4: a slip is NOT a clean ride — reset the clean-hold streak
+      flashJudgment('SLIP', '#9a938c');   // Wave-3 finding 4: warm-smoke, off PERFECT-white (#dad7d2) so SLIP reads distinct from a PERFECT
       _tlog('hold_slipped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
+      _cleanHoldStreak = 0;             // Wave-3 finding 4: a dropped hold breaks the clean-hold streak
       _g1Miss(hn.time);                 // G-1: a dropped hold is a trouble spot too
       _tlog('hold_dropped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
       // build122 review: this is the THIRD combo-break site — the miss/bomb sites snapshot the CLUTCH state
@@ -4570,6 +4624,11 @@
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive, igniteT: +odIgniteT.toFixed(3) }),   // build109 s3: igniteT exposed for the wind-up verification pass
+      // Wave-3 verification hooks (strip at content-freeze) — READ-only, never mutate score/OD/combo:
+      odOver: () => +odOvercharge.toFixed(3),                                                            // finding 3: cosmetic overcharge reservoir level
+      odBank: () => ({ last: _odLastGain, total: _odTotalGain, best: _odBestGain, notes: _odNotesTotal }),   // finding 2: derived OD end-tally readouts
+      cleanHolds: () => ({ clean: _holdCleanN, attempts: _holdAttemptM, streak: _cleanHoldStreak }),     // finding 4: clean-hold counters
+      fever: () => { const i = comboTierIdx(combo), t = COMBO_TIERS[i], n = COMBO_TIERS[i + 1]; return { tier: t.name, next: n ? n.name : null, toNext: n ? Math.max(0, n.min - combo) : 0 }; },   // finding 1: FEVER ladder read
       // build148 T1/T5/T8 dev hooks (strip at content-freeze): Flow-Shield tally, effective comboStep, RIFT tier state.
       flowShields: () => _flowShieldCount,   // T1: shields spent this run (verifies OD-active misses kept combo)
       comboStep: () => _comboStepFor(),       // T5: effective combo-per-tier for the current difficulty (Hard/RIFT=8)
@@ -4811,12 +4870,14 @@
   }
   function _fireOverdrivePayoff() {
     odActive = true; odTimer = OD_DURATION; overdrive = 1;
-    scanT = scanDur = 0.62; scanTier = 3;   // big activation scan sweep up the whole guitar
+    _odScoreAtFire = Math.round(score); _odHitsAtFire = counts.perfect + counts.great + counts.good;   // Wave-3 finding 2: snapshot for the end-tally (derived read; touches no score)
+    const _oc = odOvercharge; odOvercharge = 0;   // Wave-3 finding 3: spend the cosmetic reservoir on THIS activation's spectacle, then clear it (never affects duration/multiplier)
+    scanT = scanDur = 0.62 + _oc * 0.25; scanTier = 3;   // big activation scan sweep up the whole guitar (overcharge widens the sweep — presentation only)
     try {
       const _g = fretGeom();
       for (let _i = 0; _i < LANE_COUNT; _i++) emitFx('overdrive', 'od', _i, _g.nearX[_i], _g.nearY - _g.lw * 0.30);
-      // build13: star power LAUNCHES — comets race up every string as it ignites
-      if (!fxLite && !reduceMotion) { const _k = (_g.lw / 128) * FX_GLOBAL; for (let _i = 0; _i < LANE_COUNT; _i++) emitStringSurge(_i, 'note-comet', 60 + _i * 24, _k, _g); }
+      // build13: star power LAUNCHES — comets race up every string as it ignites (overcharge = extra comet waves, spectacle only)
+      if (!fxLite && !reduceMotion) { const _k = (_g.lw / 128) * FX_GLOBAL; const _extra = Math.round(_oc * 3); for (let _r = 0; _r <= _extra; _r++) for (let _i = 0; _i < LANE_COUNT; _i++) emitStringSurge(_i, 'note-comet', 60 + _i * 24 + _r * 40, _k, _g); }
     } catch (e) {}
     // build20 (the user circled it twice — "that flame effect doesn't fit"): the sustained
     // overdrive-aura loop sat as a SPINNING FIREBALL at the center of the catcher row for the
@@ -4834,6 +4895,15 @@
     playOverdriveHitSfx();   // build157: real Star-Power slam sample (falls back to the procedural riser if unloaded)
     if (navigator.vibrate) { try { navigator.vibrate([20, 30, 40]); } catch (e) {} }
     updateHUD();
+  }
+  // Wave-3 finding 2 (render/stats ONLY — adds ZERO score): the just-ended OD window banked `score - _odScoreAtFire`,
+  // every point of it already paid by an existing `score +=` site DURING the window. This DIFFS that already-paid
+  // total and flashes it, and books the results stats. Called at BOTH OD-end sites (natural drain-out + Flow-Shield burn-out).
+  function _odTally() {
+    const g = Math.max(0, Math.round(score) - _odScoreAtFire);
+    _odLastGain = g; _odTotalGain += g; if (g > _odBestGain) _odBestGain = g;
+    _odNotesTotal += Math.max(0, (counts.perfect + counts.great + counts.good) - _odHitsAtFire);
+    try { if (g > 0) { _armJudgePriority(480); flashJudgment('OVERDRIVE +' + g.toLocaleString(), '#ffd98a'); } } catch (e) {}
   }
   if (odFlame) {
     odFlame.addEventListener('click', (e) => { e.preventDefault(); activateOverdrive(); });
@@ -5294,7 +5364,9 @@
     }
     lastMult = mult;
     laneHitPulse[lane] = 1.0;
+    const _odWasFull = overdrive >= 1;   // Wave-3 finding 3: was the meter already full BEFORE this hit? (gate for the cosmetic overflow; does not touch `overdrive`)
     if (!odActive) overdrive = Math.min(1, overdrive + (target.type === 'star' ? 0.14 : accPerf ? 0.04 : 0.022)); // charge the meter (no top-up while OD is live — the render loop force-drains it anyway; build58 makes the no-extend rule explicit). build104 s8: accent PERFECTs charge deeper.
+    if (!odActive && _odWasFull) odOvercharge = Math.min(1, odOvercharge + (target.type === 'star' ? 0.14 : accPerf ? 0.04 : 0.022) * 0.5);   // Wave-3 finding 3: the charge the line above CLAMPED away → visualized in a cosmetic reservoir ONLY, never re-banked into `overdrive` (OD budget byte-identical)
     lanePluckT[lane] = 0;                 // pluck the string in this lane
     if (muteUntil > 0) { muteUntil = -1; applyGate(); }  // a clean hit recovers the music
     stability = Math.min(1.0, stability + 0.01);
@@ -5352,6 +5424,7 @@
     if ((target.type === 'hold' || target.type === 'rail') && target.hold > 0) {
       holdNote[lane] = target; holdScored[lane] = 0; holdSparkT[lane] = 0;
       holdRailSeg[lane] = (target.type === 'rail') ? 1 : 0;   // heading to the first waypoint transfer
+      _holdAttemptM++;   // Wave-3 finding 4: a sustain head struck → denominator for the "Clean holds N/M" stat (count only)
     }
     // HOPO CHAIN (openNotes flag): a clean hit while in combo auto-resolves the next `hopo` note
     // already inside its window in ANY lane — no fresh strum ("flow"). No-op when the flag is off.
@@ -5944,7 +6017,7 @@
       _flowShieldCount++;
       odTimer = Math.max(0, odTimer - OD_DURATION * FLOW_SHIELD_COST);
       overdrive = odTimer / OD_DURATION;                   // keep the OD meter render in sync this frame
-      if (odTimer <= 0) { odActive = false; overdrive = 0; }   // the shield drained the last of Overdrive
+      if (odTimer <= 0) { odActive = false; overdrive = 0; try { _odTally(); } catch (e) {} }   // the shield drained the last of Overdrive · Wave-3 finding 2: tally this window too (render/stats only)
       _rfPush(note.lane, 'm');                             // opponent still sees the missed note in the versus stream
       registerMissFx(note.lane);                           // the missed string still flashes...
       if (note.lane >= 0 && note.lane < laneDesat.length) laneDesat[note.lane] = Math.min(laneDesat[note.lane], 0.5);   // FIX1: shielded string only HALF-dims (a SAVE, not a dead string); Math.min avoids adding desat when a11y already suppressed registerMissFx
@@ -6267,17 +6340,38 @@
     _rfMult = tier;   // versus stream: cache the displayed multiplier tier for getRenderFrame()
     const _cStep = _comboStepFor();
     const _atCap = combo >= _cStep * _tpH.comboCap;
-    const within = odActive ? overdrive : (_atCap ? 1 : (combo % _cStep) / _cStep);
+    // Wave-3 finding 1 — FEVER ladder (cosmetic, driven by `combo` ONLY; NEVER a payment claim). The true xN badge
+    // below still shows the honest clamped tier; this is a SEPARATE named-tier layer (COMBO/HOT/BLAZE/GOLDEN/INFERNO/
+    // ASCENDANT) + progress to the next, so SOMETHING always visibly climbs past the mult cap (combo 24) → combo 500.
+    const _fi = comboTierIdx(combo), _fT = COMBO_TIERS[_fi], _fNext = COMBO_TIERS[_fi + 1];
+    let _feverPct, _feverTxt;
+    if (_fNext) { const _span = _fNext.min - _fT.min; _feverPct = _span > 0 ? Math.max(0, Math.min(1, (combo - _fT.min) / _span)) : 1; _feverTxt = (_fi === 0 ? 'COMBO' : _fT.name) + ' · ' + _fNext.name + ' in ' + Math.max(0, _fNext.min - combo); }
+    else { _feverPct = 1; _feverTxt = _fT.name + ' · MAX'; }
+    // the mult-fill was PINNED at 1 once _atCap (dead past combo 24). Repoint that pinned state at next-combo-tier
+    // progress so the bar keeps climbing (display math only — this bar is not a payment number).
+    const within = odActive ? overdrive : (_atCap ? _feverPct : (combo % _cStep) / _cStep);
     const mb = $('mult-badge'); if (mb) { mb.textContent = tier + 'x'; if (mb.parentElement) mb.parentElement.classList.toggle('boosted', tier >= 3); }
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
+    // FEVER readout — lazily injected INTO the existing #mult-gauge (index.html untouched; enriches the multiplier block only).
+    if (!_feverEl) { const _mg = $('mult-gauge'); if (_mg) { const w = document.createElement('div'); w.id = 'mult-fever'; w.style.cssText = "margin-top:5px;text-align:center;line-height:1.1;pointer-events:none;"; w.innerHTML = '<div id="mult-fever-txt" style="font-family:\'Chakra Petch\',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.07em;white-space:nowrap;text-shadow:0 0 6px rgba(255,120,40,0.45);"></div><div style="height:3px;margin:3px auto 0;max-width:52px;border-radius:2px;background:rgba(255,255,255,0.10);overflow:hidden;"><i id="mult-fever-bar" style="display:block;height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,#ff6e46,#ffd98a);box-shadow:0 0 6px rgba(255,150,60,0.6);"></i></div>'; _mg.appendChild(w); _feverEl = w; } }
+    if (_feverEl) {
+      let _inVs = false; try { const _gEl = document.getElementById('game'); _inVs = !!(_gEl && _gEl.classList.contains('vs-mode')); } catch (e) {}
+      _feverEl.style.display = (_inVs || combo < 1) ? 'none' : 'block';
+      const _ft = $('mult-fever-txt'); if (_ft) { _ft.textContent = _feverTxt; _ft.style.color = 'rgb(' + _fT.rgb.join(',') + ')'; }
+      const _fb = $('mult-fever-bar'); if (_fb) _fb.style.width = (_feverPct * 100) + '%';
+    }
     // overdrive gauge
     const of = $('od-fill'); if (of) of.style.height = (overdrive * 100) + '%';
     const odReady = overdrive >= 1 && !odActive;
-    const odf = $('od-flame'); if (odf) odf.classList.toggle('ready', odReady);
+    // Wave-3 finding 3 — OVERCHARGE shimmer: full-meter hits that the clamp discards gild the flame past 100% (cosmetic only).
+    const odf = $('od-flame'); if (odf) { odf.classList.toggle('ready', odReady); odf.style.boxShadow = (odReady && odOvercharge > 0.01) ? ('0 0 ' + Math.round(8 + odOvercharge * 22) + 'px rgba(255,' + (150 + Math.round(odOvercharge * 80)) + ',60,' + (0.4 + odOvercharge * 0.5).toFixed(2) + ')') : ''; }
+    // Wave-3 finding 2 — OD READY density cue: is a dense cluster incoming? (read the sorted notes ahead of now — render only)
+    let _odDense = false;
+    if (odReady) { try { const _tn = songTime(); let _cnt = 0; for (let _z = 0; _z < notes.length; _z++) { const _d = notes[_z].time - _tn; if (_d < 0) continue; if (_d > 2.2) break; if (notes[_z].type !== 'bomb') _cnt++; } _odDense = _cnt >= 10; } catch (e) {} }
     // HUD Overdrive readout (the desktop-visible "hype bar") — combo-driven fill + clear CHARGING/READY/ACTIVE states
     { const odb = $('hud-od-block'); if (odb) { odb.classList.toggle('ready', odReady); odb.classList.toggle('active', odActive); }
-      const odhf = $('hud-od-fill'); if (odhf) odhf.style.width = (overdrive * 100) + '%';
-      const odht = $('hud-od-text'); if (odht) odht.textContent = odActive ? 'OVERDRIVE ACTIVE!' : (odReady ? '▸ READY — PRESS SPACE' : 'CHARGING · ' + Math.round(overdrive * 100) + '%'); }
+      const odhf = $('hud-od-fill'); if (odhf) { odhf.style.width = (overdrive * 100) + '%'; odhf.style.filter = (odReady && odOvercharge > 0.01) ? ('brightness(' + (1 + odOvercharge * 0.6).toFixed(2) + ') saturate(' + (1 + odOvercharge * 0.5).toFixed(2) + ')') : ''; }
+      const odht = $('hud-od-text'); if (odht) odht.textContent = odActive ? 'OVERDRIVE ACTIVE!' : (odReady ? (_odDense ? '▸ READY — FIRE NOW · DENSE AHEAD' : '▸ READY — PRESS SPACE') : 'CHARGING · ' + Math.round(overdrive * 100) + '%'); }
     // announce once when the meter first fills, so players know Space is armed
     if (odReady && !odReadyAnnounced) { odReadyAnnounced = true; _armJudgePriority(500); flashJudgment('OVERDRIVE READY', '#ffd98a'); }   // build60: protect the arming cue from the next plain GREAT
     else if (!odReady) odReadyAnnounced = false;
@@ -6598,7 +6692,7 @@
       odTimer -= dt;
       overdrive = Math.max(0, odTimer / OD_DURATION);
       bgPulse = Math.max(bgPulse, 0.35);
-      if (odTimer <= 0) { odActive = false; overdrive = 0; if (odFlame) odFlame.classList.remove('active', 'ready'); if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } emitFx('odend', 'od'); }
+      if (odTimer <= 0) { odActive = false; overdrive = 0; try { _odTally(); } catch (e) {} if (odFlame) { odFlame.classList.remove('active', 'ready'); odFlame.style.boxShadow = ''; } if (_odAura) { try { _odAura.stop(); } catch (e) {} _odAura = null; } emitFx('odend', 'od'); }   // Wave-3 finding 2: OD end-tally (render/stats only)
     }
     applyGate(); // expire miss-dropouts so the music returns
     for (const n of notes) { if (n.time - t > dt) break; if (!n._pulsed && Math.abs(n.time - t) < dt) { n._pulsed = true; bgPulse = Math.min(1, bgPulse + 0.5); } }   // build71: notes are time-sorted ascending → stop once past the dt window (no behavior change)
