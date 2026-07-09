@@ -257,6 +257,39 @@
     }, 650);
   }
 
+  // build158: HUB BED — a low warm ambient loop under the library so the lobby isn't silent. It NEVER competes
+  // with audio: audible only while a library view (jukebox/browse/songs) is the active screen; ducks to ZERO the
+  // instant a cover preview plays (RC().previewPlaying) or a run starts (the #menu shell loses .active); silent when
+  // muted. A light 400ms poll drives it off live DOM state so it can't miss a screen transition; the volume eases.
+  var _hubEl = null, _hubTimer = 0, HUB_VOL = 0.16;
+  function _hubAudio() {
+    if (_hubEl === null) {
+      try { _hubEl = new Audio('assets/hub-embers.mp3'); _hubEl.loop = true; _hubEl.preload = 'auto'; _hubEl.volume = 0; }
+      catch (e) { _hubEl = false; }   // false = no <audio> support → give up permanently
+    }
+    return _hubEl || null;
+  }
+  function _hubInLibrary() {
+    var menu = $('menu');
+    if (!(menu && menu.classList.contains('active'))) return false;   // a run / other shell is live, not the library
+    return ['view-jukebox', 'view-browse', 'view-songs'].some(function (id) { var el = $(id); return el && el.classList.contains('active'); });
+  }
+  function _hubTarget() {
+    if (!_hubInLibrary()) return 0;
+    try { if (window.RhythmGame && RhythmGame.isMuted && RhythmGame.isMuted()) return 0; } catch (e) {}
+    try { if (RC().previewPlaying && RC().previewPlaying()) return 0; } catch (e) {}   // a cover preview owns the audio → duck fully
+    return HUB_VOL;
+  }
+  function _hubTick() {
+    var el = _hubAudio(); if (!el) return;
+    var tgt = _hubTarget();
+    var v = el.volume, nv = v + (tgt - v) * 0.16; if (Math.abs(nv - tgt) < 0.004) nv = tgt;
+    try { el.volume = Math.max(0, Math.min(1, nv)); } catch (e) {}
+    if (tgt > 0 && el.paused) { el.play().catch(function () {}); }               // resume when it should be audible (autoplay unlocks after the first menu gesture)
+    else if (tgt === 0 && !el.paused && el.volume <= 0.006) { try { el.pause(); } catch (e) {} }   // fully faded → stop the element
+  }
+  function startHubBed() { if (!_hubTimer) { try { _hubTimer = setInterval(_hubTick, 400); } catch (e) {} } }
+
   // Direct positioning — pos is ALWAYS an exact integer when idle (no drift,
   // always locked). CSS transitions on .jb-cover animate the movement. No RAF.
   function goTo(idx) {
@@ -972,6 +1005,7 @@
     }
     setSection(sectionKey);
     showView('jukebox');
+    startHubBed();   // build158: begin the ambient hub-bed poll (idempotent; audible only on the library surfaces, ducked under previews/runs)
     // catalog count indicator (playable songs; refreshes as the library grows)
     const lr = $('lib-ready');
     if (lr) {

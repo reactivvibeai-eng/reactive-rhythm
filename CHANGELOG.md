@@ -15,6 +15,9 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build158 — Hub bed: ambient lobby loop (safe, ducked)  ✅ node-clean  ·  ?v=456
+Wires the deferred `hub-embers.mp3` (Suno loop) as a low warm ambient bed under the library so the lobby isn't silent — **jukebox.js only, self-contained, engineered to NEVER bleed over a track.** A light 400ms poll drives it off live DOM state: audible only while a library view (jukebox/browse/songs) is the active screen; ducks to ZERO the instant a cover preview plays (`RC().previewPlaying()`) or a run starts (`#menu` loses `.active`); silent when muted. Volume eases in/out (no hard cuts); autoplay unlocks after the first menu gesture; caps at `HUB_VOL=0.16`. No cross-file entanglement (reuses the existing `previewPlaying`/`isMuted` accessors). **Completes the audio package** (anthem + 4 SFX + hub bed). Heard/tuned on the owner's machine (local preview serves the stale worktree).
+
 ### build157 — Real audio: Crimson Circuit anthem + 4 Suno hero SFX wired  ✅ node-clean · name-parity verified  ·  ?v=455
 Owner generated the full audio package in Suno (per Fable's RR_AUDIO_DIRECTION.md); this wires it into the engine. game.js + index.html + 6 new `assets/*.mp3`.
 - **Anthem** — `assets/crimson-circuit.mp3` (128 BPM charter-friendly hybrid-rock) replaces `lunar-waves.mp3` as the demo/start track (`#audio-el` src + the demoProvider fallback). lunar-waves stays as the intro-video decode-fallback bed.
