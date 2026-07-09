@@ -1644,6 +1644,9 @@
     // steps are ±1 and clamp to the span edge (never ping-pong reflect — a reversed rail lies about the pitch).
     let _railClamped = 0;
     function _railFromHold(cur) {
+      // FIX2 EASY teaching ladder: the first two sustains of a build stay PLAIN holds so a new player meets the
+      // hold mechanic before any Slide Rail appears. Easy-only; Medium/Hard/RIFT keep their exact rail behavior.
+      if (difficulty === 'easy' && _easyHoldRailGate < 2) return 'no';
       const cp = cur._centroidPath;
       const _driftMin = (_railTestDrift != null) ? _railTestDrift : RAIL_DRIFT_MIN;   // dev-test override (null = shipped)
       const _minLen = (_railTestMinLen != null) ? _railTestMinLen : RAIL_MIN_LEN;
@@ -1693,6 +1696,7 @@
       return 'rail';
     }
     let lastHold = -99;
+    let _easyHoldRailGate = 0;   // FIX2: plain holds emitted so far THIS build (Easy rail teaching ladder — first 2 sustains stay plain holds; read by _railFromHold)
     for (let i = 0; i < notes.length; i++) {
       const cur = notes[i];
       if (cur.type === 'star') continue;
@@ -1713,6 +1717,7 @@
         }
         if (tail >= 0.30) { cur.type = 'hold'; cur.hold = Math.round(tail * 1000) / 1000; lastHold = i;
           if (musical && RAILS_ON()) { const _rs = _railFromHold(cur); if (_rs === 'degrade') _railClamped++; }   // SLIDE RAILS: dark behind the flag
+          _easyHoldRailGate++;   // FIX2: one more plain hold emitted this build (gates the Easy rail teaching ladder in _railFromHold)
         }
       }
     }
@@ -3722,7 +3727,7 @@
     try {
       if (difficulty === 'hard' && !runFailed && !_practiceOn && accShown >= 85 && !_riftUnlocked()) {
         localStorage.setItem('rr_rift_unlocked', '1');
-        setTimeout(function () { try { window.RhythmGame.showToast('◆ RIFT UNLOCKED — the Expert wall is open in difficulty ▸', 'good'); } catch (e) {} }, 1200);
+        setTimeout(function () { try { window.RhythmGame.showToast('◆ RIFT UNLOCKED — the Expert wall is open in difficulty ▸', 'good'); } catch (e) {} }, 2400);   // FIX3: de-collide from the ratings panel (~1.2s) — grade → ratings(1.2s) → rift-unlock(2.4s)
       }
     } catch (e) {}
     try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
@@ -5759,8 +5764,8 @@
       if (odTimer <= 0) { odActive = false; overdrive = 0; }   // the shield drained the last of Overdrive
       _rfPush(note.lane, 'm');                             // opponent still sees the missed note in the versus stream
       registerMissFx(note.lane);                           // the missed string still flashes...
-      playMissSfx(false);
-      spawnMissDud(note.lane);
+      if (note.lane >= 0 && note.lane < laneDesat.length) laneDesat[note.lane] = Math.min(laneDesat[note.lane], 0.5);   // FIX1: shielded string only HALF-dims (a SAVE, not a dead string); Math.min avoids adding desat when a11y already suppressed registerMissFx
+      playOdIgniteSfx();                                   // FIX1: SAVED must SOUND like a win — reuse the low-gain OD "spark" stinger, NOT the miss squelch (no new SFX invented; spawnMissDud dropped)
       _armJudgePriority(420);
       flashJudgment('◆ SAVED', '#e0a93f');                 // ...but the combo LIVES — a crimson-gold dopamine beat, not a mercy
       _tlog('flow_shield', { lane: note.lane, combo: combo, odLeft: +overdrive.toFixed(3), shields: _flowShieldCount });   // T9

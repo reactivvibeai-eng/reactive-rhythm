@@ -128,6 +128,7 @@
   var activeNow = false;          // is #multiplayer-screen currently .active
   // ---- v418: MP RELIABILITY + LEGIBILITY (connection chip §4.2 / call lifecycle A2 / both-ready watchdog A6) ----
   var _conn = { lobby: null, room: null, match: null };   // per-channel OBSERVED realtime status: null=not open · 'live'=SUBSCRIBED · 'resub'=reconnecting · 'dead'=errored (tap to retry)
+  var _lastConnEmit = null;       // FIX 2.7: last AGGREGATE conn state emitted to telemetry (mp_conn) — dedupes per-channel churn into worst-state transitions only
   var _connResubT = { lobby: 0, room: 0, match: 0 }, _connResubN = { lobby: 0, room: 0, match: 0 };   // A5: bounded backoff re-subscribe handles/counters — ALL cleared in teardownMatch/leaveRoomChannel/leaveAll (B8)
   var _roomResubActive = false;   // review-fix BUG1: true only while _doChannelResub('room') is REBUILDING the room channel — leaveRoomChannel skips _clearConnResub('room') so the bounded ≤20 attempt counter SURVIVES the rebuild (the room path used to zero it every cycle → an infinite 2s reconnect loop that never surfaced the OFFLINE dead state). Reset on SUBSCRIBED / genuine user leave, exactly like lobby/match.
   var _matchSubbedOnce = false;   // A5: enterSetup() runs on the FIRST match SUBSCRIBED only — a mid-setup re-subscribe keeps the current step
@@ -307,6 +308,11 @@
   var RRC_FLAG_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4"></path><path d="M5 4h13l-3 4 3 4H5"></path></svg>';
   function newMatchId() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function safeUrl(u) { return String(u == null ? '' : u).replace(/["\\]/g, ''); }
+  // FIX 2.7 (MP_HARDENING_v1 §3-B1): consent-gated MP telemetry funnel. RhythmTelemetry is the global from telemetry.js
+  // (event() is internally consent-gated: buffers always, flushes only when consent === 'accepted'). Guard every call so
+  // a missing module can never throw. OBSERVE-ONLY — no call site here changes any MP transport/connection/match logic.
+  // Payloads stay small + non-PII (uuids/peer-ids are acceptable, consistent with existing telemetry usage).
+  function _tel(name, props) { try { if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event(name, props || {}); } catch (e) {} }
   // ---- v254: MP RANKED LADDER (local-first; SWAP-SEAM for a future server ladder) ----
   // 1v1 quick-match / challenge / room results record here on settle. Points: win +25, draw +8, loss -12 (floored 0); a
   // FORFEIT win (rival left) counts in the W column but awards 0 points (so leaving can't farm rank). CPU warm-ups never
@@ -758,11 +764,10 @@
     }
     // build60: invite bar is room-only — hide it by default (enterRoomWaiting re-shows it); seed a duel waiting line.
     var ib = $('mpx-invitebar'); if (ib) ib.hidden = true;
-    var ws = $('mpx-waitstatus');
-    if (ws) {
-      if (oppPresent) { ws.hidden = true; }
-      else { ws.hidden = false; ws.classList.remove('ready'); ws.textContent = 'Waiting for your opponent to join…'; }
-    }
+    // FIX 2.4: route the seed through paintWaitStatus so _waitTxt stays the single source of truth for the line
+    // (conn-loss override + escalation both key off it); escalate the opponent-join wait.
+    if (oppPresent) paintWaitStatus(null);
+    else paintWaitStatus('Waiting for your opponent to join…', false, true);
     var dot = $('mpx-dot-opp'); if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = oppMeta ? (oppMeta.name || 'OPPONENT').slice(0, 12) : 'WAITING…'; }
     var isHost = amPicker();
     var pick = $('mpx-pick'); if (pick) pick.disabled = !isHost;
@@ -816,21 +821,45 @@
       if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
       if (matchLive) { markOppGone(); settleIfReady(); }
       else { oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
-    } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…'); }
+    } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…', false, true); }   // FIX 2.4: escalate the opponent-join wait (elapsed count + 20s/60s copy)
     refreshReadyEnabled();
   }
   // build60: a single place to drive the explicit, updating waiting-room status line (duels + rooms).
   var _waitTxt = null, _waitReady = false;   // v418 (§4.2): the last REQUESTED (real) waiting line, so a connection-lost override can restore it the instant the socket recovers
-  function paintWaitStatus(txt, isReady) {
+  // FIX 2.4: waiting-state escalation — a genuine "waiting on the opponent" line gains a live elapsed count and escalates
+  // its copy at 20s / 60s. ONE bounded 1s interval drives it; it is CLEARED in teardownMatch / leaveRoomChannel /
+  // resetForRematch (extends build155's timer hygiene). Connection-loss STILL overrides the line (precedence preserved in
+  // _paintWaitLine, exactly as before). The clock persists across repeated repaints of the SAME reason (base-text keyed).
+  var _waitEscStart = 0, _waitEscT = 0, _waitEscBase = null;
+  function _fmtElapsed(s) { var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function _stopWaitEsc() { if (_waitEscT) { clearInterval(_waitEscT); _waitEscT = 0; } _waitEscStart = 0; _waitEscBase = null; }
+  function _armWaitEsc(base) {
+    if (_waitEscBase !== base) { _waitEscBase = base; _waitEscStart = Date.now(); }   // a NEW waiting reason restarts the clock; a repaint of the SAME reason keeps it running
+    if (!_waitEscT) _waitEscT = setInterval(function () { try { _paintWaitLine(); } catch (e) {} }, 1000);
+  }
+  function paintWaitStatus(txt, isReady, escalate) {
+    if (txt == null) { _waitTxt = null; _stopWaitEsc(); }
+    else { _waitTxt = txt; _waitReady = !!isReady; if (escalate) _armWaitEsc(txt); else _stopWaitEsc(); }
+    _paintWaitLine();
+  }
+  // the single renderer for #mpx-waitstatus (shared by paintWaitStatus, the 1s escalation tick, and _setConnState's
+  // recovery repaint). §4.2 rule: while realtime isn't LIVE, every waiting surface says so — the dead/resub override
+  // short-circuits BEFORE any escalation copy, so connection-loss precedence is preserved exactly as before.
+  function _paintWaitLine() {
     var ws = $('mpx-waitstatus'); if (!ws) return;
-    if (txt == null) { _waitTxt = null; ws.hidden = true; return; }
-    _waitTxt = txt; _waitReady = !!isReady;
-    // §4.2 rule: while realtime isn't LIVE, every waiting surface says so — a dead socket must never read as a quiet
-    // room. The real line (kept in _waitTxt) is restored by _setConnState the instant the chip returns to LIVE.
+    if (_waitTxt == null) { ws.hidden = true; return; }
     var cw = _connWorst();
     if (cw === 'dead') { ws.hidden = false; ws.classList.remove('ready'); ws.textContent = 'Connection lost — tap ● OFFLINE (top) to retry.'; return; }
     if (cw === 'resub') { ws.hidden = false; ws.classList.remove('ready'); ws.textContent = 'Connection lost — reconnecting…'; return; }
-    ws.hidden = false; ws.classList.toggle('ready', !!isReady); ws.textContent = txt;
+    ws.hidden = false; ws.classList.toggle('ready', !!_waitReady);
+    var txt = _waitTxt;
+    if (_waitEscStart && _waitEscBase === _waitTxt) {
+      var el = Math.floor((Date.now() - _waitEscStart) / 1000);
+      if (el >= 60) txt += ' · Taking a while — resend the invite link';
+      else if (el >= 20) txt += ' · still waiting — they may have stepped away';
+      txt += ' (' + _fmtElapsed(el) + ')';
+    }
+    ws.textContent = txt;
   }
 
   // ---- song selection (host) ----
@@ -1034,6 +1063,7 @@
   function toggleReady() {
     var b = $('mpx-ready'); if (!b || b.disabled) return;
     meReady = !meReady; setReadyBtn();
+    if (meReady) _tel('mp_ready', { stage: matchCh ? 'match' : 'room' });   // FIX 2.7: this player readied up (not on un-ready)
     if (!meReady) _stopBothReadyWd();   // A6: un-readying disarms the both-ready start watchdog
     clearFailCard();                    // a fresh READY tap clears any prior "couldn't sync the start" card
     // playtest-3 fix (Bug D): a NORMAL duel readies on the ROOM channel — the match channel doesn't exist yet. The old
@@ -1858,6 +1888,7 @@
     try { if (room.show && window.RhythmGame.setAutoPauseSuppressed) window.RhythmGame.setAutoPauseSuppressed(true); } catch (e) {}
     closeTransientOverlays();   // no overlay can occlude the starting 1v1 match
     matchLive = true; finishedLocal = false; myFinal = null; oppFinal = null; oppLeft = false; lastOppTick = null; lastOppState = null;
+    _tel('mp_start', { role: matchRole || (room.isHost ? 'host' : 'guest'), solo: !!_soloRun });   // FIX 2.7: the round actually started on this client
     _lastShockCombo = 0; _lastOdActive = false; _rankRecorded = false;   // v254/build100r: fresh combat-shock (combo + OD) + ranked-record state per match
     // build109 s4: re-broadcast room-meta the instant the match goes live so LIVE NOW's new full-room-live
     // bucket (renderLiveNow) sees this room the moment it fills+starts, not just while it had an open seat.
@@ -2435,7 +2466,7 @@
     _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
     _stopMatchReadyRebc(); _stopStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: a rematch is a fresh handshake — clear the prior round's handoff re-emit timers/arm
     _roomStartMid = null;   // BUG2 fix: each new round re-arms — a stale _roomStartMid from the prior round would make _armBothReadyWd early-return forever (treating it as "already started"), so the 2nd+ room match's both-ready watchdog never armed → a silent hang if that round's start dropped. onRoomStart re-asserts the fresh mid AFTER its teardown, so per-mid re-emit idempotency (line ~3608) is preserved.
-    _stopBothReadyWd(); _stopCallWatch();   // v418 (B8): a rematch is a fresh start handshake — clear the both-ready watchdog + any stale call-watch
+    _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc();   // v418 (B8): a rematch is a fresh start handshake — clear the both-ready watchdog + any stale call-watch. FIX 2.4: + the waiting-escalation interval
     myFinal = null; oppFinal = null; lastOppTick = null; meReady = false; oppReady = false; roomOppReady = false;
     finishedLocal = false; matchLive = false; setReadyBtn(); setLobbyInMatch(true);
     _rankRecorded = false; _serverRoundId = null; _roundStartFired = false;   // build100i: a rematch is a NEW round — clear the prior server round + re-arm the host's /mp/round/start
@@ -2486,7 +2517,7 @@
     matchLive = false; finishedLocal = false; meReady = false; oppReady = false; roomOppReady = false; _stopReadyRebc();
     _stopMatchReadyRebc(); _stopStartRebc(); _stopRoomStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: kill any live handoff re-emit timers so a torn-down match can't leak an interval
     _roomStartMid = null; _lastStartPl = null; _lateStartResends = 0;   // BUG2 fix: null the handled room-start mid so the NEXT room match's both-ready watchdog re-arms (onRoomStart re-asserts the fresh mid AFTER this teardown, which startMatchChannel calls as its safety — so per-mid idempotency survives). BUG3: drop the stored late-join start payload + budget with the match.
-    _stopBothReadyWd(); _stopCallWatch(); _matchSubbedOnce = false; _clearConnResub('match');   // v418 (B8): both-ready watchdog + call-watch + match re-subscribe timer die with the match; reset the first-subscribe gate
+    _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _matchSubbedOnce = false; _clearConnResub('match');   // v418 (B8): both-ready watchdog + call-watch + match re-subscribe timer die with the match; reset the first-subscribe gate. FIX 2.4: + the waiting-escalation interval
     try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
@@ -2650,6 +2681,7 @@
       _setRow(uid, 'ringing', '✓ RINGING — they\'ve got 45s', 60000);   // row rests ~60s (server dedupes the pair for 60s anyway)
       setTimeout(function () { var rs = _onRowState[uid]; if (rs && rs.state === 'ringing') _setRow(uid, '', 'CHALLENGE', 0); }, 60000);
       banner('mpx-setup-msg', nm + ' is ringing — they\'ve got 45s to accept. Pick the song while you wait.');
+      _tel('mp_call_sent', { to: String(uid).slice(0, 48), rid: room.id });   // FIX 2.7: the battle call actually went out (server challenge resolved)
       _startCallWatch(uid, nm, room.id);   // A2: track the call lifecycle — presence-truth ACCEPT (room.p2 lands) or a 45s MISSED, with a loud card either way
       try { paintRoomPanel(); } catch (e) {}   // §4.3: show the callee's RINGING… chip immediately
     }).catch(function (e) {
@@ -2719,6 +2751,7 @@
   function _showRing(name, rid) {
     if (_ringUp || !rid) return;
     _ringUp = true;
+    _tel('mp_ring_shown', { rail: 'poll', rid: rid });   // FIX 2.7: incoming battle-call surfaced via the notifRecent poll rail
     var card = document.createElement('div'); card.id = 'mpx-ring'; card.setAttribute('role', 'alertdialog'); card.setAttribute('aria-label', 'Battle call');
     var head = document.createElement('div'); head.className = 'mr-head'; head.textContent = '● BATTLE CALL'; card.appendChild(head);
     // B4: caller identity row — avatar disc (initial fallback; the poll rail doesn't carry an avatar URL) + name
@@ -2803,6 +2836,7 @@
       var ridKey = 'r:' + rid;
       if (_ringSeen[ridKey] && (Date.now() - _ringSeen[ridKey]) < 60000) return;   // the poll/ring already handled this room recently
       _ringSeen[ridKey] = Date.now();
+      _tel('mp_ring_shown', { rail: (src === 'pg' ? 'pg' : src === 'bc' ? 'bc' : String(src || 'rt')), rid: rid });   // FIX 2.7: incoming battle-call delivered via realtime — bc-channel broadcast vs postgres-changes fallback
       var role = (p.role === 'host') ? 'host' : 'guest';   // the callee is normally the GUEST; honor an explicit host role
       var _nid = p.notification_id || p.notif_id || null;
       try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice && _nid) window.RhythmCatalog.ackNotice(_nid); } catch (e) {}
@@ -2939,8 +2973,14 @@
     if (_conn[which] === state) return;
     _conn[which] = state;
     try { _paintConnChip(); } catch (e) {}
-    try { if (_waitTxt != null) paintWaitStatus(_waitTxt, _waitReady); } catch (e) {}   // surface/clear "Connection lost — …" on the waiting line
+    try { _paintWaitLine(); } catch (e) {}   // surface/clear "Connection lost — …" on the waiting line (preserves _waitTxt + escalation state)
     try { if (state === 'live' && room.id) paintRoomWaiting(); } catch (e) {}           // recompute the real room phase on recovery
+    // FIX 2.7 (mp_conn): emit only AGGREGATE worst-state transitions (dedup the per-channel churn) — live/reconnecting/lost.
+    try {
+      var w = _connWorst();
+      var st = (w === 'resub') ? 'reconnecting' : (w === 'dead') ? 'lost' : (w === 'live') ? 'live' : null;
+      if (st && st !== _lastConnEmit) { _lastConnEmit = st; _tel('mp_conn', { state: st }); }
+    } catch (e) {}
   }
   function _clearConnResub(which) {   // B8: called from the teardown paths — kill any pending re-subscribe + drop the chip contribution
     if (_connResubT[which]) { clearTimeout(_connResubT[which]); _connResubT[which] = 0; }
@@ -3029,6 +3069,9 @@
   // missed call recovery). Banners stay ONLY for transient FYIs.
   function showFailCard(o) {
     o = o || {}; if (!screen) return;
+    // FIX 2.7 (mp_error): every MP dead-end / abort surfaces through this one card — emit a small non-PII stage token
+    // (explicit o.stage if a caller set one, else a slug of the static head copy) so the funnel captures the failure.
+    _tel('mp_error', { stage: String(o.stage || o.head || 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) });
     var card = $('mpx-failcard');
     if (!card) {
       card = document.createElement('div'); card.id = 'mpx-failcard'; card.className = 'mpx-failcard';
@@ -3102,11 +3145,15 @@
     } else if (p.missed) {
       _callSetPhase('missed', uid, nm);
       if (uid) _setRow(uid, '', 'CHALLENGE', 0);
-      _stopCallWatch(); _callState = null;   // terminal — see above (the card's action closures already captured uid/nm)
+      _stopCallWatch();
+      try { paintRoomPanel(); } catch (e) {}   // FIX 2.3: one crimson NO ANSWER roster paint (phase 'missed') before the fail card takes over
+      _callState = null;   // terminal — see above (the card's action closures already captured uid/nm)
       showFailCard({ head: 'NO ANSWER', reason: nm + ' didn’t pick up. They’ll see a missed call in their game.',
         actions: [{ label: 'CALL AGAIN', primary: true, fn: function () { clearFailCard(); _recall(uid, nm); } }, { label: 'CALL SOMEONE ELSE', fn: function () { clearFailCard(); backToLobby(); } }] });
+      return;   // FIX 2.3b (build156 review): the line-3149 NO ANSWER roster paint is the intended final state — skip the trailing paintRoomPanel() below, which runs synchronously (no reflow) and would clobber it back to the ghost WAITING/LEFT row before the browser composites
     } else {   // accepted
       _callSetPhase('accepted', uid, nm);
+      _tel('mp_call_answered', { uid: uid ? String(uid).slice(0, 48) : null });   // FIX 2.7: the caller learned the battle call was accepted (bc:user broadcast)
       if (uid) _setRow(uid, 'ringing', '✓ ' + String(nm).slice(0, 12) + ' — JOINING…', 60000);
       clearFailCard();
       banner('mpx-setup-msg', nm + ' accepted — they’re on the way. Pick the song if you haven’t.');
@@ -3202,6 +3249,14 @@
     var oppMem = oppId ? room.members[oppId] : null;
     if (oppMem) rows.push({ name: oppMem.name || 'Player', host: !room.isHost, status: _oppStatus(oppId) });
     else if (room.isHost && _callState && _callState.rid === room.id && (_callState.phase === 'ringing' || _callState.phase === 'accepted')) rows.push({ name: _callState.name || 'Rival', status: _callChip() });
+    // FIX 2.3: an outbound call that resolved to MISSED shows a crimson NO ANSWER chip for the one paint before the fail
+    // card takes over (_onCallAnswered paints once at phase 'missed', then nulls _callState). Reuse the crimson .mrp-chip.ring.
+    else if (room.isHost && _callState && _callState.rid === room.id && _callState.phase === 'missed') rows.push({ name: _callState.name || 'Rival', status: { label: 'NO ANSWER', cls: 'ring' } });
+    // FIX 2.3: a previously-present opponent that EXPIRED from presence gets a crimson LEFT chip (keyed on room._lastP2 —
+    // the seat we remembered), NOT the ghost "WAITING" fallback (which read as if no one had ever joined — panel and the
+    // "opponent left" reason line disagreeing at the moment trust matters). A brand-new room with no opponent ever falls
+    // through to the ghost WAITING below (room._lastP2 unset). If a fresh opponent seats, oppMem paints the normal row.
+    else if (!spectating && room._lastP2) rows.push({ name: room._lastP2Name || room._p2Name || 'Opponent', status: { label: 'LEFT', cls: 'ring' } });
     else if (!spectating) rows.push({ name: 'Opponent', ghost: true, status: { label: 'WAITING', cls: '' } });
     return rows;
   }
@@ -3554,7 +3609,7 @@
       }
     });
   }
-  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
+  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -3596,7 +3651,7 @@
     } else if (room.isHost) {
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
-      if (p2) room._lastP2 = p2;   // MP-reliability FIX #3: remember the seated opponent so a transient presence lull at start-time can be recovered (startRoomMatch)
+      if (p2) { room._lastP2 = p2; if (room.members[p2] && room.members[p2].name) room._lastP2Name = String(room.members[p2].name).slice(0, 18); }   // MP-reliability FIX #3: remember the seated opponent so a transient presence lull at start-time can be recovered (startRoomMatch). FIX 2.3: + cache their name while present so the crimson LEFT chip can show it after they expire
       if (p2 !== room.p2) { if (!p2 && room.p2 && !matchLive) { roomOppReady = false; _stopBothReadyWd(); }   // review-fix (teardown): the seated opponent left the room PRE-match — clear their stale READY + disarm the A6 watchdog so it can't fire the misleading "COULDN'T SYNC" card ~14s later (mirrors the match-channel opp-leave path)
         room.p2 = p2; advertiseRoom(); }
     } else if (!room.p1) {
@@ -3733,6 +3788,7 @@
       if (lobbyCh) _openHost(); else setTimeout(_openHost, 1200);   // lobby may still be subscribing at boot
       paintQmPill('matched');
       banner('mpx-setup-msg', 'Matched! Pick the song — your rival is on the way.');
+      _tel('mp_join_converged', { path: 'host', ms: 0 });   // FIX 2.7: host side of a known pairing opens the shared room
       return;
     }
     // GUEST side: pend + fast-path on meta, then tolerate a late host with a direct join.
@@ -3750,9 +3806,10 @@
     var directAt = 4;   // ~10s of meta-fast-path grace (4 × 2.5s) before we force a direct channel join
     var maxTries = 18;  // ~45s baseline window
     var _roomDead = false;   // set only when the /room-status preflight explicitly says alive:false
+    var _jt0 = Date.now(), _directFired = false;   // FIX 2.7: join-start clock + which path converged (meta fast-path vs direct-join fallback)
     var tick = function () {
       // converged (onRoomMeta auto-joined, or a direct join landed) → done
-      if (room.id) { _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
+      if (room.id) { _tel('mp_join_converged', { path: _directFired ? 'direct' : 'meta', ms: Date.now() - _jt0 }); _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
       // v417 review-fix C: abandon when there's no pending join AND we're not in a room. Dropped the `_pendJoinRid !==
       // rid` conjunct: after a user LEAVES a direct-joined room (room.id nulled, _pendingRoomJoin already nulled at the
       // handoff) _pendJoinRid was still === rid, so the old guard stayed false and the next tick re-joinRoomDirect'd —
@@ -3767,6 +3824,7 @@
       // once room.id got set in this same tick).
       if (tries >= directAt && !room.id && !_roomDead) {
         _pendingRoomJoin = null;   // hand off from the meta fast-path to the direct join (no double-join)
+        _directFired = true;       // FIX 2.7: mark that convergence (if it lands) came via the direct-join fallback
         try { joinRoomDirect(rid, !!opts.asSpec); } catch (e) {}
       }
       // preflight the server's view of the room. v417 review-fix A: fire EARLY (tick 2, BEFORE the tick-4 direct
@@ -3906,23 +3964,26 @@
         window.RhythmChat.paintModKebab(dot, { isHost: room.isHost, oppId: opp ? oppId : null, oppName: opp && opp.name, roomCh: room.ch, meId: ME.id, hostId: room.p1, roomId: room.id });
       }
     } catch (e) {}
-    // build60: explicit, updating waiting status (announces arrivals so the wait never reads as frozen).
-    var ws = $('mpx-waitstatus');
-    if (ws) {
-      ws.hidden = false; ws.classList.remove('ready');
-      if (opp) { ws.textContent = (opp.name || 'Your opponent') + ' joined — pick a track and you\'re both set.'; }
-      else if (spectating) { ws.textContent = 'Watching this room — the match starts when the host begins.'; }
-      else if (room.isHost) { ws.textContent = 'You\'re hosting — waiting for 1 player. Copy the invite link and send it, or add a CPU to start now.'; }   // B3: link-first (no join-by-code UI)
-      else { ws.textContent = 'Waiting for the host to start…'; }
+    // build60: explicit, updating waiting status (announces arrivals so the wait never reads as frozen). FIX 2.4: this
+    // line is now routed through paintWaitStatus (the single #mpx-waitstatus funnel) so it inherits conn-loss precedence
+    // + the waiting escalation — the HOST-waiting-for-a-player case escalates (elapsed count + 20s/60s "resend the invite
+    // link" copy); every other phase (opponent joined, spectating, guest-waiting, any show-room copy) does NOT escalate.
+    if ($('mpx-waitstatus')) {
+      var wtxt, wesc = false;
+      if (opp) { wtxt = (opp.name || 'Your opponent') + ' joined — pick a track and you\'re both set.'; }
+      else if (spectating) { wtxt = 'Watching this room — the match starts when the host begins.'; }
+      else if (room.isHost) { wtxt = 'You\'re hosting — waiting for 1 player. Copy the invite link and send it, or add a CPU to start now.'; wesc = !room.show; }   // B3: link-first (no join-by-code UI)
+      else { wtxt = 'Waiting for the host to start…'; }
       // build100f (relatability): remind both players combat is on while they wait, so the mid-song freeze is expected.
-      if (room.combat) ws.textContent += ' Combat ON — a combo streak shocks the rival ~2s.';
+      if (room.combat) wtxt += ' Combat ON — a combo streak shocks the rival ~2s.';
       if (room.show) {   // build102s: show-room copy replaces the stock strings (song locked, host never blocked)
         var seatedId = room.isHost ? room.p2 : (room._snapP2 || null);
-        if (room.isHost) ws.textContent = room.p2 ? '⚔ Challenger seated — START runs the head-to-head.' : 'LIVE SHOW — START plays it solo; the artist can join between runs.';
-        else if (spectating) ws.textContent = room._snapLive ? 'LIVE — watching the run…' : 'LIVE SHOW — you\'re watching. The run starts when the host begins.';
-        else if (seatedId === ME.id) ws.textContent = room._snapLive ? 'Match in progress — you\'re seated for the NEXT run.' : 'You\'re seated — the host starts the match.';
-        else ws.textContent = room._snapLive ? 'Match in progress — you\'re in line for the NEXT run.' : 'LIVE SHOW — hang tight, the host will wave you in.';
+        if (room.isHost) wtxt = room.p2 ? '⚔ Challenger seated — START runs the head-to-head.' : 'LIVE SHOW — START plays it solo; the artist can join between runs.';
+        else if (spectating) wtxt = room._snapLive ? 'LIVE — watching the run…' : 'LIVE SHOW — you\'re watching. The run starts when the host begins.';
+        else if (seatedId === ME.id) wtxt = room._snapLive ? 'Match in progress — you\'re seated for the NEXT run.' : 'You\'re seated — the host starts the match.';
+        else wtxt = room._snapLive ? 'Match in progress — you\'re in line for the NEXT run.' : 'LIVE SHOW — hang tight, the host will wave you in.';
       }
+      paintWaitStatus(wtxt, false, wesc);
     }
     try { paintRoomCombatToggle(); } catch (e) {}   // FIX 3b (P0): host-only in-room COMBAT toggle
     try { paintShowRoom(); } catch (e) {}   // build102s: show chrome (banner/seat/invite) — self-hides for normal rooms

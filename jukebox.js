@@ -140,9 +140,17 @@
       art.style.display = ''; mark.textContent = '';
       // build100o: load a fast thumbnail; on failure fall back to the original full URL, then to the branded initial
       // (never leave the bare green palette showing). Tracks the failed URL on the element so we only retry once.
-      im.onerror = function () { if (im.dataset.full !== '1') { im.dataset.full = '1'; im.src = t.artwork_url; } else { im.onerror = null; im.remove(); mark.textContent = initial(t.title); } };
-      im.dataset.full = ''; im.src = thumb(t.artwork_url, 400);
-      let ri = refl.querySelector('img'); if (!ri) { ri = document.createElement('img'); refl.appendChild(ri); } ri.onerror = function () { ri.onerror = null; ri.src = t.artwork_url; }; ri.src = thumb(t.artwork_url, 400);
+      // build147: compute the thumb URL ONCE and only attempt the "retry full URL" step when it actually DIFFERS from the
+      // original. A non-Supabase cover passes through thumb() unchanged, so the old retry re-assigned the SAME already-
+      // failed URL — Chrome never re-fires onerror on an identical failed src → a stranded broken-image ghost (the owner's
+      // report). When the thumb can't differ, fall straight through to the branded initial tile. Supabase covers (thumb
+      // always rewrites → _tu differs) keep the exact prior thumbnail→full→initial behavior.
+      const _tu = thumb(t.artwork_url, 400);
+      im.onerror = function () { if (im.dataset.full !== '1' && _tu !== t.artwork_url) { im.dataset.full = '1'; im.src = t.artwork_url; } else { im.onerror = null; im.remove(); mark.textContent = initial(t.title); } };
+      im.dataset.full = ''; im.src = _tu;
+      let ri = refl.querySelector('img'); if (!ri) { ri = document.createElement('img'); refl.appendChild(ri); }
+      ri.onerror = function () { if (ri.dataset.full !== '1' && _tu !== t.artwork_url) { ri.dataset.full = '1'; ri.src = t.artwork_url; } else { ri.onerror = null; ri.remove(); } };   // reflection: same guard; on total failure drop it (the .cover-reflect palette shows through — no branded tile needed)
+      ri.dataset.full = ''; ri.src = _tu;
     } else { art.innerHTML = ''; mark.textContent = initial(t.title); refl.innerHTML = ''; }
     // grade chip
     const best = RC().getBest(t.id);
@@ -225,7 +233,8 @@
     $('jb-artist').textContent = t.artist_name || '';
     const bits = [RC().cleanGenre(t.genre), t.bpm ? t.bpm + ' BPM' : '', RC().fmtDur(t.duration_seconds)].filter(Boolean);
     const best = RC().getBest(t.id);
-    if (best) bits.push('BEST ' + best.grade + ' · ' + Number(best.score).toLocaleString());
+    // build147: a Daily-Rift best names its tier (e.g. "BEST S · 812,400 · RIFT") so it reads as the brag it is.
+    if (best) bits.push('BEST ' + best.grade + ' · ' + Number(best.score).toLocaleString() + (best.difficulty === 'rift' ? ' · RIFT' : ''));
     $('jb-tags').textContent = bits.join('   ·   ');
     $('jb-pos').textContent = (Math.round(pos) + 1) + ' / ' + jbList.length;
     // Play button reflects whether the centered track is game-ready
@@ -629,8 +638,11 @@
     if (t.artwork_url) {
       artEl = document.createElement('img');
       artEl.className = 'sc-art'; artEl.loading = 'lazy';
-      artEl.onerror = () => { if (artEl.dataset.full !== '1') { artEl.dataset.full = '1'; artEl.src = t.artwork_url; } else { artEl.replaceWith(procArt(t)); } };   // build100o: thumbnail → original → procedural art
-      artEl.dataset.full = ''; artEl.src = thumb(t.artwork_url, 160);
+      // build147: only attempt the full-URL retry when the thumb URL actually differs — re-assigning the same already-
+      // failed non-Supabase URL never re-fires onerror in Chrome (stranded broken-image ghost); then branded procArt.
+      const _tu = thumb(t.artwork_url, 160);
+      artEl.onerror = () => { if (artEl.dataset.full !== '1' && _tu !== t.artwork_url) { artEl.dataset.full = '1'; artEl.src = t.artwork_url; } else { artEl.replaceWith(procArt(t)); } };   // build100o: thumbnail → original → procedural art
+      artEl.dataset.full = ''; artEl.src = _tu;
     } else {
       artEl = procArt(t);
     }

@@ -1227,7 +1227,9 @@
   function gradeFor(acc) { return acc >= 0.95 ? 'S' : acc >= 0.88 ? 'A' : acc >= 0.75 ? 'B' : acc >= 0.60 ? 'C' : 'D'; }   // build71: align this fallback grader to the ENGINE scale (game.js endGame: S>=95/A>=88/B>=75/C>=60). Runs carry res.grade so this only affects the latent fallback (legacy rr_scores / external callers) — but a cover card and the results screen must never disagree.
   function getBest(trackId) {
     const s = loadScores(); let best = null;
-    ['easy', 'medium', 'hard'].forEach(d => { const r = s[trackId + '|' + d]; if (r && (!best || r.score > best.score)) best = Object.assign({ difficulty: d }, r); });
+    // build147: include 'rift' — saveBest already writes trackId+'|rift' for Daily-Rift clears, but the read path never
+    // scanned it, so those bests (often a player's highest) were saved and never surfaced on covers / the sheet BEST line.
+    ['easy', 'medium', 'hard', 'rift'].forEach(d => { const r = s[trackId + '|' + d]; if (r && (!best || r.score > best.score)) best = Object.assign({ difficulty: d }, r); });
     if (best) return best;
     if (catalogLive) return null;   // build58: skip the O(n) catalog scan on LIVE data — _mockBest only exists in mock/preview (this scan ran per card → ~n² on a full-list render)
     const t = catalogTracks.find(x => x.id === trackId);
@@ -2013,7 +2015,8 @@
       let prevReal = null;
       try {
         const s = loadScores();
-        ['easy', 'medium', 'hard'].forEach(d => { const r = s[currentTrack.id + '|' + d]; if (r && (!prevReal || r.score > prevReal.score)) prevReal = r; });
+        // build147: include 'rift' so a Daily-Rift best counts as prior best for the NEW BEST / GRADE UP compare.
+        ['easy', 'medium', 'hard', 'rift'].forEach(d => { const r = s[currentTrack.id + '|' + d]; if (r && (!prevReal || r.score > prevReal.score)) prevReal = r; });
       } catch (e) {}
       const isNewBest = !prevReal || results.score > (prevReal.score || 0);
       const isGradeUp = !!prevReal && (GRADE_ORDER[grade] || 0) > (GRADE_ORDER[prevReal.grade] || 0);
