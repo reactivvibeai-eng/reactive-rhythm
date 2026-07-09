@@ -1080,6 +1080,8 @@
   // ---- hit SFX: a real palm-mute guitar chug, decoded once into a buffer for zero-latency,
   // overlapping playback. Replaces the old synth beep. (Falls back to the beep if it can't load.)
   let hitBuffer = null, missBuffer = null, hitSfxTried = false;
+  // build157: real sampled hero SFX (Suno one-shots per RR_AUDIO_DIRECTION.md), decoded once in loadHitSfx below.
+  let odIgniteBuffer = null, shieldSaveBuffer = null, comboFlareBuffer = null, clearFanfareBuffer = null;
   let _lastPct = -1, _lastSec = -1;   // build71: per-frame HUD-write change-gate (progress bar / time) — only touch the DOM when the whole-percent or whole-second changes (self-heals on restart since pct/sec differ from the prior song)
   // SFX_LEVEL is declared near the top (settings block) so persisted prefs can set it before this point.
   function loadHitSfx() {
@@ -1089,6 +1091,11 @@
       .then(buf => getAC().decodeAudioData(buf, set, () => {})).catch(() => {});
     load('assets/hit-chug.mp3', d => { hitBuffer = d; });
     load('assets/miss-squelch.mp3', d => { missBuffer = d; });   // GH-style "clam" on a miss
+    // build157: the four Suno-made hero stingers — each falls back to its procedural cue if it can't load (see playBufferSfx)
+    load('assets/overdrive-ignite.mp3', d => { odIgniteBuffer = d; });    // Star-Power activation slam
+    load('assets/shield-save.mp3',      d => { shieldSaveBuffer = d; });   // Flow-Shield SAVED "coin-catch"
+    load('assets/combo-flare.mp3',      d => { comboFlareBuffer = d; });   // combo-milestone chime
+    load('assets/clear-fanfare.mp3',    d => { clearFanfareBuffer = d; }); // level-clear victory sting
   }
   // miss "squelch" — like GarageBand/Guitar Hero clamming a note. Music stays at full level.
   function playMissSfx(heavy) {
@@ -1159,6 +1166,24 @@
       o.connect(g); o.start(now); o.stop(now + dur);
     } catch (e) {}
   }
+  // build157: play a decoded sampled SFX buffer through a mute + Hit-Sound-mixer-gated gain node (the exact pattern
+  // playMissSfx uses). `mult`/`cap` mirror the other cues (gain = min(cap, SFX_LEVEL*mult)); returns false if it
+  // couldn't play (muted or buffer not yet decoded) so callers can fall back to the procedural cue.
+  function playBufferSfx(buf, mult, cap, rate) {
+    if (muted || !buf) return false;
+    try {
+      const ac = getAC();
+      const g = ac.createGain(); g.gain.value = Math.max(0.0001, Math.min(cap, SFX_LEVEL * mult));
+      const s = ac.createBufferSource(); s.buffer = buf;
+      if (rate && rate !== 1) { try { s.playbackRate.value = rate; } catch (e) {} }
+      s.connect(g); g.connect(ac.destination); s.start(ac.currentTime);
+      return true;
+    } catch (e) { return false; }
+  }
+  function playShieldSaveSfx() { if (!playBufferSfx(shieldSaveBuffer, 2.4, 0.36)) playOdIgniteSfx(); }   // Flow-Shield SAVED → real "coin-catch", else the procedural ignite
+  function playOverdriveHitSfx() { if (!playBufferSfx(odIgniteBuffer, 2.8, 0.42)) playOverdriveSfx(); }  // Star-Power engage → real slam, else the procedural riser
+  function playComboFlareSfx() { return playBufferSfx(comboFlareBuffer, 1.7, 0.28); }                    // combo milestone — small, fires often; silent if not loaded (additive; no prior sound here)
+  function playClearFanfareSfx() { return playBufferSfx(clearFanfareBuffer, 3.2, 0.5); }                 // level clear — big; caller falls back to the procedural sting if this returns false
   // v257 SOUND DESIGN: procedural ZAP (P-vs-P combat shock) — a noise crackle through a sweeping bandpass + a pitch-dropping
   // square = an electric "you got shocked" hit. `incoming` (you were zapped) is harsher/longer than the sender's crackle.
   function playZapSfx(incoming) {
@@ -2477,7 +2502,7 @@
     if (!cachedBuffer) {
       setLoading('Awakening ECH0', 5);
       const audioEl = $('audio-el');
-      const src = audioEl ? audioEl.src : 'assets/lunar-waves.mp3';
+      const src = audioEl ? audioEl.src : 'assets/crimson-circuit.mp3';   // build157: Crimson Circuit anthem is the demo/start track
       const arr = await fetchAudio(src);
       setLoading('Decoding waveform', 25);
       const ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -4031,7 +4056,7 @@
       // build60 FEEL: EVERY non-failed finish now lands a grade-scaled STING under the count-up (a B/C/D used to
       // finish silently — only the encore/S-A branch played one). S/A → the big 6-note run; B/C/D → the softer
       // 4-note arpeggio. A FAILED run stays silent (no reward for a fail-out). playStingSfx is mute/mixer-gated.
-      if (!results.failed) { try { playStingSfx(grade === 'S' || grade === 'A' ? 'big' : ''); } catch (e) {} }
+      if (!results.failed) { try { if (!playClearFanfareSfx()) playStingSfx(grade === 'S' || grade === 'A' ? 'big' : ''); } catch (e) {} }   // build157: real victory fanfare on a clear; falls back to the procedural grade-sting if the sample hasn't loaded
       // v255: the crowd cheers on an encore — play the optional cheer SFX (gated by mute + the SFX level; absent file = silent).
       // The cheer LAYERS on top of the sting above; only high grades earn it.
       if (encore && !muted) {
@@ -4655,7 +4680,7 @@
     if (odFlame) odFlame.classList.add('active');
     // build8: tell a level its big moment landed (Skully kicks the intense backdrop). No-op when unset.
     try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, true); } catch (e) {}
-    playOverdriveSfx();
+    playOverdriveHitSfx();   // build157: real Star-Power slam sample (falls back to the procedural riser if unloaded)
     if (navigator.vibrate) { try { navigator.vibrate([20, 30, 40]); } catch (e) {} }
     updateHUD();
   }
@@ -5058,6 +5083,7 @@
     if (combo > 0 && combo % 25 === 0) {
       const tier = combo / 25;                                  // 1, 2, 3, … — escalates with the streak
       emitComboWave(lane, tier, combo % 100 === 0);             // build13: board-wide wave, not a bottom blob
+      playComboFlareSfx();   // build157: bright metallic chime on each streak milestone (small, mixer-gated; silent if unloaded)
       lightningT = Math.min(0.55, 0.3 + tier * 0.05);
       comboGlow = 1;   // build64: flare the strings gold → white-hot on the milestone (cosmetic)
       scanT = scanDur = 0.42; scanTier = tier;   // combo-milestone scan sweep, brighter with the streak
@@ -5765,7 +5791,7 @@
       _rfPush(note.lane, 'm');                             // opponent still sees the missed note in the versus stream
       registerMissFx(note.lane);                           // the missed string still flashes...
       if (note.lane >= 0 && note.lane < laneDesat.length) laneDesat[note.lane] = Math.min(laneDesat[note.lane], 0.5);   // FIX1: shielded string only HALF-dims (a SAVE, not a dead string); Math.min avoids adding desat when a11y already suppressed registerMissFx
-      playOdIgniteSfx();                                   // FIX1: SAVED must SOUND like a win — reuse the low-gain OD "spark" stinger, NOT the miss squelch (no new SFX invented; spawnMissDud dropped)
+      playShieldSaveSfx();                                 // build157: SAVED plays the real "coin-catch" sample (falls back to the OD ignite spark if unloaded); NOT the miss squelch; spawnMissDud dropped
       _armJudgePriority(420);
       flashJudgment('◆ SAVED', '#e0a93f');                 // ...but the combo LIVES — a crimson-gold dopamine beat, not a mercy
       _tlog('flow_shield', { lane: note.lane, combo: combo, odLeft: +overdrive.toFixed(3), shields: _flowShieldCount });   // T9

@@ -15,6 +15,17 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build157 — Real audio: Crimson Circuit anthem + 4 Suno hero SFX wired  ✅ node-clean · name-parity verified  ·  ?v=455
+Owner generated the full audio package in Suno (per Fable's RR_AUDIO_DIRECTION.md); this wires it into the engine. game.js + index.html + 6 new `assets/*.mp3`.
+- **Anthem** — `assets/crimson-circuit.mp3` (128 BPM charter-friendly hybrid-rock) replaces `lunar-waves.mp3` as the demo/start track (`#audio-el` src + the demoProvider fallback). lunar-waves stays as the intro-video decode-fallback bed.
+- **Four sampled hero SFX** decode once in `loadHitSfx()` alongside hit-chug/miss-squelch, each played through the mute + Hit-Sound-mixer-gated `playBufferSfx()` (gain = min(cap, SFX_LEVEL·mult)), each with a **procedural fallback** so no moment goes silent if a sample 404s / hasn't decoded:
+  - **shield-save.mp3** → the Flow-Shield SAVED "coin-catch" (was reusing the OD ignite spark) — completes Fable's #1 feel note (the mercy now *sounds* like a win).
+  - **overdrive-ignite.mp3** → the Star-Power activation slam (was the procedural riser).
+  - **combo-flare.mp3** → a new bright chime on each %25 streak milestone (additive — no sound was there before).
+  - **clear-fanfare.mp3** → the level-clear victory sting on a non-failed results entrance (falls back to the procedural grade-sting).
+- **Deferred:** `hub-embers.mp3` (menu/lobby ambient loop) is in `assets/` but NOT yet wired — it needs careful preview/run ducking so it never bleeds over a track; scheduled as build158.
+Verified: node --check clean; def↔call name parity confirmed for all 5 new functions; assets present. Heard/tuned on the owner's machine (local preview serves the stale worktree): SFX levels, anthem-as-demo, fanfare-vs-sting balance — all tunable via SFX_LEVEL + the per-cue mult/cap.
+
 ### build156 — Fable polish wave: Flow-Shield feel + RIFT trophy + MP legibility truth-chips  ✅ node-clean · adversarial-reviewed · MP HELD  ·  ?v=454
 Executes the headless-safe quick-wins from Fable's POLISH_REVIEW_v1 (coherence verdict: build147–155 landed faithfully), across 4 files on disjoint owners, then a 3-lens adversarial review (find→refute→confirm) — **1 confirmed low bug fixed, game.js + catalog clean**.
 - **game.js — Flow-Shield SAVED now SOUNDS like a win** (Fable's #1): the OD-shielded miss drops the miss-dud, swaps the squelch for the positive `playOdIgniteSfx()` spark, and halves the string desat (`laneDesat = min(cur, 0.5)`; the reduce-motion+fxLite a11y path stays untouched). The mercy beat reads as dopamine, not punishment. Normal (non-shielded) miss path byte-identical.
