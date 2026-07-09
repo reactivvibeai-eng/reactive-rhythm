@@ -171,6 +171,21 @@
   let holdNote = Array(LANE_COUNT).fill(null);  // the sustain note currently being held in this lane
   let holdScored = Array(LANE_COUNT).fill(0);   // fraction [0..1] of the active sustain already paid out
   let holdSparkT = Array(LANE_COUNT).fill(0);   // spark-emit throttle while sustaining
+  let holdRailSeg = Array(LANE_COUNT).fill(0);  // SLIDE RAILS: index of the NEXT waypoint the active rail in this lane is heading to (0 = none/hold)
+  // ---- SLIDE RAILS (Fable v2 flagship, MECHANICS_DIRECTION_v2 §A) — DARK behind RAILS_ON. Default OFF → the
+  // charter emits EXACTLY today's chart (the EMISSION is gated, not the render). A rail is a hold whose lane MOVES:
+  // strike the head like a hold, then FOLLOW the ribbon as it bends to the next string. SCORE-IDENTICAL to the hold
+  // it replaces — transfers award ZERO score (no new score sites; the notes_total*1500 ceiling never learns rails
+  // exist). Transfer failure resolves through the EXISTING endHoldEarly GRACE/SLIP/DROP bands (one mercy model).
+  function RAILS_ON() { try { if (/[?&]rails=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_rails') === '1'; } catch (e) {} return false; }
+  const RAIL_MIN_LEN = 1.0;                                     // s — a rail needs room to read a transfer (spec A1.2)
+  const RAIL_DRIFT_MIN = 0.18;                                  // min |centroid drift| for a sustain to qualify as a slide
+  const RAIL_MAX_XFER = { easy: 1, medium: 2, hard: 3, rift: 4 };          // max transfers per rail, per difficulty
+  const RAIL_MIN_SEG  = { easy: 0.45, medium: 0.35, hard: 0.28, rift: 0.24 };  // min time per rail segment (incl. last→tail)
+  const RAIL_TW       = { easy: 0.25, medium: 0.18, hard: 0.14, rift: 0.12 };  // transfer WINDOW late side (early side = 0.6×)
+  const _railScratch = []; for (let _i = 0; _i < 16; _i++) _railScratch.push({ x: 0, y: 0, sc: 1, lane: 0 });   // ribbon point buffer (alloc-free per frame)
+  let _railTouchId = null, _railTouchLanes = null;   // SLIDE RAILS: pointer that struck a rail head (touch drag) + the lanes it synthesized down
+  let _railTestDrift = null, _railTestMinLen = null;   // SLIDE RAILS dev-test overrides (null = shipped RAIL_DRIFT_MIN/RAIL_MIN_LEN); strip at freeze
   // build104 s6c: duration-scaled sustain payout — the flat 220 made LONG sustains the worst points-per-second
   // in the game. A hold's total sustain pool now scales with its tail: 140 + 110·min(1, tail/1.2) = 140..250
   // (× live multiplier, like all score). Chart-fixed per note → identical for every player → leaderboard-safe.
@@ -705,7 +720,7 @@
     lanePulse = Array(LANE_COUNT).fill(0); laneHitPulse = Array(LANE_COUNT).fill(0);
     lanePluckT = Array(LANE_COUNT).fill(9); laneDown = Array(LANE_COUNT).fill(false);
     holdNote = Array(LANE_COUNT).fill(null); holdScored = Array(LANE_COUNT).fill(0);
-    holdSparkT = Array(LANE_COUNT).fill(0);
+    holdSparkT = Array(LANE_COUNT).fill(0); holdRailSeg = Array(LANE_COUNT).fill(0);
   }
   function loadKeyMapFor(p) {
     try { const sv = JSON.parse(localStorage.getItem(p.store) || 'null'); if (sv && typeof sv === 'object') return sv; } catch (e) {}
@@ -1345,6 +1360,12 @@
       const m = (((l - laneBase) % (2 * s1)) + 2 * s1) % (2 * s1);
       return laneBase + (m <= s1 ? m : 2 * s1 - m);
     };
+    // MINGAP hoist (Fable v2): the canonical per-difficulty onset gap table lives here now (was inline in the musical
+    // density pass) so the trill + stair/zipper gates below read the SAME source. Those two sites hardcoded a stale
+    // hard:0.22 that build141's hard:0.30 softening missed — hoisting fixes them (behavior change for hard's trill/
+    // stair gates is INTENDED; medium/easy/rift are unchanged since their table values already matched).
+    const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.30, rift: 0.22 };
+    const MINGAP_D = MINGAP[difficulty] || 0.22;
     // MUSICAL mode (build57) needs centroid-tagged onsets from analyzeMusical; if a fallback produced
     // plain (centroid-less) onsets, degrade to the classic placer so a track is never left unplayable.
     const musical = (chartMode === 'musical') && beats.length && (typeof beats[0].centroid === 'number');
@@ -1394,7 +1415,7 @@
       // build59: Medium dialed back from 0.235 (≈4.3 notes/sec) — playtesters found Medium too rapid/scattered.
       // CHANGE 3a — raise every floor (was {0.45,0.33,0.155}) so the baseline chart is sparser and more readable
       // across the board; the "barrage" complaint was largely Hard packing ~6.4 nps. Now ≈ 2 / 2.5 / 4.5 nps.
-      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.30, rift: 0.22 };   // build148 T8: RIFT restores the pre-build141 brutal 0.22 (~4.5 onsets/s wall) · v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. build141 (beta data): Hard 0.22→0.30 — 0 of 22 Hard runs cleared 90%, max-combo only ~6% of chart; 0.22 packed ~4.5 onsets/s = an unsustainable wall. 0.30 caps ~3.3/s so a competent player can actually hold a streak. Easy/Medium unchanged.
+      // MINGAP hoisted to buildNotes scope (Fable v2).   // build148 T8: RIFT restores the pre-build141 brutal 0.22 (~4.5 onsets/s wall) · v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. build141 (beta data): Hard 0.22→0.30 — 0 of 22 Hard runs cleared 90%, max-combo only ~6% of chart; 0.22 packed ~4.5 onsets/s = an unsustainable wall. 0.30 caps ~3.3/s so a competent player can actually hold a streak. Easy/Medium unchanged.
       // v253 (research): a CAMPAIGN BOSS stage is "Hard-MINUS", not raw Hard — the boss complaint ("I shouldn't be crying at
       // the end of the level") is no-release + density, not speed (we're already ~5× below GH-boss NPS). When the LAUNCHED
       // level is a boss (_levelCtx.boss, set by launchLevel→setLevelContext), widen the Hard min-gap and lower the sustained
@@ -1545,7 +1566,7 @@
         last2 = last; last = lane;
         let type = 'tap';
         if ((b.downbeat && b.strength >= 1.4) || b.strength >= 1.9) type = 'accent';  // on-beat / strong → accented gem (build104 s8: stars moved to the budgeted placeStars pass below)
-        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (Math.floor(b.t * 97 + idx * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _centroid: b.centroid, _sustain: b.sustain || 0, _hotBands: b.hotBands || null, _onGrid: !!b.onGrid, _downbeat: !!b.downbeat, _energy: b.energy || 0 };
+        return { time: b.t, strength: b.strength, lane: lane, type: type, hold: 0, spin: (Math.floor(b.t * 97 + idx * 7) % 360) * Math.PI / 180, judged: false, hit: null, _pulsed: false, _centroid: b.centroid, _sustain: b.sustain || 0, _hotBands: b.hotBands || null, _onGrid: !!b.onGrid, _downbeat: !!b.downbeat, _energy: b.energy || 0, _centroidPath: b.centroidPath || null };
       });
       // CHANGE 1 (dedupe) — snapping can collapse two onsets onto the same (time-slot, lane). Drop the collision,
       // keeping the STRONGEST, then re-sort ascending (the engine's hit-detection early-break requires sorted time).
@@ -1614,6 +1635,60 @@
     // as one. Ergonomics guard: a >2s tail with 3+ notes falling under it must sit on an EDGE lane
     // (0/1/top) so the pinned finger doesn't fence the hand off mid-neck. The s5 sanitizer audits
     // conflicts introduced by LATER passes (chords/fillers) against every hold span.
+    // SLIDE RAILS (spec A1.2): upgrade a qualifying HOLD to a RAIL — a sustain whose measured centroid GLIDES is a
+    // pitch bend, so the rail's lane walks the strings with it. Returns 'rail' (converted), 'degrade' (was a slide
+    // candidate but clamping/time-fit left 0 transfers → stays a hold, counted in railClamped), or 'no'. All lane
+    // steps are ±1 and clamp to the span edge (never ping-pong reflect — a reversed rail lies about the pitch).
+    let _railClamped = 0;
+    function _railFromHold(cur) {
+      const cp = cur._centroidPath;
+      const _driftMin = (_railTestDrift != null) ? _railTestDrift : RAIL_DRIFT_MIN;   // dev-test override (null = shipped)
+      const _minLen = (_railTestMinLen != null) ? _railTestMinLen : RAIL_MIN_LEN;
+      if (!cp || cp.length < 2) return 'no';
+      if (cur.hold < _minLen) return 'no';
+      const drift = cp[cp.length - 1] - cp[0];
+      if (Math.abs(drift) < _driftMin) return 'no';
+      const sgn = drift > 0 ? 1 : -1;
+      let agree = 0, tot = 0;
+      for (let k = 1; k < cp.length; k++) { const dd = cp[k] - cp[k - 1]; if (dd === 0) continue; tot++; if ((dd > 0 ? 1 : -1) === sgn) agree++; }
+      if (tot === 0 || agree / tot < 0.70) return 'no';   // wobble = vibrato, not a slide → leave it a hold
+      // a slide candidate from here — a failure to place any transfer DEGRADES to a plain hold (railClamped++).
+      const maxX = RAIL_MAX_XFER[difficulty] || 1;
+      const minSeg = RAIL_MIN_SEG[difficulty] || 0.45;
+      const loLane = laneBase, hiLane = laneBase + span - 1;
+      const edgeDist = sgn > 0 ? (hiLane - cur.lane) : (cur.lane - loLane);   // how far the hand can walk this way
+      const timeFit = Math.floor((cur.hold - 0.05) / minSeg) - 1;             // steps+1 segments each ≥ minSeg (+margin)
+      let steps = Math.min(maxX, Math.round(Math.abs(drift) / RAIL_DRIFT_MIN), edgeDist, timeFit);
+      if (steps < 1) return 'degrade';
+      const S = cur.hold / (steps + 1);                  // even spacing GUARANTEES each segment ≥ minSeg
+      const slack = (S - minSeg) * 0.4;                  // nudge budget that can't break spacing to a neighbor/head/tail
+      const cpDt = 0.15;                                 // cp samples are 150ms apart (analyzer hop)
+      const times = [];
+      for (let j = 1; j <= steps; j++) {
+        let tj = S * j;
+        if (slack > 0.001) {                             // nudge toward the steepest IN-DIRECTION centroid gradient nearby
+          let bestT = tj, bestG = 0;
+          for (let k = 1; k < cp.length; k++) {
+            const bt = k * cpDt;
+            if (bt < tj - slack || bt > tj + slack) continue;
+            const g = (cp[k] - cp[k - 1]) * sgn;
+            if (g > bestG) { bestG = g; bestT = bt; }
+          }
+          tj = bestT;
+        }
+        times.push(Math.round(tj * 1000) / 1000);
+      }
+      times.sort((a, b) => a - b);
+      const rail = [{ t: 0, lane: cur.lane }];
+      for (let j = 1; j <= steps; j++) {
+        const lane = cur.lane + sgn * j;
+        if (lane < loLane || lane > hiLane) break;       // defensive (edgeDist already bounds this)
+        rail.push({ t: times[j - 1], lane: lane });
+      }
+      if (rail.length < 2) return 'degrade';
+      cur.type = 'rail'; cur.rail = rail;                // keep every existing field incl. .hold (all hold code keeps working)
+      return 'rail';
+    }
     let lastHold = -99;
     for (let i = 0; i < notes.length; i++) {
       const cur = notes[i];
@@ -1633,7 +1708,9 @@
           for (let j = i + 1; j < notes.length && notes[j].time < cur.time + tail; j++) under++;
           if (under >= 3) tail = 2;   // busy passage + mid-neck lane → keep the pin short
         }
-        if (tail >= 0.30) { cur.type = 'hold'; cur.hold = Math.round(tail * 1000) / 1000; lastHold = i; }
+        if (tail >= 0.30) { cur.type = 'hold'; cur.hold = Math.round(tail * 1000) / 1000; lastHold = i;
+          if (musical && RAILS_ON()) { const _rs = _railFromHold(cur); if (_rs === 'degrade') _railClamped++; }   // SLIDE RAILS: dark behind the flag
+        }
       }
     }
     // ---- CHORDS: a second simultaneous note in another lane (press two keys at once) ----
@@ -1798,7 +1875,7 @@
       // build62 regression guards stay LOAD-BEARING: Medium requires runs ≥4 notes and ≥6s apart (the loose-gate
       // experiment tanked melody-following 0.87→0.68 once), and centroidLaneR ≥ 0.85 stays the Medium acceptance
       // gate across genre-diverse tracks.
-      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22, rift: 0.22 }[difficulty] || 0.22;
+      // MINGAP_D hoisted to buildNotes scope (Fable v2) — was a stale hard:0.22, now canonical hard:0.30.
       const trillMaxGap = Math.max(_hardLike ? 0.26 : 0.30, MINGAP_D * 1.15);
       const minLen = difficulty === 'medium' ? 4 : 3;            // notes needed to call it a trill (Medium guard: real runs only)
       let lastTrillT = -999, i = 0;
@@ -1825,7 +1902,7 @@
       // build104 s9: same chart-relative gate treatment as the trill pass — Medium's 0.36 gate sat below its own
       // 0.38 density floor (patNotes was 0 EVERYWHERE). Gate = max(legacy, MINGAP×1.35); Medium keeps the ≥6s
       // spacing regression guard.
-      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22, rift: 0.22 }[difficulty] || 0.22;
+      // MINGAP_D hoisted to buildNotes scope (Fable v2) — was a stale hard:0.22, now canonical hard:0.30.
       const patMaxGap = Math.max(_hardLike ? 0.30 : 0.36, MINGAP_D * 1.35);
       const minLen = 4;
       // build104 s9: Medium PATTERN BUDGET — the chart-relative gate wakes the pass up, but on a run-heavy song
@@ -2013,6 +2090,79 @@
           i = j + 1;
         }
       }
+      // (b2) RAIL-SPAN AUDIT (SLIDE RAILS, spec A1.2 — only ever populated when RAILS_ON built rails): a rail
+      // occupies EACH segment's lane for [segStart−clear, segEnd+clear] AND the destination lane for [w.t−0.35,
+      // w.t+0.35] around every transfer (the transfer finger must be free). Movable intruders (tap/accent, not
+      // chord/hold/rail/open) relocate to a nearby ±1 rail-free lane; the rest force the rail's tail to TRUNCATE
+      // before the conflict (dropping now-invalid trailing waypoints), degrading to a plain hold if it falls under
+      // RAIL_MIN_LEN or loses all transfers (railClamped++). Lane/hold mutations only → time-sort preserved; a
+      // degraded rail is re-checked by (c) below. No-op unless rails exist, so flag-off charts are untouched.
+      {
+        const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03;
+        const XW = 0.35, loLane = laneBase, hiLane = laneBase + span - 1, minSeg = RAIL_MIN_SEG[difficulty] || 0.45;
+        const railOcc = (r, headT, hold) => {
+          const sp = [];
+          for (let k = 0; k < r.length; k++) { const s0 = headT + r[k].t, s1 = headT + (k + 1 < r.length ? r[k + 1].t : hold); sp.push({ lane: r[k].lane, t0: s0 - clear, t1: s1 + clear }); }
+          for (let k = 1; k < r.length; k++) { const wt = headT + r[k].t; sp.push({ lane: r[k].lane, t0: wt - XW, t1: wt + XW }); }
+          return sp;
+        };
+        const movable = (m) => (m.type === 'tap' || m.type === 'accent') && !m.chord && !m.open;
+        const railBusy = (nl, tm, exceptH) => {
+          for (const rr of notes) { if (rr.type !== 'rail' || !rr.rail || rr === exceptH) continue; const sp = railOcc(rr.rail, rr.time, rr.hold); for (const s of sp) if (s.lane === nl && tm > s.t0 + 1e-6 && tm < s.t1 - 1e-6) return true; }
+          return false;
+        };
+        for (const h of notes) {
+          if (h.type !== 'rail' || !h.rail) continue;
+          // 1) relocate movable intruders to a nearby (±1) rail-free, note-free lane
+          {
+            const spans = railOcc(h.rail, h.time, h.hold);
+            for (const m of notes) {
+              if (m === h || m.type === 'bomb' || !movable(m)) continue;
+              let conflict = false; for (const s of spans) { if (m.lane === s.lane && m.time > s.t0 + 1e-6 && m.time < s.t1 - 1e-6) { conflict = true; break; } }
+              if (!conflict) continue;
+              for (const nl of [m.lane - 1, m.lane + 1]) {
+                if (nl < loLane || nl > hiLane) continue;
+                let occ = false; for (const s of spans) { if (s.lane === nl && m.time > s.t0 + 1e-6 && m.time < s.t1 - 1e-6) { occ = true; break; } }
+                if (occ || railBusy(nl, m.time, h)) continue;
+                let clash = false; for (const o of notes) { if (o !== m && o.lane === nl && Math.abs(o.time - m.time) <= clear) { clash = true; break; } }
+                if (clash) continue;
+                m.lane = nl; break;
+              }
+            }
+          }
+          // 2) truncate at the earliest remaining conflict (unmovable / un-relocatable); degrade if too short
+          let g = 0;
+          while (h.type === 'rail' && g++ < 16) {
+            const spans = railOcc(h.rail, h.time, h.hold);
+            let earliest = Infinity, em = null;
+            for (const m of notes) { if (m === h || m.type === 'bomb') continue; for (const s of spans) { if (m.lane === s.lane && m.time > s.t0 + 1e-6 && m.time < s.t1 - 1e-6) { if (m.time < earliest) { earliest = m.time; em = m; } break; } } }
+            if (!em) break;
+            const newHold = Math.round(Math.min(h.hold, em.time - clear - h.time) * 1000) / 1000;
+            while (h.rail.length > 1 && h.rail[h.rail.length - 1].t > newHold - minSeg) h.rail.pop();
+            if (h.rail.length < 2 || newHold < RAIL_MIN_LEN) {
+              h.type = 'hold'; delete h.rail;
+              if (newHold >= 0.30) h.hold = newHold; else { h.type = 'tap'; h.hold = 0; }
+              _railClamped++;
+            } else { h.hold = newHold; }
+          }
+          // 3) SLIDE-THEN-BUTTON (spec): the first movable, non-fill note within 0.7s after the tail prefers
+          // exitLane±1 — makes "slide → button" a composed phrase, not luck (lane-only nudge, best-effort).
+          if (h.type === 'rail' && h.rail && h.rail.length >= 2) {
+            const exitLane = h.rail[h.rail.length - 1].lane, tailEnd = h.time + h.hold;
+            for (const m of notes) {
+              if (m.time <= tailEnd + 1e-6) continue;
+              if (m.time > tailEnd + 0.7) break;
+              if (!movable(m) || m._fill) continue;
+              if (Math.abs(m.lane - exitLane) <= 1) break;
+              const want = exitLane + (m.lane > exitLane ? 1 : -1);
+              if (want < loLane || want > hiLane) break;
+              let clash = false; for (const o of notes) { if (o !== m && o.lane === want && Math.abs(o.time - m.time) <= clear) { clash = true; break; } }
+              if (!clash) m.lane = want;
+              break;
+            }
+          }
+        }
+      }
       // (c) HOLD-SPAN AUDIT: after every insert/move above, no SCORED note may sit on a hold's lane inside
       // its sustain (+ the re-press clearance) — a correctly-held key physically can't strike it. Truncate
       // the tail to clear the intruder; a tail below the 0.30s playable minimum demotes back to a tap.
@@ -2042,6 +2192,7 @@
       for (const n of notes) {
         if (typeof n.lane === 'number') n.lane = mir(n.lane);
         if (n.chordLanes) n.chordLanes = n.chordLanes.map(mir);
+        if (n.type === 'rail' && n.rail) n.rail = n.rail.map((w) => ({ t: w.t, lane: mir(w.lane) }));   // SLIDE RAILS: mirror waypoint lanes too
       }
     }
     // build75 NOTE FEEL — surface the music the charter ALREADY computes (strength / downbeat / on-grid) so songs
@@ -2062,7 +2213,11 @@
       window.__rrChartStats = {
         notes: notes.length,
         emphSpread: (function () { const e = notes.filter(n => typeof n._emph === 'number').map(n => n._emph); return e.length ? +(Math.max.apply(null, e) - Math.min.apply(null, e)).toFixed(3) : 0; })(),
-        holds: notes.filter(n => n.type === 'hold').length,
+        holds: notes.filter(n => n.type === 'hold').length,   // holds ONLY (rails are counted separately below)
+        rails: notes.filter(n => n.type === 'rail').length,   // SLIDE RAILS (0 unless RAILS_ON built them)
+        railTransfers: notes.reduce((a, n) => a + (n.type === 'rail' && n.rail ? n.rail.length - 1 : 0), 0),
+        meanRailLen: (function () { const r = notes.filter(n => n.type === 'rail'); return r.length ? Math.round(r.reduce((a, n) => a + (n.hold || 0), 0) / r.length * 100) / 100 : 0; })(),
+        railClamped: _railClamped,   // slide candidates that degraded to plain holds (clamp/time-fit/clearance)
         stars: notes.filter(n => n.type === 'star').length,
         chords: notes.filter(n => n.chord).length,
         bombs: notes.filter(n => n.type === 'bomb').length,
@@ -2569,7 +2724,22 @@
           let sus = 0; const sthr = domV * 0.5, smax = f + Math.round(4.0 / secPerF);   // build104 s6b: measure sustains to 4s (was 1.8 — long rings were invisible to the charter)
           for (let g = f + 1; g < nF && g < smax; g++) { if (env[domB][g] >= sthr) sus = (g - f) * secPerF; else break; }
           let eTot = 0; for (let b = 0; b < NB; b++) eTot += env[b][f];                                                          // local energy → section-aware density
-          res.push({ t: Math.round((f * hop / sr) * 1000) / 1000, strength: Math.round(Math.min(3, nov[f] / (mean + 1e-4)) * 100) / 100, centroid: centroid, hotBands: hotBands, sustain: Math.round(sus * 100) / 100, energy: eTot });
+          // SLIDE RAILS (spec A1.1): on a LONG sustain (≥0.9s), sample the band-energy centroid at 150ms hops across the
+          // ring so a gliding centroid can be read as a pitch bend (a rail). Extra field only — everything downstream that
+          // doesn't know it ignores it (held-safe). Gated on RAILS_ON so a flag-off musical chart pays zero extra cost and
+          // is byte-identical; the per-frame band energies (env) are already computed this pass — reused, not re-rendered.
+          let centroidPath = null;
+          if (RAILS_ON() && sus >= 0.9) {
+            const hopF = Math.max(1, Math.round(0.15 / secPerF));
+            const endF = Math.min(nF - 1, f + Math.round(sus / secPerF));
+            centroidPath = [];
+            for (let g = f; g <= endF && centroidPath.length < 12; g += hopF) {
+              let cnum = 0, cden = 0; for (let b = 0; b < NB; b++) { const e = env[b][g]; cnum += bandLog[b] * e; cden += e; }
+              const clg = cden > 0 ? cnum / cden : (logMin + logMax) / 2;
+              centroidPath.push(Math.round(Math.max(0, Math.min(1, (clg - logMin) / (logMax - logMin))) * 100) / 100);
+            }
+          }
+          res.push({ t: Math.round((f * hop / sr) * 1000) / 1000, strength: Math.round(Math.min(3, nov[f] / (mean + 1e-4)) * 100) / 100, centroid: centroid, hotBands: hotBands, sustain: Math.round(sus * 100) / 100, energy: eTot, centroidPath: centroidPath });
           lastF = f;
         }
       }
@@ -2920,7 +3090,7 @@
     lanePluckT = Array(LANE_COUNT).fill(9); muteUntil = -1; curGain = 1; overdrive = 0;
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null); _mpStunUntil = 0;
     _frets.clear();   // GH require-strum: clear held-fret state at every run boundary so a stale fret can't carry into the next run (B78-1)
-    holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
+    holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0); holdRailSeg = Array(LANE_COUNT).fill(0);
     odActive = false; odTimer = 0; odIgniteT = 0; lastMult = 1; odReadyAnnounced = false; _flowShieldCount = 0;   // build109 s3: a run boundary must not leave the OD wind-up armed to fire into the next run · build148: reset Flow-Shield tally
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
@@ -3211,8 +3381,14 @@
       const inRange = (n.time >= start && n.time < end);
       const keep = inRange || (n.chord && n.chordId != null && keepChord[n.chordId]);
       if (!keep) continue;
-      if (n.type === 'hold' && n.hold > 0 && (n.time + n.hold) > end) {
+      if ((n.type === 'hold' || n.type === 'rail') && n.hold > 0 && (n.time + n.hold) > end) {
         n.hold = Math.max(0.05, end - n.time);   // clamp the sustain tail to the section boundary (min a hair so it stays a hold)
+        // SLIDE RAILS: drop any waypoint at/after the clamped tail (keep invariant 1); a truncated rail below
+        // RAIL_MIN_LEN degrades to a plain hold so a clipped section never leaves a half-rail.
+        if (n.type === 'rail' && n.rail) {
+          while (n.rail.length > 1 && n.rail[n.rail.length - 1].t >= n.hold) n.rail.pop();
+          if (n.rail.length < 2 || n.hold < RAIL_MIN_LEN) { n.type = 'hold'; delete n.rail; }
+        }
       }
       out.push(n);
     }
@@ -3901,7 +4077,7 @@
     const hn = holdNote[lane]; if (!hn) return;
     const rem = Math.max(0, 1 - holdScored[lane]);
     if (rem > 0.001) score += rem * holdTotalFor(hn) * curMult();
-    holdScored[lane] = 1; holdNote[lane] = null;
+    holdScored[lane] = 1; holdNote[lane] = null; holdRailSeg[lane] = 0;
     laneHitPulse[lane] = 1.0; lanePluckT[lane] = 0;
     spawnHitParticles(lane, 'great');
     emitFx('holdend', 'hold', lane);   // build8c: sustain banked — column pulse up the lane
@@ -3919,7 +4095,7 @@
     const hn = holdNote[lane]; if (!hn) return;
     const GRACE = 0.75;                 // held at least this far → the release is forgiven (tail grace)
     const SLIP = 0.45;                  // held most of it → keep the streak, forfeit the rest of the payout
-    holdNote[lane] = null;
+    holdNote[lane] = null; holdRailSeg[lane] = 0;   // SLIDE RAILS: a rail resolves through these SAME bands (banked fraction is path-global)
     if (holdScored[lane] >= GRACE) {    // home stretch → count it as a clean hold
       const rem = Math.max(0, 1 - holdScored[lane]);
       if (rem > 0.001) score += rem * holdTotalFor(hn) * curMult();
@@ -3947,6 +4123,49 @@
       playMissSfx();
     }
     updateHUD();
+  }
+  // ---- SLIDE RAILS input/judging (spec A2) — one mental model = the hold's, plus a migrating slot -----------
+  // Is `lane` the pending transfer DESTINATION of an active rail, inside its window? Used to (a) suppress the empty-
+  // press whiff when a keyboard/touch destination press services a transfer, and (b) let a GH fret-change migrate.
+  function _activeRailForDest(lane, jt) {
+    for (let l = 0; l < LANE_COUNT; l++) {
+      const hn = holdNote[l]; if (!hn || hn.type !== 'rail' || !hn.rail) continue;
+      const seg = holdRailSeg[l] || 0; if (seg < 1 || seg >= hn.rail.length) continue;
+      if (hn.rail[seg].lane !== lane) continue;
+      const wt = hn.time + hn.rail[seg].t, TW = RAIL_TW[difficulty] || 0.18;
+      if (jt >= wt - 0.6 * TW && jt <= wt + TW) return l;
+    }
+    return -1;
+  }
+  // migrate the active rail slot from `fromLane` to `toLane` — the banked fraction is path-global (carries over), the
+  // transfer awards ZERO score (juice only). A made transfer flashes "SLIDE ▸" (warm gold) + a spark on the dest catcher.
+  function _railMigrate(fromLane, toLane, note, nextSeg) {
+    holdNote[toLane] = note; holdScored[toLane] = holdScored[fromLane]; holdSparkT[toLane] = holdSparkT[fromLane] || 0; holdRailSeg[toLane] = nextSeg;
+    holdNote[fromLane] = null; holdScored[fromLane] = 0; holdRailSeg[fromLane] = 0;
+    laneHitPulse[toLane] = 1.0; lanePluckT[toLane] = 0;
+    flashJudgment('SLIDE ▸', '#e0a93f');
+    try { spawnHitParticles(toLane, 'great'); emitFx('hit', 'great', toLane); } catch (e) {}
+    if (navigator.vibrate) { try { navigator.vibrate(10); } catch (e) {} }
+  }
+  // per-frame liveness + transfer for the active rail in lane `lane`. Returns 'pay' (fall through to the shared sustain
+  // payout on this lane), 'migrated' (slot moved this frame → skip payout here), or 'drop' (resolved via endHoldEarly's
+  // GRACE/SLIP/DROP bands). No new score sites; no new punishment vocabulary.
+  function _railSustainStep(lane, note, jt) {
+    if (performance.now() < _mpStunUntil) return 'pay';   // MP stun: coast (the payout branch advances the marker w/o pay)
+    const rail = note.rail; if (!rail) { if (!laneDown[lane]) { endHoldEarly(lane); return 'drop'; } return 'pay'; }
+    const seg = holdRailSeg[lane] || 0, TW = RAIL_TW[difficulty] || 0.18;
+    if (seg >= 1 && seg < rail.length) {
+      const wt = note.time + rail[seg].t, newLane = rail[seg].lane, w0 = wt - 0.6 * TW, w1 = wt + TW;
+      if (jt < w0) { if (!laneDown[lane]) { endHoldEarly(lane); return 'drop'; } return 'pay'; }   // before window: current segment lane must be down
+      if (jt <= w1) {                                                                               // inside window: dest down → transfer; else either-down keeps alive
+        if (laneDown[newLane]) { _railMigrate(lane, newLane, note, seg + 1); return 'migrated'; }
+        if (laneDown[lane]) return 'pay';
+        endHoldEarly(lane); return 'drop';                                                          // neither down inside the window
+      }
+      endHoldEarly(lane); return 'drop';                                                            // window closed, transfer missed → bands
+    }
+    if (!laneDown[lane]) { endHoldEarly(lane); return 'drop'; }                                     // past all transfers → hold-like on the last segment
+    return 'pay';
   }
   // dev-only harness for deterministic input/sustain testing (no effect on real play)
   try {
@@ -3989,7 +4208,119 @@
       // is not viable in a throttled tab).
       seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
       beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
-      notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0 })),   // build104 s5/6 diag (strip at freeze)
+      notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0, rail: (n.type === 'rail' && n.rail) ? n.rail.map(w => [Math.round(w.t * 1000) / 1000, w.lane]) : 0 })),   // build104 s5/6 diag (strip at freeze)
+      // ---- SLIDE RAILS dev hooks (spec A2.5 / A1.3 / A3.3; strip at content-freeze) --------------------------------
+      railsOn: (v) => { if (v === undefined) return RAILS_ON(); try { localStorage.setItem('rr_rails', v ? '1' : '0'); } catch (e) {} return RAILS_ON(); },
+      rail: () => {   // live state of the active rail (the migrating slot)
+        for (let l = 0; l < LANE_COUNT; l++) {
+          const hn = holdNote[l]; if (!hn || hn.type !== 'rail') continue;
+          const seg = holdRailSeg[l] || 0, jt = songTime() - audioOffset, TW = RAIL_TW[difficulty] || 0.18;
+          let nextIn = null, win = false, dest = null;
+          if (seg >= 1 && seg < hn.rail.length) { const wt = hn.time + hn.rail[seg].t; nextIn = Math.round((wt - jt) * 1000) / 1000; win = (jt >= wt - 0.6 * TW && jt <= wt + TW); dest = hn.rail[seg].lane; }
+          return { lane: l, seg: seg, nextTransferIn: nextIn, window: win, banked: Math.round(holdScored[l] * 1000) / 1000, destLane: dest, transfers: hn.rail.length - 1 };
+        }
+        return null;
+      },
+      holdGlides: () => notes.filter(n => (n.type === 'hold' || n.type === 'rail') && n._centroidPath && n._centroidPath.length >= 2).map(n => { const cp = n._centroidPath; return { t: Math.round(n.time * 100) / 100, type: n.type, hold: n.hold, sus: n._sustain, cpLen: cp.length, drift: Math.round((cp[cp.length - 1] - cp[0]) * 1000) / 1000, cp: cp }; }),   // SLIDE RAILS diag (strip at freeze): which sustains carry a centroid path + its drift
+      railTest: (drift, minLen) => { _railTestDrift = (drift == null ? null : +drift); _railTestMinLen = (minLen == null ? null : +minLen); return { drift: _railTestDrift, minLen: _railTestMinLen }; },   // SLIDE RAILS dev lever (strip at freeze): relax the qualify thresholds so a low-glide test track emits rails
+      railList: () => notes.filter(n => n.type === 'rail').map(n => ({ t: Math.round(n.time * 1000) / 1000, lane: n.lane, hold: n.hold, transfers: n.rail.length - 1, rail: n.rail.map(w => [Math.round(w.t * 1000) / 1000, w.lane]) })),   // SLIDE RAILS diag (strip at freeze)
+      // SLIDE RAILS derivation test (strip at freeze): inject a CLEAN monotonic glide into the real onset stream and
+      // rebuild through the REAL buildNotes() charter at SHIPPED thresholds — proves emission + clearance + audit +
+      // geom on a genuine slide the ambient demo track lacks. dir<0 descends the strings, dir>0 climbs.
+      railBuildTest: (dir) => {
+        try {
+          if (!beats || !beats.length) return 'no-beats';
+          _railTestDrift = null; _railTestMinLen = null;   // use the shipped RAIL_DRIFT_MIN / RAIL_MIN_LEN
+          dir = (dir < 0) ? -1 : 1;
+          const tEnd = beats[beats.length - 1].t, t0 = Math.max(4, tEnd - 8);
+          const cleaned = beats.filter(b => b.t < t0 - 0.15 || b.t > t0 + 5.5);
+          const cp = dir < 0 ? [0.88, 0.78, 0.66, 0.54, 0.42, 0.30, 0.16] : [0.12, 0.26, 0.40, 0.52, 0.66, 0.78, 0.90];
+          cleaned.push({ t: Math.round(t0 * 1000) / 1000, strength: 2.2, centroid: cp[0], hotBands: [], sustain: 2.6, energy: 1, centroidPath: cp.slice(), onGrid: true, downbeat: true });
+          cleaned.sort((a, b) => a.t - b.t);
+          cleaned._period = beats._period; cleaned._phase = beats._phase; cleaned._bpm = beats._bpm;
+          beats = cleaned; buildNotes();
+          const s = window.__rrChartStats, audit = window.__rrDebug.railAudit(), geom = window.__rrDebug.railGeom();
+          return { rails: s.rails, railTransfers: s.railTransfers, railClamped: s.railClamped, meanRailLen: s.meanRailLen, notes: s.notes, holds: s.holds, violations: audit.violations, geomMaxPx: geom.rail ? geom.maxDeltaPx : null, geomWaypoints: geom.rail ? geom.waypoints : null, list: window.__rrDebug.railList() };
+        } catch (e) { return 'ERR ' + e.message; }
+      },
+      // SLIDE RAILS transfer/judging test (strip at freeze): drives the PRODUCTION _railSustainStep/_railMigrate/
+      // endHoldEarly deterministically (jt is a param → no clock dependence). Proves: made transfer migrates the slot +
+      // keeps combo + awards ZERO score; missed transfer resolves through the EXISTING GRACE/SLIP/DROP bands.
+      railTransferTest: () => {
+        try {
+          const TW = RAIL_TW[difficulty] || 0.18, wt = 100 + 0.9;   // first transfer at head+0.9
+          const mkRail = () => ({ type: 'rail', time: 100, hold: 2.0, lane: 2, rail: [{ t: 0, lane: 2 }, { t: 0.9, lane: 1 }, { t: 1.8, lane: 0 }], judged: true, hit: 'perfect' });
+          const clearSlots = () => { for (let l = 0; l < LANE_COUNT; l++) { holdNote[l] = null; holdScored[l] = 0; holdRailSeg[l] = 0; laneDown[l] = false; } };
+          _mpStunUntil = 0; const out = {};
+          // MADE: dest pressed inside window → migrate, combo intact, zero score from the transfer
+          clearSlots(); let R = mkRail(); holdNote[2] = R; holdScored[2] = 0.5; holdRailSeg[2] = 1; laneDown[2] = true; laneDown[1] = true; combo = 10; { const s0 = score; const r = _railSustainStep(2, R, wt); out.made = { ret: r, migratedToDest: holdNote[1] === R, newSeg: holdRailSeg[1], oldCleared: holdNote[2] === null, bankedCarried: holdScored[1], comboIntact: combo === 10, transferScoreDelta: Math.round((score - s0) * 1000) / 1000 }; }
+          // MISS→DROP: banked 0.30 (<0.45), window closed, dest not down → combo breaks
+          clearSlots(); R = mkRail(); holdNote[2] = R; holdScored[2] = 0.30; holdRailSeg[2] = 1; laneDown[2] = true; combo = 10; { const r = _railSustainStep(2, R, wt + TW + 0.05); out.missDrop = { ret: r, comboAfter: combo, dropped: !!R.dropped, cleared: holdNote[2] === null }; }
+          // MISS→SLIP: banked 0.55 (0.45..0.75) → NO combo break, beam dims
+          clearSlots(); R = mkRail(); holdNote[2] = R; holdScored[2] = 0.55; holdRailSeg[2] = 1; laneDown[2] = true; combo = 10; { const r = _railSustainStep(2, R, wt + TW + 0.05); out.missSlip = { ret: r, comboAfter: combo, dropped: !!R.dropped }; }
+          // MISS→GRACE: banked 0.80 (>=0.75) → clean, combo intact, remainder paid
+          clearSlots(); R = mkRail(); holdNote[2] = R; holdScored[2] = 0.80; holdRailSeg[2] = 1; laneDown[2] = true; combo = 10; { const s0 = score; const r = _railSustainStep(2, R, wt + TW + 0.05); out.missGrace = { ret: r, comboAfter: combo, cleared: holdNote[2] === null, remainderPaid: (score - s0) > 0 }; }
+          clearSlots();
+          return out;
+        } catch (e) { return 'ERR ' + e.message; }
+      },
+      // SLIDE RAILS render probe (strip at freeze): inject a rail into the LIVE notes + force render frames (approaching
+      // then struck/retracting) so the ribbon + chevron draw path is exercised headlessly; returns any thrown error.
+      railRenderProbe: () => {
+        try {
+          if (state !== 'playing' && state !== 'paused') return 'not-running';   // render() runs in both (loop() draws when paused too)
+          const jt = songTime() - audioOffset;
+          const R = { type: 'rail', time: jt + 1.0, hold: 2.0, lane: 2, rail: [{ t: 0, lane: 2 }, { t: 0.9, lane: 1 }, { t: 1.8, lane: 0 }], judged: false, hit: null, _pulsed: false, strength: 1.5, spin: 0 };
+          notes.push(R); notes.sort((a, b) => a.time - b.time);
+          let frames = 0, err = null;
+          for (let i = 0; i < 6; i++) { try { loop(); frames++; } catch (e) { err = e.message; break; } }
+          holdNote[2] = R; holdScored[2] = 0.3; holdRailSeg[2] = 1; R.judged = true; R.hit = 'perfect';   // now render it struck (retracting ribbon)
+          for (let i = 0; i < 6 && !err; i++) { try { loop(); frames++; } catch (e) { err = e.message; break; } }
+          R.dropped = true;   // and the resolving/dim path
+          for (let i = 0; i < 4 && !err; i++) { try { loop(); frames++; } catch (e) { err = e.message; break; } }
+          holdNote[2] = null; holdScored[2] = 0; holdRailSeg[2] = 0;
+          return { frames: frames, err: err };
+        } catch (e) { return 'ERR ' + e.message; }
+      },
+      railAudit: () => {   // scans notes → checks EVERY waypoint invariant (A1.2); MUST be 0 violations on all difficulties
+        const rails = notes.filter(n => n.type === 'rail');
+        const violations = [];
+        for (let i = 1; i < notes.length; i++) { if (notes[i].time < notes[i - 1].time - 1e-9) { violations.push('unsorted@' + i); break; } }
+        const LANE_SPAN = { easy: 3, medium: 6, hard: 6, rift: 6 };
+        const span = Math.min(LANE_SPAN[difficulty] || LANE_COUNT, LANE_COUNT), laneBase = Math.floor((LANE_COUNT - span) / 2);
+        const minSeg = RAIL_MIN_SEG[difficulty] || 0.45, maxX = RAIL_MAX_XFER[difficulty] || 1;
+        const clear = (DIFFICULTY[difficulty].hitWindow || 0.16) + 0.03, XW = 0.35;
+        for (const n of rails) {
+          const r = n.rail, tag = '@' + n.time.toFixed(2);
+          if (!r || r.length < 2) { violations.push('degenerate' + tag); continue; }
+          if (r[0].t !== 0 || r[0].lane !== n.lane) violations.push('inv1-head' + tag);
+          for (let k = 1; k < r.length; k++) if (!(r[k].t > r[k - 1].t)) violations.push('inv1-asc' + tag + ':' + k);
+          if (!(r[r.length - 1].t < n.hold)) violations.push('inv1-lasttail' + tag);
+          for (let k = 1; k < r.length; k++) if (Math.abs(r[k].lane - r[k - 1].lane) !== 1) violations.push('inv2-step' + tag + ':' + k);
+          for (let k = 1; k < r.length; k++) if (r[k].t - r[k - 1].t < minSeg - 1e-6) violations.push('inv3-seg' + tag + ':' + k);
+          if (n.hold - r[r.length - 1].t < minSeg - 1e-6) violations.push('inv3-tailseg' + tag);
+          if (r.length - 1 > maxX) violations.push('inv4-maxX' + tag);
+          for (const w of r) if (w.lane < laneBase || w.lane > laneBase + span - 1) violations.push('inv5-span' + tag + ':' + w.lane);
+          const spans = [];
+          for (let k = 0; k < r.length; k++) { const s0 = n.time + r[k].t, s1 = n.time + (k + 1 < r.length ? r[k + 1].t : n.hold); spans.push({ lane: r[k].lane, t0: s0 - clear, t1: s1 + clear }); }
+          for (let k = 1; k < r.length; k++) { const wt = n.time + r[k].t; spans.push({ lane: r[k].lane, t0: wt - XW, t1: wt + XW }); }
+          for (const m of notes) { if (m === n || m.type === 'bomb') continue; for (const s of spans) { if (m.lane === s.lane && m.time > s.t0 + 1e-6 && m.time < s.t1 - 1e-6) { violations.push('clr' + tag + ':L' + s.lane + '@' + m.time.toFixed(2)); break; } } }
+        }
+        return { rails: rails.length, violations: violations };
+      },
+      railGeom: () => {   // railX(w.lane,d) vs noteX(w.lane,d) at each waypoint (A3.1 must reduce exactly) — report max |Δ|px
+        const fg = fretGeom(); const nX = fg.nearX, fX = fg.farX;
+        const zFar = (ART.persp > 1) ? (perspOverride || ART.persp) : 0;
+        const Pp = (zFar > 1) ? (d) => { const z = 1 + d * (zFar - 1); return (1 - 1 / z) / (1 - 1 / zFar); } : (d) => d;
+        const warp = (warpOverride >= 0 ? warpOverride : (ART.warp || 0)), cxw = fg.gx + 0.5 * fg.gw;
+        const wX = (warp > 0) ? (x, u) => cxw + (x - cxw) * (1 - warp * Math.max(0, u)) : (x) => x;
+        const noteXp = (i, d) => { const u = Pp(d); return wX(nX[i] + (fX[i] - nX[i]) * u, u); };
+        const railXp = (laneF, d) => { const i0 = Math.max(0, Math.min(LANE_COUNT - 2, Math.floor(laneF))), f = laneF - i0, u = Pp(d); const nx = nX[i0] + (nX[i0 + 1] - nX[i0]) * f, fx = fX[i0] + (fX[i0 + 1] - fX[i0]) * f; return wX(nx + (fx - nx) * u, u); };
+        const rail = notes.find(n => n.type === 'rail'); if (!rail) return { rail: false };
+        let maxD = 0;
+        for (const w of rail.rail) for (const d of [0, 0.25, 0.5, 0.75, 1.0]) { const dd = Math.abs(railXp(w.lane, d) - noteXp(w.lane, d)); if (dd > maxD) maxD = dd; }
+        return { rail: true, waypoints: rail.rail.length, maxDeltaPx: Math.round(maxD * 1e6) / 1e6, canvas: canvas.width + 'x' + canvas.height, head: { time: Math.round(rail.time * 1000) / 1000, lane: rail.lane, hold: rail.hold } };
+      },
       endRun: () => { if (state === 'playing') { endGame(); return true; } return state; },
       // PRACTICE MODE dev hook (strip at content-freeze): confirm the section filter + speed + no-score gating headlessly.
       practiceState: () => ({
@@ -4056,11 +4387,29 @@
       if (state === 'playing') laneDown[lane] = true;   // hold-to-sustain
       onLaneInput(lane, 'touch', e.timeStamp);
       if (state === 'playing') zone.classList.add('lit');
+      // SLIDE RAILS: if this press struck a rail head, remember the pointer so a DRAG across strings can migrate it.
+      if (state === 'playing' && holdNote[lane] && holdNote[lane].type === 'rail') { _railTouchId = e.pointerId; _railTouchLanes = null; }
     };
-    const release = () => { onLaneRelease(lane); zone.classList.remove('lit'); };
+    const release = (e) => {
+      onLaneRelease(lane); zone.classList.remove('lit');
+      // SLIDE RAILS: lifting the rail-drag pointer clears every lane the drag synthesized down.
+      if (e && _railTouchId != null && e.pointerId === _railTouchId) { _railTouchId = null; if (_railTouchLanes) { _railTouchLanes.forEach(l => { laneDown[l] = false; }); _railTouchLanes = null; } }
+    };
+    // SLIDE RAILS: while the SAME pointer that struck the rail head is down, map its x → lane and synthesize a press on
+    // the entered string so the sustain loop can migrate (the window is the only judge; a wrong-lane wander does nothing).
+    const railDrag = (e) => {
+      if (_railTouchId == null || e.pointerId !== _railTouchId || state !== 'playing') return;
+      let best = -1, bestDx = Infinity;
+      try { const g = fretGeom(); const r = canvas.getBoundingClientRect(); const px = (e.clientX - r.left) * (canvas.width / r.width);
+        for (let l = 0; l < LANE_COUNT; l++) { const dx = Math.abs(px - g.nearX[l]); if (dx < bestDx) { bestDx = dx; best = l; } } } catch (err) { return; }
+      if (best < 0) return;
+      if (!_railTouchLanes) _railTouchLanes = new Set();
+      if (!laneDown[best]) { laneDown[best] = true; _railTouchLanes.add(best); }
+    };
     // unified Pointer Events: one path for touch, mouse, AND pen — fires on press,
     // no touch/mouse double-fire, multi-finger chords work (one pointer per zone).
     zone.addEventListener('pointerdown', press, { passive: false });
+    zone.addEventListener('pointermove', railDrag, { passive: true });
     zone.addEventListener('pointerup', release);
     zone.addEventListener('pointercancel', release);
     // build65 (cycle-3): pointerleave REMOVED — a finger drifting off a small lane button mid-sustain is NOT a lift, and
@@ -4357,7 +4706,10 @@
               // stroke can't also pay a later fret; a real follow-up strum is a NEW stroke and fires normally (the
               // note is judged by then, and guitar-source empties are inert — no double anything).
               const _bnw = performance.now();
-              if (_strumBufT && (_bnw - _strumBufT) <= _strumBufMs && !holdNote[lane]) { _strumBufT = 0; onLaneInput(lane, 'guitar', _bnw); }
+              // SLIDE RAILS: on the rail BODY, a fret change ALONE migrates the transfer (native hammer-on/pull-off) —
+              // laneDown is now set, so the sustain loop migrates; bypass the strum buffer so it can't fire a phantom hit.
+              const _railXfer = (state === 'playing') && _activeRailForDest(lane, songTime() - audioOffset) >= 0;
+              if (!_railXfer && _strumBufT && (_bnw - _strumBufT) <= _strumBufMs && !holdNote[lane]) { _strumBufT = 0; onLaneInput(lane, 'guitar', _bnw); }
             }
             else { if (state === 'playing') laneDown[lane] = true; onLaneInput(lane, 'gamepad', performance.now()); }   // legacy: fret-press = hit (keyboard/standard pad)
           }
@@ -4450,6 +4802,9 @@
       if (d < targetDiff || (d === targetDiff && target && target.type === 'bomb' && n.type !== 'bomb')) { targetDiff = d; target = n; }
     }
     if (!target) {   // empty press — no note in window. build85: whiff cue (does NOT break combo or drain stability — keyboard-feel guardrail)
+      // SLIDE RAILS: a destination press that services an active rail transfer (finger-roll onto the next string) is
+      // NOT a whiff — laneDown was already set by the input path, so the sustain loop migrates on the next frame.
+      if (_activeRailForDest(lane, t) >= 0) return;
       // build102w: an EMPTY STRUM is FREE. In strum mode, alternate-strumming between notes is normal technique —
       // the whiff dash + whiff SFX + catcher recoil on every stroke read as constant complaints (part of the "weird
       // and tiring" report). Guitar-source empties do NOTHING; keyboard/touch/press-mode keep the build85 cue.
@@ -4614,8 +4969,11 @@
     hitFeel(kind, lane, accPerf);   // build104 s8: an accent PERFECT kicks harder
     // a struck hold note becomes an active sustain — it keeps paying out (and the
     // string keeps ringing) for as long as this lane stays pressed (see loop()).
-    if (target.type === 'hold' && target.hold > 0) {
+    // SLIDE RAILS: a rail head is struck EXACTLY like a hold head; its slot then migrates across lanes (holdRailSeg
+    // tracks the NEXT transfer). Score-identical to a hold — no new score path here.
+    if ((target.type === 'hold' || target.type === 'rail') && target.hold > 0) {
       holdNote[lane] = target; holdScored[lane] = 0; holdSparkT[lane] = 0;
+      holdRailSeg[lane] = (target.type === 'rail') ? 1 : 0;   // heading to the first waypoint transfer
     }
     // HOPO CHAIN (openNotes flag): a clean hit while in combo auto-resolves the next `hopo` note
     // already inside its window in ANY lane — no fresh strum ("flow"). No-op when the flag is off.
@@ -4631,7 +4989,7 @@
     const diff = DIFFICULTY[difficulty];
     let resolved = 0;
     for (const n of notes) {
-      if (n.judged || !n.hopo) continue;
+      if (n.judged || !n.hopo || n.type === 'rail') continue;   // SLIDE RAILS: a rail head is a commitment, not a flow tap — never hopo-resolved
       if (n.time < t - diff.hitWindow * 0.5) continue;
       if (n.time > t + diff.hitWindow) break;
       n.judged = true; n.hit = 'great';
@@ -5660,7 +6018,7 @@
       if (jt <= n.time + diff.hitWindow) break;   // this note (and all later) still inside their miss window → done
       if (n.judged) continue;
       if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } continue; }   // dodged the hazard — safe, no penalty
-      if (n.type === 'hold') { missNote(n); continue; }
+      if (n.type === 'hold' || n.type === 'rail') { missNote(n); continue; }   // SLIDE RAILS: an unstruck rail head misses like a hold head
       if (jt <= n.time + diff.hitWindow + MISS_GRACE) continue;
       missNote(n);
     }
@@ -5686,7 +6044,10 @@
       const hn = holdNote[i]; if (!hn) continue;
       const end = hn.time + hn.hold;
       if (jt >= end) { completeHold(i); continue; }       // reached the tail end → full payout + pop
-      if (!laneDown[i]) { endHoldEarly(i); continue; }    // let go early → endHoldEarly (combo break unless past the tail grace)
+      if (hn.type === 'rail') {                            // SLIDE RAILS: rail-aware liveness + transfer migration
+        const _rr = _railSustainStep(i, hn, jt);
+        if (_rr !== 'pay') continue;                       // 'migrated' / 'drop' handled inside → skip payout on lane i this frame
+      } else if (!laneDown[i]) { endHoldEarly(i); continue; }   // let go early → endHoldEarly (combo break unless past the tail grace)
       const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
       if (performance.now() < _mpStunUntil) { holdScored[i] = frac; continue; }   // v258: MP combat stun — advance the sustain marker WITHOUT paying out (no score banked while shocked, and no refund-lump when the stun ends)
       const gain = frac - holdScored[i];
@@ -5968,6 +6329,16 @@
     const cxw = fg.gx + 0.5 * fg.gw;
     const warpX = (warp > 0) ? (x, u) => cxw + (x - cxw) * (1 - warp * Math.max(0, u)) : (x) => x;
     const noteX = (i, d) => { const u = P(d); return warpX(nearX[i] + (farX[i] - nearX[i]) * u, u); };
+    // SLIDE RAILS (spec A3.1): fractional-lane x. Interpolates the MEASURED per-string nearX/farX through the SAME
+    // P(d) persp + warpX neck-recede, so at an INTEGER laneF this reduces ALGEBRAICALLY to noteX(i,d) — a rail's
+    // endpoints sit on the painted strings BY CONSTRUCTION (the catcher-alignment class; verified by __rrDebug.railGeom).
+    const railX = (laneF, d) => {
+      const i0 = Math.max(0, Math.min(LANE_COUNT - 2, Math.floor(laneF))), f = laneF - i0;
+      const u = P(d);
+      const nx = nearX[i0] + (nearX[i0 + 1] - nearX[i0]) * f;
+      const fx = farX[i0] + (farX[i0 + 1] - farX[i0]) * f;
+      return warpX(nx + (fx - nx) * u, u);
+    };
     const noteY = (d) => nearY + (farY - nearY) * P(d);
     // scrolling fret lines — the highway itself rushes toward you (the #1 speed/depth cue, GH-style)
     // build22 (Melody): on the 'pink' theme the SAME moving rows render as PAW PRINTS stepping
@@ -6151,10 +6522,13 @@
 
     // notes — glossy spheres sliding down the strings toward the catchers
     for (const n of notes) {
-      const held = (n.type === 'hold' && holdNote[n.lane] === n);   // struck & actively sustaining
-      // a struck-then-dropped hold keeps showing its (shrinking) beam until the tail passes —
+      // SLIDE RAILS: a rail's active slot MIGRATES across lanes, so "held" is any lane whose holdNote is this note.
+      let _railLane = -1;
+      if (n.type === 'rail') { for (let _l = 0; _l < LANE_COUNT; _l++) if (holdNote[_l] === n) { _railLane = _l; break; } }
+      const held = (n.type === 'hold' && holdNote[n.lane] === n) || (n.type === 'rail' && _railLane >= 0);   // struck & actively sustaining
+      // a struck-then-dropped hold/rail keeps showing its (shrinking) beam until the tail passes —
       // it goes dim and dies in place, so a let-go reads clearly instead of vanishing instantly
-      const resolving = (n.type === 'hold' && n.dropped && t < n.time + n.hold);
+      const resolving = ((n.type === 'hold' || n.type === 'rail') && n.dropped && t < n.time + n.hold);
       if (n.judged && n.hit !== 'miss' && !held && !resolving) continue;
       let d = (n.time - t) / approach;
       // build60 PERF: notes are time-sorted ascending and d is monotonic-decreasing across the array,
@@ -6249,8 +6623,62 @@
       // HOLD sustain — a glowing MOLTEN ENERGY BEAM up the lane: soft feathered crimson
       // edges, a hot white core, and lava pulses flowing down toward the catcher. While
       // held it retracts into the catcher as it pays out; brightens once struck.
-      if (n.type === 'hold' && n.hold > 0) {
-        const struck = held || resolving;
+      if ((n.type === 'hold' || n.type === 'rail') && n.hold > 0) {
+       const struck = held || resolving;
+       if (n.type === 'rail' && n.rail && n.rail.length >= 2) {
+        // ---- RAIL RIBBON (SLIDE RAILS, spec A3.2): the hold-beam layer stack bent along the moving path. Time→laneF
+        // is piecewise-constant per segment, smoothstepped across each transfer's bend window [wt−0.6·TW, wt+TW] — the
+        // visual bend width IS the input slack, so the ribbon teaches the transfer timing with zero UI. Per-sub-segment
+        // lane tint cross-fades across the bend (your finger is now on THIS string). railX keeps every endpoint on the
+        // measured strings. Struck → retracts from the catcher (relStart advances); dropped → the resolving dim.
+        const rail = n.rail, railTW = RAIL_TW[difficulty] || 0.18;
+        const railLaneAt = (rel) => {
+          let laneF = rail[0].lane;
+          for (let k = 0; k < rail.length; k++) { if (rail[k].t <= rel) laneF = rail[k].lane; else break; }
+          for (let k = 1; k < rail.length; k++) { const w0 = rail[k].t - 0.6 * railTW, w1 = rail[k].t + railTW; if (rel >= w0 && rel <= w1) { const s = (rel - w0) / (w1 - w0); laneF = rail[k - 1].lane + (rail[k].lane - rail[k - 1].lane) * (s * s * (3 - 2 * s)); break; } }
+          return laneF;
+        };
+        const relStart = struck ? Math.max(0, t - n.time) : 0, NP = 14;
+        const pts = _railScratch; let np = 0;
+        for (let s = 0; s <= NP; s++) {
+          const rel = relStart + (n.hold - relStart) * (s / NP);
+          let dPt = (n.time + rel - t) / approach; if (struck) dPt = Math.max(0, dPt);
+          const lf = railLaneAt(rel), p = pts[np++];
+          p.x = railX(lf, dPt); p.y = noteY(dPt); p.sc = depthScale(dPt); p.lane = Math.max(0, Math.min(LANE_COUNT - 1, Math.round(lf)));
+        }
+        const aM = resolving ? 0.30 : ((held || (n.hit && n.hit !== 'miss')) ? 1 : 0.78);
+        ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
+        const strokePoly = (wf, af, blur) => {
+          for (let s = 1; s < np; s++) {
+            const a = pts[s - 1], b = pts[s], lc = resolving ? '150,58,58' : LANE_COLORS[a.lane].rgb;
+            ctx.strokeStyle = 'rgba(' + lc + ',' + (af * aM).toFixed(3) + ')'; ctx.lineWidth = lw * wf * (0.7 + 0.3 * a.sc);
+            ctx.shadowColor = 'rgb(' + lc + ')'; ctx.shadowBlur = blur;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+          }
+        };
+        strokePoly(0.348, 0.11, 12);   // soft outer feather (0.24*1.45)
+        strokePoly(0.204, 0.30, 6);    // tighter inner feather (0.24*0.85)
+        if (!resolving) {
+          ctx.shadowBlur = 6; ctx.strokeStyle = 'rgba(255,236,214,' + (held ? 0.85 : 0.45) + ')'; ctx.lineWidth = lw * 0.12;
+          ctx.setLineDash([lw * 0.19, lw * 0.62]); ctx.lineDashOffset = -((performance.now() * 0.22) % 100000);
+          ctx.beginPath(); for (let s = np - 1; s >= 0; s--) { const p = pts[s]; if (s === np - 1) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); } ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        ctx.shadowBlur = 3; ctx.strokeStyle = 'rgba(255,248,244,' + (resolving ? 0.24 : (held ? 0.9 : 0.58)) + ')'; ctx.lineWidth = Math.max(1, lw * 0.041);
+        ctx.beginPath(); for (let s = 0; s < np; s++) { const p = pts[s]; if (s === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); } ctx.stroke();
+        ctx.restore();
+        // BEND CHEVRONS at upcoming transfers — the in-world "slide ▸" cue; renders under fxLite/reduceMotion too.
+        for (let k = 1; k < rail.length; k++) {
+          if (rail[k].t <= relStart + 0.01) continue;
+          let dPt = (n.time + rail[k].t - t) / approach; if (struck) dPt = Math.max(0, dPt);
+          if (dPt > 1.04 || dPt < -0.05) continue;
+          const scc = depthScale(dPt), bx = railX((rail[k - 1].lane + rail[k].lane) / 2, dPt), by = noteY(dPt);
+          const dir = (railX(rail[k].lane, dPt) >= railX(rail[k - 1].lane, dPt)) ? 1 : -1, L = lw * 0.34 * scc;
+          ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,244,224,0.9)'; ctx.lineWidth = Math.max(1.2, lw * 0.09 * scc); ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(bx - dir * L * 0.6, by - L * 0.55); ctx.lineTo(bx + dir * L * 0.5, by); ctx.lineTo(bx - dir * L * 0.6, by + L * 0.55); ctx.stroke();
+          ctx.restore();
+        }
+       } else {
         const dEnd = struck
           ? Math.max(0, (n.time + n.hold - t) / approach)   // remaining length, retracting into the catcher
           : Math.min(1.04, d + n.hold / approach);          // full tail ahead of the head
@@ -6281,6 +6709,7 @@
         // thin hot-white core thread (cool & faint when dropped)
         beam(Math.max(1, wB * 0.17), 'rgba(255,248,244,' + (resolving ? 0.24 : (lit ? 0.9 : 0.58)) + ')', 3);
         ctx.restore();
+       }
       }
       // build7: soft accent aura behind a note as it nears the catcher (additive; Quick Play / fxLite skip).
       // Radius uses the SAME note size as drawNote (lw*0.46*sc), so the halo tracks the sphere exactly.
@@ -6296,7 +6725,7 @@
           ctx.restore();
         }
       }
-      if (!resolving) {
+      if (!resolving && !(n.type === 'rail' && held)) {   // SLIDE RAILS: a struck rail's head has retracted — the ribbon + catcher glow carry it (no gem at the old lane)
         // build109 s2 Step D: travel-axis angle for the approach squash/stretch (visual only — drawNote
         // reads d/angle purely for the transform; hit-judgment geometry stays keyed to nx/ny/note.time
         // elsewhere and is untouched by this). Cheap: one extra noteY sample already using cached fn refs.
@@ -8399,7 +8828,7 @@
       if (d < -0.12 || d > dMax) continue;               // matches the render cull
       var p = _ghostPool[n++];
       p.lane = nn.lane; p.d = d;
-      p.type = nn.type === 'hold' ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
+      p.type = (nn.type === 'hold' || nn.type === 'rail') ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
     }
     return { n: n, items: _ghostPool };
   };
@@ -8524,7 +8953,8 @@
       _p2push(lane, kind === 'perfect' ? 'p' : 'g');
       P.lastJudgeT = performance.now();
       // a struck hold → P2 sustain (scored continuously in p2Frame while the fret stays held)
-      if (target.type === 'hold' && target.hold > 0) { P.holdNote[lane] = { note: target, idx: targetIdx }; P.holdScored[lane] = 0; }
+      // SLIDE RAILS mirror: a rail head is a struck sustain for P2 too; `seg` (P2-owned) tracks the next transfer.
+      if ((target.type === 'hold' || target.type === 'rail') && target.hold > 0) { P.holdNote[lane] = { note: target, idx: targetIdx, seg: (target.type === 'rail' ? 1 : 0) }; P.holdScored[lane] = 0; }
     }
     // P2 strum (GH guitars): fire every held fret at the strum instant (chord-safe), debounced like tryStrum
     function p2Strum(now) {
@@ -8585,6 +9015,31 @@
         const h = P.holdNote[i]; if (!h) continue;
         const hn = h.note, end = hn.time + hn.hold;
         if (jt >= end) { const rem = 1 - P.holdScored[i]; if (rem > 0) P.score += rem * holdTotalFor(hn) * _p2Mult(); P.holdNote[i] = null; P.holdScored[i] = 0; continue; }
+        // SLIDE RAILS mirror (simplified): same TW table + same GRACE/SLIP bands; transfer = P2's destination input in
+        // the window (migrates P2's OWN slot; zero score). P2 tracks its own `seg` on the wrapper + its own dropped
+        // resolution — never touches P1's holdNote/holdScored/holdRailSeg or the shared n.dropped.
+        if (hn.type === 'rail' && hn.rail) {
+          const rail = hn.rail, seg = h.seg || 0, TW = RAIL_TW[difficulty] || 0.18;
+          let drop = false;
+          if (seg >= 1 && seg < rail.length) {
+            const wt = hn.time + rail[seg].t, newLane = rail[seg].lane, w0 = wt - 0.6 * TW, w1 = wt + TW;
+            if (jt < w0) { if (!P.laneDown[i]) drop = true; }
+            else if (jt <= w1) {
+              if (P.laneDown[newLane]) { P.holdNote[newLane] = { note: hn, idx: h.idx, seg: seg + 1 }; P.holdScored[newLane] = P.holdScored[i]; P.holdNote[i] = null; P.holdScored[i] = 0; continue; }   // transfer made — zero score
+              if (!P.laneDown[i]) drop = true;   // neither old nor new down inside the window
+            } else { drop = true; }              // window closed, transfer missed
+          } else if (!P.laneDown[i]) { drop = true; }   // past all transfers → hold-like on lane i
+          if (drop) {
+            const f = P.holdScored[i];
+            if (f >= 0.75) { const rem = 1 - f; if (rem > 0) P.score += rem * holdTotalFor(hn) * _p2Mult(); }
+            else if (f < 0.45) { P.combo = 0; }
+            P.holdNote[i] = null; P.holdScored[i] = 0; continue;
+          }
+          const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
+          const gain = frac - P.holdScored[i];
+          if (gain > 0) { P.score += gain * holdTotalFor(hn) * _p2Mult(); P.holdScored[i] = frac; }
+          continue;
+        }
         if (!P.laneDown[i]) {   // build104 s6c/d mirror: duration-scaled payout + graded release — ≥0.75 completes, 0.45–0.75 keeps combo + banked, <0.45 breaks P2's combo (matches P1's bands)
           const f = P.holdScored[i];
           if (f >= 0.75) { const rem = 1 - f; if (rem > 0) P.score += rem * holdTotalFor(hn) * _p2Mult(); }
@@ -8601,7 +9056,7 @@
       for (let i = 0; i < notes.length; i++) {
         const n = notes[i];
         if (P.judged.has(i)) continue;
-        const edge = n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold') ? 0 : 0.06);
+        const edge = n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold' || n.type === 'rail') ? 0 : 0.06);
         if (jt <= edge) continue;
         P.judged.add(i);
         if (n.type === 'bomb') continue;          // dodged hazard — no penalty (matches P1)
@@ -8634,7 +9089,7 @@
         if (d < -0.12 || d > dMax) continue;
         const p = _p2GhostPool[n++];
         p.lane = nn.lane; p.d = d;
-        p.type = nn.type === 'hold' ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
+        p.type = (nn.type === 'hold' || nn.type === 'rail') ? 1 : (nn.chord ? 2 : (nn.type === 'bomb' ? 3 : 0));
         p.hit = P.judged.has(k) && P.hitKind[k] != null;   // P2 hit this one → fade it on P2's deck
       }
       return { n: n, items: _p2GhostPool };
@@ -8702,7 +9157,7 @@
       _tick: function () { p2PollPad(); },                    // one input poll (reads navigator.getGamepads)
       _scoreTick: function () {                               // one scoring frame WITHOUT rAF (sustains + miss pass)
         const t = songTime(), jt = t - audioOffset, diff = DIFFICULTY[difficulty];
-        for (let i = 0; i < notes.length; i++) { const n = notes[i]; if (P.judged.has(i)) continue; if (jt <= n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold') ? 0 : 0.06)) continue; P.judged.add(i); if (n.type === 'bomb') continue; P.counts.miss++; P.combo = 0; _p2push(n.lane, 'm'); }
+        for (let i = 0; i < notes.length; i++) { const n = notes[i]; if (P.judged.has(i)) continue; if (jt <= n.time + diff.hitWindow + ((n.type === 'bomb' || n.type === 'hold' || n.type === 'rail') ? 0 : 0.06)) continue; P.judged.add(i); if (n.type === 'bomb') continue; P.counts.miss++; P.combo = 0; _p2push(n.lane, 'm'); }
       }
     };
     _p2 = api;
