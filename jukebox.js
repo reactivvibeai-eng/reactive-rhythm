@@ -53,11 +53,18 @@
   // leaving the green palette placeholder showing). Rewrite the Storage object URL to the image-TRANSFORM endpoint with a
   // width cap so each cover is a fast thumbnail. Non-Supabase / non-storage URLs pass through untouched; an onerror at the
   // call site falls back to the original full URL, then to branded art. (Backend should ship a real thumbnail_url too.)
+  // build146 FIX (Golden Buzzer "broken thumbnails"): passing ONLY `width` to Supabase's render endpoint does NOT scale
+  // proportionally — it returns width×ORIGINAL-height, i.e. the art horizontally SQUISHED (a 1254² cover → 400×1254, a
+  // 3500² submission → 400×3500). object-fit:cover can't undo a squish, so every cover rendered as a narrow, zoomed,
+  // "broken"-looking slice — worst on the large / non-square user-submission art that dominates the GB winners shelf.
+  // Pin BOTH dims + resize=cover so the endpoint returns a proper SQUARE, center-cropped thumbnail (the art boxes are
+  // all square) — and, as a bonus, a cheap fixed-size render (a huge 3500² source no longer transcodes to 400×3500).
   function thumb(url, w) {
     try {
       if (!url || typeof url !== 'string') return url || '';
       if (/supabase\.co\/storage\/v1\/object\/public\//.test(url)) {
-        return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + (url.indexOf('?') >= 0 ? '&' : '?') + 'width=' + (w || 360) + '&quality=72';
+        var s = (w || 360);
+        return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + (url.indexOf('?') >= 0 ? '&' : '?') + 'width=' + s + '&height=' + s + '&resize=cover&quality=72';
       }
     } catch (e) {}
     return url;
