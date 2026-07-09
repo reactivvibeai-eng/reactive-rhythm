@@ -56,11 +56,14 @@
   ];
 
   // server-matched difficulty filter step
-  const DIFF_STEP = { easy: 4, medium: 2, hard: 1 };
+  const DIFF_STEP = { easy: 4, medium: 2, hard: 1, rift: 1 };   // build148 T8: RIFT (Expert) shares Hard's finest beat-filter step; its brutality comes from buildNotes NOT softening (see _rift below)
   const DIFFICULTY = {
     easy:   { approach: 1.30, hitWindow: 0.20, name: 'DRIFT — Easy'      },
     medium: { approach: 0.95, hitWindow: 0.16, name: 'PULSE — Medium'    },
     hard:   { approach: 0.68, hitWindow: 0.12, name: 'FRACTURE — Hard'   },
+    // build148 T8 (Fable RIFT tier): Expert = the pre-build141 brutal Hard, opt-in, unlocked by clearing FRACTURE ≥85%.
+    // Faster approach (0.62) + tighter window (0.11) than Hard; buildNotes restores every pre-softening constant for it.
+    rift:   { approach: 0.62, hitWindow: 0.11, name: 'RIFT — Expert'     },
   };
   // ---- TIMING FEEL (flag-gated, default-OFF → judging byte-identical to v73) ----
   // 'classic' = today's wide, forgiving windows (the feel the user likes).
@@ -181,6 +184,12 @@
   let odReadyAnnounced = false;                // one-shot "OVERDRIVE READY" cue per fill
   let lastMult = 1;                             // last applied score multiplier (HUD)
   const OD_DURATION = 8;                        // how long an activation lasts
+  // build148 T1 (Fable FLOW SHIELD): while Overdrive is LIVE a missed note keeps your combo — it burns this
+  // fraction of the OD meter (≈2s of OD time) instead. Bombs are never shielded; a shielded note still scores 0
+  // and still counts as a miss for accuracy, so a perfect FC (no misses) never triggers it → the notes_total*1500
+  // ceiling is untouched (leaderboard-safe). PLAYTEST-GATED: tune the drain here.
+  const FLOW_SHIELD_COST = 0.25;
+  let _flowShieldCount = 0;                     // shields spent this run (telemetry / __rrDebug; reset in resetScoring)
   let bgPulse = 0;
   // ---- JUICE: FX intensities. The user-facing "FX Intensity" setting picks a preset; "balanced" = the defaults
   // below. The `window.__rrJuice` dev hook (strip at content-freeze) fine-tunes individual values live. ----
@@ -1309,6 +1318,13 @@
   // ===========================================================================
   function buildNotes() {
     const step = DIFF_STEP[difficulty];
+    // build148 T8 (Fable RIFT/Expert tier): RIFT reproduces the pre-build141 BRUTAL Hard chart. Every lever below
+    // that build141 softened is restored for RIFT only via `_rift ? <brutal> : <existing>` (so easy/medium/hard stay
+    // byte-identical). `_hardLike` = the two dense tiers that share Hard's FEATURE set (bombs, note rows, chords,
+    // fast pairs, tight trill/pattern gates). RIFT falls into the plain else of any `easy?…:medium?…:…` chain, which
+    // already gives it Hard's value — so only the explicitly-softened `=== 'hard'` sites need a rift branch.
+    const _rift = (difficulty === 'rift');
+    const _hardLike = (difficulty === 'hard' || _rift);
     // Guitar-Hero-style difficulty ramp: Easy uses fewer, CENTERED strings; Medium/Hard use all 5
     // (span clamps to LANE_COUNT=5 → inSpan is the identity, so Medium/Hard charts are unchanged). Defined up
     // front so the downstream chord/bomb passes (which reference span/laneBase/inSpan) work in BOTH chart modes.
@@ -1316,7 +1332,7 @@
     // the top string dead (the "centered" comment was a lie on a 5-lane neck). span 3 → laneBase 1 → lanes 1,2,3:
     // a genuinely centered, symmetric 3-string on-ramp. Note count is gap-driven (MINGAP), not lane-driven, so this
     // doesn't make Easy "blanker" — it just stops scattering a beginner across an off-centre 4-wide span.
-    const LANE_SPAN = { easy: 3, medium: 6, hard: 6 };
+    const LANE_SPAN = { easy: 3, medium: 6, hard: 6, rift: 6 };
     const span = Math.min(LANE_SPAN[difficulty] || LANE_COUNT, LANE_COUNT);   // never exceed lane count (5-string safe)
     const laneBase = Math.floor((LANE_COUNT - span) / 2);                          // centered active window
     const inSpan = (l) => laneBase + ((((l - laneBase) % span) + span) % span);    // wrap any index into the active set
@@ -1378,7 +1394,7 @@
       // build59: Medium dialed back from 0.235 (≈4.3 notes/sec) — playtesters found Medium too rapid/scattered.
       // CHANGE 3a — raise every floor (was {0.45,0.33,0.155}) so the baseline chart is sparser and more readable
       // across the board; the "barrage" complaint was largely Hard packing ~6.4 nps. Now ≈ 2 / 2.5 / 4.5 nps.
-      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.30 };   // v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. build141 (beta data): Hard 0.22→0.30 — 0 of 22 Hard runs cleared 90%, max-combo only ~6% of chart; 0.22 packed ~4.5 onsets/s = an unsustainable wall. 0.30 caps ~3.3/s so a competent player can actually hold a streak. Easy/Medium unchanged.
+      const MINGAP = { easy: 0.50, medium: 0.38, hard: 0.30, rift: 0.22 };   // build148 T8: RIFT restores the pre-build141 brutal 0.22 (~4.5 onsets/s wall) · v253 (research): Medium 0.34→0.38 — 0.34 allowed ~2.9 onsets/s (real-GH HARD territory); ease toward real-GH Medium ~2.4/s. build141 (beta data): Hard 0.22→0.30 — 0 of 22 Hard runs cleared 90%, max-combo only ~6% of chart; 0.22 packed ~4.5 onsets/s = an unsustainable wall. 0.30 caps ~3.3/s so a competent player can actually hold a streak. Easy/Medium unchanged.
       // v253 (research): a CAMPAIGN BOSS stage is "Hard-MINUS", not raw Hard — the boss complaint ("I shouldn't be crying at
       // the end of the level") is no-release + density, not speed (we're already ~5× below GH-boss NPS). When the LAUNCHED
       // level is a boss (_levelCtx.boss, set by launchLevel→setLevelContext), widen the Hard min-gap and lower the sustained
@@ -1392,7 +1408,7 @@
       // CHANGE 3b — let QUIET passages open further (cap 1.5→2.0×) so breakdowns genuinely breathe instead of
       // staying as dense as the verses; the loud-section tighten floor is unchanged.
       let eMax = 0; for (let i = 0; i < beats.length; i++) { const e = beats[i].energy || 0; if (e > eMax) eMax = e; }
-      const tightenFloor = difficulty === 'hard' ? 0.8 : difficulty === 'medium' ? 0.97 : 1.0;   // v253: Medium 0.95→0.97 — loud choruses tighten less (kills the chorus density spike that read as "too challenging")
+      const tightenFloor = _hardLike ? 0.8 : difficulty === 'medium' ? 0.97 : 1.0;   // v253: Medium 0.95→0.97 — loud choruses tighten less (kills the chorus density spike that read as "too challenging")
       const gapFor = (b) => { const e = eMax > 0 ? (b.energy || 0) / eMax : 0.5; return baseGap * Math.max(tightenFloor, Math.min(2.0, 1.4 - 0.6 * e)); };
       // CHANGE 5 — privilege STRONG beats: when deciding whether a new onset should bump the recent pick out of its
       // gap-window, compare EFFECTIVE strength (downbeats ×1.6, on-grid ×1.3) — so emphasis lands on the beat, not on
@@ -1434,7 +1450,7 @@
       // CHANGE 3c — SLIDING-WINDOW NPS CAP: even after the min-gap, a busy bar can spike past readability. In any 1.0 s
       // window exceeding the per-difficulty cap, drop the weakest onsets (off-grid first, then lowest effective strength)
       // until the window is within budget. This is what actually flattens the "barrage" peaks.
-      const _npsBase = { hard: 4, medium: 3, easy: 2 }[difficulty] || 3;   // build141 (beta data): Hard 5→4 — a 5-nps ceiling let busy choruses spike into an unholdable barrage (the "combo breaks every ~15 notes" wall). Medium/Easy unchanged.
+      const _npsBase = { hard: 4, medium: 3, easy: 2, rift: 5 }[difficulty] || 3;   // build141 (beta data): Hard 5→4 — a 5-nps ceiling let busy choruses spike into an unholdable barrage (the "combo breaks every ~15 notes" wall). Medium/Easy unchanged.
       const npsCap = _bossStage ? Math.max(2, _npsBase - 1) : _npsBase;   // build62: Hard 5 NPS = teeth. v253/v258: ANY campaign boss clamps the ceiling down one notch (Hard 5→4, Medium 3→2) so a boss is never raw density.
       if (filtered.length > npsCap) {
         const WIN = 1.0;
@@ -1514,7 +1530,7 @@
         // were a big part of the "scattered/unreadable" complaint). Preserve the up/down direction, just bound the leap:
         // Easy ±1, Medium ±2, Hard ±3 strings.
         if (last >= 0) {
-          const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 2;   // build141 (beta data): Hard 3→2 — unclamped 3-string leaps were a top combo-break source; a ±2 clamp keeps runs holdable while density/speed keep Hard clearly harder than Medium
+          const maxJump = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : (_rift ? 3 : 2);   // build148 T8: RIFT keeps the pre-build141 ±3 leaps · build141 (beta data): Hard 3→2 — unclamped 3-string leaps were a top combo-break source; a ±2 clamp keeps runs holdable while density/speed keep Hard clearly harder than Medium
           if (lane > last + maxJump) lane = last + maxJump;
           else if (lane < last - maxJump) lane = last - maxJump;
           lane = Math.max(laneBase, Math.min(laneBase + span - 1, lane));
@@ -1633,20 +1649,20 @@
       // would have produced on this same chart (keeps totals within the v1 band; the scoring epoch already moves
       // with this batch). Partner lanes still prefer the REAL co-fired bands; the mechanical +2 fan is only the
       // fallback for a chosen lead without a measured stack.
-      const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : difficulty === 'hard' ? 11 : 7) : (difficulty === 'medium' ? 14 : difficulty === 'hard' ? 16 : 8);   // build141 (beta data): Hard chord budget halved (gap 5→11 / 8→16) — ~195 chord-partner notes on a Hard chart were the #1 combo-break source on a strum controller; Medium/Easy unchanged
+      const chordGapMin = noteVariety ? (difficulty === 'medium' ? 9 : _rift ? 5 : difficulty === 'hard' ? 11 : 7) : (difficulty === 'medium' ? 14 : _rift ? 8 : difficulty === 'hard' ? 16 : 8);   // build148 T8: RIFT restores the pre-build141 dense chord budget (gap 5 / 8)   // build141 (beta data): Hard chord budget halved (gap 5→11 / 8→16) — ~195 chord-partner notes on a Hard chart were the #1 combo-break source on a strum controller; Medium/Easy unchanged
       const chordMod = noteVariety ? (difficulty === 'medium' ? 4 : 3) : (difficulty === 'medium' ? 6 : 4);
       let budget = 0;
       { let lc = -99; for (let i = 0; i < base.length; i++) { const n = base[i]; if ((n.type === 'tap' || n.type === 'accent') && (i - lc) >= chordGapMin && i % chordMod === 0) { budget++; lc = i; } } }
       const durAll = beats.length ? (beats[beats.length - 1].t || 0) : 0;
       let eMaxC = 0, sMaxC = 0;
       for (const n of base) { if ((n._energy || 0) > eMaxC) eMaxC = n._energy || 0; if ((n.strength || 1) > sMaxC) sMaxC = n.strength || 1; }
-      const floorBase = difficulty === 'hard' ? 3.0 : 3.5;   // build141 (beta data): Hard chord time-floor 2.0→3.0s — space chords further apart so a Hard run reads as single-note melody with occasional stabs, not a chord wall
+      const floorBase = _rift ? 2.0 : difficulty === 'hard' ? 3.0 : 3.5;   // build141 (beta data): Hard chord time-floor 2.0→3.0s — space chords further apart so a Hard run reads as single-note melody with occasional stabs, not a chord wall
       const floorFor = (n) => {
         const e = eMaxC > 0 ? (n._energy || 0) / eMaxC : 0.5;
         let f = floorBase * (2.0 - 1.2 * e);
         // build104 s10 (#8 safe half): HARD RAMP-IN — the first 20% of a Fracture chart uses Medium's chord
         // cadence (floor ×1.75 → ×1.0 across the ramp) so the song opens playable and tightens to full teeth.
-        if (difficulty === 'hard' && durAll > 0 && n.time < 0.2 * durAll) f *= 1.75 - 0.75 * (n.time / (0.2 * durAll));
+        if (_hardLike && durAll > 0 && n.time < 0.2 * durAll) f *= 1.75 - 0.75 * (n.time / (0.2 * durAll));
         return f;
       };
       const cands = [];
@@ -1686,13 +1702,13 @@
         if (n._hotBands && n._hotBands.length >= 2) {
           const set = {}; set[n.lane] = 1;
           n._hotBands.forEach(function (bnd) { set[inSpan(laneBase + Math.max(0, Math.min(span - 1, bnd)))] = 1; });
-          const cap = difficulty === 'hard' ? 2 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord · build141 (beta data): Hard 3→2 — 3-finger chords were an unfair combo-break; 2-note stabs stay satisfying without the wall
+          const cap = _rift ? 3 : 2; const partners = Object.keys(set).map(Number).filter(l => l !== n.lane).sort((a, b) => a - b).slice(0, cap - 1); lanes = [n.lane].concat(partners).sort((a, b) => a - b);   // build71: keep the STRUCK lead lane in the chord · build141 (beta data): Hard 3→2 — 3-finger chords were an unfair combo-break; 2-note stabs stay satisfying without the wall
           if (lanes.length < 2) { let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl); }
         } else {
           lanes = [n.lane];
           let pl = inSpan(n.lane + 2); if (pl === n.lane) pl = inSpan(pl + 1); lanes.push(pl);
           // a beefier 3-note chord now and then (more often on Hard) — "hit the bar"
-          if ((difficulty === 'hard' && i % 30 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && difficulty !== 'hard' && i % 9 === 0)) {   // build141 (beta data): Hard 3-note fan i%12→i%30, and Hard opts out of the noteVariety i%9 fan — fewer 3-note stabs so Hard holds a streak
+          if ((difficulty === 'hard' && i % 30 === 0) || (_rift && i % 12 === 0) || (difficulty === 'medium' && i % 28 === 0) || (noteVariety && difficulty !== 'hard' && i % 9 === 0)) {   // build141 (beta data): Hard 3-note fan i%12→i%30, and Hard opts out of the noteVariety i%9 fan — fewer 3-note stabs so Hard holds a streak
             let p2 = inSpan(n.lane + 4); if (lanes.indexOf(p2) < 0) lanes.push(p2);
           }
         }
@@ -1709,7 +1725,7 @@
     // ---- BOMBS: hazards in the gaps — DON'T hit this lane while one is at the bridge ----
     // CHANGE 4 — scattered single bombs are now HARD-ONLY (Infinity on Medium too, was 15). Random mid-gap bombs were
     // non-musical clutter on Medium; the telegraphed bomb-ROWS path (noteVariety) is the intended "dodge this" moment.
-    const bombGap = difficulty === 'hard' ? 48 : Infinity;   // Hard only — Medium/Easy stay clean · build141 (beta data): scattered bombs 11→48 apart — an accidentally-struck bomb is a combo-break; the softened (sparser) Hard chart opens MORE >0.7s gaps, so the spacing had to widen a lot to actually thin bombs below baseline
+    const bombGap = _rift ? 11 : difficulty === 'hard' ? 48 : Infinity;   // Hard only — Medium/Easy stay clean · build141 (beta data): scattered bombs 11→48 apart — an accidentally-struck bomb is a combo-break; the softened (sparser) Hard chart opens MORE >0.7s gaps, so the spacing had to widen a lot to actually thin bombs below baseline
     // grid-snap helper (CHANGE 4): land a hazard ON the pulse so even bombs read musically. Falls back to the raw time.
     const _per = (beats._period || 0), _ph = (beats._phase || 0), _sub = _per / 4;
     const snapGrid = (t) => { if (_per > 0 && _sub > 0) { const g = _ph + Math.round((t - _ph) / _sub) * _sub; if (Math.abs(t - g) < _per * 0.25) return Math.round(g * 1000) / 1000; } return t; };
@@ -1733,9 +1749,9 @@
     // auto-avoid exist), adds NO scored notes, placed ONLY in a clean rest gap, never shares a time
     // with a real note. Default (flag off) → none, chart byte-identical. ----
     if (noteVariety && difficulty !== 'easy') {
-      const rowEveryT = difficulty === 'hard' ? 20 : 22;   // min seconds between rows · build141 (beta data): Hard 14→20 — rarer walls
+      const rowEveryT = _rift ? 14 : difficulty === 'hard' ? 20 : 22;   // min seconds between rows · build141 (beta data): Hard 14→20 — rarer walls
       const leadIn = 0.85, restAfter = 0.85;
-      const rowLanes = Math.min(LANE_COUNT, difficulty === 'hard' ? 3 : 3);   // build141 (beta data): Hard 4→3 — a narrower wall is a cleaner dodge (one open lane), fewer bomb notes to fat-finger
+      const rowLanes = Math.min(LANE_COUNT, _rift ? 4 : 3);   // build141 (beta data): Hard 4→3 — a narrower wall is a cleaner dodge (one open lane), fewer bomb notes to fat-finger
       let lastRowT = -999;
       for (let i = 0; i < notes.length - 1; i++) {
         const a = notes[i], b = notes[i + 1];
@@ -1782,8 +1798,8 @@
       // build62 regression guards stay LOAD-BEARING: Medium requires runs ≥4 notes and ≥6s apart (the loose-gate
       // experiment tanked melody-following 0.87→0.68 once), and centroidLaneR ≥ 0.85 stays the Medium acceptance
       // gate across genre-diverse tracks.
-      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22 }[difficulty] || 0.22;
-      const trillMaxGap = Math.max(difficulty === 'hard' ? 0.26 : 0.30, MINGAP_D * 1.15);
+      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22, rift: 0.22 }[difficulty] || 0.22;
+      const trillMaxGap = Math.max(_hardLike ? 0.26 : 0.30, MINGAP_D * 1.15);
       const minLen = difficulty === 'medium' ? 4 : 3;            // notes needed to call it a trill (Medium guard: real runs only)
       let lastTrillT = -999, i = 0;
       const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord;
@@ -1809,8 +1825,8 @@
       // build104 s9: same chart-relative gate treatment as the trill pass — Medium's 0.36 gate sat below its own
       // 0.38 density floor (patNotes was 0 EVERYWHERE). Gate = max(legacy, MINGAP×1.35); Medium keeps the ≥6s
       // spacing regression guard.
-      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22 }[difficulty] || 0.22;
-      const patMaxGap = Math.max(difficulty === 'hard' ? 0.30 : 0.36, MINGAP_D * 1.35);
+      const MINGAP_D = { easy: 0.50, medium: 0.38, hard: 0.22, rift: 0.22 }[difficulty] || 0.22;
+      const patMaxGap = Math.max(_hardLike ? 0.30 : 0.36, MINGAP_D * 1.35);
       const minLen = 4;
       // build104 s9: Medium PATTERN BUDGET — the chart-relative gate wakes the pass up, but on a run-heavy song
       // it converted 50+ notes and measurably dented melody-following (A/B: centroidLaneR 0.820→0.766 on an
@@ -1855,7 +1871,7 @@
     // strong single becomes a full-neck "strum" (any lane clears). HOPO = trailing members of a fast
     // run tagged so they chain off a clean hit. Both reuse tap scoring; notes stay time-sorted. ----
     if (openNotes && difficulty !== 'easy') {
-      const openMinGap = difficulty === 'hard' ? 0.55 : 0.8;
+      const openMinGap = _hardLike ? 0.55 : 0.8;
       const openCentre = laneBase + Math.floor(span / 2);
       let lastOpenT = -999, lastHopoT = -999;
       for (let i = 0; i < notes.length; i++) {
@@ -1871,7 +1887,7 @@
           continue;
         }
         const single = (x) => x && (x.type === 'tap' || x.type === 'accent') && !x.chord && !x.open;
-        const fastFromPrev = single(prev) && single(n) && (n.time - prev.time) <= (difficulty === 'hard' ? 0.18 : 0.30);
+        const fastFromPrev = single(prev) && single(n) && (n.time - prev.time) <= (_hardLike ? 0.18 : 0.30);
         if (fastFromPrev && (n.time - lastHopoT) >= 0.05) { n.hopo = true; lastHopoT = n.time; }
       }
     }
@@ -2905,7 +2921,7 @@
     laneDown = Array(LANE_COUNT).fill(false); holdNote = Array(LANE_COUNT).fill(null); _mpStunUntil = 0;
     _frets.clear();   // GH require-strum: clear held-fret state at every run boundary so a stale fret can't carry into the next run (B78-1)
     holdScored = Array(LANE_COUNT).fill(0); holdSparkT = Array(LANE_COUNT).fill(0);
-    odActive = false; odTimer = 0; odIgniteT = 0; lastMult = 1; odReadyAnnounced = false;   // build109 s3: a run boundary must not leave the OD wind-up armed to fire into the next run
+    odActive = false; odTimer = 0; odIgniteT = 0; lastMult = 1; odReadyAnnounced = false; _flowShieldCount = 0;   // build109 s3: a run boundary must not leave the OD wind-up armed to fire into the next run · build148: reset Flow-Shield tally
     { const odf = $('od-flame'); if (odf) odf.classList.remove('ready', 'active'); }
     updateHUD();
     // build85 (Phase 3.1): light the BEST chip from the stored per-song best (the thing to chase)
@@ -3376,6 +3392,14 @@
       isPractice: _practiceOn,   // alias — the requested __rrDebug.practiceState() surface + any future reader
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
+    // build148 T8: clearing FRACTURE (Hard) at ≥85% on a real (non-practice, non-failed) run UNLOCKS the RIFT
+    // (Expert) tier — the opt-in wall. One-way localStorage latch; the difficulty picker reads _riftUnlocked().
+    try {
+      if (difficulty === 'hard' && !runFailed && !_practiceOn && accShown >= 85 && !_riftUnlocked()) {
+        localStorage.setItem('rr_rift_unlocked', '1');
+        setTimeout(function () { try { window.RhythmGame.showToast('◆ RIFT UNLOCKED — the Expert wall is open in difficulty ▸', 'good'); } catch (e) {} }, 1200);
+      }
+    } catch (e) {}
     try { _fireSongEnd('end'); } catch (e) {}   // MP: report final AFTER results object is ready
 
     renderResults(results, accShown, grade);   // build71: show the same rounded accuracy the grade was computed from
@@ -3732,12 +3756,29 @@
   function hidePause() { _disarmRestart(); $('pause-overlay').classList.remove('show'); }
 
   // ---------- INPUT ----------
+  // build148 T8: is the RIFT (Expert) tier available? Earned by clearing FRACTURE ≥85% (see endGame), or admin.
+  // The ENGINE always accepts setDifficulty('rift') (levels/launch/tests) — this gate only controls the UI button.
+  function _riftUnlocked() {
+    try {
+      if (localStorage.getItem('rr_rift_unlocked') === '1') return true;
+      if (window.RhythmCatalog && typeof window.RhythmCatalog.isAdmin === 'function' && window.RhythmCatalog.isAdmin()) return true;
+    } catch (e) {}
+    return false;
+  }
   function syncDiffButtons() {
-    document.querySelectorAll('#diff-grid .diff-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.diff === difficulty));
+    const _rl = _riftUnlocked();
+    document.querySelectorAll('#diff-grid .diff-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.diff === difficulty);
+      if (b.dataset.diff === 'rift') { b.classList.toggle('locked', !_rl); b.title = _rl ? 'Expert' : 'Clear FRACTURE at 85%+ to unlock'; }
+    });
   }
   document.querySelectorAll('#diff-grid .diff-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      // gate the Expert tier: a locked RIFT button nudges instead of switching
+      if (btn.dataset.diff === 'rift' && !_riftUnlocked()) {
+        try { window.RhythmGame.showToast('RIFT is Expert — clear FRACTURE (Hard) at 85%+ to unlock it', 'neutral'); } catch (e) {}
+        return;
+      }
       difficulty = btn.dataset.diff;
       syncDiffButtons();
       try { localStorage.setItem('rr_diff', difficulty); } catch (e) {}
@@ -3751,6 +3792,7 @@
       difficulty = 'easy'; syncDiffButtons(); _firstRunEasy = true;
     }
   } catch (e) {}
+  try { syncDiffButtons(); } catch (e) {}   // build148 T8: always reconcile the RIFT lock state on load (covers the no-saved-diff-but-has-history case)
   if (_firstRunEasy) setTimeout(() => { try { window.RhythmGame.showToast('Starting you on EASY — bump it up anytime in difficulty ▸', 'neutral'); } catch (e) {} }, 2600);   // build89: 'neutral' is a supported severity ('info' was coerced to neutral anyway)
   $('resume-btn').addEventListener('click', resumeGame);
   // RESTART is gated behind a two-tap "tap again to restart" confirm so a stray click can't nuke a
@@ -3837,10 +3879,20 @@
     if (lane == null || lane < 0 || lane >= LANE_COUNT) return;
     laneDown[lane] = false;
   }
+  // build148 T5 (Fable multiplier-ramp retune): combo needed per multiplier TIER. Loop-reachability (Law 1) — a
+  // dense chart still has to reach its first reward. Hard/RIFT chains broke every ~15 notes at step 12, stranding
+  // players at 1× (never seeing 2×@12 / HOT@25); step 8 puts 2× at combo 8, 3× at 16. comboCap / MAX_MULT / the
+  // notes_total*1500 ceiling are ALL untouched — a perfect FC still reaches 4× on every tier (leaderboard-safe);
+  // only how FAST you ramp changes. Easy/Medium keep the classic feel; the 'tight' timing profile stays as-tuned.
+  function _comboStepFor() {
+    const base = timingProf().comboStep;
+    if (timingFeel !== 'classic') return base;            // 'tight' profile (step 10) already tuned — leave it
+    return (difficulty === 'hard' || difficulty === 'rift') ? 8 : base;
+  }
   // current score multiplier (combo tier + overdrive), shared by taps and sustains
   function curMult() {
     const _tp = timingProf();
-    const ct = Math.min(_tp.comboCap, 1 + Math.floor(combo / _tp.comboStep));
+    const ct = Math.min(_tp.comboCap, 1 + Math.floor(combo / _comboStepFor()));
     const cap = _tp.comboCap + 1;                       // overdrive adds one tier above the base cap
     return Math.min(MAX_MULT, Math.min(odActive ? cap : _tp.comboCap, odActive ? ct + 1 : ct));   // v258: hard-clamp to MAX_MULT (=4) — the 'tight' profile's comboCap:5 + overdrive could reach 6× and bust the notes_total*1500 ceiling
   }
@@ -3925,6 +3977,12 @@
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive, igniteT: +odIgniteT.toFixed(3) }),   // build109 s3: igniteT exposed for the wind-up verification pass
+      // build148 T1/T5/T8 dev hooks (strip at content-freeze): Flow-Shield tally, effective comboStep, RIFT tier state.
+      flowShields: () => _flowShieldCount,   // T1: shields spent this run (verifies OD-active misses kept combo)
+      comboStep: () => _comboStepFor(),       // T5: effective combo-per-tier for the current difficulty (Hard/RIFT=8)
+      rift: () => ({ difficulty, unlocked: _riftUnlocked(), step: DIFF_STEP.rift, approach: DIFFICULTY.rift.approach, hitWindow: DIFFICULTY.rift.hitWindow }),
+      setDiff: (d) => { if (DIFF_STEP[d]) { difficulty = d; try { syncDiffButtons(); } catch (e) {} } return difficulty; },   // T8: force any tier (incl. rift) for a headless chart-build probe
+      unlockRift: () => { try { localStorage.setItem('rr_rift_unlocked', '1'); } catch (e) {} return _riftUnlocked(); },
       audio: () => ({ musicVol: +musicVol.toFixed(2), curGain: +curGain.toFixed(3), nodeGain: (player && player.gain) ? +player.gain.gain.value.toFixed(3) : null, muted, sfx: +SFX_LEVEL.toFixed(3), offsetMs: Math.round(audioOffset * 1000) }),
       // build104 s2 dev probes (strip at content-freeze): seed the timing-sample buffer with a fixed bias so the
       // results auto-calibration chip is verifiable headless, + end the live run on demand (a real 4-min playthrough
@@ -4476,7 +4534,7 @@
     // milestone block so the named-mode flash headlines at 25/75/150/300/500.
     { const _nt = comboTierIdx(combo); if (_nt > comboTierCur) { comboTierCur = _nt; onComboTierUp(_nt, lane); } }
     const _tpM = timingProf();
-    const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _tpM.comboStep));
+    const comboTier = Math.min(_tpM.comboCap, 1 + Math.floor(combo / _comboStepFor()));
     const _capM = _tpM.comboCap + 1;                                  // overdrive = +1 tier
     const mult = Math.min(MAX_MULT, Math.min(odActive ? _capM : _tpM.comboCap, odActive ? comboTier + 1 : comboTier));   // v258: hard-clamp to MAX_MULT (=4) — keep score within the per-note ceiling on every timing profile
     // build104 s8: ACCENTS ARE MONEY NOTES — a PERFECT on a chart-authored accent pays 1.5× base, charges the OD
@@ -5135,6 +5193,25 @@
   }
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
+    // build148 T1 FLOW SHIELD: while Overdrive is LIVE, a missed note does NOT break your combo — it burns ~25%
+    // of the OD meter (≈2s of OD time) instead. Bombs are never shielded (they resolve on the bomb path, which keeps
+    // its own combo reset). The note still scores 0 and still counts as a miss for accuracy (accW 0), so momentum
+    // survives but the run isn't free — and a perfect FC never triggers it, so the score ceiling is untouched.
+    if (odActive && odTimer > 0) {
+      counts.miss++;                                       // accuracy still takes the hit (no combo reset below runs — we return)
+      _flowShieldCount++;
+      odTimer = Math.max(0, odTimer - OD_DURATION * FLOW_SHIELD_COST);
+      overdrive = odTimer / OD_DURATION;                   // keep the OD meter render in sync this frame
+      if (odTimer <= 0) { odActive = false; overdrive = 0; }   // the shield drained the last of Overdrive
+      _rfPush(note.lane, 'm');                             // opponent still sees the missed note in the versus stream
+      registerMissFx(note.lane);                           // the missed string still flashes...
+      playMissSfx(false);
+      spawnMissDud(note.lane);
+      _armJudgePriority(420);
+      flashJudgment('◆ SAVED', '#e0a93f');                 // ...but the combo LIVES — a crimson-gold dopamine beat, not a mercy
+      updateHUD();
+      return;                                              // combo / comboTierCur deliberately NOT reset
+    }
     // build60 FEEL: how big was the streak that just died? (peak of the streak, tracked pre-zero.) A high break
     // hurts more, so the feedback escalates. `combo` is the count still live at entry; _peakCombo is its high.
     const _brokePeak = Math.max(combo, _peakCombo);
@@ -5441,11 +5518,12 @@
     const _ma = $('m-acc'); if (_ma) _ma.textContent = acc.toFixed(0) + '%';
     // live multiplier gauge — reflects the actual score multiplier (combo + overdrive)
     const _tpH = timingProf();
-    const comboTier = Math.min(_tpH.comboCap, 1 + Math.floor(combo / _tpH.comboStep));
+    const comboTier = Math.min(_tpH.comboCap, 1 + Math.floor(combo / _comboStepFor()));
     const tier = Math.min(MAX_MULT, Math.min(odActive ? _tpH.comboCap + 1 : _tpH.comboCap, odActive ? comboTier + 1 : comboTier));   // v258: clamp the HUD multiplier to MAX_MULT so the displayed tier matches the clamped score
     _rfMult = tier;   // versus stream: cache the displayed multiplier tier for getRenderFrame()
-    const _atCap = combo >= _tpH.comboStep * _tpH.comboCap;
-    const within = odActive ? overdrive : (_atCap ? 1 : (combo % _tpH.comboStep) / _tpH.comboStep);
+    const _cStep = _comboStepFor();
+    const _atCap = combo >= _cStep * _tpH.comboCap;
+    const within = odActive ? overdrive : (_atCap ? 1 : (combo % _cStep) / _cStep);
     const mb = $('mult-badge'); if (mb) { mb.textContent = tier + 'x'; if (mb.parentElement) mb.parentElement.classList.toggle('boosted', tier >= 3); }
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
     // overdrive gauge
@@ -8397,7 +8475,7 @@
     function _p2push(lane, j) { P.ev.push({ l: lane, j: j }); if (P.ev.length > 12) P.ev.shift(); }
     function _p2Mult() {
       const tp = timingProf();
-      const ct = Math.min(tp.comboCap, 1 + Math.floor(P.combo / tp.comboStep));
+      const ct = Math.min(tp.comboCap, 1 + Math.floor(P.combo / _comboStepFor()));
       const cap = tp.comboCap + 1;
       return Math.min(MAX_MULT, Math.min(P.odActive ? cap : tp.comboCap, P.odActive ? ct + 1 : ct));   // identical to curMult(), P2 namespace
     }
@@ -8527,7 +8605,15 @@
         if (jt <= edge) continue;
         P.judged.add(i);
         if (n.type === 'bomb') continue;          // dodged hazard — no penalty (matches P1)
-        P.counts.miss++; P.combo = 0;
+        P.counts.miss++;
+        // build148 T1 mirror: P2 Flow Shield — an Overdrive-active miss keeps P2's combo and burns ~25% of P2's
+        // remaining OD time (6s window) instead of breaking the streak. Accuracy still takes the hit above.
+        if (P.odActive && t < (P._odUntil || 0)) {
+          P._odUntil = Math.max(t, (P._odUntil || 0) - 6 * FLOW_SHIELD_COST);
+          if (P._odUntil <= t) { P.odActive = false; P.overdrive = 0; }
+        } else {
+          P.combo = 0;
+        }
         _p2push(n.lane, 'm');
       }
     }
