@@ -383,6 +383,12 @@
   // never read by scoring/accFrac/grade/leaderboard-submit; a pure informational signal surfaced in the results
   // sub-line so spamming every lane can't pass as clean play even though it costs nothing to try.
   let wastedInputs = 0;
+  // RESULTS-ONLY feedback trackers (G-1 trouble-section detector · G-3 vs-your-best pace). Both are alloc-light,
+  // per-run, and NEVER read by scoring/accFrac/grade/leaderboard-submit — they only surface on the results screen
+  // (real solo runs; the _ratingsTidFor gate excludes practice/preview/MP/demo). Reset each run in resetScoring().
+  let _g1MissTimes = [];    // G-1: song-time (sec) of every miss/dropped-hold this run → cluster into the worst window
+  let _paceSamples = [];    // G-3: cumulative score sampled at 10 evenly-spaced progress points (0..9)
+  let _paceBucket = 0;      // G-3: next pace bucket to fill (advances as progress crosses each 10%)
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
   // build108 (fail-out freeze-frame fix): true for the ~550ms "wipeout beat" between failRun() declaring the run
@@ -3146,6 +3152,7 @@
     _missCursor = 0;   // build60 PERF: fresh run → miss-sweep cursor points at the first (unjudged) note
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
+    _g1MissTimes = []; _paceSamples = []; _paceBucket = 0;   // G-1/G-3 results-only trackers → fresh per run
     _endingLock = false;   // build108: a fresh run always starts unlocked
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
@@ -3782,6 +3789,10 @@
     // D1 RATINGS: un-hide #results-rate ~1.2s after the grade, on a REAL run only (practice/preview/MP/demo keep it
     // hidden). Same eligibility gate as recordLocal's real-run path; pre-fills a prior rating. Held-safe (UI only).
     try { _maybeShowRatings(results, accFrac); } catch (e) {}
+    // RESULTS-ONLY delighters (R-1 near-goal + RETRY · G-1 trouble-section drill · G-3 vs-your-best pace). Same
+    // real-run gate as the ratings/recordLocal path (practice/preview/MP/demo suppressed). Additive DOM only — never
+    // touches score/grade/leaderboard; fully guarded so a failure here can't break the record/submit pipeline below.
+    try { _renderResultsExtras(results, accShown, grade, accFrac); } catch (e) {}
 
     // telemetry: song_complete (finished) vs run_fail (Fail Mode ended early). NON-PII — ids/numbers only.
     try {
@@ -4087,6 +4098,145 @@
     } catch (e) {}
   }
 
+  // ============================================================================================================
+  // RESULTS-ONLY DELIGHTERS — injected DYNAMICALLY into the EXISTING results DOM (no index.html markup added). All
+  // three are additive, headless-safe, and gated to REAL SOLO runs via _ratingsTidFor (practice/preview/MP/demo
+  // return null → nothing shows). They only READ results/counts/notes/score — NO new score site, notes untouched,
+  // and every branch is guarded so a failure here can never break the endGame record/submit pipeline.
+  //   R-1  near-goal + RETRY  — the single closest meaningful gap (from Full Combo / next grade / next star)
+  //   G-1  trouble-section    — the worst ~15s miss cluster → DRILL IT (opens the existing Practice mode @0.75×)
+  //   G-3  vs-your-best pace  — a 10-seg strip comparing this run's pace to your stored best for this track+diff
+  // ============================================================================================================
+  function _starsForGrade(g) { return (g === 'S' || g === 'A') ? 3 : (g === 'B') ? 2 : (g === 'C' || g === 'D') ? 1 : 0; }
+
+  function _renderResultsExtras(results, accShown, grade, accFrac) {
+    // Always clear any prior run's injected lines FIRST — endGame is the sole results path, so a later SUPPRESSED
+    // run (practice/MP/demo) must not leave an earlier real run's delighter on screen.
+    ['rr-neargoal', 'rr-trouble', 'rr-pace'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+    if (!results) return;
+
+    var tid = null; try { tid = _ratingsTidFor(results); } catch (e) { tid = null; }
+    if (!tid) return;   // SUPPRESSED — practice/preview/MP/demo/no-real-track (same gate as recordLocal + ratings)
+
+    var dur = songDuration || 0;
+    var badges = document.getElementById('results-badges');
+    var lb = document.getElementById('results-leaderboard');
+
+    // ---- R-1 : NEAR-MISS + NEXT-GOAL (forward-framed) + RETRY -------------------------------------------------
+    // Supersede the build122 "results-almost" stamp on real runs (it covers the same near-FC/near-grade idea at a
+    // TIGHTER bound and without a retry, so R-1's bounds are a strict superset) — the two never double up. On a
+    // suppressed run R-1 never fires, so that stamp still shows exactly as before.
+    try {
+      if (!results.failed) {
+        var _almost = document.getElementById('results-almost'); if (_almost && _almost.parentNode) _almost.parentNode.removeChild(_almost);
+        var miss = counts.miss | 0;
+        var fcGap = (!results.full_combo && miss >= 1 && miss <= 5) ? miss : null;   // notes from a Full Combo
+        var LAD = [['D', -Infinity], ['C', 60], ['B', 75], ['A', 88], ['S', 95]];    // accuracy grade ladder (endGame's)
+        var ci = -1; for (var _i = 0; _i < LAD.length; _i++) { if (LAD[_i][0] === grade) { ci = _i; break; } }
+        var next = (ci >= 0 && ci < LAD.length - 1) ? LAD[ci + 1] : null;
+        var GRADE_NEAR = 4.0;   // accuracy points — "one more clean section" from the next grade up
+        var gradeGap = (next && typeof accShown === 'number') ? (next[1] - accShown) : null;
+        var gradeOk = (gradeGap != null && gradeGap > 0 && gradeGap <= GRADE_NEAR);
+        // pick the SINGLE nearest gap (each normalized to its own threshold window); ties -> the more visceral FC.
+        var fcClose = (fcGap != null) ? (fcGap / 5) : Infinity;
+        var gradeClose = gradeOk ? (gradeGap / GRADE_NEAR) : Infinity;
+        var text = null;
+        if (fcClose === Infinity && gradeClose === Infinity) { text = null; }   // nothing genuinely near → show NOTHING
+        else if (fcClose <= gradeClose) { text = (fcGap === 1 ? '1 NOTE' : fcGap + ' NOTES') + ' FROM FULL COMBO'; }
+        else {
+          var gTxt = gradeGap < 0.05 ? '<0.1' : gradeGap.toFixed(1);
+          var curStars = _starsForGrade(grade), nextStars = _starsForGrade(next[0]);
+          if (nextStars > curStars) text = 'ONE STAR AWAY — ' + gTxt + '% FROM ' + nextStars + '★';
+          else text = gTxt + '% FROM GRADE ' + next[0];
+        }
+        if (text && badges) {
+          var html = '<div id="rr-neargoal" style="margin:10px auto 0;max-width:360px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;'
+            + 'padding:8px 14px;border-radius:11px;border:1px solid rgba(224,169,63,0.42);border-left:3px solid #ff1f2e;'
+            + 'background:linear-gradient(90deg,rgba(255,31,46,0.14),rgba(224,169,63,0.10));">'
+            + '<span style="font-family:\'Oxanium\',sans-serif;font-weight:800;font-size:13px;letter-spacing:0.06em;color:#ffe08a;text-shadow:0 0 10px rgba(224,169,63,0.35);">' + text + '</span>'
+            + '<button id="rr-neargoal-retry" type="button" style="flex:0 0 auto;padding:5px 13px;border-radius:8px;cursor:pointer;font-family:\'Chakra Petch\',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:#0d0605;background:linear-gradient(180deg,#f4c65a,#e0a93f);border:1px solid rgba(255,224,138,0.8);">Retry</button>'
+            + '</div>';
+          badges.insertAdjacentHTML('afterend', html);
+          var rbtn = document.getElementById('rr-neargoal-retry');
+          if (rbtn) rbtn.addEventListener('click', function () { try { restartGame(); } catch (e) {} });
+          var _rep = document.getElementById('results-replay'); if (_rep) _rep.classList.add('brag');
+        }
+      }
+    } catch (e) {}
+
+    // ---- G-3 : vs YOUR BEST pace strip (rendered before the trouble line so results read: pace → where → actions)
+    try {
+      if (!results.failed && dur > 0 && lb) {
+        var key = 'rr_pace_' + tid + '_' + (results.difficulty || difficulty);
+        var finalScore = Math.max(0, Math.round(results.score || 0));
+        var thisPace = [];
+        for (var bkt = 0; bkt < 10; bkt++) thisPace[bkt] = (typeof _paceSamples[bkt] === 'number') ? _paceSamples[bkt] : finalScore;
+        thisPace[9] = finalScore;   // last bucket always reflects the true final (the loop can end before p hits 1.0)
+        var best = null;
+        try { var raw = localStorage.getItem(key); if (raw) { var arr = JSON.parse(raw); if (arr && arr.length === 10) best = arr; } } catch (e) {}
+        if (best) {
+          var segs = '', firstBehind = -1, lastAhead = -1;
+          for (var s = 0; s < 10; s++) {
+            var ahead = thisPace[s] >= best[s];
+            if (ahead) lastAhead = s; else if (firstBehind < 0) firstBehind = s;
+            segs += '<i style="flex:1;height:14px;border-radius:2px;background:' + (ahead ? '#e0a93f' : '#ff6b4a') + ';box-shadow:0 0 6px ' + (ahead ? 'rgba(224,169,63,0.45)' : 'rgba(255,107,74,0.4)') + ';"></i>';
+          }
+          var line;
+          if (thisPace[9] > best[9]) {
+            line = (firstBehind < 0) ? 'Ahead of your best the whole way — new peak.'
+              : 'Behind at ' + fmtTime((firstBehind / 10) * dur) + ' — then you took it back. New best.';
+          } else {
+            var gap = best[9] - thisPace[9];
+            if (gap === 0) line = 'Dead even with your best at the line.';
+            else if (lastAhead >= 0 && lastAhead < 9) line = 'Ahead until ' + fmtTime(((lastAhead + 1) / 10) * dur) + ' — then your best pulled away.';
+            else if (lastAhead < 0) line = 'Your best led the whole run — ' + gap.toLocaleString() + ' to close.';
+            else line = gap.toLocaleString() + ' shy of your best at the finish.';
+          }
+          var phtml = '<div id="rr-pace" style="margin:14px auto 0;max-width:360px;">'
+            + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">'
+            + '<span style="font-family:\'Chakra Petch\',sans-serif;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#b9b2ac;">vs Your Best</span>'
+            + '<span style="font-family:\'Oxanium\',sans-serif;font-size:10px;letter-spacing:0.05em;color:#8a847d;">start → finish</span></div>'
+            + '<div style="display:flex;gap:3px;">' + segs + '</div>'
+            + '<div style="font-family:\'Oxanium\',sans-serif;font-size:11.5px;color:#dad7d2;margin-top:6px;text-align:center;">' + line + '</div></div>';
+          lb.insertAdjacentHTML('beforebegin', phtml);
+        }
+        // Update the stored best-pace when this run's final beats the stored final (or none stored yet). Entirely
+        // game.js-side (rr_pace_* key) — catalog.recordLocal + the canonical per-song best are untouched.
+        if (!best || finalScore > best[9]) { try { localStorage.setItem(key, JSON.stringify(thisPace)); } catch (e) {} }
+      }
+    } catch (e) {}
+
+    // ---- G-1 : TROUBLE-SECTION detector → DRILL THIS SECTION (opens the existing Practice mode pre-filled @0.75×)
+    try {
+      if (lb && _g1MissTimes.length >= 4) {
+        var msArr = _g1MissTimes.filter(function (x) { return typeof x === 'number' && isFinite(x); }).sort(function (a, b) { return a - b; });
+        var WIN = 15, bestCount = 0, bestStart = 0;
+        for (var kk = 0; kk < msArr.length; kk++) {
+          var e0 = msArr[kk] + WIN, cnt = 0;
+          for (var jj = kk; jj < msArr.length && msArr[jj] <= e0; jj++) cnt++;
+          if (cnt > bestCount) { bestCount = cnt; bestStart = msArr[kk]; }
+        }
+        if (bestCount >= 4) {
+          var wStart = Math.max(0, bestStart), wEnd = (dur > 0) ? Math.min(bestStart + WIN, dur) : (bestStart + WIN);
+          var totalIn = 0;
+          try { for (var n2 = 0; n2 < notes.length; n2++) { var nn = notes[n2]; if (nn.type === 'bomb') continue; if (nn.time >= wStart - 0.001 && nn.time <= wEnd + 0.001) totalIn++; } } catch (e) {}
+          var dropped = (totalIn > 0) ? Math.min(bestCount, totalIn) : bestCount;
+          var denom = Math.max(totalIn, dropped);
+          var thtml = '<div id="rr-trouble" style="margin:12px auto 0;max-width:360px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;'
+            + 'padding:8px 14px;border-radius:11px;border:1px solid rgba(255,31,46,0.34);background:rgba(28,14,12,0.55);">'
+            + '<span style="font-family:\'Oxanium\',sans-serif;font-size:12px;color:#ff9a6a;letter-spacing:0.03em;">You dropped ' + dropped + ' of ' + denom + ' in ' + fmtTime(wStart) + '–' + fmtTime(wEnd) + '</span>'
+            + '<button id="rr-trouble-drill" type="button" style="flex:0 0 auto;padding:5px 13px;border-radius:8px;cursor:pointer;font-family:\'Chakra Petch\',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.10em;text-transform:uppercase;color:#ffe0d6;background:rgba(255,31,46,0.16);border:1px solid rgba(255,31,46,0.6);">Drill it</button></div>';
+          lb.insertAdjacentHTML('beforebegin', thtml);
+          var dbtn = document.getElementById('rr-trouble-drill');
+          if (dbtn) {
+            var _ds = Math.max(0, wStart - 0.5), _de = (dur > 0) ? Math.min(dur, wEnd + 0.5) : (wEnd + 0.5);
+            dbtn.addEventListener('click', function () { try { play(provider, { mode: 'practice', section: { start: _ds, end: _de }, speed: 0.75 }); } catch (e) {} });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
   // ---------- PAUSE ----------
   let _deferredStart = null;   // build65 (cycle-4): a stashed run-start thunk, set when a pause lands during the lead-in/countdown pre-roll (before the song began); consumed by resumeGame() so we never force-start audio behind a stuck PAUSED overlay.
   function pauseGame() {
@@ -4329,6 +4479,7 @@
       _tlog('hold_slipped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
     } else {                            // genuine drop → you let go too early
       hn.dropped = true;
+      _g1Miss(hn.time);                 // G-1: a dropped hold is a trouble spot too
       _tlog('hold_dropped', { lane: lane, type: hn.type, banked: +_bankAt.toFixed(3) });            // T9
       // build122 review: this is the THIRD combo-break site — the miss/bomb sites snapshot the CLUTCH state
       // but this one omitted it, so a dropped-hold peak could leak stale-high across the broken streak and
@@ -5776,6 +5927,11 @@
     }
     if (navigator.vibrate) { try { navigator.vibrate([22, 40, 22]); } catch (e) {} }
   }
+  // G-1: record a miss/drop at its SONG-TIME (sec) so results can cluster the worst window. Alloc-light (one number
+  // pushed), fully guarded, and never read by scoring — a pure results-screen signal. Capped so a pathological
+  // all-miss run can't grow this unbounded.
+  function _g1Miss(tSec) { try { if (typeof tSec === 'number' && isFinite(tSec) && _g1MissTimes.length < 2000) _g1MissTimes.push(tSec); } catch (e) {} }
+
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
     // build148 T1 FLOW SHIELD: while Overdrive is LIVE, a missed note does NOT break your combo — it burns ~25%
@@ -5784,6 +5940,7 @@
     // survives but the run isn't free — and a perfect FC never triggers it, so the score ceiling is untouched.
     if (odActive && odTimer > 0) {
       counts.miss++;                                       // accuracy still takes the hit (no combo reset below runs — we return)
+      _g1Miss(note.time);                                  // G-1: a shielded miss still marks a trouble spot
       _flowShieldCount++;
       odTimer = Math.max(0, odTimer - OD_DURATION * FLOW_SHIELD_COST);
       overdrive = odTimer / OD_DURATION;                   // keep the OD meter render in sync this frame
@@ -5807,6 +5964,7 @@
     if (_peakCombo >= CLUTCH_MIN_BREAK_PEAK) { _lastBreakPeak = _peakCombo; _clutchArmed = true; } else { _clutchArmed = false; }
     _peakCombo = 0;
     counts.miss++; combo = 0; comboTierCur = 0;
+    _g1Miss(note.time);        // G-1: mark this miss's song-time for the trouble-section detector
     _rfPush(note.lane, 'm');   // versus stream
     // music stays at FULL level (no ducking) — the miss is signalled by the squelch SFX +
     // a dull "dud" spatter on the missed string (Guitar-Hero "clam" feel).
@@ -6452,6 +6610,9 @@
     if (odActive) energy = Math.min(1, energy + 0.3);
 
     const p = Math.max(0, Math.min(1, t / songDuration));
+    // G-3: sample cumulative score at 10 evenly-spaced progress points (results-only "vs your best" pace strip).
+    // Alloc-light — a bounded while that advances at most once per ~10% of the song; reads score, never writes it.
+    while (_paceBucket < 10 && p >= (_paceBucket + 1) / 10) { _paceSamples[_paceBucket] = Math.round(score); _paceBucket++; }
     const pct = Math.round(p * 100);
     if (pct !== _lastPct) { _lastPct = pct; const hp = $('hud-progress'); if (hp) hp.style.width = pct + '%'; const mp = $('m-progress'); if (mp) mp.style.width = pct + '%'; }   // build71: gate the per-frame layout writes on whole-percent change (also null-safe now)
     const sec = Math.floor(t);

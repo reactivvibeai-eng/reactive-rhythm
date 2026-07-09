@@ -24,6 +24,17 @@
   // sync by hand (three call sites total: leaderboard names ×2 + chat text ×1).
   // If you touch this list, touch the other two too.
   var BADWORDS = ['nigger', 'nigga', 'faggot', 'retard', 'cunt', 'rape', 'kike', 'spic', 'chink', 'fuck', 'shit', 'bitch', 'whore', 'slut', 'dick', 'cock', 'pussy', 'asshole', 'bastard', 'nazi', 'wank', 'twat', 'jizz', 'coon', 'tranny'];
+  // build121b — TWO-TIER split of BADWORDS (union == BADWORDS; no word added/removed). The single-tier
+  // whole-word/equality fix opened a slur-evasion hole: 'nigger123' is one token whose leet-fold ≠ 'nigger'
+  // and \b can't fire before a digit, so digit/letter-appended slurs passed unmasked. Fix:
+  //  • HARD — strong slurs with essentially NO innocent-substring collisions → matched by leet-fold CONTAINS
+  //    on each token, so 'xnigger'/'nigger123'/'n1gg3r'/'faggot1' all censor.
+  //  • SOFT — collision-prone milder words (the ones behind grape/Scunthorpe/Dickinson/Cockburn/raccoon/
+  //    suspicious/shiitake) → WHOLE-WORD only (per-token leet-EQUALITY) PLUS a digit-adjacency catch
+  //    (boundary digits stripped, then equality — 'rape1' censors, 'grape'/'gr4pe' pass). 'spic'/'coon'/
+  //    'shit'/'retard' are SOFT precisely because they sit inside suspicious/raccoon/shiitake/retardant.
+  var HARD_SLURS = ['nigger', 'nigga', 'faggot', 'kike', 'chink', 'tranny', 'fuck', 'bitch', 'whore', 'slut', 'pussy', 'asshole', 'bastard', 'nazi', 'wank', 'twat', 'jizz'];
+  var SOFT_SLURS = ['retard', 'cunt', 'rape', 'spic', 'shit', 'dick', 'cock', 'coon'];
 
   // Leet-speak normalization (mirrors scrubName/cleanName) — used only to DETECT
   // a hit; the mask is applied against the ORIGINAL string so punctuation/case
@@ -115,8 +126,26 @@
   function filterDisplayName(s) {
     var raw = String(s == null ? '' : s).trim();
     if (!raw) return 'anon';
-    var norm = normalize(raw);
-    for (var i = 0; i < BADWORDS.length; i++) { if (norm.indexOf(BADWORDS[i]) >= 0) return 'player'; }
+    // build121b — TWO-TIER whole-name filter (see HARD_SLURS/SOFT_SLURS note above). Fixes BOTH the old
+    // substring false positives ('grape'⊃'rape', 'Dickinson'⊃'dick') AND the digit-append evasion hole
+    // ('nigger123', 'faggot1') that the single-tier whole-word/equality version let slip through.
+    // (0) separator-spread catch: leet-fold the WHOLE name and match by EQUALITY (not contains, so no
+    //     cross-word false positive) → 'n-i-g-g-e-r'/'n1gg3r'/'_slut_'→their fold, 'grape'→'grape' (≠ any word).
+    var folded = normalize(raw);
+    if (BADWORDS.indexOf(folded) >= 0) return 'player';
+    var tokens = raw.split(/[^A-Za-z0-9]+/);
+    for (var t = 0; t < tokens.length; t++) {
+      var tok = tokens[t]; if (!tok) continue;
+      var ftok = normalize(tok);
+      // (1) HARD slurs: leet-fold CONTAINS on the token → catches 'xnigger'/'nigger123'/'n1gg3r'/'faggot1'.
+      //     These have no innocent-substring collisions, so contains is safe.
+      for (var h = 0; h < HARD_SLURS.length; h++) { if (ftok.indexOf(HARD_SLURS[h]) >= 0) return 'player'; }
+      // (2) SOFT (collision-prone) words: WHOLE-WORD only. Match the token's leet-fold by EQUALITY, plus a
+      //     digit-adjacency form (strip boundary digits FIRST — before leet folding — then fold + equality):
+      //     'rape'/'rape1'/'1cunt'/'dick99' censor; 'grape'/'gr4pe'/'Dickinson'/'Scunthorpe'/'Cockburn' pass.
+      var fcore = normalize(tok.replace(/^[0-9]+/, '').replace(/[0-9]+$/, ''));
+      for (var i = 0; i < SOFT_SLURS.length; i++) { if (ftok === SOFT_SLURS[i] || fcore === SOFT_SLURS[i]) return 'player'; }
+    }
     return raw;
   }
 

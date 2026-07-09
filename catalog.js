@@ -2150,12 +2150,32 @@
   // copy of the list/logic if chat.js is ever absent (older cached HTML, load-order regression, etc.) — so
   // this extraction is zero-behavior-change even in a partial-load edge case.
   var LB_BADWORDS = ['nigger','nigga','faggot','retard','cunt','rape','kike','spic','chink','fuck','shit','bitch','whore','slut','dick','cock','pussy','asshole','bastard','nazi','wank','twat','jizz','coon','tranny'];
+  // build121b — TWO-TIER split (union == LB_BADWORDS; no word added/removed). Mirrors chat.js HARD_SLURS/SOFT_SLURS.
+  // HARD = strong slurs with no innocent-substring collisions → leet-fold CONTAINS (catches 'nigger123'/'xnigger').
+  // SOFT = collision-prone milder words (grape/Scunthorpe/Dickinson/Cockburn/raccoon/suspicious/shiitake/retardant)
+  // → WHOLE-WORD only (per-token leet-EQUALITY) + a digit-adjacency catch ('rape1' censors; 'grape'/'gr4pe' pass).
+  var LB_HARD = ['nigger','nigga','faggot','kike','chink','tranny','fuck','bitch','whore','slut','pussy','asshole','bastard','nazi','wank','twat','jizz'];
+  var LB_SOFT = ['retard','cunt','rape','spic','shit','dick','cock','coon'];
   function scrubName(s) {
     try { if (window.RhythmChat && window.RhythmChat.filterDisplayName) return window.RhythmChat.filterDisplayName(s); } catch (e) {}
     var raw = String(s == null ? '' : s).trim();
     if (!raw) return 'anon';
-    var norm = raw.toLowerCase().replace(/[\s_\-.]/g, '').replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't').replace(/@/g, 'a').replace(/\$/g, 's').replace(/!/g, 'i');
-    for (var i = 0; i < LB_BADWORDS.length; i++) { if (norm.indexOf(LB_BADWORDS[i]) >= 0) return 'player'; }
+    // build121b — TWO-TIER fallback (when chat.js hasn't loaded), byte-for-byte semantics of RhythmChat.filterDisplayName.
+    // Fixes the substring false positives ('grape'⊃'rape', 'Dickinson'⊃'dick') AND the digit-append evasion hole
+    // ('nigger123', 'faggot1') the single-tier whole-word version let slip. Word list unchanged — only match semantics.
+    var _leet = function (x) { return String(x).toLowerCase().replace(/[\s_\-.]/g, '').replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/4/g, 'a').replace(/5/g, 's').replace(/7/g, 't').replace(/@/g, 'a').replace(/\$/g, 's').replace(/!/g, 'i'); };
+    // (0) separator-spread catch: whole-name leet-fold matched by EQUALITY ('n-i-g-g-e-r'→'nigger'; 'grape'→'grape' ≠ any).
+    if (LB_BADWORDS.indexOf(_leet(raw)) >= 0) return 'player';
+    var toks = raw.split(/[^A-Za-z0-9]+/);
+    for (var i = 0; i < toks.length; i++) {
+      var tok = toks[i]; if (!tok) continue;
+      var ftok = _leet(tok);
+      // (1) HARD slurs → leet-fold CONTAINS (safe: no innocent collisions) — 'xnigger'/'nigger123'/'faggot1'.
+      for (var h = 0; h < LB_HARD.length; h++) { if (ftok.indexOf(LB_HARD[h]) >= 0) return 'player'; }
+      // (2) SOFT (collision-prone) → WHOLE-WORD equality + digit-adjacency (boundary digits stripped BEFORE folding).
+      var fcore = _leet(tok.replace(/^[0-9]+/, '').replace(/[0-9]+$/, ''));
+      for (var k = 0; k < LB_SOFT.length; k++) { if (ftok === LB_SOFT[k] || fcore === LB_SOFT[k]) return 'player'; }
+    }
     return raw;
   }
   // ---------- Leaderboard render (called by engine after a live server submit) ----------
@@ -2487,6 +2507,142 @@
     } catch (e) { return false; }
   }
 
+  // ===========================================================================
+  // RETENTION / DISCOVERY DATA LAYER (derived, read-only — the UI that renders these
+  // rails/cards is a LATER wave; these getters just expose the model). A brand-new player
+  // with NO history must never throw: every getter graceful-empties ([] / {} / null). The
+  // ONLY write in this whole block is the single rr_lastVisit stamp (_stampLastVisit, once at boot).
+  // ===========================================================================
+
+  // ---- rr_lastVisit: read the PREVIOUS visit, THEN stamp now (the one permitted write) ----
+  var _prevLastVisit = null;       // ms of the previous visit (null = first-ever visit / unreadable)
+  var _lastVisitStamped = false;
+  function _stampLastVisit() {
+    if (_lastVisitStamped) return;   // once per page load
+    _lastVisitStamped = true;
+    try {
+      var raw = localStorage.getItem('rr_lastVisit');
+      var prev = raw != null ? parseInt(raw, 10) : NaN;
+      _prevLastVisit = (isFinite(prev) && prev > 0) ? prev : null;
+    } catch (e) { _prevLastVisit = null; }
+    try { localStorage.setItem('rr_lastVisit', String(Date.now())); } catch (e) {}   // <-- the single stamp
+  }
+  // hours since the previous visit (null on a first-ever visit — graceful).
+  function lastVisitAgeHours() {
+    if (!_prevLastVisit) return null;
+    return Math.max(0, (Date.now() - _prevLastVisit) / 3600000);
+  }
+  // MUSIC tracks added since the previous visit (reuses the New-rail created_at logic), newest-first.
+  // [] on a first-ever visit (nothing is "new since last time") — graceful.
+  function freshSince() {
+    if (!_prevLastVisit) return [];
+    var cutoff = _prevLastVisit;
+    var dateOf = function (t) { return (typeof t.created_at === 'number' ? t.created_at : Date.parse(t.created_at)) || 0; };
+    return musicTracks().filter(function (t) { return t && !isVideo(t) && dateOf(t) > cutoff; })
+      .sort(function (a, b) { return dateOf(b) - dateOf(a); });
+  }
+
+  // ---- play-history AFFINITY (per-genre + per-artist) for a future "For You" rail ----
+  // set of track ids the player has actually played (career.songs keys ∪ rr_scores keys).
+  function _playedIds() {
+    var set = {};
+    try { var c = loadCareer(); var sg = (c && c.songs) || {}; for (var k in sg) if (Object.prototype.hasOwnProperty.call(sg, k)) set[String(k)] = true; } catch (e) {}
+    try { var sc = loadScores(); for (var k2 in sc) if (Object.prototype.hasOwnProperty.call(sc, k2)) { var id = String(k2).split('|')[0]; if (id) set[id] = true; } } catch (e) {}
+    return set;
+  }
+  // ranked affinity: { genres:[{name,weight}], artists:[{name,weight}], plays } — weights are play counts,
+  // highest-first. {genres:[],artists:[],plays:0} for a player with no mapped history (graceful).
+  function getAffinity() {
+    var empty = { genres: [], artists: [], plays: 0 };
+    var songs; try { songs = (getCareer().songs) || {}; } catch (e) { return empty; }
+    var ids = Object.keys(songs);
+    if (!ids.length) return empty;
+    var byId = {}, pool = musicTracks();
+    for (var i = 0; i < pool.length; i++) { var t = pool[i]; if (t && t.id != null) byId[String(t.id)] = t; }
+    var gW = {}, aW = {}, total = 0;
+    for (var j = 0; j < ids.length; j++) {
+      var tk = byId[ids[j]]; if (!tk) continue;   // title-keyed / practice / unloaded id → not a catalog track, skip
+      var w = Math.max(1, songs[ids[j]] | 0); total += w;
+      var g = cleanGenre(tk.genre); if (g) gW[g] = (gW[g] || 0) + w;
+      var a = tk.artist_name; if (a) aW[a] = (aW[a] || 0) + w;
+    }
+    var rank = function (m) { return Object.keys(m).map(function (k) { return { name: k, weight: m[k] }; }).sort(function (x, y) { return y.weight - x.weight; }); };
+    return { genres: rank(gW), artists: rank(aW), plays: total };
+  }
+  // up to n playable MUSIC tracks biased toward affinity (unplayed-first, decode-confident, NEVER videos).
+  // [] for a new player with no affinity — graceful.
+  function forYouTracks(n) {
+    n = Math.max(1, Math.floor(Number(n) || 0) || 12);
+    var aff = getAffinity();
+    if (aff.plays === 0) return [];
+    var gRank = {}, aRank = {};
+    aff.genres.forEach(function (g) { gRank[g.name] = g.weight; });
+    aff.artists.forEach(function (a) { aRank[a.name] = a.weight; });
+    var played = _playedIds();
+    var pool = musicTracks().filter(function (t) { return t && trackReady(t) && !isVideo(t); });
+    var scored = [];
+    for (var i = 0; i < pool.length; i++) {
+      var t = pool[i];
+      var g = cleanGenre(t.genre), a = t.artist_name, s = 0;
+      if (g && gRank[g]) s += gRank[g] * 2;        // genre affinity
+      if (a && aRank[a]) s += aRank[a] * 3;        // artist affinity (stronger signal)
+      if (s <= 0) continue;                        // not in any affinity bucket → not "for you"
+      if (_discoverConfident(t)) s += 0.5;         // nudge decode-confident picks up
+      var isPlayed = !!played[String(t.id)];
+      if (!isPlayed) s += 5;                       // unplayed-first within the affinity set
+      scored.push({ t: t, s: s, played: isPlayed, tie: hashStr('foryou|' + (t.id || t.title || '')) });
+    }
+    scored.sort(function (x, y) { return (y.s - x.s) || ((x.played === y.played) ? (x.tie - y.tie) : (x.played ? 1 : -1)); });
+    return scored.slice(0, n).map(function (o) { return o.t; });
+  }
+
+  // ---- COLLECTION / completion model (from saved bests via getBest) ----
+  // per-genre { total, sCount, fcCount }. total = music tracks in the genre; sCount = tracks whose best grade
+  // is S; fcCount = tracks fully CLEARED (a saved best exists). NOTE: per-track full-combo isn't persisted
+  // (rr_scores stores grade/score/accuracy only), so fcCount is the "cleared" count. {} on empty catalog.
+  function getCollectionStats() {
+    var out = {}, pool = musicTracks();
+    if (!pool || !pool.length) return out;
+    for (var i = 0; i < pool.length; i++) {
+      var t = pool[i]; if (!t) continue;
+      var g = cleanGenre(t.genre) || 'Other';
+      var b = out[g] || (out[g] = { total: 0, sCount: 0, fcCount: 0 });
+      b.total++;
+      var best = null; try { best = getBest(t.id); } catch (e) {}
+      if (best) { b.fcCount++; if (best.grade === 'S') b.sCount++; }
+    }
+    return out;
+  }
+  // up to n tracks the player has PLAYED but not yet S-ranked, nearest-to-S first (best grade, then accuracy).
+  // [] for a new player — graceful.
+  function chaseTheS(n) {
+    n = Math.max(1, Math.floor(Number(n) || 0) || 12);
+    var pool = musicTracks(), out = [];
+    for (var i = 0; i < pool.length; i++) {
+      var t = pool[i]; if (!t) continue;
+      var best = null; try { best = getBest(t.id); } catch (e) {}
+      if (!best || best.grade === 'S') continue;   // unplayed, or already maxed → not a chase target
+      out.push({ t: t, go: (GRADE_ORDER[best.grade] || 0), acc: (typeof best.accuracy === 'number' ? best.accuracy : 0) });
+    }
+    out.sort(function (x, y) { return (y.go - x.go) || (y.acc - x.acc); });
+    return out.slice(0, n).map(function (o) { return o.t; });
+  }
+
+  // ---- DAILY PICKS: date-hashed deterministic approachable set (stable per calendar day) ----
+  // reuses the Daily Rift date-hash (hashStr + dailyRiftToday) so it's the SAME set all day for a player,
+  // rotating tomorrow — unlike Surprise (per-load random). Prefers decode-confident, ready, music-only
+  // tracks; widens to any ready music track if too few confident ones. [] on empty catalog — graceful.
+  function dailyPicks(n) {
+    n = Math.max(1, Math.floor(Number(n) || 0) || 8);
+    var today = dailyRiftToday();
+    var pool = musicTracks().filter(function (t) { return t && trackReady(t) && !isVideo(t) && _discoverConfident(t); });
+    if (pool.length < n) pool = musicTracks().filter(function (t) { return t && trackReady(t) && !isVideo(t); });
+    if (!pool.length) return [];
+    return pool.slice().sort(function (a, b) {
+      return hashStr('daily|' + today + '|' + (a.id || a.title || '')) - hashStr('daily|' + today + '|' + (b.id || b.title || ''));
+    }).slice(0, n);
+  }
+
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
     submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback
@@ -2513,6 +2669,8 @@
     // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.
     dailyRiftTrack, dailyRiftState, dailyRiftToday, setDailyRift,
     search, sortTracks, sections, getBest,
+    // retention / discovery data layer (derived, read-only; UI rails/cards wired in a later wave)
+    getAffinity, forYouTracks, getCollectionStats, chaseTheS, freshSince, lastVisitAgeHours, dailyPicks,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
     preview, stopPreview,
     // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js
@@ -2952,6 +3110,7 @@
 
   async function boot() {
     if (!window.RhythmGame) { console.error('engine not loaded'); return; }
+    try { _stampLastVisit(); } catch (e) {}   // retention: read the previous rr_lastVisit, then stamp now (the ONE permitted write; feeds freshSince/lastVisitAgeHours)
     // build101: the review deep-launch boots FIRST and IN PARALLEL with the catalog fetch — the card needs no
     // library, and the old serial order painted the review seconds late behind the full paged /tracks crawl.
     var _q = new URLSearchParams(location.search);

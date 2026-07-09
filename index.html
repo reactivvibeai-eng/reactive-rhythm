@@ -28,26 +28,55 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=456" />
+<link rel="stylesheet" href="jukebox.css?v=457" />
 <style>
   :root {
+    /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
+       Palette, radii, spacing scale and motion, codified. The legacy semantic
+       vars below (--bg, --crimson, --line, --ease-settle, ...) now ALIAS these,
+       so there is one place to retune the brand. Values are byte-for-byte the
+       previous literals — this pass is visually identical, just consistent. */
+    /* palette — warm BLACK / CRIMSON / CHROME (R>=G>=B, no cool cast) */
+    --rr-black:        #0a0706;              /* warm near-black */
+    --rr-black-2:      #160c0b;              /* warm red-black */
+    --rr-ink:          #f4eef0;              /* primary text */
+    --rr-ink-dim:      #a0938f;              /* dim text (~4.7:1) */
+    --rr-chrome:       #dad7d2;              /* neutral-warm silver (chrome) */
+    --rr-silver:       #cbc7c2;              /* warm silver accent */
+    --rr-crimson:      #ff1f2e;              /* brand crimson */
+    --rr-crimson-deep: #a3060f;              /* deep crimson */
+    --rr-gold:         #e0a93f;              /* reward / premium accent */
+    --rr-hairline:     rgba(160, 40, 46, 0.32); /* muted crimson divider line */
+    /* radii scale */
+    --rr-r-xs: 8px;  --rr-r-sm: 10px; --rr-r-md: 14px;
+    --rr-r-lg: 16px; --rr-r-xl: 18px; --rr-r-pill: 999px;
+    /* spacing scale (4px base) */
+    --rr-sp-1: 4px;  --rr-sp-2: 8px;  --rr-sp-3: 12px;
+    --rr-sp-4: 16px; --rr-sp-5: 24px; --rr-sp-6: 32px;
+    /* MOTION (U-4): three duration tokens + one easing pair.
+       ease-out = enter (settle), ease-in = exit. reduce-motion collapses both. */
+    --rr-t-fast: 140ms;
+    --rr-t-std: 220ms;
+    --rr-t-ceremony: 420ms;
+    --rr-ease-out: cubic-bezier(.2, 1, .3, 1);   /* enter */
+    --rr-ease-in:  cubic-bezier(.4, 0, 1, 1);    /* exit */
     /* BRAND: black · crimson · chrome — strictly warm/neutral, NO blue/purple cast.
        (the darks were blue-tinted before, so red glows blended to purple — fixed.) */
-    --bg: #0a0706;          /* warm near-black (R≥G≥B) — no cool cast */
-    --bg-2: #160c0b;        /* warm red-black */
-    --ink: #f4eef0;
-    --ink-dim: #a0938f;     /* build62: nudged from #8a7f7c (4.33:1, failed WCAG AA on tinted bgs) → ~4.7:1, still warm-dim */
-    --chrome: #dad7d2;      /* true chrome: neutral-warm silver (was cool blue-gray) */
-    --crimson: #ff1f2e;
-    --silver: #cbc7c2;      /* build58: renamed from the misleading --cyan (it's a warm silver, never blue) */
-    --amber: #e0a93f;
-    --gold: #e0a93f;
-    --red-deep: #a3060f;
-    --line: rgba(160, 40, 46, 0.32);     /* muted CRIMSON hairline — a light line over the
+    --bg: var(--rr-black);          /* warm near-black (R≥G≥B) — no cool cast */
+    --bg-2: var(--rr-black-2);        /* warm red-black */
+    --ink: var(--rr-ink);
+    --ink-dim: var(--rr-ink-dim);     /* build62: nudged from #8a7f7c (4.33:1, failed WCAG AA on tinted bgs) → ~4.7:1, still warm-dim */
+    --chrome: var(--rr-chrome);      /* true chrome: neutral-warm silver (was cool blue-gray) */
+    --crimson: var(--rr-crimson);
+    --silver: var(--rr-silver);      /* build58: renamed from the misleading --cyan (it's a warm silver, never blue) */
+    --amber: var(--rr-gold);
+    --gold: var(--rr-gold);
+    --red-deep: var(--rr-crimson-deep);
+    --line: var(--rr-hairline);     /* muted CRIMSON hairline — a light line over the
                                             crimson bg-glow blended to pink/"purple", so the
                                             dividers are now red-family and can never read purple */
     /* build91: shared easing tokens — one house "arrival" curve (settle), a spring for pops, a bar fill */
-    --ease-settle: cubic-bezier(.2, 1, .3, 1);
+    --ease-settle: var(--rr-ease-out);
     --ease-spring: cubic-bezier(.2, 1.4, .3, 1);
     --ease-bar: cubic-bezier(.2, .8, .2, 1);
     /* ── RAISED-GLASS design language (MP · Store · Leaderboard panels & buttons) ──
@@ -61,7 +90,7 @@
     --glass-lift: 0 16px 38px -14px rgba(0,0,0,0.66), 0 2px 8px rgba(0,0,0,0.4); /* raised drop shadow */
     --glass-glow: 0 10px 28px -16px rgba(255,31,46,0.30); /* faint warm under-glow */
     --glass-blur: blur(13px) saturate(1.08);
-    --glass-radius: 16px;
+    --glass-radius: var(--rr-r-lg);
     /* primary crimson glass (BUY / EQUIP / JOIN / DONE) — glossy top + confident depth */
     --cglass-fill: linear-gradient(180deg, #ff3a47 0%, #e21d2b 46%, #b3121f 100%);
     --cglass-bevel: inset 0 1.5px 0 rgba(255,255,255,0.42), inset 0 -2px 6px rgba(120,4,12,0.5);
@@ -131,7 +160,7 @@
   /* polished entrance for the modal overlays (How-to / Levels / Career) — they used to pop in flat */
   .screen.active .howto-card,
   .screen.active .levels-card,
-  .screen.active .profile-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .screen.active .profile-card { animation: cardIn var(--rr-t-ceremony) var(--rr-ease-out) both; }
   @keyframes cardIn { from { opacity: 0; transform: translateY(16px) scale(0.965); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .calib-screen { z-index: 250; }
 
@@ -1016,7 +1045,7 @@
   /* v258 PERF: a backdrop video only renders for its ACTIVE screen — display:none halts decode/compositing on the other two (the screen observer also pause()s them) */
   #profile-screen:not(.active) .scr-vidbg, #levels-screen:not(.active) .scr-vidbg, #leaderboard-screen:not(.active) .scr-vidbg { display: none !important; }
   .profile-screen > .profile-card, .levels-screen > .levels-card, .leaderboard-screen > .lbd-card { position: relative; z-index: 1; }
-  .screen.active .lbd-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .screen.active .lbd-card { animation: cardIn var(--rr-t-ceremony) var(--rr-ease-out) both; }
   .lbd-card { width: min(620px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 32px 28px; text-align: center; }
   .lbd-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
   /* v254 (#86): leaderboard wordmark IMAGE — shown when assets/lbd/lbd-wordmark.png loads (mirrors the MP wordmark: lives on
@@ -1257,7 +1286,7 @@
   @media (prefers-reduced-motion: reduce) { #rr-consent { transition: opacity .2s ease; transform: translateX(-50%) translateY(0); } #rr-consent:not(.show) { transform: translateX(-50%) translateY(140%); } }
   /* ---- STORE overlay (Sparks shop) — mirrors leaderboard overlay; brand crimson/ember/gold ---- */
   .store-screen { z-index: 261; background: linear-gradient(rgba(10,7,9,0.50), rgba(10,7,9,0.80)), url('assets/store/store-bg.jpg') center/cover no-repeat fixed, radial-gradient(ellipse at 50% 28%, rgba(120,12,20,0.45), transparent 64%), #0a0706; backdrop-filter: blur(18px); overflow-y: auto; }
-  .screen.active .store-card { animation: cardIn 0.42s cubic-bezier(.2,1,.3,1) both; }
+  .screen.active .store-card { animation: cardIn var(--rr-t-ceremony) var(--rr-ease-out) both; }
   .store-card { width: min(720px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 32px 18px; text-align: center; }
   .store-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 46px; letter-spacing: 0.04em; color: var(--ink); text-shadow: 0 0 30px rgba(255,42,48,0.55); margin: 6px 0 0; line-height: 1; }
   .store-balrow { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -3160,10 +3189,13 @@
     font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.04em;
     text-align: left;
     box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 24px var(--rr-toast-glow, rgba(255,31,46,0.25));
-    opacity: 0; transition: opacity .2s ease, transform .2s ease;
+    opacity: 0;
+    /* U-4 shared feedback motion: exit uses ease-in (below); enter uses ease-out (.show) */
+    transition: opacity var(--rr-t-std) var(--rr-ease-in), transform var(--rr-t-std) var(--rr-ease-in);
     pointer-events: none;
   }
-  .rr-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .rr-toast.show { opacity: 1; transform: translateX(-50%) translateY(0);
+    transition: opacity var(--rr-t-std) var(--rr-ease-out), transform var(--rr-t-std) var(--rr-ease-out); }
   .rr-toast .rr-toast-ico { flex: none; width: 17px; height: 17px; color: var(--rr-toast-accent, var(--crimson)); }
   .rr-toast .rr-toast-ico svg { width: 17px; height: 17px; display: block; }
   .rr-toast.sev-error   { --rr-toast-accent: rgba(255,31,46,0.55); --rr-toast-glow: rgba(255,31,46,0.25); }
@@ -3202,6 +3234,70 @@
     text-transform: uppercase; color: #cdbf9a; margin-top: 6px;
   }
   html.rr-reduce-motion #levelup-toast { transition: opacity .2s ease; transform: translate(-50%, 0) scale(1); }
+
+  /* ===================== RR FEEDBACK VOCABULARY (U-2) =====================
+     ONE way to tell the player something. Three tiers, one shared motion:
+       TOAST       (.rr-toast, above)  transient FYI (~2.4s, bottom, one-at-a-time)
+       STATUS LINE (.rr-statusline)    ambient state — a quiet inline line
+       CARD        (.rr-card)          a dead-end / decision — warm-dark box, crimson
+                                       left rule, 1-2 actions (never a bare grey banner)
+     Shared motion (U-4): enter = fade+rise on --rr-ease-out; exit = fade+sink on
+     --rr-ease-in; duration --rr-t-std. This is the generic, reusable form of the
+     three tiers MP converged on — lifted OUT of the .mpx-* namespace so the whole
+     app shares one vocabulary. (MP's own .mpx-failcard is left untouched.) */
+  @keyframes rrFbIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .rr-fb-in { animation: rrFbIn var(--rr-t-std) var(--rr-ease-out) both; }   /* one-shot: freshly-inserted elements */
+
+  /* --- STATUS LINE: ambient state (quiet, inline) --- */
+  .rr-statusline {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: var(--rr-r-sm);
+    background: rgba(18,12,12,0.6); border: 1px solid var(--line);
+    color: var(--ink-dim); font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.1em; line-height: 1.4;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity var(--rr-t-std) var(--rr-ease-in), transform var(--rr-t-std) var(--rr-ease-in);
+  }
+  .rr-statusline.show { opacity: 1; transform: none;
+    transition: opacity var(--rr-t-std) var(--rr-ease-out), transform var(--rr-t-std) var(--rr-ease-out); }
+  .rr-statusline .rr-sl-dot { flex: none; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--rr-gold); box-shadow: 0 0 8px rgba(224,169,63,0.5); }
+  .rr-statusline.sev-error   .rr-sl-dot { background: var(--rr-crimson); box-shadow: 0 0 8px rgba(255,31,46,0.5); }
+  .rr-statusline.sev-neutral .rr-sl-dot { background: var(--rr-chrome); box-shadow: none; }
+
+  /* --- CARD: a dead-end / decision (generic sibling of §4.4 .mpx-failcard) --- */
+  .rr-card { position: absolute; inset: 0; z-index: 34; display: grid; place-items: center; padding: 18px;
+    background: rgba(10,7,7,0.72);
+    opacity: 0; transition: opacity var(--rr-t-std) var(--rr-ease-in); }
+  .rr-card.show { opacity: 1; transition: opacity var(--rr-t-std) var(--rr-ease-out); }
+  .rr-card[hidden] { display: none; }
+  .rr-card-box { width: min(420px, 94%); text-align: left; padding: 20px 20px 18px; border-radius: var(--rr-r-lg);
+    background: linear-gradient(180deg, rgba(30,22,21,0.98), rgba(20,15,14,0.98));
+    border: 1px solid rgba(218,215,210,0.16); border-left: 4px solid var(--rr-crimson);
+    box-shadow: 0 18px 60px -20px rgba(0,0,0,0.8);
+    transform: translateY(8px); transition: transform var(--rr-t-std) var(--rr-ease-in); }
+  .rr-card.show .rr-card-box { transform: none; transition: transform var(--rr-t-std) var(--rr-ease-out); }
+  .rr-card-head { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px;
+    letter-spacing: 0.02em; color: var(--ink); margin-bottom: 8px; }
+  .rr-card-msg { font-family: 'Chakra Petch', sans-serif; font-size: 13px; line-height: 1.45;
+    color: #b3a8a5; margin-bottom: 16px; }
+  .rr-card-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  .rr-card-btn { flex: 1 1 120px; padding: 11px 14px; border-radius: var(--rr-r-sm); cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    background: rgba(218,215,210,0.07); border: 1px solid rgba(218,215,210,0.2); color: #cdc4c1;
+    transition: border-color var(--rr-t-fast) ease, color var(--rr-t-fast) ease, box-shadow var(--rr-t-fast) ease; }
+  .rr-card-btn:hover { border-color: var(--rr-crimson); color: var(--rr-chrome); box-shadow: 0 0 14px rgba(255,31,46,0.22); }
+  .rr-card-btn.primary { background: linear-gradient(180deg, rgba(255,42,48,0.24), rgba(179,18,31,0.16));
+    border-color: rgba(255,31,46,0.6); color: #fff; }
+  .rr-card-btn.primary:hover { border-color: rgba(255,31,46,0.9); box-shadow: 0 0 18px -4px rgba(255,31,46,0.65); }
+
+  /* reduce-motion: the global rule already zeroes durations; these zero the
+     residual transforms so the tiers appear instantly at their end-state. */
+  html.rr-reduce-motion .rr-statusline,
+  html.rr-reduce-motion .rr-card,
+  html.rr-reduce-motion .rr-card-box,
+  html.rr-reduce-motion .rr-fb-in { transform: none !important; }
+  html.rr-reduce-motion .rr-fb-in, html.rr-reduce-motion .lib-empty { animation: none !important; }
 
   /* ---------- Sparks balance chip + identity (library top bar) ---------- */
   .rr-idwrap { display: flex; align-items: center; gap: 9px; }
@@ -3866,7 +3962,7 @@
       #0a0706; }   /* build11: opaque base — never bleed the engine backdrop through */
   .mh-card { width: min(920px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: 6px; padding: 8px; text-align: center; }
-  .menu-hub.active .mh-card { animation: cardIn 0.46s cubic-bezier(.2,1,.3,1) both; }
+  .menu-hub.active .mh-card { animation: cardIn var(--rr-t-ceremony) var(--rr-ease-out) both; }
   .mh-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
   .mh-brand img { width: 26px; height: 26px; filter: drop-shadow(0 0 10px rgba(255,31,46,0.55)); }
   .mh-brand span { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.32em;
@@ -7755,7 +7851,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=456"></script>
+<script src="telemetry.js?v=457"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -7934,17 +8030,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=456"></script>
-<script src="game.js?v=456"></script>
-<script src="procbg.js?v=456"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=456"></script>
-<script src="chat.js?v=456"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=456"></script>
-<script src="goals.js?v=456"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=456"></script>
-<script src="share.js?v=456"></script>
-<script src="replay.js?v=456"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=456"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=457"></script>
+<script src="game.js?v=457"></script>
+<script src="procbg.js?v=457"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=457"></script>
+<script src="chat.js?v=457"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=457"></script>
+<script src="goals.js?v=457"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=457"></script>
+<script src="share.js?v=457"></script>
+<script src="replay.js?v=457"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=457"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
