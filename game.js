@@ -544,7 +544,27 @@
     menu: $('menu'), loading: $('loading'), game: $('game'),
     countdown: $('countdown-screen'), results: $('results'),
   };
+  // The loading screen was a one-way door: no exit, a progress ring that lies (fixed 8/25/… steps regardless of
+  // real progress), and a 30s fetch timeout on a dead track. A first-time player reads 30 silent seconds as a
+  // crash and never comes back. So: an escape after 2s, and an honest line at 6s. Both hide again the moment the
+  // screen changes, so a fast load never shows either.
+  let _loadEscT = 0, _loadSlowT = 0;
+  function _disarmLoadingEscape() {
+    if (_loadEscT) { clearTimeout(_loadEscT); _loadEscT = 0; }
+    if (_loadSlowT) { clearTimeout(_loadSlowT); _loadSlowT = 0; }
+    const c = $('loading-cancel'), s = $('loading-slow');
+    if (c) c.hidden = true;
+    if (s) s.hidden = true;
+  }
+  function _armLoadingEscape() {
+    _disarmLoadingEscape();
+    _loadEscT = setTimeout(function () { const c = $('loading-cancel'); if (c) c.hidden = false; }, 2000);
+    _loadSlowT = setTimeout(function () { const s = $('loading-slow'); if (s) s.hidden = false; }, 6000);
+  }
   function showScreen(name) {
+    // Every entry to / exit from 'loading' owns the escape hatch. Doing it here (rather than at the two
+    // showScreen('loading') call sites) means no future launch path can forget to disarm it.
+    if (name === 'loading') _armLoadingEscape(); else _disarmLoadingEscape();
     // D1 RATINGS: leaving the results screen re-hides + resets the ratings widget so the next run starts clean
     // (also cancels any pending ~1.2s show timer). Guarded — a no-op before the widget/state exist.
     if (name !== 'results') { try { _resetRatingsWidget(); } catch (e) {} }
@@ -4721,6 +4741,18 @@
     rsec.addEventListener('click', () => { _disarmRestart(); hidePause(); if (_practiceOn) practiceRearm(); });
   } }
   $('exit-btn').addEventListener('click', () => { _disarmRestart(); hidePause(); _abortBridge(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
+  // Loading-screen CANCEL. Bumping _playGen invalidates the in-flight launch at its next await boundary
+  // (beginPlay re-checks `myGen !== _playGen` after every await), so a slow fetch that finally resolves cannot
+  // land a song on top of the menu the player just escaped to.
+  try {
+    const _lcBtn = $('loading-cancel');
+    if (_lcBtn) _lcBtn.addEventListener('click', () => {
+      _playGen++;
+      _disarmLoadingEscape();
+      try { stopGame(); } catch (e) {}
+      showScreen('menu');
+    });
+  } catch (e) {}
   // FIRST PULSE: quitting a bridge run mid-song never reaches endGame's handoff, so disarm here — restore the
   // pre-bridge tier (rr_diff on disk was never changed) so the player returns to menu on their Easy tier, and clear
   // the bridge state so it can't leak into the next run. No-op when no bridge run is active.

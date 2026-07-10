@@ -985,6 +985,10 @@
         fetchReleaseParties().then(function () {
           try { if (_releaseParties.length && typeof renderHome === 'function') renderHome(); } catch (e2) {}
         });
+        // finding #8: the async crawl resolves AFTER boot already painted the library, and NOTHING repaints the hub —
+        // so the Daily/Weekly Rift tiles + status strip strand on "Loading…" until the hub is manually re-entered.
+        // Emit a completion signal so a hub listener (in index.html — we ONLY emit here) can repaint. One per crawl.
+        try { window.dispatchEvent(new CustomEvent('rr:catalog-ready')); } catch (e2) {}
         return;
       } else if (!crawlErrored) {
         // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
@@ -1001,6 +1005,10 @@
     var readyM = cleanM.filter(trackReady);   // preview also shows only playable
     catalogTracks = readyM.filter(function (t) { return !isVideo(t); });
     catalogVideos = cleanM.filter(function (t) { return isVideo(t) && videoReady(t); });
+    // finding #8: the mock/fallback resolution also readies a usable catalog — emit so the hub repaints off "Loading…"
+    // instead of stranding when the live crawl was empty/unreachable. (Mutually exclusive with the live-path emit
+    // above — the live branch returns early — so still exactly one rr:catalog-ready per loadCatalog() resolution.)
+    try { window.dispatchEvent(new CustomEvent('rr:catalog-ready')); } catch (e2) {}
   }
 
   // re-fetch the catalog (the library grows constantly on the platform)
@@ -1815,6 +1823,7 @@
   // they stay in sync. Falls back to the Watch preview only when the film has no decodable audio.
   // ============================================================================
   let _flixRaf = 0, _flixPrevSrc = null, _flixActive = false, _flixVideoUrl = '', _flixSawActive = false;
+  let _flixFailT = 0;   // finding #2: stopwatch (ms) since a launched flix left the loading screen WITHOUT ever activating #game → a failed decode/chart; 0 = not counting
   // build99f (playtest P0): ~7% of the Mux-hosted films are missing their audio.m4a rendition, so a deterministic
   // featured film (or a tapped card) could 404 and dead-end on the loading screen — the worst first-impression bug
   // on the flagship feature. Probe audio reachability once per film (session-cached) so the premiere hero can
@@ -1864,7 +1873,7 @@
   }
   function _startFlixBackdrop(videoUrl) {
     const bv = document.getElementById('bg-video'); if (!bv || !videoUrl) return;
-    _flixActive = true; _flixVideoUrl = videoUrl; _flixSawActive = false;
+    _flixActive = true; _flixVideoUrl = videoUrl; _flixSawActive = false; _flixFailT = 0;   // reset the failed-launch stopwatch for this fresh flix
     _flixPrevSrc = bv.getAttribute('src') || '';
     const g = document.getElementById('game'); if (g) g.classList.add('flix-mode');
     try { bv.pause(); } catch (e) {}
@@ -1880,6 +1889,26 @@
       // tear down ONLY after a real run actually started then ended (was-active → not-active). Do NOT tear down during
       // the ~4s decode/lead-in BEFORE the game first activates (that bug restored moon-loop before play even began).
       if (_flixSawActive && !active) { _stopFlixBackdrop(); return; }
+      // finding #2 — FAILED-LAUNCH LEAK GUARD. A flix whose audio can't decode/chart NEVER reaches showScreen('game'),
+      // so #game never goes .active, _flixSawActive stays false, and the was-active→not-active teardown above never
+      // fires. Without this, the loop re-asserts the dead flix video as the backdrop for the REST OF THE SESSION —
+      // wrong video on the menu and every later song, burning CPU/battery. A HEALTHY launch spends its whole (up-to-
+      // several-second) decode on the LOADING screen and then flips #game .active; the failure path bails to #menu.
+      // So: once we've LEFT loading and the engine reports no live run yet #game never activated, start a grace
+      // stopwatch (a timestamp, NOT a single frame — absorbs the between-screen swap) and tear down if it holds ~2s.
+      // Gating on !loading is what protects a slow-but-healthy decode from being mistaken for a failure.
+      if (!_flixSawActive) {
+        var ld = document.getElementById('loading');
+        var stillLoading = !!(ld && ld.classList.contains('active'));
+        var lst = window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : null;
+        var noRun = !lst || (!lst.playing && !(lst.progress > 0));   // engine has no live run going
+        if (!stillLoading && noRun) {
+          if (!_flixFailT) _flixFailT = performance.now();
+          else if (performance.now() - _flixFailT > 2000) { _stopFlixBackdrop(); return; }
+        } else {
+          _flixFailT = 0;   // still loading (healthy decode) or a run appeared → not a failed launch; reset the stopwatch
+        }
+      }
       // re-assert the flix video + class if the engine's play-setup reset #bg-video to the default backdrop.
       if (bv.getAttribute('src') !== _flixVideoUrl) {
         bv.muted = true; bv.loop = false; bv.setAttribute('src', _flixVideoUrl); try { bv.load(); } catch (e) {}
@@ -2798,7 +2827,8 @@
   // playable (non-video, trackReady) catalog track.
   var _reclaimCache = [];        // never null — [] until a fetch yields >=1 valid row
   var _reclaimInflight = false;  // a fetch attempt is currently running — SYNC guard against concurrent bursts (render loops)
-  var _reclaimDone = false;      // a fetch actually reached the endpoint WITH a token — don't repeat (even on a 404/empty)
+  var _reclaimDone = false;      // a fetch actually SUCCEEDED (or hit a terminal 4xx) — don't repeat; a transient 5xx/offline leaves this FALSE so a later call retries
+  var _reclaimTries = 0;         // finding #7: transient-failure attempts spent — cap retries so a persistent outage can't storm the render-driven call sites
   function getReclaimTargets() {
     if (!_reclaimDone && !_reclaimInflight) { try { _fetchReclaimTargets(); } catch (e) {} }
     return _reclaimCache.slice();   // defensive copy — always an Array, never null
@@ -2850,8 +2880,11 @@
       try {
         var tk = await getToken();
         if (!tk) return;             // unauthed → cache stays []; leave _reclaimDone FALSE so a later sign-in retries
-        _reclaimDone = true;         // have a token + about to hit the endpoint — count this as the one real attempt (a 404/empty won't re-hammer)
         var out = await api('/leaderboard/deltas?since=' + _reclaimSince(), { auth: true });
+        // finding #7: flag DONE only AFTER the endpoint actually resolved. The old code set _reclaimDone=true BEFORE
+        // this await and the catch never reset it, so ONE transient 5xx / offline blip on the first fetch permanently
+        // killed the PASSED-YOU reclaim card for the whole session (no retry short of a full page reload).
+        _reclaimDone = true;
         var rows = Array.isArray(out) ? out : (out && (out.deltas || out.rows || out.reclaim));   // bare array (real shape) OR a wrapped body — both tolerated
         var clean = _sanitizeReclaimRows(rows);
         if (clean.length) {
@@ -2859,7 +2892,15 @@
           // async resolve lands AFTER the synchronous first render — nudge the UI to repaint (mirror of rr:playstats).
           try { window.dispatchEvent(new CustomEvent('rr:reclaim')); } catch (e) {}
         }
-      } catch (e) { /* 404 / 401 / network / non-JSON / non-array → fail-soft, cache stays [], no throw, no spam */ }
+      } catch (e) {
+        // finding #7: a 403/404 is a DEFINITIVE "no reclaim data for you" — terminal, so flag DONE and stop. A 5xx /
+        // network / non-JSON is TRANSIENT: leave _reclaimDone FALSE so the next natural call (next hub entry) retries,
+        // but cap the transient retries so a persistent outage can't turn the render-driven call sites into a storm.
+        // (api() throws 'API <status> …', so the status parses out of the message; a network error carries none → transient.)
+        var _st = 0; try { var _m = /API (\d{3})/.exec(e && e.message); if (_m) _st = +_m[1]; } catch (_e) {}
+        if (_st === 403 || _st === 404) { _reclaimDone = true; }
+        else if (++_reclaimTries >= 3) { _reclaimDone = true; }
+      }
       finally { _reclaimInflight = false; }
     })();
   }

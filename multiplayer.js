@@ -64,6 +64,22 @@
   resolveMe();
   // re-resolve identity on auth changes (sign-in mid-session flips guest → named).
   try { if (window.RhythmCatalog && window.RhythmCatalog.onAuthChange) window.RhythmCatalog.onAuthChange(resolveMe); } catch (e) {}
+  // ME.signedIn used to be WRITE-ONCE-TRUE: line ~56 was the only assignment to true and nothing ever set it
+  // back to false (catalog.js getUser() deliberately never demotes a locally-present session). So a session that
+  // died mid-play — signed out in another tab, refresh token expired — left the flag lying, and every honesty
+  // signal keyed on it: the ONLINE NOW roster hid itself in silence (its 401 swallowed) while the "Sign in to
+  // play online" nudge stayed hidden because it reads !ME.signedIn. A 401 from an authed endpoint is proof OUR
+  // token is dead. It says nothing about a room — never infer room state from it (MP_GUEST_CONTRACT_v1 §6.5).
+  function _demoteOn401(err) {
+    var m = String((err && err.message) || err || '');
+    if (!/\b401\b|unauthorized/i.test(m)) return false;
+    if (!ME.signedIn) return false;
+    ME.id = localId(); ME.name = 'Player'; ME.avatar = null; ME.signedIn = false;
+    try { paintYou(); } catch (e) {}
+    try { refreshSigninNote(); } catch (e) {}
+    try { reannounce(); } catch (e) {}
+    return true;
+  }
 
   // ---- state ----
   var JOINED_AT = Date.now();
@@ -2859,9 +2875,13 @@
     window.RhythmCatalog.presenceOnline().then(function (r) {
       _onBusy = false;
       renderOnline((r && r.users) || []);
-    }).catch(function () {
+    }).catch(function (e) {
       _onBusy = false;
-      var b2 = $('mpx-online'); if (b2) b2.hidden = true;   // 401/transient → hide quietly, never a nag or a broken card
+      var b2 = $('mpx-online'); if (b2) b2.hidden = true;   // transient → hide quietly, never a nag or a broken card
+      // ...but a 401 is NOT transient: our token is dead and it will 401 forever. Hiding the box in silence while
+      // ME.signedIn still claims true left the player staring at a roster-less lobby with no sign-in prompt and
+      // no error. _demoteOn401 flips the flag, which un-hides the sign-in note via refreshSigninNote().
+      _demoteOn401(e);
     });
   }
   function renderOnline(users) {
@@ -2935,7 +2955,14 @@
       var _bc = 'mpx-setup-msg';
       if (_bcOpened) { try { closeRoom(true); step('lobby'); _onlineStart(); _bc = 'mpx-lobby-msg'; } catch (e2) {} }
       var m = String((e && e.message) || '');
-      if (/\b403\b/.test(m)) {                       // their Battle-calls toggle is OFF
+      if (/\b401\b/.test(m)) {                       // OUR session died — permanent until re-login, never "try again"
+        // This branch was missing. A 401 fell through to the generic else below and offered 'Try again', which
+        // re-opened a room, re-fired the challenge, re-401'd and re-tore-down — a retry loop that could never
+        // succeed, with no hint that the session was the problem. qmFail has had this branch all along.
+        _demoteOn401(e);
+        _setRow(uid, 'dim', 'Sign in to call', 3600000);
+        banner(_bc, 'Sign in on ReactivVibe to battle-call players.');
+      } else if (/\b403\b/.test(m)) {                 // their Battle-calls toggle is OFF
         _setRow(uid, 'dim', 'Not taking calls', 3600000);
         banner(_bc, nm + ' isn\'t taking battle calls right now.');
       } else if (/\b409\b/.test(m)) {                // rate-limited — re-arm after the 20s window
@@ -3598,7 +3625,7 @@
   }
   function qmFail(e) {
     var msg = String((e && e.message) || '');
-    if (/\b401\b/.test(msg)) { qmStop(false); banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.'); return; }
+    if (/\b401\b/.test(msg)) { _demoteOn401(e); qmStop(false); banner('mpx-lobby-msg', 'Sign in on ReactivVibe to use matchmaking.'); return; }   // this branch always existed; it just never told ME.signedIn the truth
     // build102x: /match/* went LIVE 2026-07-02 (an edge-fn redeploy shipped them; all four probe 401-for-anon). This
     // branch stays as a deploy-regression guard — a route that 404s never pairs anyone, so stop the search honestly
     // instead of pulsing "Looking…" forever.

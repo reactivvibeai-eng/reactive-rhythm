@@ -1557,6 +1557,13 @@
     let bars = [];          // eased per-bar amplitudes (0..1)
     let pulse = 0;          // smoothed bass pulse → global "breathing" scale
     let phase = 0;          // idle animation phase
+    let rafId = 0;          // live rAF handle; 0 = loop parked. Guards against a second concurrent loop.
+    // The library surface must be on screen for the visualizer to run — otherwise its rAF
+    // would tick (DOM reads every frame) all through gameplay, alongside the 60fps game loop.
+    function isActive() {
+      const v = $('view-jukebox'), m = $('menu');
+      return !!(v && v.classList.contains('active') && m && m.classList.contains('active'));
+    }
     function resize() {
       const r = cv.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
@@ -1567,10 +1574,11 @@
       ctx.setTransform(d, 0, 0, d, 0, 0);
     }
     function draw() {
-      requestAnimationFrame(draw);
-      const active = $('view-jukebox') && $('view-jukebox').classList.contains('active') &&
-                     $('menu') && $('menu').classList.contains('active');
-      if (!active) { if (W) ctx.clearRect(0, 0, W, H); return; }
+      // FAILURE PREVENTED: a second always-on rAF loop ticking for the whole session (including
+      // during gameplay). Park instead of re-arming when the library is off screen; the observer
+      // below relaunches us when it returns. Re-arm BEFORE the work so a body exception can't kill the loop.
+      if (!isActive()) { rafId = 0; if (W) ctx.clearRect(0, 0, W, H); return; }
+      rafId = requestAnimationFrame(draw);
       resize();
       ctx.clearRect(0, 0, W, H);
 
@@ -1624,7 +1632,20 @@
       ctx.fillStyle = 'rgba(255,224,205,0.45)';
       ctx.fillRect(0, cy - 0.5, W, 1);
     }
-    requestAnimationFrame(draw);
+    // Drive the loop from view changes rather than a self-perpetuating rAF: start when the library
+    // becomes active, and let draw() park itself when it leaves. The rafId guard prevents a double
+    // observer fire from spawning a second loop; a missing element simply never starts it (no throw).
+    function start() { if (rafId || !isActive()) return; rafId = requestAnimationFrame(draw); }
+    try {
+      if (window.MutationObserver) {
+        const mo = new MutationObserver(start);
+        ['view-jukebox', 'menu'].forEach(function (id) {
+          const el = $(id);
+          if (el) mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+        });
+      }
+    } catch (e) {}
+    start();   // arm immediately if the library is already on screen at boot
   })();
 
   // =========================================================================

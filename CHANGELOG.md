@@ -15,6 +15,62 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build167 — pre-launch hardening: 9 confirmed defects + the MP session latch  ✅ every fix verified headlessly with a positive control · 0 console errors on a clean instrument  ·  ?v=466
+
+Two adversarial swarms (27 claims → 13 confirmed; and a 9-defect silent-guest audit) plus a Fable ruling.
+Only what survived refutation was fixed.
+
+**MP — `ME.signedIn` was WRITE-ONCE-TRUE.** multiplayer.js:56 was the only assignment to `true`; nothing
+anywhere set it back to `false` (catalog.js `getUser()` deliberately never demotes a locally-present session).
+So once a session died mid-play — signed out in another tab, refresh token expired — the flag lied for the rest
+of the session: `_onlineFetch` swallowed its 401 and hid the ONLINE NOW roster **in silence**, while the "Sign
+in to play online" nudge stayed hidden *because it keys on the stale flag*. And battle-call's `.catch` had 403
+and 409 branches but **no 401**, so a dead session fell through to *"Couldn't send the battle call — try
+again"* — a retry that re-opened a room, re-fired, re-401'd and re-tore-down, forever. `qmFail` had had the
+401 branch all along. Added `_demoteOn401()`: a 401 from an authed endpoint is proof OUR token is dead (it says
+nothing about a room — see `MP_GUEST_CONTRACT_v1` §6.5). Wired into all three catches. Caught while writing it:
+`node --check` passes on `_demoteOn401(err)` inside `qmFail(e)` — a `ReferenceError` a syntax check cannot see.
+
+**The loading screen was a one-way door.** No exit, a progress ring that lies (fixed 8/25/… steps), and a 30s
+fetch timeout on a dead track. Now a CANCEL at 2s (bumping `_playGen`, so a late-resolving fetch can't land a
+song on top of the menu you escaped to) and an honest line at 6s. *Proven end-to-end against a fetch that never
+settles:* hidden at 0.7s → cancel at 2.5s → slow line at 6.7s → cancel returns to menu and disarms.
+
+**A failed AI-Flix launch leaked a perpetual rAF loop** that force-set the dead flix video as the backdrop for
+the rest of the session. The audit proposed gating on `getLiveStats() === null` — but that function *always*
+returns an object, so the proposed fix would never have fired. Fixed instead on screen-state + a 2s stopwatch.
+
+**The library visualizer rAF ran forever, during gameplay.** Its early-return skipped the work but not the
+re-arm. Now parks when the library is inactive. Positive control: 0 parked → 2→3 growing → **3→3 flat during
+"gameplay"** → 5→7 growing on return.
+
+**Reduce Motion never stopped the three full-screen menu videos** (the CSS only hid `.scr-vidbg`). One rule
+fixes it; the decoder observer then *pauses* them, so the proposed observer gate was unnecessary. Control had
+to strip `rr-perf-bg` + `has-keyart` first — the first two attempts were vacuous because the videos were
+already hidden.
+
+**Pinch-zoom was blocked** (`user-scalable=no`, WCAG 1.4.4 fail). Removed. Safe, because `touch-action:
+manipulation` already sits on the fixed root — it kills double-tap-zoom while *allowing* pinch.
+
+**Mute lied to screen readers.** State lived only in which `<svg>` was displayed. Added `aria-pressed` + a
+state-naming label — and found the deeper bug it exposed: `syncIcon()` only ran on the *library* button, so
+muting via the floating button or the M key left the library's icon (and now its aria) stale. A MutationObserver
+on the class now drives it.
+
+**Transient 5xx permanently disabled the reclaim card** (`_reclaimDone = true` set *before* the await, catch
+never reset it). Now terminal only on 403/404, with a capped retry otherwise.
+**Hub tiles stranded on "Loading…"** — `rr:catalog-ready` now fires once per `loadCatalog()` resolution (both
+the live and the mock exit) and the hub repaints only when it's actually on screen (verified: 1 repaint visible,
+**0** hidden).
+**Tap targets:** hub gear 38→44px, library icon buttons 36→44px on phones, and the goals-card `×` keeps its
+22px dot with a 44px hit area. (The audit blamed `.rw-x`; build165 had already fixed that one — the real
+offender was `.mgc-dismiss`.)
+
+**NOT fixed, and why:** the gameplay analytics funnel is dark — 364 plays, **0** `song_start`/`song_complete`
+rows. `POST /events` returns `200 {"ok":true,"accepted":1}` **anonymously**, and the consent banner works. The
+funnel is empty because telemetry is strict opt-in for *everyone* (`telemetry.js:167`), with no geo gate, and
+essentially nobody clicks Accept. Auto-accepting telemetry is a privacy decision with legal weight. **Owner call.**
+
 ### build166 — Golden Buzzer covers were invisible: one CSS property collapsed every winner card  ✅ measured before/after with a same-page control  ·  ?v=465
 
 The owner reported "the golden buzzer thumbnails are still completely broken." They were, on production, for

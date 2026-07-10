@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <title>Reactive Rhythm — ReactivVibe AI</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<!-- No maximum-scale / user-scalable=no. Android Chrome honors them, which locks low-vision players out of
+     pinch-zoom entirely (a hard WCAG 1.4.4 failure). The original intent — stopping iOS double-tap-zoom from
+     firing during rapid tapping — belongs on the elements being tapped: `touch-action: manipulation`, below. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -37,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=465" />
+<link rel="stylesheet" href="jukebox.css?v=466" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -564,6 +567,22 @@
     box-shadow: 0 0 40px var(--crimson);
     animation: pulse 1s ease-in-out infinite;
   }
+  .loading-slow {
+    margin-top: 14px; font-family: 'Chakra Petch', sans-serif; font-size: 12px; letter-spacing: 0.04em;
+    color: var(--ink-dim, #9c918e); text-align: center; max-width: 34ch; animation: none;
+  }
+  .loading-slow[hidden], .loading-cancel[hidden] { display: none; }
+  .loading-cancel {
+    margin-top: 12px; min-width: 120px; min-height: 44px; padding: 10px 22px; cursor: pointer;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.12em;
+    color: var(--ink-dim, #9c918e); background: rgba(10, 7, 5, 0.55);
+    border: 1px solid var(--line, rgba(220,214,212,0.16)); border-radius: 10px;
+    transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  }
+  .loading-cancel:hover, .loading-cancel:focus-visible {
+    color: var(--ink, #f6eef0); border-color: var(--crimson, #ff2a30); background: rgba(255, 42, 48, 0.08);
+  }
+  .loading-cancel:focus-visible { outline: 2px solid var(--crimson, #ff2a30); outline-offset: 2px; }
   .loading-text {
     font-family: 'Chakra Petch', sans-serif;
     font-size: 14px;
@@ -1075,6 +1094,13 @@
       linear-gradient(180deg, rgba(10,6,7,0.6), rgba(8,5,6,0.42) 28%, rgba(8,5,6,0.88) 100%); }
   html.rr-perf-bg .scr-vidbg { display: none !important; }
   html.rr-reduce-motion .scr-vidbg { display: none !important; }   /* v258: respect reduced-motion (CSS can't pause a <video>; hide it — the scrim supplies the bg) */
+  /* ...and the three PRIMARY full-screen backdrops, which this rule never covered. They were only hidden under
+     `rr-perf-bg`, so a player who asked the OS for reduced motion still got three looping videos — the single
+     largest moving surface in the app. The decoder observer below is gated to match; without that gate it would
+     simply .play() them again. */
+  html.rr-reduce-motion #start-video,
+  html.rr-reduce-motion #menu-hub-video,
+  html.rr-reduce-motion #menu-bg-video { display: none !important; }
   /* v258 PERF: a backdrop video only renders for its ACTIVE screen — display:none halts decode/compositing on the other two (the screen observer also pause()s them) */
   #profile-screen:not(.active) .scr-vidbg, #levels-screen:not(.active) .scr-vidbg, #leaderboard-screen:not(.active) .scr-vidbg { display: none !important; }
   .profile-screen > .profile-card, .levels-screen > .levels-card, .leaderboard-screen > .lbd-card { position: relative; z-index: 1; }
@@ -2234,7 +2260,7 @@
   html.rr-perf-bg #menu-hub .mh-bg-scrim { background: none; }
   #menu-hub .mh-card { position: relative; z-index: 2; }
   /* v262: gear → Settings on the start menu (delegates to the library's calib/settings opener; gear spins on hover) */
-  #menu-hub .mh-settings { position: absolute; top: 16px; right: 16px; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; cursor: pointer; color: #cdc4c1; background: rgba(10,7,6,0.55); border: 1px solid var(--line, rgba(218,215,210,0.22)); transition: color .15s ease, border-color .15s ease, transform .3s ease, box-shadow .15s ease; z-index: 5; }
+  #menu-hub .mh-settings { position: absolute; top: 16px; right: 16px; width: 44px; height: 44px;   /* WCAG 2.5.5: was 38px */ display: grid; place-items: center; border-radius: 50%; cursor: pointer; color: #cdc4c1; background: rgba(10,7,6,0.55); border: 1px solid var(--line, rgba(218,215,210,0.22)); transition: color .15s ease, border-color .15s ease, transform .3s ease, box-shadow .15s ease; z-index: 5; }
   #menu-hub .mh-settings:hover, #menu-hub .mh-settings:focus-visible { color: var(--chrome, #dad7d2); border-color: var(--crimson, #ff1f2e); transform: rotate(40deg); box-shadow: 0 0 14px rgba(255,31,46,0.28); }
   #menu-hub .mh-settings svg { width: 20px; height: 20px; }
   html.rr-reduce-motion #menu-hub .mh-settings:hover { transform: none; }
@@ -3968,7 +3994,9 @@
     .lib-bar { flex-wrap: wrap; }
     .lib-search { order: 3; flex-basis: 100%; max-width: none; margin: 12px 0 0; }
     .lib-actions { gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
-    .lib-actions .icon-btn { width: 36px; height: 36px; }
+    /* WCAG 2.5.5: these were 36px on the exact devices where a mis-tap costs most — Exit-to-site sits
+       next to Search. The svg stays 17px; only the target grows. */
+    .lib-actions .icon-btn { width: 44px; height: 44px; }
     .lib-actions .icon-btn svg { width: 17px; height: 17px; }
     .lib-bar { padding-left: 14px; padding-right: 14px; }
     .lib-ready { display: none; }
@@ -4247,6 +4275,13 @@
     background: linear-gradient(180deg, #f4cf6a, #d89b2c);
     border-radius: 999px; padding: 3px 10px;
     box-shadow: 0 0 12px rgba(224,169,63,0.5), 0 2px 6px rgba(0,0,0,0.4); }
+  /* Tap-target law (WCAG 2.5.5): the DOT stays 22px — a big × on a card is ugly — but the HIT AREA is 44px.
+     A transparent ::before centered on the button does it with zero layout shift. This × sits inches from the
+     card's own CTA, so a mis-tap isn't a no-op, it launches something. */
+  .mgc-dismiss::before {
+    content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 44px; height: 44px; border-radius: 50%;
+  }
   .mgc-dismiss {
     position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
     border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--ink-dim);
@@ -7593,6 +7628,11 @@
         <span id="loading-msg">Awakening ECH0</span>
         <span class="pct" id="loading-pct">0%</span>
       </div>
+      <!-- A dead or slow track used to hang here for up to 30s with no way out and a progress ring that told a
+           comforting lie. On a first session that reads as "the game crashed." Now: an honest line after 6s, and
+           an exit that always works. Both are hidden until they have something true to say. -->
+      <div class="loading-slow" id="loading-slow" hidden>Taking longer than usual — this track may be slow to load.</div>
+      <button type="button" class="loading-cancel" id="loading-cancel" hidden>CANCEL</button>
     </div>
   </div>
 
@@ -7942,7 +7982,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=465"></script>
+<script src="telemetry.js?v=466"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8121,17 +8161,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=465"></script>
-<script src="game.js?v=465"></script>
-<script src="procbg.js?v=465"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=465"></script>
-<script src="chat.js?v=465"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=465"></script>
-<script src="goals.js?v=465"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=465"></script>
-<script src="share.js?v=465"></script>
-<script src="replay.js?v=465"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=465"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=466"></script>
+<script src="game.js?v=466"></script>
+<script src="procbg.js?v=466"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=466"></script>
+<script src="chat.js?v=466"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=466"></script>
+<script src="goals.js?v=466"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=466"></script>
+<script src="share.js?v=466"></script>
+<script src="replay.js?v=466"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=466"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -11964,6 +12004,14 @@
       var on = document.getElementById('lib-mute-on'), off = document.getElementById('lib-mute-off');
       if (on) on.style.display = muted ? 'none' : '';
       if (off) off.style.display = muted ? '' : 'none';
+      // The mute state was encoded ONLY in which <svg> was displayed. A screen reader heard "Mute audio" whether
+      // audio was playing or already silenced, so a blind player had no way to know the current state — they could
+      // only toggle and hope. aria-pressed makes it a real toggle button; the label names the state, not the wish.
+      [lm, floating].forEach(function (b) {
+        if (!b) return;
+        b.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        b.setAttribute('aria-label', muted ? 'Unmute audio' : 'Mute audio');
+      });
       lm.classList.toggle('muted', muted);
     }
     lm.addEventListener('click', function () {
@@ -11971,6 +12019,13 @@
       try { window.RhythmCatalog && window.RhythmCatalog.stopPreview && window.RhythmCatalog.stopPreview(); } catch (e) {}
       syncIcon();
     });
+    // syncIcon only ever ran when the LIBRARY button was clicked. Mute via the floating button (or the M key,
+    // which game.js routes to it) flipped `.muted` on #mute-btn and nobody told the library — so its icon, and
+    // now its aria-pressed, went stale and actively lied about the state. Watch the class instead of trusting
+    // that every future mute path remembers to call us.
+    try {
+      new MutationObserver(syncIcon).observe(floating, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) {}
     setTimeout(syncIcon, 300);
   })();
 
@@ -12449,6 +12504,22 @@
   })();
   // showHub() calls paintDailyRift through this thin shim (defined above as window.__rrPaintDailyRift).
   function paintDailyRift() { try { if (window.__rrPaintDailyRift) window.__rrPaintDailyRift(); } catch (e) {} }
+
+  // The hub's retention tiles paint BEFORE the async catalog crawl resolves, and nothing ever repainted them —
+  // so Daily Rift / Weekly Rift / the status strip could sit on "Loading…" until you left the hub and came back.
+  // catalog.js now fires rr:catalog-ready exactly once per loadCatalog() resolution (both the live and the
+  // mock/fallback exit, so an unreachable backend un-strands the hub too). Only repaint if the hub is on screen;
+  // painting a hidden screen is wasted work, and showHub() repaints on entry anyway.
+  try {
+    window.addEventListener('rr:catalog-ready', function () {
+      var hub = document.getElementById('menu-hub');
+      if (!hub || !hub.classList.contains('active')) return;
+      try { paintDailyRift(); } catch (e) {}
+      try { paintWeeklyRift(); } catch (e) {}
+      try { paintReclaimThread(); } catch (e) {}
+      try { if (window.rrAttentionCap) window.rrAttentionCap(); } catch (e) {}   // repaints can open a second pulse; re-assert the one-pulse cap (build165)
+    });
+  } catch (e) {}
 
   // ===========================================================================
   // build125 — WEEKLY RIFT LADDER card (delighter: the Sunday-night ritual). Mirrors the Daily Rift IIFE
