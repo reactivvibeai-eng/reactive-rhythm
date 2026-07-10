@@ -716,7 +716,7 @@
     lobbyCh.on('broadcast', { event: 'challenge-ans' }, function (m) { onChallengeAns(m.payload); });
     // build8: open-room directory advertisements (host → everyone) + close notices
     lobbyCh.on('broadcast', { event: 'room-meta' }, function (m) { onRoomMeta(m.payload); });
-    lobbyCh.on('broadcast', { event: 'room-gone' }, function (m) { var p = m.payload; if (p && p.rid) { delete roomsDir[p.rid]; renderRooms(); updateBrowseCount(); } });
+    lobbyCh.on('broadcast', { event: 'room-gone' }, function (m) { var p = m.payload; if (p && p.rid) { delete roomsDir[p.rid]; try { _roomGoneRescue(p.rid); } catch (e) {} renderRooms(); updateBrowseCount(); } });
     lobbyCh.on('broadcast', { event: 'room-ping' }, function () { if (room.id && room.isHost) advertiseRoom(); if (tour.id && tour.isHost) advertiseTour(); });   // late-joiner asks; hosts re-announce
     // build9: tournament directory advertisements
     lobbyCh.on('broadcast', { event: 'tour-meta' }, function (m) { onTourMeta(m.payload); });
@@ -3892,7 +3892,7 @@
       }
     });
   }
-  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _stopRoomStateBeat(); _stopCritSweep(); if (!_roomResubActive) _dropCritScope('room'); _roomStateSeen = -1; if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
+  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); if (!_directJoinInFlight) _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _stopRoomStateBeat(); _stopCritSweep(); if (!_roomResubActive) _dropCritScope('room'); _roomStateSeen = -1; if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -4023,6 +4023,27 @@
   // silently drops to the lobby/menu while a room is expected — worst case it holds a clear "Joining…" state.
   var _pendJoinT = 0, _pendJoinRid = null;
   function _clearPendJoin() { if (_pendJoinT) { clearInterval(_pendJoinT); _pendJoinT = 0; } _pendJoinRid = null; }
+  // MP_GUEST_CONTRACT_v1 §2: true only while joinRoomDirect() is deliberately opening the channel for the very rid
+  // the _pendJoin watchdog is waiting on. joinRoomChannel() calls leaveRoomChannel(), which calls _clearPendJoin() —
+  // so the direct join used to DESTROY the clock that was supposed to time it out, and the guest was then stranded in
+  // a synthesized room with no watchdog, no fail card, and a ghost opponent. The v417 "a user LEAVE must not get
+  // auto-yanked back" reason for that _clearPendJoin still holds for every other caller; this flag exempts only the
+  // handoff into the room we are already pending.
+  var _directJoinInFlight = false;
+  // MP_GUEST_CONTRACT_v1 §2 — the host's own 'room-gone' broadcast is POSITIVE proof of death, it rides public
+  // realtime (so a guest gets it), and until now it only pruned the room browser. It must also rescue whoever is
+  // mid-join or parked in that room. Conservative on purpose: never yank a live match, a show, or a spectator.
+  function _roomGoneRescue(rid) {
+    if (!rid) return;
+    var pending = (_pendJoinRid === rid) || (_pendingRoomJoin === rid);
+    var parkedIn = (room.id === rid && !room.isHost && !matchLive && !matchCh && !room.show && !spectating);
+    if (!pending && !parkedIn) return;
+    _clearPendJoin();
+    if (_pendingRoomJoin === rid) _pendingRoomJoin = null;
+    if (parkedIn) { try { leaveGuestRoom(); } catch (e) {} }
+    showFailCard({ head: 'THAT ROOM IS CLOSED', reason: 'The host closed the room before you got in.',
+      actions: [{ label: 'BACK TO LOBBY', primary: true, fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
+  }
   // direct channel join with NO room-meta — synthesizes a minimal room object off the rid alone. Host identity,
   // name, combat/matched flags all self-heal from the host's room-meta (onRoomMeta) + presence + song broadcasts
   // once the host is online. Used only as the late-host fallback; the meta fast-path stays byte-identical.
@@ -4040,7 +4061,9 @@
       isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: (meta && meta.hostId) || null, p2: asSpec ? null : ME.id,
       show: !!(meta && meta.show), submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
     spectating = !!asSpec;
-    joinRoomChannel(rid, room.seat);
+    // keep the _pendJoin watchdog alive across this handoff — it now owns the host-liveness deadline (§4).
+    _directJoinInFlight = true;
+    try { joinRoomChannel(rid, room.seat); } finally { _directJoinInFlight = false; }
     reannounce();
     banner('mpx-lobby-msg', '');
     enterRoomWaiting();
@@ -4092,9 +4115,24 @@
     var maxTries = 18;  // ~45s baseline window
     var _roomDead = false;   // set only when the /room-status preflight explicitly says alive:false
     var _jt0 = Date.now(), _directFired = false;   // FIX 2.7: join-start clock + which path converged (meta fast-path vs direct-join fallback)
+    // MP_GUEST_CONTRACT_v1 §2 — CONVERGENCE IS HOST EVIDENCE, NOT room.id.
+    // joinRoomDirect() synthesizes room.id off the rid alone: a hypothesis, not a fact. Reading it as "converged"
+    // is what let a guest sit forever in a room that never existed. Every probe below is realtime and
+    // guest-callable — no safety verdict may ride on an authed REST call a guest cannot make.
+    var _hostEvidence = function () {
+      if (room.id !== rid) return false;
+      if (!_directFired) return true;                       // meta fast-path: joinRoom() only ever runs off a real host meta
+      if (matchCh) return true;                             // a live match channel cannot exist without a host
+      if (roomsDir[rid]) return true;                       // the host's room-meta healed us after the direct join
+      if (room.p1 && room.members[room.p1]) return true;    // host heartbeat present (same predicate as the v417 eject guard)
+      if (_roomStateSeen > 0) return true;                  // a versioned host room-state snapshot landed (onRoomState)
+      return false;
+    };
     var tick = function () {
-      // converged (onRoomMeta auto-joined, or a direct join landed) → done
-      if (room.id) { _tel('mp_join_converged', { path: _directFired ? 'direct' : 'meta', ms: Date.now() - _jt0 }); _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
+      // converged — the host proved, over realtime, that it exists
+      if (_hostEvidence()) { _tel('mp_join_converged', { path: _directFired ? 'direct' : 'meta', ms: Date.now() - _jt0 }); _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
+      // the user navigated into a DIFFERENT room — stop watching this one; never fight them.
+      if (room.id && room.id !== rid) { _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null; return; }
       // v417 review-fix C: abandon when there's no pending join AND we're not in a room. Dropped the `_pendJoinRid !==
       // rid` conjunct: after a user LEAVES a direct-joined room (room.id nulled, _pendingRoomJoin already nulled at the
       // handoff) _pendJoinRid was still === rid, so the old guard stayed false and the next tick re-joinRoomDirect'd —
@@ -4141,6 +4179,20 @@
           // B5: a dead deep-link ends in a CARD with a real next step, never a one-line grey banner lost in a busy lobby.
           showFailCard({ head: 'ROOM DIDN’T ANSWER', reason: 'The room didn’t respond for 45s — the host may have closed it.',
             actions: [{ label: 'TRY AGAIN', primary: true, fn: function () { clearFailCard(); _pendJoin(rid, opts); } }, { label: 'BACK', fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
+        } else if (room.id === rid && !room.isHost && !_hostEvidence()) {
+          // MP_GUEST_CONTRACT_v1 §2 state 5 (host-never-came) — 45s in a channel nobody else was ever in. The old
+          // code called this "converged" and left the guest here forever, watching a ghost 'Opponent — WAITING'.
+          _pendingRoomJoin = null;
+          var _wasSpec = spectating || !!opts.asSpec;
+          _tel('mp_join_failed', { path: 'direct', reason: 'no_host', ms: Date.now() - _jt0 });
+          try { leaveGuestRoom(); } catch (e) {}
+          if (_wasSpec) {   // spectate byte-identity: a watcher sees the EXISTING card, never new chrome
+            showFailCard({ head: 'ROOM DIDN’T ANSWER', reason: 'The room didn’t respond for 45s — the host may have closed it.',
+              actions: [{ label: 'BACK', primary: true, fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
+          } else {
+            showFailCard({ head: 'NO HOST IN THIS ROOM', reason: 'You made it in, but the host never showed. The invite may be stale — ask them for a fresh link, or try again in case they’re just slow.',
+              actions: [{ label: 'TRY AGAIN', primary: true, fn: function () { clearFailCard(); _pendJoin(rid, opts); } }, { label: 'BACK TO LOBBY', fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
+          }
         }
       }
     };
@@ -4240,19 +4292,35 @@
   // room.isHost + hidden for show rooms + never shown to a guest/spectator, so spectate byte-identity holds).
   // Shows a real server code once room-announce lands; a neutral placeholder (never the un-joinable local hash)
   // meanwhile, so a code a peer types always resolves. The invite LINK/button stays the always-works share path.
+  // MP_GUEST_CONTRACT_v1 §3 (the placeholder law): every placeholder declares its success render, its failure
+  // render, and the deadline that forces the choice. '····' is legal ONLY while a real fetch is in flight. A
+  // signed-out host has nothing in flight — /room-announce is host-locked, so a code will NEVER arrive — and the
+  // dots were therefore a lie with good posture. The truth is known synchronously from ME.signedIn.
   function _paintShareCode() {
     var codeEl = $('mpx-invite-code'); if (!codeEl) return;
     if (!room.id || !room.isHost) return;
-    codeEl.textContent = room.shareCode || '····';
+    if (room.shareCode) { codeEl.textContent = room.shareCode; codeEl.title = ''; return; }              // success
+    if (!ME.signedIn) { codeEl.textContent = 'SIGN IN'; codeEl.title = 'Room codes need sign-in — your invite link works right now.'; return; }
+    if (room.codePending) { codeEl.textContent = '····'; codeEl.title = ''; return; }                     // in flight (the only legal '····')
+    codeEl.textContent = 'LINK ONLY'; codeEl.title = 'Couldn’t get a room code — the invite link still works.';   // failure render
   }
   // Fired from openRoomWithId (host path). Idempotent server-side per host+room; harmless on battle-call / qm rooms.
   function _announceMyRoom() {
     if (!room.id || !room.isHost) return;
     var _rid = room.id;
     room.shareCode = null;
+    if (!ME.signedIn) { room.codePending = false; try { _paintShareCode(); } catch (e) {} return; }       // no token → no fetch, and no dots
+    room.codePending = true; try { _paintShareCode(); } catch (e) {}
+    // the promise settling IS the deadline: it resolves to a code, or to the 'LINK ONLY' failure render.
     _roomAnnounce(_rid).then(function (r) {
-      if (r && r.code && room.id === _rid && room.isHost) { room.shareCode = _normCode(r.code); try { _paintShareCode(); } catch (e) {} }
-    }).catch(function () {});
+      if (room.id !== _rid || !room.isHost) return;
+      room.codePending = false;
+      if (r && r.code) room.shareCode = _normCode(r.code);
+      try { _paintShareCode(); } catch (e) {}
+    }).catch(function () {
+      if (room.id !== _rid || !room.isHost) return;
+      room.codePending = false; try { _paintShareCode(); } catch (e) {}
+    });
   }
 
   // ---- Join-by-code entry UI (lobby step only; a child of .mpx-step-lobby so step() hides it in every
@@ -4315,7 +4383,7 @@
     { var _bbr = $('mpx-beat-room'); if (_bbr) _bbr.hidden = true; }   // build102y step6: default-hidden — only endSpectate's paint (right after this) may show it
     if (room.isHost && room.id) {
       if (codeRow) codeRow.hidden = false;
-      if (codeEl) codeEl.textContent = room.shareCode || '····';   // Wave-3: the real server join-by-code (·· placeholder until room-announce lands / if the server is older); _paintShareCode updates it live
+      try { _paintShareCode(); } catch (e) {}   // §3: ONE renderer owns every state of this slot (code / SIGN IN / '····' in-flight / LINK ONLY)
       if (addCpu) addCpu.hidden = false;
     } else {
       if (codeRow) codeRow.hidden = true;
@@ -7284,7 +7352,10 @@
     var share = (code ? 'Join my Reactive Rhythm room — code ' + code + ' or open: ' : 'Join my Reactive Rhythm room: ') + link;
     var btn = $('mpx-invite-friend');
     function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — SEND IT' : 'VS PLAYER — INVITE'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = 'VS PLAYER — INVITE'; }, 2600); }
-    try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a friend:', share); }); }
+    // The CLIPBOARD gets the bare URL. We used to copy a whole sentence; pasted into an address bar, Chrome treats
+    // that as a search query and the invite silently goes nowhere. The prose survives only in the manual-copy prompt,
+    // where a human reads it rather than a browser parsing it.
+    try { navigator.clipboard.writeText(link).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a friend:', share); }); }
     catch (e) { window.prompt('Copy this — send it to a friend:', share); }
   });
   // build60: a solo host is never stuck — drop a CPU opponent into the duel and start a real split-screen match.

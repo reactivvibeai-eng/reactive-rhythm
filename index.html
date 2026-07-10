@@ -37,7 +37,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=463" />
+<link rel="stylesheet" href="jukebox.css?v=464" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -4062,9 +4062,8 @@
   /* animated accent hairline across the top edge — subtle drift, brightens on hover */
   .mh-tile::after { content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 2px; pointer-events: none;
     background: linear-gradient(90deg, transparent, var(--ta), transparent);
-    opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta));
-    background-size: 200% 100%; animation: mhEdge 5.5s linear infinite; }
-  @keyframes mhEdge { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
+    opacity: 0.35; filter: drop-shadow(0 0 6px var(--ta)); }
+  /* D1 (HUB_IA_v1 §3.2): mhEdge infinite drift KILLED — the quiet tiles keep a STATIC hairline; no loop. */
   /* build19: produced TITLE WORDMARK (self-healing slot) — hidden until the file loads; when it
      does, the art replaces the text title (H1 stays for screen readers). */
   .mh-logo { display: none; }
@@ -4146,6 +4145,9 @@
      + applies .has-art, reusing the existing .mh-art layer); the CSS fallback below paints a warm gold gradient +
      a faint ⚡ rift glow so the tile reads even with NO image (the owner is generating the art). NO blue/purple. */
   #mh-daily       { --ta: #e0a93f; }          /* gold — daily reward */
+  /* D1 (HUB_IA_v1 §3.2): Daily Rift is SECOND RANK — spans 2 cols (still quiet; never pulses). */
+  #mh-daily { grid-column: span 2; }
+  @media (max-width: 420px) { #mh-daily { grid-column: auto; } }   /* span 2 on a 1-col grid overflows */
   .mh-tile.mh-daily { background:
       radial-gradient(120% 90% at 50% -10%, rgba(224,169,63,0.16), rgba(224,169,63,0) 60%),
       linear-gradient(180deg, rgba(36,26,12,0.92), rgba(20,15,9,0.95)); }
@@ -4167,8 +4169,7 @@
   .mh-tile.mh-daily.has-art .mh-daily-tags { color: #f4d488; }
   .mh-tile.primary::before { opacity: 0.7; }
   /* reduced-motion / fxLite: freeze the drifting edge + sheen to a calm static state */
-  html.rr-reduce-motion .mh-tile::after { animation: none; opacity: 0.45; }
-  body.rr-fx-lite .mh-tile::after { animation: none; }
+  html.rr-reduce-motion .mh-tile::after { opacity: 0.45; }
   /* ===== hub tile KEY ART (build10, assets/hub/) — JS applies .has-art only when the
      file actually loads (self-healing). Art rides a z-0 child span under the z-1 labels;
      the generic SVG icon hides because the painting IS the icon. */
@@ -4195,6 +4196,8 @@
   #menu-hub .mh-tile.primary::before { animation: mhPrimaryBeat 2s ease-in-out infinite; }
   html.rr-reduce-motion #menu-hub .mh-brand img, body.rr-fx-lite #menu-hub .mh-brand img { animation: none; }
   html.rr-reduce-motion #menu-hub .mh-tile.primary::before, body.rr-fx-lite #menu-hub .mh-tile.primary::before { animation: none; opacity: 0.7; }
+  /* D1 (HUB_IA_v1 §3.1): when an accent OUTRANKS Campaign, the governor hushes the hero beat (pulse ladder). */
+  #menu-hub .mh-tile.primary.rr-hush::before { animation: none; opacity: 0.7; }
 
   .mh-soon { position: absolute; top: 10px; right: 10px; font-family: 'Chakra Petch', sans-serif;
     font-size: 9px; font-weight: 700; letter-spacing: 0.16em; color: var(--gold);
@@ -4273,6 +4276,13 @@
     filter: drop-shadow(0 0 14px rgba(255,150,74,0.85)) drop-shadow(0 0 28px rgba(255,31,46,0.5)); }
   @keyframes mgcFlameBreathe { 0%,100% { opacity: 0.85; transform: translate(-50%,-50%) scale(1); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); } }
   html.rr-reduce-motion .mgc-flame-glow, body.rr-fx-lite .mgc-flame-glow { animation: none !important; }
+  /* D1 (HUB_IA_v1 §3.4): STREAK-AT-RISK flame — urgent ember breathe (pulse-ladder rank 2 on the hub). */
+  .mgc-flame--risk .mgc-flame-glow { background: radial-gradient(circle, rgba(255,90,20,0.5), transparent 70%);
+    animation: mgcFlameRisk 1.6s ease-in-out infinite; }
+  @keyframes mgcFlameRisk { 0%,100% { opacity: 0.7; } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.1); } }
+  .mgc-flame.rr-hush .mgc-flame-glow,
+  html.rr-reduce-motion .mgc-flame--risk .mgc-flame-glow,
+  body.rr-fx-lite .mgc-flame--risk .mgc-flame-glow { animation: none !important; }
   .mgc-body { flex: 1 1 auto; min-width: 0; }
   .mgc-toprow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .mgc-row { display: flex; flex-wrap: wrap; gap: 14px 22px; }
@@ -4301,48 +4311,15 @@
   .mgc-xp-fill { display: block; height: 100%; width: 0%; border-radius: 4px;
     background: linear-gradient(90deg, #c98a2c, #f4cf6a); box-shadow: 0 0 8px rgba(224,169,63,0.5);
     transition: width 0.5s cubic-bezier(.2,1,.3,1); }
-  /* next-action CTA — crimson-bordered ghost pill (ghost-pill language of .mh-skip), funnels into play */
-  .mgc-cta { flex: 0 0 auto; cursor: pointer; align-self: flex-start;
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 8px 16px; border: 1px solid rgba(255,31,46,0.55); border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255,31,46,0.16), rgba(163,6,15,0.12));
-    font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--ink); white-space: nowrap;
-    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .15s ease; }
-  .mgc-cta:hover, .mgc-cta:focus-visible { color: #fff; border-color: var(--crimson);
-    box-shadow: 0 0 18px rgba(255,31,46,0.4); background: linear-gradient(180deg, rgba(255,31,46,0.28), rgba(163,6,15,0.2));
-    transform: translateY(-1px); outline: none; }
-  .mgc-cta[hidden] { display: none; }
+  /* D1 (HUB_IA_v1 §3.4): #mgc-cta REMOVED — a second filled "PLAY A LEVEL" CTA duplicated the Campaign hero
+     on the same screen. The goals card is now a zero-CTA ambient status module. */
   @media (max-width: 600px) {
     .mh-goalscard { flex-direction: column; align-items: flex-start; padding: 18px 36px 16px 16px; }
     .mgc-flame { flex-direction: row; min-width: 0; }
     .mgc-toprow { flex-direction: column; align-items: flex-start; }
-    .mgc-cta { align-self: stretch; justify-content: center; }
   }
-  /* build122 p3 — COME BACK TOMORROW: slim forward "keep your streak" nudge ribbon under the goals card.
-     Gold/ember, same flame language as .mgc-flame — a quieter, single-line sibling (not a second hero card). */
-  .mh-streak-ribbon {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin: 10px auto 0; padding: 9px 16px; max-width: 620px;
-    border: 1px solid rgba(224,169,63,0.3); border-radius: 999px;
-    background: linear-gradient(180deg, rgba(224,169,63,0.08), rgba(224,169,63,0.03));
-  }
-  .mh-streak-ribbon[hidden] { display: none; }
-  .mh-streak-ribbon .msr-ico { font-size: 15px; filter: drop-shadow(0 0 5px rgba(224,169,63,0.55)); flex: none; }
-  .mh-streak-ribbon .msr-txt {
-    flex: 1 1 auto; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.02em;
-    color: var(--ink-dim); text-align: left; min-width: 0;
-  }
-  .mh-streak-ribbon .msr-txt b { color: var(--gold); font-family: 'Oxanium', sans-serif; font-weight: 700; }
-  .mh-streak-ribbon .msr-cal {
-    flex: none; cursor: pointer; text-decoration: none;
-    padding: 5px 12px; border: 1px solid rgba(224,169,63,0.4); border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--gold); background: rgba(224,169,63,0.06);
-    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease;
-  }
-  .mh-streak-ribbon .msr-cal:hover, .mh-streak-ribbon .msr-cal:focus-visible { color: #fff; border-color: var(--gold); box-shadow: 0 0 14px rgba(224,169,63,0.4); outline: none; }
-  @media (max-width: 600px) { .mh-streak-ribbon { flex-direction: column; align-items: stretch; text-align: center; } .mh-streak-ribbon .msr-txt { text-align: center; } .mh-streak-ribbon .msr-cal { align-self: center; } }
+  /* D1 (HUB_IA_v1 §3.5): #mh-streak-ribbon DELETED — its flame+count live in the goalscard flame and the
+     library chip; its at-risk urgency now lives in .mgc-flame--risk. The "+ REMIND ME" third CTA died with it. */
 
   /* build125 — WEEKLY RIFT LADDER card. A slim GOLD-accented sibling of the .mh-daily tile (same radius/
      border grammar, Oxanium numbers + Chakra Petch labels), sat above the hub grid. Distinct from the daily's
@@ -4420,6 +4397,13 @@
     .mh-weekly .mwk-play { flex: 1 1 auto; }
   }
   @media (prefers-reduced-motion: reduce) { .mh-weekly::before { background: linear-gradient(115deg, rgba(240,200,110,0.06), rgba(240,200,110,0) 42%); } .mh-weekly .mwk-play { transition: none; } }
+  /* D1 (HUB_IA_v1 §3.5): RIFT CLOSING (<24h) — the whole card beats gold (pulse-ladder rank 4, governed). */
+  @keyframes mwkClosingBeat { 0%,100% { box-shadow: 0 0 0 1px rgba(224,169,63,0.28), 0 10px 30px rgba(224,169,63,0.10); }
+    50% { box-shadow: 0 0 0 1px rgba(224,169,63,0.55), 0 0 26px rgba(224,169,63,0.30); } }
+  #mh-weekly.is-closing { animation: mwkClosingBeat 2s ease-in-out infinite; }
+  #mh-weekly.is-closing.rr-hush,
+  html.rr-reduce-motion #mh-weekly.is-closing,
+  body.rr-fx-lite #mh-weekly.is-closing { animation: none; box-shadow: 0 0 0 1px rgba(224,169,63,0.45); }
 
   /* build122 p3: STREAK SAVED one-time reveal — a dedicated, more dramatic sibling of #levelup-toast (same
      gold/crimson visual language + centered-overlay idiom) reserved for the "you missed a day but the freeze
@@ -4456,6 +4440,34 @@
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
   .mh-skip:hover, .mh-skip:focus-visible { color: var(--chrome); border-color: var(--crimson);
     box-shadow: 0 0 16px rgba(255,31,46,0.28); background: rgba(30,14,16,0.6); outline: none; }
+  /* D1 (HUB_IA_v1 §3.3): FOOTER row — Browse-all + the demoted STORE ghost-link (id kept: 3 wiring tables key on it). */
+  .mh-foot { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .mh-foot .mh-skip { margin-top: 0; }
+  .mh-foot .mh-skip, .mh-footlink { min-height: 44px; }
+  .mh-footlink { cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 10px 22px; border: 1px solid rgba(224,169,63,0.35); border-radius: 999px;
+    background: rgba(20,11,12,0.5);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--ink-dim);
+    transition: color .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+  .mh-footlink:hover, .mh-footlink:focus-visible { color: var(--gold); border-color: rgba(224,169,63,0.85);
+    box-shadow: 0 0 16px rgba(224,169,63,0.28); background: rgba(30,20,10,0.6); outline: none; }
+  /* D1 (HUB_IA_v1 §3.6): quiet reclaim THREAD on the status strip — never an accent, never animates. */
+  .mh-status-reclaim { border: none; background: none; cursor: pointer; padding: 4px 0;
+    font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
+  .mh-status-reclaim[hidden] { display: none; }
+  .mh-status-reclaim b { color: var(--gold); font-weight: 700; }
+  @media (max-width: 600px) { .mh-status-reclaim { min-height: 44px; } }
+  /* D1 (HUB_IA_v1 §5): 375px column — the CAMPAIGN hero must be reachable without hunting, so the goals
+     card yields its above-grid slot on phones (grid renders before goalscard/weekly/foot). */
+  @media (max-width: 600px) {
+    #menu-hub .mh-card { display: flex; flex-direction: column; }
+    #mh-goalscard { order: 1; }
+    #mh-weekly { order: 2; }
+    .mh-foot { order: 3; }
+  }
   .hub-back { position: absolute; top: max(calc(env(safe-area-inset-top, 0px) + 12px), 16px); left: 16px;
     z-index: 70; display: inline-flex; align-items: center; gap: 7px; padding: 9px 15px 9px 11px;
     border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
@@ -5871,6 +5883,7 @@
         </span>
         <span class="mh-status-spark" id="mh-status-spark" hidden></span>
         <span class="mh-status-cont" id="mh-status-cont" hidden></span>
+        <button class="mh-status-reclaim" id="mh-status-reclaim" type="button" hidden></button>
       </div>
       <!-- build110 Phase 4 / build117 p1 PREMIUM makeover: "you're back today" retention hero card —
            daily/weekly goal progress + XP bar + rotating roast copy on complete (playtest-4 spec:
@@ -5901,7 +5914,6 @@
               <span class="mgc-complete-txt" id="mgc-complete-txt">DAILY GOAL COMPLETE</span>
               <span class="mgc-complete-xp" id="mgc-complete-xp"></span>
             </div>
-            <button class="mgc-cta" id="mgc-cta" type="button" hidden>PLAY A LEVEL →</button>
           </div>
           <div class="mgc-xprow">
             <span class="mgc-xp-cap" id="mgc-xp-cap">XP TO LEVEL 2: 0 / 80</span>
@@ -5909,35 +5921,7 @@
           </div>
         </div>
       </div>
-      <!-- build122 p3 — COME BACK TOMORROW (delighter #3): slim forward "keep your streak alive" nudge.
-           Shown whenever the streak is alive (count > 0); gold flame language matches the goals-card flame.
-           Painted by paintStreakRibbon() (called from showHub()). Hidden until painted with data. -->
-      <div class="mh-streak-ribbon" id="mh-streak-ribbon" hidden>
-        <span class="msr-ico" aria-hidden="true">🔥</span>
-        <span class="msr-txt">Streak: <b id="msr-days">0</b> days — play 1 song tomorrow to keep it</span>
-        <a class="msr-cal" id="msr-cal" href="#" title="Add a reminder to your calendar" aria-label="Add a reminder to your calendar">+ REMIND ME</a>
-      </div>
-      <!-- build125 — WEEKLY RIFT LADDER (delighter: the Sunday-night ritual). A slim gold-accented
-           card: this week's Rift track, YOUR best this week (or "not played yet"), a countdown to the
-           Monday 00:00 reset, and a PLAY THE RIFT button. Painted by paintWeeklyRift() (called from
-           showHub() alongside paintDailyRift). Reads window.RhythmWeeklyRift (self-contained ledger,
-           goals.js). Local-only "personal best" — no fabricated cross-player rank. Hidden until painted. -->
-      <div class="mh-weekly" id="mh-weekly" hidden>
-        <span class="mwk-eyebrow">WEEKLY RIFT</span>
-        <span class="mwk-art" id="mwk-art" aria-hidden="true"></span>
-        <div class="mwk-body">
-          <span class="mwk-song" id="mwk-song">Loading this week&rsquo;s Rift&hellip;</span>
-          <span class="mwk-meta">
-            <span class="mwk-best" id="mwk-best">Not played yet</span>
-            <span class="mwk-dot" aria-hidden="true">&middot;</span>
-            <span class="mwk-count" id="mwk-count">resets in &mdash;</span>
-          </span>
-        </div>
-        <div class="mwk-actions">
-          <button class="mwk-play" id="mwk-play" type="button">PLAY THE RIFT</button>
-          <button class="mwk-share" id="mwk-share" type="button" hidden aria-label="Share your Weekly Rift best">SHARE</button>
-        </div>
-      </div>
+      <!-- D1 (HUB_IA_v1 §3.5): #mh-streak-ribbon DELETED; #mh-weekly MOVED to below the grid (see after #mh-grid). -->
       <div class="mh-grid" id="mh-grid">
         <button class="mh-tile primary mh-hero" id="mh-campaign" type="button">
           <span class="mh-hero-chip" id="mh-campaign-chip">NEW · START HERE</span>
@@ -5965,11 +5949,7 @@
           <span class="mh-t">Multiplayer</span>
           <span class="mh-d">Head to head</span>
         </button>
-        <button class="mh-tile" id="mh-store" type="button">
-          <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v1a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0V6l-3-4z"></path><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5"></path><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"></path></svg></span>
-          <span class="mh-t">Store</span>
-          <span class="mh-d">Spend Sparks</span>
-        </button>
+        <!-- D1 (HUB_IA_v1 §3.3): Store DEMOTED off the grid → the footer (.mh-foot). Its id is preserved there. -->
         <button class="mh-tile" id="mh-leaderboard" type="button">
           <span class="mh-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"></path><path d="M5 5H3v2a3 3 0 0 0 3 3"></path><path d="M19 5h2v2a3 3 0 0 1-3 3"></path></svg></span>
           <span class="mh-t">Leaderboards</span>
@@ -5981,7 +5961,29 @@
           <span class="mh-d">Your career</span>
         </button>
       </div>
-      <button class="mh-skip" id="mh-skip" type="button">Browse all tracks →</button>
+      <!-- D1 (HUB_IA_v1 §3.5): WEEKLY RIFT card moved BELOW the grid — weekly cadence never outranks
+           "what do I do right now". Painted by paintWeeklyRift() (showHub). Reads window.RhythmWeeklyRift. -->
+      <div class="mh-weekly" id="mh-weekly" hidden>
+        <span class="mwk-eyebrow">WEEKLY RIFT</span>
+        <span class="mwk-art" id="mwk-art" aria-hidden="true"></span>
+        <div class="mwk-body">
+          <span class="mwk-song" id="mwk-song">Loading this week&rsquo;s Rift&hellip;</span>
+          <span class="mwk-meta">
+            <span class="mwk-best" id="mwk-best">Not played yet</span>
+            <span class="mwk-dot" aria-hidden="true">&middot;</span>
+            <span class="mwk-count" id="mwk-count">resets in &mdash;</span>
+          </span>
+        </div>
+        <div class="mwk-actions">
+          <button class="mwk-play" id="mwk-play" type="button">PLAY THE RIFT</button>
+          <button class="mwk-share" id="mwk-share" type="button" hidden aria-label="Share your Weekly Rift best">SHARE</button>
+        </div>
+      </div>
+      <!-- D1 (HUB_IA_v1 §3.3): footer — Browse-all + the demoted STORE ghost-link (id kept for 3 wiring tables). -->
+      <div class="mh-foot">
+        <button class="mh-skip" id="mh-skip" type="button">Browse all tracks →</button>
+        <button class="mh-footlink" id="mh-store" type="button">STORE</button>
+      </div>
     </div>
   </div>
 
@@ -7940,7 +7942,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=463"></script>
+<script src="telemetry.js?v=464"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8119,17 +8121,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=463"></script>
-<script src="game.js?v=463"></script>
-<script src="procbg.js?v=463"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=463"></script>
-<script src="chat.js?v=463"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=463"></script>
-<script src="goals.js?v=463"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=463"></script>
-<script src="share.js?v=463"></script>
-<script src="replay.js?v=463"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=463"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=464"></script>
+<script src="game.js?v=464"></script>
+<script src="procbg.js?v=464"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=464"></script>
+<script src="chat.js?v=464"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=464"></script>
+<script src="goals.js?v=464"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=464"></script>
+<script src="share.js?v=464"></script>
+<script src="replay.js?v=464"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=464"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -12220,12 +12222,14 @@
     hub.classList.add('active');
     try { window.RhythmGoals && window.RhythmGoals.checkRollover(); } catch (e) {}  // build112 p1: belt-and-suspenders rollover before any hub reader of RG.state()
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
+    try { paintReclaimThread(); } catch (e) {}   // D1 (HUB_IA_v1 §3.6): quiet one-line reclaim thread on the status strip
     try { paintDailyRift(); } catch (e) {}    // build100: Daily Rift tile — today's song, seeded global %, cleared-state (render-only; never throws)
     try { paintWeeklyRift(); } catch (e) {}   // build125: Weekly Rift card — this week's track, your best, reset countdown (render-only; never throws)
     try { paintGoalsCard(); } catch (e) {}    // build110: "you're back today" XP/streak/goals hero card (render-only; never throws)
-    try { paintStreakRibbon(); } catch (e) {}  // build122 p3: forward "keep your streak" nudge (render-only; never throws)
+    // D1 (HUB_IA_v1 §3.5): #mh-streak-ribbon DELETED — paintStreakRibbon() call removed (redundant flame/count).
     try { maybeShowStreakSaved(); } catch (e) {}  // build122 p3: one-time STREAK SAVED reveal on return (see fn — consumes its own marker)
     try { rollHubQuip(); } catch (e) {}       // build99V: random easter-egg quip under the subtitle
+    try { window.rrAttentionCap && window.rrAttentionCap(); } catch (e) {}   // D1 (HUB_IA_v1 §4.4): one-pulse governor, after ALL hub paints
     try { hub.querySelector('.mh-card').focus && hub.querySelector('.mh-card').focus(); } catch (e) {}
   }
   // build99V: easter-egg quips — a random, outrageous line under the menu subtitle each visit (owner: "something
@@ -12320,6 +12324,18 @@
       else contEl.hidden = true;
     }
   }
+  // D1 (HUB_IA_v1 §3.6): quiet reclaim THREAD on the status strip. Reads RhythmCatalog.getReclaimTargets()
+  // (guarded; first row only). Hidden when []/absent/signed-out — silent, like everything reclaim. NO animation.
+  function paintReclaimThread() {
+    var el = $('mh-status-reclaim'); if (!el) return;
+    var RC = window.RhythmCatalog, rows = [];
+    try { if (RC && typeof RC.getReclaimTargets === 'function') { var a = RC.getReclaimTargets(); if (Array.isArray(a)) rows = a; } } catch (e) {}
+    if (!rows.length) { el.hidden = true; el.innerHTML = ''; return; }
+    var row = rows[0] || {};
+    var who = (RC && RC.escapeHtml) ? RC.escapeHtml(String(row.passerName || 'A rival')) : String(row.passerName || 'A rival');
+    el.innerHTML = '◤ <b>' + who + '</b> took your spot — reclaim it';
+    el.hidden = false;
+  }
   function toLibrary() {
     hub.classList.remove('active');
     menu.classList.add('active');
@@ -12361,6 +12377,7 @@
     ['mh-skip',        toLibrary]
   ];
   W.forEach(function (p) { var el = $(p[0]); if (el) el.addEventListener('click', p[1]); });
+  (function () { var r = $('mh-status-reclaim'); if (r) r.addEventListener('click', toLibrary); })();   // D1 §3.6: reclaim thread → library (the reclaim card waits there)
 
   // ===========================================================================
   // DAILY RIFT (build100) — the once-a-day hardcore challenge tile.
@@ -12475,6 +12492,10 @@
       // reveal the card only once there's a real track for this week (until then it stays hidden — no empty shell)
       if (t) card.hidden = false;
       if (shareEl) shareEl.hidden = !(st.played && (st.bestScore || 0) > 0);
+      // D1 (HUB_IA_v1 §3.5): rift-CLOSING beat when <24h to reset (pulse-ladder rank 4; governed).
+      var _ms = +st.msToReset || 0;
+      card.classList.toggle('is-closing', _ms > 0 && _ms < 86400000);
+      try { window.rrAttentionCap && window.rrAttentionCap(); } catch (e) {}   // §4.4: re-assert the one-pulse cap after this paint
     }
     window.__rrPaintWeeklyRift = paintWeeklyRift;   // let showHub call it without exposing scope
 
@@ -12585,10 +12606,21 @@
       // build117 p1: toggle a tier CSS class so the flame glow escalates (bigger/brighter/breathing at
       // higher tiers) — mirrors how COMBO_TIERS drives escalating in-game visuals.
       flameIco.className = 'mgc-flame mgc-flame--' + tier.toLowerCase();
+      // D1 (HUB_IA_v1 §3.4): STREAK-AT-RISK ember (pulse-ladder rank 2). Derived exactly like jukebox.js
+      // _streakAtRisk(): count>=1, NOT completed today, completed yesterday → at risk.
+      try {
+        if ((s.count || 0) >= 1) {
+          var _tk = (window.RhythmCatalog && RhythmCatalog.dailyRiftToday) ? RhythmCatalog.dailyRiftToday() : null;
+          if (!_tk) { var _n = new Date(); _tk = _n.getFullYear() + '-' + ('0' + (_n.getMonth() + 1)).slice(-2) + '-' + ('0' + _n.getDate()).slice(-2); }
+          var _pp = String(_tk).split('-'); var _yd = new Date(+_pp[0], (+_pp[1] || 1) - 1, +_pp[2] || 1); _yd.setDate(_yd.getDate() - 1);
+          var _yk = _yd.getFullYear() + '-' + ('0' + (_yd.getMonth() + 1)).slice(-2) + '-' + ('0' + _yd.getDate()).slice(-2);
+          if (s.lastCompleteDate !== _tk && s.lastCompleteDate === _yk) flameIco.classList.add('mgc-flame--risk');
+        }
+      } catch (e) {}
     }
 
     var levelsDone = (g.levels || 0) >= RG.DAILY_LEVELS, mpDone = (g.mp || 0) >= RG.DAILY_MP;
-    var goalsRow = $('mgc-goals-row'), completeRow = $('mgc-complete-row'), cta = $('mgc-cta');
+    var goalsRow = $('mgc-goals-row'), completeRow = $('mgc-complete-row');
     if (g.claimedDaily) {
       if (goalsRow) goalsRow.hidden = true;
       if (completeRow) completeRow.hidden = false;
@@ -12596,7 +12628,6 @@
       // build117 p1: rotating roast line replaces the old static "see you tomorrow" — deterministic
       // per calendar day (g.date is the stored day-string, goals.js:59), never Math.random.
       var ctxt = $('mgc-complete-txt'); if (ctxt) ctxt.textContent = goalRoastLine(g.date || '');
-      if (cta) cta.hidden = true;   // goal already claimed today — no funnel needed
     } else {
       if (goalsRow) goalsRow.hidden = false;
       if (completeRow) completeRow.hidden = true;
@@ -12614,26 +12645,16 @@
       }
       dots('mgc-dots-levels', g.levels || 0, RG.DAILY_LEVELS);
       dots('mgc-dots-mp', g.mp || 0, RG.DAILY_MP);
-      // build117 p1: next-action CTA funnels straight into Campaign so the card is a hook back into
-      // play, not just a readout.
-      if (cta) cta.hidden = false;
     }
 
     var prog = RG.xpProgress();
     var cap = $('mgc-xp-cap'), fill = $('mgc-xp-fill');
     if (cap) cap.textContent = 'XP TO LEVEL ' + (prog.level + 1) + ': ' + prog.into + ' / ' + prog.span;
     if (fill) fill.style.width = Math.max(0, Math.min(100, Math.round(prog.into / prog.span * 100))) + '%';
+    try { window.rrAttentionCap && window.rrAttentionCap(); } catch (e) {}   // D1 (HUB_IA_v1 §4.4): one-pulse cap after the flame paint
   }
   window.__rrPaintGoalsCard = paintGoalsCard;   // dev hook parity with __rrPaintDailyRift
-  (function () {
-    // build117 p1: CTA pill wiring — funnels into Campaign (the guided "start here" path). Only ever
-    // visible when !g.claimedDaily (paintGoalsCard hides it on claim), and the card itself is hidden
-    // whenever gated off, so no risk of firing while hidden.
-    var cta = $('mgc-cta'); if (!cta) return;
-    cta.addEventListener('click', function () {
-      var campaign = $('mh-campaign'); if (campaign) campaign.click();
-    });
-  })();
+  // D1 (HUB_IA_v1 §3.4): #mgc-cta REMOVED — the goals card is a zero-CTA ambient status module now (no CTA wiring).
   (function () {
     var dismiss = $('mgc-dismiss'); if (!dismiss) return;
     dismiss.addEventListener('click', function () {
@@ -12648,51 +12669,10 @@
   // streak is alive (count > 0), independent of whether today's Daily Goal is already claimed (the ribbon's
   // job is reminding the player to come back TOMORROW, not today's progress — that's the goals card above).
   // ===========================================================================
-  function paintStreakRibbon() {
-    var ribbon = $('mh-streak-ribbon'); if (!ribbon) return;
-    var RG = window.RhythmGoals; if (!RG) { ribbon.hidden = true; return; }
-    var days = 0;
-    try { days = RG.streakState().count || 0; } catch (e) {}
-    if (days <= 0) { ribbon.hidden = true; return; }
-    ribbon.hidden = false;
-    var d = $('msr-days'); if (d) d.textContent = String(days);
-  }
-  window.__rrPaintStreakRibbon = paintStreakRibbon;   // dev hook parity with __rrPaintGoalsCard
-
-  // build-a-tiny-.ics reminder for "come back tomorrow" — a single VALARM-less all-day event tomorrow,
-  // built as a data: URI so it needs no backend/permission (Notification API would need a user opt-in
-  // prompt AND doesn't persist across days without a service worker — a calendar file is the simpler,
-  // zero-dependency affordance that actually survives until tomorrow).
-  function buildStreakIcs() {
-    var d = new Date(); d.setDate(d.getDate() + 1);
-    var y = d.getFullYear(), m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
-    var dateStr = y + '' + m + '' + day;
-    // build122 review: DTEND for a VALUE=DATE event is NON-inclusive → it must be the day AFTER DTSTART.
-    // Equal dates make a zero-length all-day event that strict clients (Google Calendar) reject/drop.
-    var e = new Date(); e.setDate(e.getDate() + 2);
-    var endStr = e.getFullYear() + '' + ('0' + (e.getMonth() + 1)).slice(-2) + '' + ('0' + e.getDate()).slice(-2);
-    var stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    var uid = 'rr-streak-' + dateStr + '@reactivvibe.com';
-    var lines = [
-      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ReactivVibe//Reactive Rhythm//EN',
-      'BEGIN:VEVENT', 'UID:' + uid, 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + dateStr, 'DTEND;VALUE=DATE:' + dateStr,
-      'SUMMARY:Play Reactive Rhythm — keep your streak alive', 'DESCRIPTION:One song keeps the flame going. Do not break the streak.',
-      'END:VEVENT', 'END:VCALENDAR'
-    ];
-    return 'data:text/calendar;charset=utf8,' + encodeURIComponent(lines.join('\r\n'));
-  }
-  (function () {
-    var cal = $('msr-cal'); if (!cal) return;
-    cal.addEventListener('click', function (ev) {
-      ev.preventDefault();
-      try {
-        var a = document.createElement('a');
-        a.href = buildStreakIcs(); a.download = 'reactive-rhythm-streak-reminder.ics';
-        document.body.appendChild(a); a.click(); a.remove();
-        try { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('Reminder saved — add it to your calendar', 'success'); } catch (e2) {}
-      } catch (e) {}
-    });
-  })();
+  // D1 (HUB_IA_v1 §3.5): paintStreakRibbon() + __rrPaintStreakRibbon + the "+ REMIND ME" .ics builder and its
+  // msr-cal wiring DELETED with the #mh-streak-ribbon card (its flame/count/urgency now live in the goalscard
+  // flame + .mgc-flame--risk + the library streak chip). If the owner misses the reminder in playtest, it
+  // returns as a ghost row INSIDE the goalscard — not as its own card (per §3.5).
 
   // ===========================================================================
   // build122 p3 — COME BACK TOMORROW: one-time "STREAK SAVED" reveal on RETURN. Distinct from the existing

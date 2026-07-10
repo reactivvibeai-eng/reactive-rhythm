@@ -15,6 +15,51 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build165 — MP GUEST CONTRACT: the phantom-room fix + hub IA (D1) + D3 wiring  ✅ node-clean · 2-peer headless proof (real Supabase) · 0 console errors  ·  ?v=464
+
+**The bug the owner's 2-account test found — and it was worse than reported.** A guest who opened an
+invite link to a room that wasn't there was not shown an error. They were placed in a *fabricated* room
+with a ghost `Opponent — WAITING`, forever. Reproduced headlessly with a room id that never existed
+(`?mproom=rzzzzdeadbeef` → `step:setup`, ghost opponent, no banner, indefinitely).
+
+THREE independent mechanisms each removed the clock that was supposed to save them:
+1. `joinRoomDirect` → `joinRoomChannel` (:3834) → `leaveRoomChannel` (:3895) → **`_clearPendJoin()`** —
+   the direct join destroyed its own watchdog on the way in.
+2. `_pendJoin`'s tick read `room.id` as "converged" (:4097) — but `joinRoomDirect` *self-asserts*
+   `room.id` (:4039). The watchdog declared victory over its own hallucination and cleared itself.
+3. The 45s fail card is gated on `!room.id` (:4139), which the synthesized `room.id` made **unreachable
+   by construction**. And the `/room-status` preflight that would have caught it returns **401 to any
+   signed-out caller** (live-probed), with the rejection swallowed by `.catch(function(){})`.
+
+Auth-independent: a **signed-in** player hits it too. The 401 only removed the backup net.
+
+Per `MP_GUEST_CONTRACT_v1.md` (Fable 5), fixed WITHOUT any backend change and without weakening auth —
+a guest's safety verdict must never ride on an endpoint a guest cannot call:
+- **Convergence is now HOST EVIDENCE, not `room.id`** — meta fast-path, `roomsDir` heal, host heartbeat
+  presence, a versioned room-state snapshot, or a live match channel. All realtime, all guest-callable.
+- `_directJoinInFlight` keeps the `_pendJoin` watchdog alive across the direct-join handoff.
+- At 45s (the existing `maxTries` envelope, finally *applied*): eject + **NO HOST IN THIS ROOM** card with
+  TRY AGAIN. Spectators get the existing card — no new chrome (byte-identity).
+- `room-gone` now **rescues a pending joiner** (`_roomGoneRescue`), not just prunes the room browser.
+- Telemetry stops lying: `mp_join_converged{path:'direct'}` counted phantoms as wins; adds `mp_join_failed`.
+- **Placeholder law (§3):** `····` was a permanent lie for a signed-out host (`/room-announce` is authed,
+  so no code ever arrives). Now tri-state — real code · `SIGN IN` · `····` only while a fetch is in flight ·
+  `LINK ONLY` on failure.
+- The invite button now copies a **bare URL**. It used to copy a sentence; pasted into an address bar,
+  Chrome runs a web search and the invite silently goes nowhere.
+
+**Proof (2 browser origins, real Supabase Realtime, `?v=464` confirmed loaded):** dead rid → ejected at
+45s with `NO HOST IN THIS ROOM`, roster empty, back at lobby. **Positive control:** live host → converged,
+roster shows both players, still in the room at 76s — *not* ejected. Zero console errors on both peers.
+
+**Also in this build — hub IA (D1, `HUB_IA_v1.md`) + the deferred D3 wiring.** Killed the infinite `mhEdge`
+drift on all 7 tiles; a 6-rank pulse ladder enforced by a two-screen `applyAttentionCap()` v2
+(`window.rrAttentionCap`); Store demoted off the grid (id preserved — 3 id-keyed wiring tables); deleted
+`#mh-streak-ribbon` + `#mgc-cta`; Daily Rift promoted to span-2 with a ≤420px clamp; a `data-mode="freeze"`
+welcome branch; `.rr-skel` + `.rr-shelf-empty` JS consumers. Verified with a **pseudo-element-aware
+animation census plus a positive control** (injected an infinite `::after` → census rose 2→3 and named it),
+375px no-h-scroll + 44px tap floors, and a reduce-motion zero-census.
+
 ### build164 — Wave 5: Rift ladder + SPOTLIGHT + calibration + `?playtest=1` — and TWO integrity bugs closed  ✅ node-clean · boot-verified (0 console errors) · adversarial-reviewed (2 confirmed → both fixed) · leaderboard-integrity hole closed  ·  ?v=463
 Four disjoint agents (jukebox.js / catalog.js / game.js / index.html+jukebox.css) + a Fable ruling. The review confirmed **2 real defects** — one of them a bypass of a fix made earlier in this same wave — and both are fixed below. Two further bugs were found and fixed *before* review. `multiplayer.js` stayed frozen (owner's call) so the pending 2-account MP test remains bisectable.
 - **🔒 LEADERBOARD INTEGRITY (pre-existing; the most important fix here).** `?open=1`, `?rails=1`, `rr_open`, `rr_rails` and `__rrOpenNotes(true)` are **reachable in production** — none is localhost-gated (cf. the build66 launch-audit finding where `?dev=1` unlocked paid content in prod). Open notes are hittable from ANY lane (strictly easier) and change the note array. So anyone could append `?open=1` to the live game and post an inflated `CHART_VERSION`-2-stamped score to the real boards. Closing it required understanding that **there are TWO submit surfaces**: `results.preview` suppresses the LOCAL one (recordLocal/career/best/ratings) but never reaches `session.submit` — the SERVER leaderboard is closed only by landing in an early branch of endGame's submit chain (which is why the FIRST PULSE bridge run needed its own branch). Both are now OR'd with `_chartShapeModified()`.

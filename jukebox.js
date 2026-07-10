@@ -1016,7 +1016,10 @@
     cap.innerHTML = '<span class="rsc-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
                     '<span class="rsc-sub">' + RC().escapeHtml(t.artist_name || '') + '</span>';
     card.appendChild(cap);
-    _spotInto(cap, t, 'inline');   // Wave-5 (B3): SPOTLIGHT eyebrow + 2x XP chip under the shelf caption
+    // HUB_IA_v1 §4.2: SPOTLIGHT → a STATIC gold "2× XP" pill (never animated, never a pulse candidate) on the
+    // one daily-pick track the spotlight getter flags. Supersedes Wave-5 B3's inline shelf chip (one mark, top-
+    // right; crown/grade sit top-left so no collision). The coverflow/B3 spotlight elsewhere is untouched.
+    try { if (_spotOn(t.id)) { const sp = document.createElement('span'); sp.className = 'rsc-spot'; sp.textContent = '2× XP'; card.appendChild(sp); } } catch (e) {}
     card.addEventListener('click', () => RC().openSheet(t));
     return card;
   }
@@ -1034,13 +1037,114 @@
     sec.appendChild(row);
     return sec;
   }
+  // =========================================================================
+  // HUB_IA_v1 §4.1 — WEEKLY-RIFT LADDER card (library Browse). A persistent .rr-card at the TOP of
+  // #rr-shelves, rendered in the SAME innerHTML='' rebuild as the shelves (NOT mounted into #view-jukebox —
+  // the coverflow keeps its welcome-only one-card law). Data comes from whatever standings getter the
+  // parallel wave ships on RhythmCatalog / RhythmWeeklyRift — read DEFENSIVELY (typeof guard; null / absent
+  // → render NOTHING, empty-guard like every shelf). Never dismissible, never once-per-session (labeled module).
+  // =========================================================================
+  function _riftStandings() {
+    try {
+      const C = RC();
+      if (C && typeof C.getRiftStandings === 'function') { const s = C.getRiftStandings(); if (s && typeof s === 'object') return s; }
+      const WR = window.RhythmWeeklyRift;
+      if (WR && typeof WR.standings === 'function') { const s = WR.standings(); if (s && typeof s === 'object') return s; }
+    } catch (e) {}
+    return null;
+  }
+  function _riftClosesMs(s) {
+    try {
+      if (typeof s.closesInMs === 'number') return s.closesInMs;
+      if (typeof s.msToReset === 'number') return s.msToReset;
+      if (s.closes_at != null) { const t = Date.parse(s.closes_at); if (isFinite(t)) return t - Date.now(); }
+    } catch (e) {}
+    return null;
+  }
+  function _riftCountdown(ms) {
+    if (typeof ms !== 'number' || ms <= 0) return '';
+    let mins = Math.floor(ms / 60000), d = Math.floor(mins / 1440); mins -= d * 1440;
+    const h = Math.floor(mins / 60); mins -= h * 60;
+    if (d > 0) return 'closes in ' + d + 'd ' + h + 'h';
+    if (h > 0) return 'closes in ' + h + 'h ' + mins + 'm';
+    return 'closes in ' + Math.max(1, mins) + 'm';
+  }
+  function renderRiftLadder(host) {
+    const s = _riftStandings();
+    if (!s) return false;   // empty-guard: no standings getter / null → render NOTHING (spec §4.1)
+    const esc = (x) => { try { return RC().escapeHtml(String(x == null ? '' : x)); } catch (e) { return String(x == null ? '' : x); } };
+    const song = String(s.song || s.trackTitle || (s.track && s.track.title) || 'this week’s Rift');
+    const rank = (typeof s.rank === 'number' && s.rank > 0) ? Math.round(s.rank)
+      : ((typeof s.my_rank === 'number' && s.my_rank > 0) ? Math.round(s.my_rank) : null);
+    const played = !!(s.played || rank != null);
+    const closesMs = _riftClosesMs(s);
+    const closes = _riftCountdown(closesMs);
+    const delta = (typeof s.delta === 'number') ? s.delta : null;
+    const card = document.createElement('div');
+    card.id = 'rr-rift-ladder'; card.className = 'rr-card rr-card--rift';
+    card.setAttribute('data-mode', 'rift-ladder'); card.setAttribute('role', 'status');
+    const title = played ? ('You’re #' + rank + ' this week · ' + song) : ('This week’s Rift: ' + song);
+    let sub;
+    if (played) {
+      const dPhrase = (delta > 0) ? ('▲' + delta + ' since yesterday') : (delta < 0 ? ('▼' + (-delta) + ' since yesterday') : '— since yesterday');
+      sub = dPhrase + (closes ? ' · ' + closes : '');
+    } else {
+      sub = 'Not played yet' + (closes ? ' · ' + closes : '');
+    }
+    let rowsHtml = '';   // top-3 rows — the ONLY card allowed .rw-rows (hidden ≤560px via CSS)
+    const top3 = Array.isArray(s.top3) ? s.top3 : [];
+    if (top3.length) {
+      rowsHtml = '<span class="rw-rows">';
+      for (let i = 0; i < top3.length && i < 3; i++) {
+        const r = top3[i] || {};
+        const nm = (typeof r === 'string') ? r : (r.name || r.display_name || r.player || '');
+        const sc = (r && typeof r.score === 'number') ? Number(r.score).toLocaleString() : '';
+        rowsHtml += '<span class="rw-row"><span class="rw-rk">#' + (i + 1) + '</span>' + esc(nm) + (sc ? '<span class="rw-sc">' + sc + '</span>' : '') + '</span>';
+      }
+      rowsHtml += '</span>';
+    }
+    const bolt = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.2a.7.7 0 0 0 .56 1.12H11l-1.4 8L19.5 10.8a.7.7 0 0 0-.56-1.12H13l0-7.68z"></path></svg>';
+    card.innerHTML =
+      '<span class="rw-eyebrow">WEEKLY RIFT</span>' +
+      '<span class="rw-ic" aria-hidden="true">' + bolt + '</span>' +
+      '<span class="rw-txt"><span class="rw-title">' + esc(title) + '</span><span class="rw-sub">' + esc(sub) + '</span></span>' +
+      '<button class="rw-cta" type="button">PLAY THE RIFT</button>' +
+      rowsHtml;
+    if (typeof closesMs === 'number' && closesMs > 0 && closesMs < 86400000) card.classList.add('is-closing');   // §1.2 rank 4
+    const cta = card.querySelector('.rw-cta');
+    if (cta) cta.addEventListener('click', () => {
+      try { const WR = window.RhythmWeeklyRift, C = RC(); const t = WR && WR.weeklyTrack ? WR.weeklyTrack() : null; if (t && C.launchTrack) C.launchTrack(t, {}); } catch (e) {}
+    });
+    host.appendChild(card);
+    return true;
+  }
+  // D3 (Wave-5) consumers — a transient .rr-skel shimmer rail (loading) + a one-line .rr-shelf-empty state.
+  // The shimmer is loading-ONLY (removed on the next innerHTML='' rebuild) so it is NOT a registered attention
+  // accent (per the jukebox.css .rr-skel contract); the empty line uses the finite rrFbIn entrance (never loops).
+  function _skelShelf() {
+    const sec = document.createElement('section');
+    sec.className = 'rr-shelf'; sec.setAttribute('aria-hidden', 'true');
+    const row = document.createElement('div'); row.className = 'rr-shelf-row';
+    for (let i = 0; i < 6; i++) { const sk = document.createElement('div'); sk.className = 'rr-skel cover'; row.appendChild(sk); }
+    sec.appendChild(row);
+    return sec;
+  }
+  function _shelfEmpty(text) {
+    const d = document.createElement('div'); d.className = 'rr-shelf-empty';
+    d.innerHTML = '<svg class="rse-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4l2.5 1.6"></path></svg><span>' + text + '</span>';
+    return d;
+  }
   function renderRetentionShelves() {
     const scroll = document.querySelector('#view-browse .browse-scroll');
     if (!scroll) return;
     let host = $('rr-shelves');
     if (!host) { host = document.createElement('div'); host.id = 'rr-shelves'; host.className = 'rr-shelves'; scroll.insertBefore(host, scroll.firstChild); }
     host.innerHTML = '';
+    // §4.1: the Weekly-Rift ladder renders FIRST inside the host (before the shelf loop), same rebuild.
+    let any = false;
+    try { if (renderRiftLadder(host)) any = true; } catch (e) {}
     rebuildNearMiss();
+    let catalogReady = true; try { catalogReady = !!(RC().allTracks && RC().allTracks().length); } catch (e) {}
     let foryou = [], fresh = [], daily = [];
     try { foryou = (RC().forYouTracks ? RC().forYouTracks(24) : []) || []; } catch (e) {}
     try { fresh = (RC().freshSince ? RC().freshSince() : []) || []; } catch (e) {}
@@ -1052,9 +1156,15 @@
       buildShelf('foryou', 'For you', 'From what you play', foryou.slice(0, 18)),
       buildShelf('daily', 'Daily picks', "Today's rotation", daily),
     ];
-    let any = false;
     shelves.forEach(s => { if (s) { host.appendChild(s); any = true; } });
-    host.style.display = any ? '' : 'none';   // no shelves → the whole block collapses (no empty header/gap)
+    // D3: whole retention block empty → transient skeleton while the library loads, else one quiet branded line.
+    if (!any) {
+      if (!catalogReady) host.appendChild(_skelShelf());
+      else host.appendChild(_shelfEmpty('Today’s rotation is still warming up — check back soon.'));
+      any = true;
+    }
+    host.style.display = any ? '' : 'none';
+    try { window.rrAttentionCap && window.rrAttentionCap(); } catch (e) {}   // §4.4: the ladder may own the library pulse (rank 4)
   }
 
   // =========================================================================
@@ -1109,25 +1219,43 @@
     } catch (e) {}
     return null;
   }
-  // D1 ATTENTION CAP — enforce "at most ONE pulsing accent" by precedence
-  // reclaim > streak-at-risk > everything else. The welcome card carries at most one
-  // pulse (its reclaim mode); here we HUSH the always-on streak chip whenever the reclaim
-  // card owns the pulse, so the chip and card never shout at the same time.
+  // D1 ATTENTION CAP v2 (HUB_IA_v1 §4.4) — the full two-screen resolver. Exactly ONE registered accent may
+  // loop per visible screen, by the pulse ladder. Library: welcome card (any mode) > chip.at-risk >
+  // ladder.is-closing > nothing. Hub: flame--risk > weekly.is-closing > flame tier-breathe > campaign default.
+  // Shipped guarantee kept as a strict SUBSET: reclaim card ⇒ chip hushed. Exported (production, not __rr-*).
   function applyAttentionCap() {
     try {
+      // ---- LIBRARY: welcome card (any mode) > chip.at-risk > ladder.is-closing > nothing ----
       const card = $('rr-welcome');
-      const mode = card ? (card.getAttribute('data-mode') || '') : '';
       const chip = $('rr-streak-chip');
-      if (chip) chip.classList.toggle('rr-hush', mode === 'reclaim');
-      // Wave-5 (C3): the Weekly-Rift climb glow is the LOWEST-priority accent. It yields to any higher-priority
-      // pulse — the reclaim card, or a streak-at-risk pulse (welcome card in 'streak' mode OR the at-risk chip) —
-      // so we never have two glowing accents shouting at once (precedence reclaim > streak-at-risk > everything
-      // else). Hushing removes ONLY the glow animation; the rank/delta text stays fully visible.
-      const higher = (mode === 'reclaim') || (mode === 'streak') || !!(chip && chip.classList.contains('at-risk'));
-      const rift = $('rr-rift-standings');
-      if (rift) rift.classList.toggle('rr-hush', higher);
+      const ladder = $('rr-rift-ladder');
+      const chipRisk = !!(chip && chip.classList.contains('at-risk'));
+      const ladderHot = !!(ladder && ladder.classList.contains('is-closing'));
+      const lib = card ? 'card' : chipRisk ? 'chip' : ladderHot ? 'ladder' : '';
+      if (card)   card.classList.toggle('rr-hush', lib !== 'card');
+      if (chip)   chip.classList.toggle('rr-hush', lib !== 'chip');
+      if (ladder) ladder.classList.toggle('rr-hush', lib !== 'ladder');
+      // ---- HUB: flame--risk > weekly.is-closing > flame tier-breathe > campaign default ----
+      const flame = document.getElementById('mgc-flame');
+      const wk = document.getElementById('mh-weekly');
+      const camp = document.getElementById('mh-campaign');
+      const gcHidden = !!(document.getElementById('mh-goalscard') || {}).hidden;
+      const flameRisk = !gcHidden && !!(flame && flame.classList.contains('mgc-flame--risk'));
+      const flameTier = !gcHidden && !!(flame && (flame.classList.contains('mgc-flame--inferno') || flame.classList.contains('mgc-flame--undying')));
+      const wkHot = !!(wk && !wk.hidden && wk.classList.contains('is-closing'));
+      const hub = flameRisk ? 'flame' : wkHot ? 'weekly' : flameTier ? 'flame' : 'campaign';
+      if (flame) flame.classList.toggle('rr-hush', hub !== 'flame');
+      if (wk)    wk.classList.toggle('rr-hush', hub !== 'weekly');
+      if (camp)  camp.classList.toggle('rr-hush', hub !== 'campaign');
+      // ---- Wave-5 (C3) COEXISTENCE: #rr-rift-standings appends a climb-glow INTO #mh-weekly on the hub. It is
+      // NOT a registered accent in the HUB_IA_v1 pulse ladder, and the hub ALWAYS has an owner (campaign is the
+      // default, §1.2). An unregistered infinite hub loop must be dead → hush its glow whenever any registered
+      // accent owns the hub (always). The Wave-5 hush drops ONLY the delta glow; the rank/delta text stays.
+      const standings = document.getElementById('rr-rift-standings');
+      if (standings) standings.classList.add('rr-hush');
     } catch (e) {}
   }
+  window.rrAttentionCap = applyAttentionCap;   // HUB_IA_v1 §4.4: production export (index.html showHub + paints call this)
   function maybeWelcomeCard(opts) {
     try {
       const menu = $('menu');
@@ -1173,7 +1301,22 @@
         sub = 'Play a track today so it doesn’t reset.';
         cta = 'Play now';
         onCta = () => { try { const d = RC().dailyPicks(1); if (d && d[0]) RC().openSheet(d[0]); } catch (e) {} };
-      } else if (!mode && fresh.length > 0) {
+      }
+      // §4.3 STREAK-FREEZE ceremony — a one-shot welcome branch (precedence reclaim > streak > freeze > fresh).
+      // Fires when RhythmGoals.streakState().freezeJustUsed is truthy AND rr_freeze_ack !== today (stamped on
+      // render → one-shot). It renders the card and CONSUMES the shared marker so the Wave-5 B4 toast + the hub
+      // STREAK-SAVED reveal both yield (exactly one surface per freeze). Finite entrance flourish only (never loops).
+      let freezeJust = false, freezeCount = 0;
+      try { const ss = (window.RhythmGoals && window.RhythmGoals.streakState) ? (window.RhythmGoals.streakState() || {}) : {}; freezeJust = !!ss.freezeJustUsed; freezeCount = ss.count | 0; } catch (e) {}
+      let freezeAck = ''; try { freezeAck = localStorage.getItem('rr_freeze_ack') || ''; } catch (e) {}
+      if (!mode && freezeJust && freezeAck !== today) {
+        mode = 'freeze';
+        title = 'A freeze saved your ' + freezeCount + '-day streak';
+        sub = 'Your banked freeze burned so the fire didn’t.';
+        cta = 'KEEP IT BURNING';
+        onCta = () => { try { const d = RC().dailyPicks(1); if (d && d[0]) RC().openSheet(d[0]); } catch (e) {} };
+      }
+      if (!mode && fresh.length > 0) {
         mode = 'fresh';
         let ageH = null; try { ageH = RC().lastVisitAgeHours(); } catch (e) {}
         const ago = _agoPhrase(ageH);
@@ -1194,6 +1337,8 @@
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 4.2 4 7a4 4 0 0 1-8 0c0-1 .4-1.8 1-2.5C9.6 9 10 10 11 10.4 10.2 8 12 6 12 3z"></path><path d="M8.5 15a3.5 3.5 0 0 0 7 0"></path></svg>'
         : mode === 'reclaim'
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M1 12h3M20 12h3"></path></svg>'
+        : mode === 'freeze'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6l7-3z"></path></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-3.6 3 1.1 4.8L12 14.5 8 16.8l1.1-4.8L5.5 9l4.6-1.4L12 3z"></path></svg>';
       card.innerHTML =
         '<span class="rw-ic" aria-hidden="true">' + icon + '</span>' +
@@ -1203,6 +1348,10 @@
       card.querySelector('.rw-cta').addEventListener('click', () => { _dismissWelcome(card, today); if (onCta) onCta(); });
       card.querySelector('.rw-x').addEventListener('click', () => { _dismissWelcome(card, today); applyAttentionCap(); });
       view.insertBefore(card, view.firstChild);
+      if (mode === 'freeze') {
+        try { localStorage.setItem('rr_freeze_ack', today); } catch (e) {}   // §4.3 one-shot per day
+        try { if (window.RhythmGoals && window.RhythmGoals.consumeFreezeJustUsed) window.RhythmGoals.consumeFreezeJustUsed(); } catch (e) {}   // claim the shared marker so the B4 toast + hub reveal yield (never double)
+      }
       applyAttentionCap();   // D1: re-run the one-pulse cap now the card's mode is on screen
     } catch (e) {}
   }
