@@ -236,13 +236,15 @@
     // Idempotent + reversible: covers are pooled/recycled, so both add AND remove branches are required.
     const gbWin = !!RC().goldenBuzzer(t);
     el.classList.toggle('gb-winner', gbWin);
-    let crown = card.querySelector('.gb-crown');
+    // Crown/tag mount on .jb-cover, NOT .cover-card. The card is `overflow:hidden` (it clips the artwork to the
+    // rounded corners), which silently ate the crown at top:-10px. .jb-cover is the same box, unclipped.
+    let crown = el.querySelector('.gb-crown');
     if (gbWin && !crown) {
       crown = document.createElement('span'); crown.className = 'gb-crown'; crown.textContent = '♔'; crown.setAttribute('aria-hidden', 'true');   // ♔ decorative (the gb-tag carries the readable label)
       const tag = document.createElement('span'); tag.className = 'gb-tag'; tag.textContent = 'Golden Buzzer Winner';
-      card.appendChild(crown); card.appendChild(tag);
+      el.appendChild(crown); el.appendChild(tag);
     } else if (!gbWin && crown) {
-      crown.remove(); const tg = card.querySelector('.gb-tag'); if (tg) tg.remove();   // recycled onto a non-winner → strip stale crown/tag
+      crown.remove(); const tg = el.querySelector('.gb-tag'); if (tg) tg.remove();   // recycled onto a non-winner → strip stale crown/tag
     }
     _spotCover(el, t);   // Wave-5 (B3): gold SPOTLIGHT eyebrow + 2x XP chip on today's daily-spotlight track (pooled cover → add/remove)
   }

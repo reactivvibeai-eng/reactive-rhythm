@@ -15,6 +15,29 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build166 — Golden Buzzer covers were invisible: one CSS property collapsed every winner card  ✅ measured before/after with a same-page control  ·  ?v=465
+
+The owner reported "the golden buzzer thumbnails are still completely broken." They were, on production, for
+every Golden Buzzer track — and the cause was one line.
+
+`.cover-card` is `position:absolute; inset:0` (jukebox.css ~157). The GB rule overrode it to
+**`position:relative`**, which stops `inset` from stretching the box; since every child (`.cover-art`) is
+absolutely positioned, the card then has no in-flow content and **collapses to ~0 height**. An absolutely
+positioned box is already a containing block for its absolute children, so the override bought nothing.
+
+Measured on one page, same moment, natural control:
+| rail | .cover-card position | card height | art height |
+|---|---|---|---|
+| Featured | `absolute` | 207–272px | 207–270px |
+| Golden Buzzer | **`relative`** | **2–19px** | **0–16px** |
+
+After the fix both rails measure 273px. Also: `.gb-crown` sat at `top:-10px` inside a card with
+`overflow:hidden` — it was being clipped away entirely. Crown + tag now mount on `.jb-cover` (same box,
+unclipped). Both add and remove branches updated (covers are pooled/recycled).
+
+Confirmed NOT the cause, by live probe: all 35 golden_buzzer rows have an `artwork_url`, and every URL
+returns `200 image/png`. The data was always fine.
+
 ### build165 — MP GUEST CONTRACT: the phantom-room fix + hub IA (D1) + D3 wiring  ✅ node-clean · 2-peer headless proof (real Supabase) · 0 console errors  ·  ?v=464
 
 **The bug the owner's 2-account test found — and it was worse than reported.** A guest who opened an

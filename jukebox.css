@@ -224,7 +224,12 @@ html.rr-reduce-motion .jb-cover.is-center .cover-card::after { animation: none; 
    ONE allowed non-crimson accent here (owner-ratified, per the green-fret/gold precedent). Dark
    pill stays WARM (rgba(10,7,5), R>=G>=B). Dormant until the backend marks a track. */
 .jb-cover.gb-winner .cover-card {
-  position: relative;
+  /* NO `position: relative` here. .cover-card is `position:absolute; inset:0` (~line 157). Overriding it to
+     `relative` stops `inset` from stretching the box, and since every child (.cover-art) is absolutely
+     positioned the card then has no in-flow content and collapses to ~0 height — which silently destroyed the
+     artwork on EVERY Golden Buzzer cover. Measured side-by-side on one page: Featured card 207-272px tall,
+     Golden Buzzer card 2-19px. An absolutely positioned box is ALREADY a containing block for its absolute
+     children, so .gb-crown / .gb-tag never needed this. */
   border: 1.5px solid var(--gold, #e0a93f);
   box-shadow: 0 0 0 1px rgba(224,169,63,0.6), 0 0 22px 2px rgba(224,169,63,0.42), inset 0 0 16px rgba(224,169,63,0.12);
   animation: gbFrameBreathe 2.6s ease-in-out infinite;   /* slow gold breathe so the winner frame has presence (GB-SHINE) */
