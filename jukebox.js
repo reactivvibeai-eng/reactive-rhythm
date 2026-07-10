@@ -244,6 +244,7 @@
     } else if (!gbWin && crown) {
       crown.remove(); const tg = card.querySelector('.gb-tag'); if (tg) tg.remove();   // recycled onto a non-winner → strip stale crown/tag
     }
+    _spotCover(el, t);   // Wave-5 (B3): gold SPOTLIGHT eyebrow + 2x XP chip on today's daily-spotlight track (pooled cover → add/remove)
   }
 
   function layout() {
@@ -753,6 +754,7 @@
       text.appendChild(gt);
     }
     card.appendChild(text);
+    _spotInto(text, t, 'inline');   // Wave-5 (B3): SPOTLIGHT eyebrow + 2x XP chip in the row's text column
     // build95 (playtest): AI Flixs film cue — a video found via global 'all'-scope search renders here as a plain
     // music ROW with no film indicator. Show a "FILM · SOON" pill + suppress the music status/grade/chevron so a
     // film reads distinct from a song. Tap still opens the sheet (which owns the Watch/Soon affordance). Render-only.
@@ -908,6 +910,7 @@
     cap.innerHTML = '<span class="vc-title">' + RC().escapeHtml(t.title || '') + '</span>' +
                     '<span class="vc-sub">' + RC().escapeHtml([t.artist_name, RC().cleanGenre(t.genre)].filter(Boolean).join(' · ')) + '</span>';
     card.appendChild(cap);
+    _spotInto(cap, t, 'inline');   // Wave-5 (B3): SPOTLIGHT eyebrow + 2x XP chip under the poster caption
     card.addEventListener('click', () => RC().openSheet(t));   // sheet handles the Watch affordance (Item 6)
     return card;
   }
@@ -1013,6 +1016,7 @@
     cap.innerHTML = '<span class="rsc-title">' + RC().escapeHtml(t.title || 'Untitled') + '</span>' +
                     '<span class="rsc-sub">' + RC().escapeHtml(t.artist_name || '') + '</span>';
     card.appendChild(cap);
+    _spotInto(cap, t, 'inline');   // Wave-5 (B3): SPOTLIGHT eyebrow + 2x XP chip under the shelf caption
     card.addEventListener('click', () => RC().openSheet(t));
     return card;
   }
@@ -1115,6 +1119,13 @@
       const mode = card ? (card.getAttribute('data-mode') || '') : '';
       const chip = $('rr-streak-chip');
       if (chip) chip.classList.toggle('rr-hush', mode === 'reclaim');
+      // Wave-5 (C3): the Weekly-Rift climb glow is the LOWEST-priority accent. It yields to any higher-priority
+      // pulse — the reclaim card, or a streak-at-risk pulse (welcome card in 'streak' mode OR the at-risk chip) —
+      // so we never have two glowing accents shouting at once (precedence reclaim > streak-at-risk > everything
+      // else). Hushing removes ONLY the glow animation; the rank/delta text stays fully visible.
+      const higher = (mode === 'reclaim') || (mode === 'streak') || !!(chip && chip.classList.contains('at-risk'));
+      const rift = $('rr-rift-standings');
+      if (rift) rift.classList.toggle('rr-hush', higher);
     } catch (e) {}
   }
   function maybeWelcomeCard(opts) {
@@ -1334,7 +1345,7 @@
       try {
         const menuEl = $('menu');
         if (menuEl && window.MutationObserver) {
-          const mo = new MutationObserver(() => { if (menuEl.classList.contains('active')) { maybeWelcomeCard(); renderStreakChip(); } });
+          const mo = new MutationObserver(() => { if (menuEl.classList.contains('active')) { maybeWelcomeCard(); renderStreakChip(); maybeFreezeCeremony(); } });
           mo.observe(menuEl, { attributes: true, attributeFilter: ['class'] });
         }
       } catch (e) {}
@@ -1624,6 +1635,258 @@
     if (chase) obs.observe(chase, { childList: true, subtree: true });
     augment();
   })();
+
+  // =========================================================================
+  // WAVE-5 SURFACES (jukebox.js-owned; read-only consumers of RhythmCatalog /
+  // RhythmGoals / RhythmWeeklyRift). All self-contained here:
+  //   C3 — Weekly-Rift STANDINGS ladder appended into the hub's #mh-weekly card
+  //   B4 — streak-freeze CEREMONY on the library-entry return path
+  //   B3 — SPOTLIGHT eyebrow + 2x XP chip on the daily track's cards
+  // Every surface is fail-soft (never throws into render), brand-safe (black /
+  // crimson / chrome / gold; warm darks), reduced-motion-collapsing, and routes
+  // any glow through applyAttentionCap() so it never opens a second competing pulse.
+  // Styling is injected once as a scoped <style> (jukebox.css is owned elsewhere).
+  // =========================================================================
+  var _w5css = false;
+  function _ensureWave5Css() {
+    if (_w5css) return;
+    try {
+      if (document.getElementById('rr-wave5-css')) { _w5css = true; return; }
+      var s = document.createElement('style');
+      s.id = 'rr-wave5-css';
+      s.textContent = [
+        ".rr-rift-standings{flex:1 1 100%;order:9;position:relative;z-index:1;display:flex;flex-direction:column;gap:3px;margin-top:2px;padding-top:9px;border-top:1px solid rgba(224,169,63,0.18);font-family:'Chakra Petch',sans-serif;}",
+        ".rr-rift-standings .rrs-line{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}",
+        ".rr-rift-standings .rrs-rank{font-family:'Oxanium',sans-serif;font-weight:800;font-size:18px;line-height:1;color:#f4d488;letter-spacing:.02em;}",
+        ".rr-rift-standings .rrs-delta{font-family:'Oxanium',sans-serif;font-weight:800;font-size:12px;letter-spacing:.04em;}",
+        ".rr-rift-standings .rrs-delta.up{color:#f0c86e;}",
+        ".rr-rift-standings .rrs-delta.down{color:#b89a7a;}",
+        ".rr-rift-standings .rrs-of{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#a89f98;}",
+        ".rr-rift-standings .rrs-reset{margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#c9a961;}",
+        ".rr-rift-standings .rrs-top{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:#a89f98;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
+        ".rr-rift-standings .rrs-top b{color:#e7d7b0;font-weight:700;}",
+        "@keyframes rrRiftClimb{0%,100%{text-shadow:0 0 0 rgba(240,200,110,0);}50%{text-shadow:0 0 10px rgba(240,200,110,.8);}}",
+        ".rr-rift-standings.rr-climb .rrs-delta.up{animation:rrRiftClimb 1.9s ease-in-out infinite;}",
+        ".rr-rift-standings.rr-hush .rrs-delta.up{animation:none;}",
+        "@media (max-width:600px){.rr-rift-standings{align-items:center;text-align:center;}.rr-rift-standings .rrs-line{justify-content:center;}.rr-rift-standings .rrs-reset{margin-left:0;}}",
+        ".rr-freeze-card{position:fixed;left:50%;top:74px;transform:translateX(-50%) translateY(-8px);z-index:60;max-width:min(92vw,420px);display:flex;align-items:center;gap:12px;padding:13px 17px;border-radius:14px;pointer-events:none;border:1px solid rgba(224,169,63,.5);background:radial-gradient(120% 160% at 0% -30%,rgba(224,169,63,.16),rgba(224,169,63,0) 60%),linear-gradient(180deg,rgba(38,27,13,.97),rgba(19,13,8,.98));box-shadow:0 10px 34px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.4) inset;opacity:0;transition:opacity .4s ease,transform .4s cubic-bezier(.2,.7,.2,1);}",
+        ".rr-freeze-card.show{opacity:1;transform:translateX(-50%) translateY(0);}",
+        ".rr-freeze-card .rfz-ic{flex:none;font-size:22px;filter:drop-shadow(0 0 10px rgba(224,169,63,.55));}",
+        ".rr-freeze-card .rfz-txt{display:flex;flex-direction:column;gap:2px;min-width:0;}",
+        ".rr-freeze-card .rfz-title{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#f4d488;}",
+        ".rr-freeze-card .rfz-sub{font-family:'Chakra Petch',sans-serif;font-size:11px;letter-spacing:.02em;color:#b3aaa2;}",
+        ".rr-spot-tag.rr-spot-overlay{position:absolute;bottom:10px;left:10px;z-index:5;display:flex;flex-direction:column;align-items:flex-start;gap:3px;pointer-events:none;}",
+        ".rr-spot-tag.rr-spot-inline{display:inline-flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;}",
+        ".rr-spot-eyebrow{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:8px;line-height:1.25;letter-spacing:.16em;text-transform:uppercase;color:#1a1206;background:linear-gradient(180deg,#f4d488,#c99a34);padding:2px 6px;border-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.45);}",
+        ".rr-spot-chip{font-family:'Oxanium',sans-serif;font-weight:800;font-size:8.5px;line-height:1.25;letter-spacing:.05em;text-transform:uppercase;color:#f4d488;background:rgba(20,14,8,.85);border:1px solid rgba(224,169,63,.6);padding:2px 6px;border-radius:4px;white-space:nowrap;}",
+        "html.rr-reduce-motion .rr-rift-standings.rr-climb .rrs-delta.up{animation:none!important;}",
+        "html.rr-reduce-motion .rr-freeze-card{transition:opacity .2s ease!important;transform:translateX(-50%) translateY(0)!important;}"
+      ].join('');
+      (document.head || document.documentElement).appendChild(s);
+      _w5css = true;
+    } catch (e) {}
+  }
+
+  // ---- B3 SPOTLIGHT — DEFENSIVE consumer of the parallel-agent catalog.js contract.
+  // RhythmCatalog.isSpotlight(trackId) -> boolean (one date-stable daily 2x-XP track). The getter may not
+  // exist yet while that agent works, so guard on typeof; absent getter / null → render nothing.
+  function _spotOn(id) {
+    try { var C = RC(); if (C && typeof C.isSpotlight === 'function' && id != null) return !!C.isSpotlight(id); } catch (e) {}
+    return false;
+  }
+  function _spotTag(mode) {
+    var wrap = document.createElement('span');
+    wrap.className = 'rr-spot-tag ' + (mode === 'overlay' ? 'rr-spot-overlay' : 'rr-spot-inline');
+    var eb = document.createElement('span'); eb.className = 'rr-spot-eyebrow'; eb.textContent = 'SPOTLIGHT';
+    var ch = document.createElement('span'); ch.className = 'rr-spot-chip'; ch.textContent = '2× XP TODAY';
+    wrap.appendChild(eb); wrap.appendChild(ch);
+    return wrap;
+  }
+  // pooled/recycled coverflow cover → reversible add/remove (covers are re-filled onto other tracks)
+  function _spotCover(el, t) {
+    try {
+      if (!el) return;
+      var on = _spotOn(t && t.id);
+      el.classList.toggle('rr-spot', on);
+      var host = el.querySelector('.cover-card'); if (!host) return;
+      var tag = host.querySelector('.rr-spot-tag');
+      if (on) { if (!tag) { _ensureWave5Css(); host.appendChild(_spotTag('overlay')); } }
+      else if (tag) { tag.remove(); }
+    } catch (e) {}
+  }
+  // freshly-built card node (shelf / song row / video) → add once when on
+  function _spotInto(container, t, mode) {
+    try { if (container && _spotOn(t && t.id)) { _ensureWave5Css(); container.appendChild(_spotTag(mode)); } } catch (e) {}
+  }
+
+  // ---- B4 streak-freeze CEREMONY. goals.js auto-consumes a banked freeze SILENTLY and sets a one-time
+  // marker (RhythmGoals.freezeJustUsed) surfaced by RhythmGoals.consumeFreezeJustUsed() — one-shot: returns
+  // true exactly once, then clears. index.html's maybeShowStreakSaved() consumes the SAME marker on the HUB
+  // return path (showHub); this covers the LIBRARY-entry return path it misses. Because both share the one
+  // atomic marker, exactly one surface ever fires per freeze — they can never double-reveal. The live
+  // 'rr-streak-freeze-used' toast + the 'rr-streak-milestone' gold cosmetic toast already fire from index.html
+  // (goals.js events) — NOT duplicated here.
+  function maybeFreezeCeremony() {
+    try {
+      var RG = window.RhythmGoals;
+      if (!RG || typeof RG.consumeFreezeJustUsed !== 'function') return;
+      if (!RG.consumeFreezeJustUsed()) return;   // one-shot; nothing pending (or the hub reveal already took it)
+      _ensureWave5Css();
+      var old = $('rr-freeze-card'); if (old) old.remove();
+      var card = document.createElement('div');
+      card.id = 'rr-freeze-card'; card.className = 'rr-freeze-card';
+      card.setAttribute('role', 'status'); card.setAttribute('aria-live', 'polite');
+      card.innerHTML =
+        '<span class="rfz-ic" aria-hidden="true">❄️→🔥</span>' +
+        '<span class="rfz-txt"><span class="rfz-title">Streak Freeze used</span>' +
+        '<span class="rfz-sub">Your Streak Freeze saved the run — earned back at day 30</span></span>';
+      document.body.appendChild(card);
+      requestAnimationFrame(function () { try { card.classList.add('show'); } catch (e) {} });
+      setTimeout(function () { try { card.classList.remove('show'); setTimeout(function () { try { card.remove(); } catch (e) {} }, 520); } catch (e) {} }, 5200);
+      try { applyAttentionCap(); } catch (e) {}   // transient/non-pulsing, but re-assert the one-pulse cap after the repaint
+    } catch (e) {}
+  }
+
+  // ---- C3 WEEKLY-RIFT STANDINGS — the ladder you can feel move. Enriches the hub's #mh-weekly card (owned by
+  // index.html; we only APPEND an owned #rr-rift-standings sub-block) with the live GET {API_BASE}/rift/standings
+  // ->  { week_start, closes_at, total_players, top3:[...], my_rank }. Fail-soft LAW: on error / 401 / anon /
+  // missing my_rank, the sub-block is removed so the card renders EXACTLY as index.html paints it (no empty rows,
+  // no throw, no console spam). Auth reuses the app's established shared-session pattern (index.html beta-gate
+  // token() / catalog adoptSiteSession) — anon → my_rank null → the unchanged path.
+  var _riftCache = null, _riftCacheAt = 0, _riftInflight = false;
+  var _WK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function _wcfg() { try { return window.RHYTHM_CONFIG || {}; } catch (e) { return {}; } }
+  function _riftBase() { return (_wcfg().API_BASE || '').replace(/\/+$/, ''); }
+  function _riftToken() {
+    try {
+      var cfg = _wcfg();
+      var m = (cfg.SUPABASE_URL || '').match(/https?:\/\/([a-z0-9]+)\.supabase/i);
+      if (m) { var raw = localStorage.getItem('sb-' + m[1] + '-auth-token'); if (raw) { var o = JSON.parse(raw); return (o && (o.access_token || (o.currentSession && o.currentSession.access_token))) || null; } }
+    } catch (e) {}
+    return null;
+  }
+  function _riftHeaders() {
+    var cfg = _wcfg(); var h = { 'content-type': 'application/json' };
+    if (cfg.SUPABASE_KEY) h.apikey = cfg.SUPABASE_KEY;
+    h.authorization = 'Bearer ' + (_riftToken() || cfg.SUPABASE_KEY || '');
+    return h;
+  }
+  function _riftFetch() {
+    return new Promise(function (resolve) {
+      var base = _riftBase();
+      if (!base || typeof fetch !== 'function') { resolve(null); return; }
+      var done = false;
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var to = setTimeout(function () { if (!done) { done = true; try { ctrl && ctrl.abort(); } catch (e) {} resolve(null); } }, 6000);
+      try {
+        fetch(base + '/rift/standings', { headers: _riftHeaders(), signal: ctrl ? ctrl.signal : undefined })
+          .then(function (r) { return (r && r.ok) ? r.json() : null; })
+          .then(function (j) { if (!done) { done = true; clearTimeout(to); resolve(j || null); } })
+          .catch(function () { if (!done) { done = true; clearTimeout(to); resolve(null); } });
+      } catch (e) { if (!done) { done = true; clearTimeout(to); resolve(null); } }
+    });
+  }
+  // delta since yesterday — LOCAL snapshot (the endpoint returns an absolute rung, no delta). rr_rift_rank keeps
+  // { day, rank, prevDay, prevRank }; the baseline is the last rank recorded on a PRIOR day. null → no arrow.
+  function _riftDelta(myRank) {
+    var today = _todayKey();
+    var snap = {}; try { snap = JSON.parse(localStorage.getItem('rr_rift_rank') || '{}') || {}; } catch (e) {}
+    var delta = null;
+    if (snap.day === today) {
+      if (typeof snap.prevRank === 'number') delta = snap.prevRank - myRank;
+      snap.rank = myRank;
+    } else {
+      if (typeof snap.rank === 'number') { snap.prevRank = snap.rank; snap.prevDay = snap.day; }
+      if (typeof snap.prevRank === 'number') delta = snap.prevRank - myRank;
+      snap.day = today; snap.rank = myRank;
+    }
+    try { localStorage.setItem('rr_rift_rank', JSON.stringify(snap)); } catch (e) {}
+    return delta;
+  }
+  function _riftCloses(closesAt) {
+    try {
+      var t = Date.parse(closesAt); if (!isFinite(t)) return '';
+      var ms = t - Date.now(); if (ms <= 0) return 'closing now';
+      var wd = _WK[new Date(t).getDay()];
+      var days = Math.floor(ms / 86400000);
+      if (days >= 1) return 'closes ' + wd + ' · ' + days + 'd left';
+      var hrs = Math.floor(ms / 3600000);
+      if (hrs >= 1) return 'closes ' + wd + ' · ' + hrs + 'h left';
+      return 'closes ' + wd + ' · <1h';
+    } catch (e) { return ''; }
+  }
+  function _riftName(x) {
+    if (x == null) return '';
+    if (typeof x === 'string') return x;
+    try { return String(x.name || x.display_name || x.username || x.player_name || x.player || ''); } catch (e) { return ''; }
+  }
+  function _riftEsc(s) { try { return RC().escapeHtml(String(s)); } catch (e) { return String(s == null ? '' : s).replace(/[&<>"']/g, ''); } }
+  function _riftPaint(data) {
+    try {
+      var card = $('mh-weekly'); if (!card) return;
+      var existing = $('rr-rift-standings');
+      // essential rung: my_rank must be a real positive integer (null when anon/unranked → fail-soft/unchanged)
+      var myRank = (data && typeof data.my_rank === 'number' && data.my_rank > 0) ? Math.round(data.my_rank) : null;
+      if (myRank == null) { if (existing) existing.remove(); try { applyAttentionCap(); } catch (e) {} return; }
+      _ensureWave5Css();
+      var top3 = (data && Array.isArray(data.top3)) ? data.top3 : [];
+      var names = [];
+      for (var i = 0; i < top3.length && names.length < 3; i++) { var n = _riftName(top3[i]); if (n) names.push(n); }
+      var delta = _riftDelta(myRank);
+      var total = (data && typeof data.total_players === 'number' && data.total_players > 0) ? data.total_players : null;
+      var closes = _riftCloses(data && data.closes_at);
+      var block = existing;
+      if (!block) { block = document.createElement('div'); block.id = 'rr-rift-standings'; block.className = 'rr-rift-standings'; block.setAttribute('role', 'status'); card.appendChild(block); }
+      var deltaHtml = '';
+      if (typeof delta === 'number' && delta > 0) deltaHtml = '<span class="rrs-delta up">▲' + delta + '</span>';
+      else if (typeof delta === 'number' && delta < 0) deltaHtml = '<span class="rrs-delta down">▼' + (-delta) + '</span>';
+      var line = '<div class="rrs-line"><span class="rrs-rank">#' + myRank + '</span>' + deltaHtml +
+        (total ? '<span class="rrs-of">of ' + total.toLocaleString() + '</span>' : '') +
+        (closes ? '<span class="rrs-reset">' + _riftEsc(closes) + '</span>' : '') + '</div>';
+      var topHtml = names.length
+        ? '<div class="rrs-top">TOP — ' + names.map(function (n) { return '<b>' + _riftEsc(n) + '</b>'; }).join(' · ') + '</div>'
+        : '';
+      block.innerHTML = line + topHtml;
+      block.classList.toggle('rr-climb', typeof delta === 'number' && delta > 0);   // a real rung climb earns the (governed) glow
+      try { applyAttentionCap(); } catch (e) {}   // route through the one-pulse governor after the repaint
+    } catch (e) {}
+  }
+  function _riftRefresh(force) {
+    try {
+      if (!$('mh-weekly')) return;
+      var now = Date.now();
+      if (!force && _riftCache !== null && (now - _riftCacheAt < 180000)) { _riftPaint(_riftCache); return; }   // 3-min throttle
+      if (_riftInflight) return;
+      _riftInflight = true;
+      _riftFetch().then(function (data) {
+        _riftInflight = false; _riftCache = data; _riftCacheAt = Date.now();
+        _riftPaint(data);
+      });
+    } catch (e) { _riftInflight = false; }
+  }
+  // wire the hub: refresh the standings whenever #menu-hub becomes active (the ticker in index.html only repaints
+  // the index-owned #mwk-* fields; our sub-block persists across those repaints since it's a separate child).
+  (function () {
+    try {
+      _ensureWave5Css();
+      var hubEl = $('menu-hub');
+      if (hubEl && window.MutationObserver) {
+        new MutationObserver(function () { if (hubEl.classList.contains('active')) _riftRefresh(false); }).observe(hubEl, { attributes: true, attributeFilter: ['class'] });
+        if (hubEl.classList.contains('active')) _riftRefresh(false);
+      }
+    } catch (e) {}
+  })();
+
+  // dev/verify sentinel (test-only; strip with the other __rr* hooks before launch)
+  try {
+    window.__rrWave5 = {
+      v: 1,
+      riftRefresh: _riftRefresh,
+      riftPaint: _riftPaint,
+      freeze: maybeFreezeCeremony,
+      spotOn: _spotOn
+    };
+  } catch (e) {}
 
   window.RhythmLibrary = { render, showView, relayout };
 })();

@@ -185,18 +185,62 @@
   let holdScored = Array(LANE_COUNT).fill(0);   // fraction [0..1] of the active sustain already paid out
   let holdSparkT = Array(LANE_COUNT).fill(0);   // spark-emit throttle while sustaining
   let holdRailSeg = Array(LANE_COUNT).fill(0);  // SLIDE RAILS: index of the NEXT waypoint the active rail in this lane is heading to (0 = none/hold)
+  // ---- TASK4: ?playtest=1 MASTER SWITCH for the DARK mechanics -------------------------------------------------------
+  // ONE in-memory switch so the owner can feel every dark gameplay flag (slide rails / STARSTRUCK star-phrases / open
+  // notes) in a single sitting, while real users keep the safe defaults. It is an ADDITIONAL OR-term on each flag's
+  // existing gate — every individual gate (?rails=1 / rr_rails, ?odphrase=1 / rr_odphrase, ?open=1 / rr_open) keeps
+  // working exactly as today. It NEVER writes localStorage: this page load only, zero persistence, no leak into a later
+  // normal session. With ?playtest=1 ABSENT, `PLAYTEST_ALL` is false → `x || false === x` at every site → byte-identical.
+  // Because open-notes + slide-rails MODIFY the note array (STARSTRUCK only adds props → array-identical), a playtest
+  // run rides the EXISTING preview/practice scoring gate (endGame stamps results.preview) → UNRANKED. See SCORING_RULINGS_v2.
+  const PLAYTEST_ALL = (function () { try { return /[?&]playtest=1\b/.test(location.search); } catch (e) { return false; } })();
+  if (PLAYTEST_ALL) {   // dev-only chrome: an unmistakable corner chip. Guarded so it can NEVER appear without the flag.
+    try {
+      var _mkPlaytestChip = function () {
+        if (document.getElementById('rr-playtest-chip')) return;
+        var c = document.createElement('div');
+        c.id = 'rr-playtest-chip';
+        c.textContent = 'PLAYTEST BUILD — dark flags ON · UNRANKED';
+        c.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;pointer-events:none;'
+          + "font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;"
+          + 'color:#ffe08a;background:rgba(28,10,10,0.88);border:1px solid rgba(255,31,46,0.7);'
+          + 'border-radius:6px;padding:4px 9px;box-shadow:0 0 10px rgba(255,31,46,0.35);';
+        (document.body || document.documentElement).appendChild(c);
+      };
+      if (document.body) _mkPlaytestChip(); else document.addEventListener('DOMContentLoaded', _mkPlaytestChip, { once: true });
+    } catch (e) {}
+  }
   // ---- SLIDE RAILS (Fable v2 flagship, MECHANICS_DIRECTION_v2 §A) — DARK behind RAILS_ON. Default OFF → the
   // charter emits EXACTLY today's chart (the EMISSION is gated, not the render). A rail is a hold whose lane MOVES:
   // strike the head like a hold, then FOLLOW the ribbon as it bends to the next string. SCORE-IDENTICAL to the hold
   // it replaces — transfers award ZERO score (no new score sites; the notes_total*1500 ceiling never learns rails
   // exist). Transfer failure resolves through the EXISTING endHoldEarly GRACE/SLIP/DROP bands (one mercy model).
-  function RAILS_ON() { try { if (/[?&]rails=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_rails') === '1'; } catch (e) {} return false; }
+  function RAILS_ON() { if (PLAYTEST_ALL) return true; try { if (/[?&]rails=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_rails') === '1'; } catch (e) {} return false; }
   // ---- A2 STARSTRUCK star-phrases (Wave-4b) — DARK behind STARPHRASE_ON. Default OFF → the chart post-pass never
   // runs, no note carries a phraseId, and the runtime hooks (guarded on phraseId != null) are byte-identical no-ops.
   // When ON it's PURE LEGIBILITY: clearing a whole star-phrase fires a STARSTRUCK callout + gold burst. It NEVER adds
   // score, Overdrive charge, or multiplier — OD charge stays EXACTLY per-note (the star charge line is untouched). The
   // notes_total*1500 ceiling never learns phrases exist. The ceremony IS the reward.
-  function STARPHRASE_ON() { try { if (/[?&]odphrase=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_odphrase') === '1'; } catch (e) {} return false; }
+  function STARPHRASE_ON() { if (PLAYTEST_ALL) return true; try { if (/[?&]odphrase=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_odphrase') === '1'; } catch (e) {} return false; }
+  // ---- CHART-SHAPE GUARD-RAIL (Fable, SCORING_RULINGS_v2) — is THIS run being played on a chart whose note ARRAY was
+  // altered by a dark mechanic? open-notes (hittable from ANY lane → strictly easier; also bakes `.hopo` auto-chain
+  // tags) and slide-rails (holds re-typed to 'rail') both change the array. STARSTRUCK does NOT (it only adds
+  // phraseId/phraseLen — array-identical, proven by phraseV2Proof), so those runs stay ranked.
+  //
+  // ASK THE CHART, NOT THE FLAG. An earlier version of this read the live `openNotes` / RAILS_ON() at endGame and was
+  // BYPASSABLE: buildNotes bakes the mechanic into per-note properties once (n.open at 2109, n.hopo at 2127), and hit
+  // detection keys on those baked properties — NOT on the flag. So loading `?open=1`, then calling the ungated,
+  // production-reachable `__rrOpenNotes(false)` mid-run, flipped the flag false while the easy chart stayed baked, and
+  // the inflated score posted to the real leaderboard. The mirror bug voided a legitimately clean run. Reading the
+  // finalized `notes` array is ground truth: it is immune to flag toggles, and it also covers the MULTIPLAYER path,
+  // where `notes` is the host's injected chart (the broadcast serializer at 2763 carries `open`/`hopo`), so a guest
+  // inherits the host's modified-chart verdict instead of consulting its own local flags.
+  // O(n) once at endGame, short-circuiting. All flags default OFF → no note carries these props → false on every
+  // normal load, so the ranked path is byte-identical. Fallback to the flags only if `notes` is somehow unreadable.
+  function _chartShapeModified() {
+    try { return Array.isArray(notes) && notes.some(function (n) { return n && (n.open === true || n.hopo === true || n.type === 'rail'); }); }
+    catch (e) { return !!openNotes || !!RAILS_ON(); }
+  }
   // A2 STARSTRUCK grouping — Fable's ANCHORED rule (SCORING_RULINGS_v2). A STARSTRUCK phrase is the APPROACH RUN that
   // ENDS at an existing star: from each star, walk BACKWARD collecting eligible preceding notes within PHRASE_WIN, up
   // to PHRASE_CAP-1 of them, with the star itself the LAST member (so the existing _phraseCredit fires exactly on the
@@ -327,7 +371,7 @@
   // noteVariety so they A/B independently. OPEN = "strum the whole neck" (any lane clears it). HOPO =
   // a fast-run note that auto-chains off a clean hit (no fresh strum). Enable: ?open=1 / rr_open / __rrOpenNotes(true).
   let openNotes = false;
-  try { openNotes = /[?&]open=1/.test(location.search) || localStorage.getItem('rr_open') === '1'; } catch (e) {}
+  try { openNotes = PLAYTEST_ALL || /[?&]open=1/.test(location.search) || localStorage.getItem('rr_open') === '1'; } catch (e) {}   // TASK4: PLAYTEST_ALL is an extra OR-term (no persistence — never written back to rr_open)
   try { window.__rrOpenNotes = function (on) { if (on === undefined) return openNotes; openNotes = !!on; try { localStorage.setItem('rr_open', on ? '1' : '0'); } catch (e) {} return openNotes; }; } catch (e) {}
   let chartMode = 'musical'; // Settings → Chart Feel: 'musical' (build57 DEFAULT — multi-band detection + centroid/pitch-contour lanes + dynamic density) | 'classic' (every Nth bass-only onset, hashed lanes — fallback)
   let levelGuitarPref = 'mine';   // build60: Settings → "Guitar on Levels" — 'mine' (the equipped guitar wins on any level) | 'level' (use the level's own themed guitar)
@@ -3869,7 +3913,19 @@
       // `results.preview` (no career / per-song best / Bonus Sparks / Daily-Rift ×3 / XP / streak / account submit),
       // _ratingsTidFor returns null (no ranked results-extras, no ratings widget), and the live-submit block below
       // short-circuits it. Default false → a normal run records + submits exactly as before.
-      preview: _bridgeRun,
+      // CHART-SHAPE GUARD-RAIL (Fable, SCORING_RULINGS_v2): "never submit v2-stamped scores off a modified chart."
+      // open-notes and slide-rails MODIFY the note array (open notes are hittable from ANY lane — strictly easier;
+      // rails re-type holds), so a run with either ON is NOT comparable to the ranked CHART_VERSION-2 chart and must be
+      // UNRANKED — no matter HOW the flag was enabled. It is not enough to gate only ?playtest=1: `?open=1`, `?rails=1`,
+      // `rr_open`, `rr_rails` and `__rrOpenNotes(true)` are all reachable in PRODUCTION (no localhost gate — cf. the
+      // build66 launch-audit finding where `?dev=1` unlocked paid content in prod), so before this, any player could
+      // append `?open=1` to the live game and post an inflated score to the real leaderboards.
+      // STARSTRUCK is deliberately NOT here: it only ADDS phraseId/phraseLen props, the array is byte-identical, so
+      // those runs stay ranked (proven by phraseV2Proof).
+      // When a dark mechanic eventually ships ON by default, it becomes part of a NEW chart epoch — bump CHART_VERSION
+      // and drop it from this list; until then, playing it means playing unranked.
+      // All flags default OFF → this stays exactly `_bridgeRun` on every normal load, byte-identical.
+      preview: _bridgeRun || PLAYTEST_ALL || _chartShapeModified(),
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     // build148 T8: clearing FRACTURE (Hard) at ≥85% on a real (non-practice, non-failed) run UNLOCKS the RIFT
@@ -3947,6 +4003,16 @@
       // FIRST PULSE bridge run — UNRANKED: no leaderboard submit at all (server chart OR account). No practice note
       // either; _renderBridgeResults paints the dedicated "BRIDGE RUN — unranked" chip instead. This closes the last
       // submit surface (session.submit) on top of recordLocal's results.preview early-return.
+    } else if (PLAYTEST_ALL || _chartShapeModified()) {
+      // CHART-SHAPE GUARD-RAIL (SCORING_RULINGS_v2): open-notes / slide-rails are baked into the chart shape, so a run
+      // with either ON must NEVER submit a ranked score — and this must hold however the flag was set, not just via
+      // ?playtest=1. `results.preview` above suppresses recordLocal/ratings/results-extras (the LOCAL surfaces), but
+      // it does NOT reach `session.submit` below — that is the SERVER leaderboard, and it is closed only by landing in
+      // one of these branches (this is why the bridge run needed its own branch too). Before this, a bare `?open=1` —
+      // reachable in production, no localhost gate — fell straight through to session.submit and posted an inflated
+      // score (open notes are hittable from ANY lane) to the live boards. Same close-out as practice/tight: local note
+      // only. All flags default OFF → unreachable on a normal load.
+      try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
     } else if (timingFeel === 'tight') {
       try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
     } else if (session && session.submit) {
@@ -4107,9 +4173,14 @@
         const _curMs = Math.round(audioOffset * 1000);
         const _newMs = Math.max(-150, Math.min(150, _curMs + Math.round(_med / 2)));
         if (Math.abs(_med) > 25 && _newMs !== _curMs) {
+          // NAME THE CONSEQUENCE, not a bare number: a larger offset makes each note reach the strike line LATER
+          // relative to the music (jt = songTime - audioOffset), so the sign of the applied DELTA is what the player
+          // will actually feel. (deltaMs is never 0 here — the `_newMs !== _curMs` guard above rules that out.)
+          const _later = (_newMs - _curMs) > 0;
+          const _feel = _later ? 'later' : 'earlier';
           const _btn = 'padding:5px 12px;border-radius:8px;border:1px solid rgba(236,231,227,0.25);background:rgba(20,12,10,0.6);color:#ece7e3;font-family:\'Chakra Petch\',sans-serif;font-size:11px;letter-spacing:0.08em;cursor:pointer;';
           const _achtml = '<div id="results-autocal" style="margin:10px auto 0;max-width:340px;padding:9px 12px;border:1px solid rgba(224,169,63,0.35);border-radius:10px;background:rgba(28,16,10,0.55);">'
-            + '<div style="font-size:11.5px;letter-spacing:0.06em;color:#e0a93f;font-family:\'Chakra Petch\',sans-serif;">Your hits ran ~' + Math.abs(_med) + 'ms ' + (_med > 0 ? 'LATE' : 'EARLY') + ' — auto-calibrate?</div>'
+            + '<div style="font-size:11.5px;letter-spacing:0.06em;color:#e0a93f;font-family:\'Chakra Petch\',sans-serif;">Your hits ran ~' + Math.abs(_med) + 'ms ' + (_med > 0 ? 'LATE' : 'EARLY') + ' — nudge notes ' + _feel + ' to match?</div>'
             + '<div style="display:flex;gap:8px;justify-content:center;margin-top:7px;">'
             + '<button id="autocal-apply" style="' + _btn + 'border-color:rgba(224,169,63,0.6);color:#ffe08a;">APPLY ' + (_newMs > 0 ? '+' : '') + _newMs + 'ms</button>'
             + '<button id="autocal-later" style="' + _btn + '">NOT NOW</button>'
@@ -4126,7 +4197,10 @@
               audioOffset = _newMs / 1000;
               try { localStorage.setItem('rr_offset_ms', String(_newMs)); } catch (e2) {}
               try { updateCalibMenuVal(); } catch (e2) {}
-              if (_chip) _chip.innerHTML = '<div style="font-size:11.5px;letter-spacing:0.06em;color:#ffe08a;font-family:\'Chakra Petch\',sans-serif;text-align:center;">✓ Timing offset set to ' + (_newMs > 0 ? '+' : '') + _newMs + 'ms — fine-tune anytime in Settings ▸ Calibration</div>';
+              // A3 telemetry — one consent-gated event through the existing RhythmTelemetry sink (_tlog is the sink
+              // wrapper; RhythmTelemetry.event is itself consent-gated — we don't bypass that).
+              try { _tlog('calibrate_apply', { source: 'autocal', offsetMs: _newMs, prevMs: _curMs, deltaMs: _newMs - _curMs, medianMs: _med }); } catch (e2) {}
+              if (_chip) _chip.innerHTML = '<div style="font-size:11.5px;letter-spacing:0.06em;color:#ffe08a;font-family:\'Chakra Petch\',sans-serif;text-align:center;">✓ Applied ' + (_newMs > 0 ? '+' : '') + _newMs + 'ms — notes will feel ' + _feel + '. Fine-tune in Settings ▸ Calibration</div>';
             });
             const _la = document.getElementById('autocal-later');
             if (_la) _la.addEventListener('click', () => { if (_chip) _chip.remove(); });
@@ -4523,6 +4597,8 @@
   function pauseGame() {
     if (state !== 'playing' || _endingLock) return;   // build108 review fix (critical): NEVER pause during the fail-out wipeout beat — a pause (Escape/gamepad/blur/visibilitychange all route here) would flip state off 'playing', so the deferred endGame() re-entry guard would silently swallow the only teardown call and strand the failed run (resume then continues it as if it never failed).
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
+    // A3: surface this run's timing bias + a one-tap RE-CALIBRATE (deduped every pause; renders nothing below the floor).
+    try { _renderPauseCalibration(); } catch (e) {}
     // PRACTICE: the RESTART SECTION action is only meaningful in a practice run — show it there, hide it otherwise.
     try { const _rs = document.getElementById('restart-section-btn'); if (_rs) _rs.hidden = !_practiceOn; } catch (e) {}
     try { window.RhythmProcBg && window.RhythmProcBg.pause(); } catch (e) {}   // build66: freeze the reactive backdrop while paused
@@ -4543,6 +4619,50 @@
     lastFrame = performance.now();
   }
   function hidePause() { _disarmRestart(); $('pause-overlay').classList.remove('show'); }
+
+  // ---------- A3 (Wave-5): CALIBRATION SURFACING ----------
+  // The offset machinery (audioOffset / rr_offset_ms / the calib wizard) shipped in build104; the only gap was
+  // DISCOVERABILITY — a new player on a laggy device never found it. On pause we read the run's own per-hit timing
+  // errors (_timingSamples: signed sec, >0 = pressed LATE) and, once there's a meaningful sample, surface a plain-
+  // language read of the MEDIAN bias (median, not mean — one stray whiff shouldn't swing it) plus a one-tap
+  // RE-CALIBRATE into the EXISTING wizard. DISPLAY / derived-read only — never touches score/judging (see HARD LAW).
+  const PAUSE_CAL_FLOOR = 12;   // below a meaningful sample, show NOTHING rather than editorialize on noise
+  function _pauseCalInfo() {
+    const n = _timingSamples.length;
+    if (n < PAUSE_CAL_FLOOR) return { n: n, medianMs: null, text: null };
+    const sv = _timingSamples.map(s => s * 1000).sort((a, b) => a - b);
+    const med = Math.round(sv.length % 2 ? sv[(sv.length - 1) / 2] : (sv[sv.length / 2 - 1] + sv[sv.length / 2]) / 2);
+    const ad = Math.abs(med);
+    const text = ad <= 8 ? 'Your timing looks dialed in'
+      : ('Your hits are landing ~' + ad + 'ms ' + (med > 0 ? 'late' : 'early'));
+    return { n: n, medianMs: med, text: text };
+  }
+  // Build the pause block by INJECTING DOM from game.js (index.html is owned by a parallel agent) — the same pattern
+  // _renderResultsExtras uses for the results pills. Always removes the prior node FIRST so re-pausing can't stack it.
+  function _renderPauseCalibration() {
+    let ov = null; try { ov = $('pause-overlay'); } catch (e) {}
+    if (!ov) return;
+    const old = document.getElementById('rr-pause-cal'); if (old) old.remove();   // dedupe — never two
+    const info = _pauseCalInfo();
+    if (!info.text) return;   // below the sample floor → surface nothing rather than noise
+    const dialed = Math.abs(info.medianMs) <= 8;
+    const col = dialed ? '#e0a93f' : (info.medianMs > 0 ? '#ff7a4a' : '#dad7d2');   // brand: gold on-beat, warm-orange late, chrome early (no blue/green)
+    const node = document.createElement('div');
+    node.id = 'rr-pause-cal';
+    node.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:9px;margin-top:-4px;max-width:340px;';
+    const line = document.createElement('div');
+    line.style.cssText = 'font-family:\'Chakra Petch\',sans-serif;font-size:12.5px;letter-spacing:0.05em;color:' + col + ';text-align:center;';
+    line.textContent = info.text;
+    const btn = document.createElement('button');
+    btn.id = 'rr-pause-recal'; btn.className = 'ghost-btn'; btn.textContent = 'RE-CALIBRATE';
+    btn.style.cssText = 'padding:9px 18px;font-size:12px;';
+    // straight into the build104 wizard; the game stays paused underneath (calib-screen z-250 > pause-overlay z-100),
+    // so closing the wizard returns to the pause menu with the run intact.
+    btn.addEventListener('click', () => { try { openCalib(); } catch (e) {} });
+    node.appendChild(line); node.appendChild(btn);
+    const keys = ov.querySelector('.results-keys');
+    if (keys && keys.parentNode === ov) ov.insertBefore(node, keys); else ov.appendChild(node);
+  }
 
   // ---------- INPUT ----------
   // build148 T8: is the RIFT (Expert) tier available? Earned by clearing FRACTURE ≥85% (see endGame), or admin.
@@ -4909,6 +5029,11 @@
       // results auto-calibration chip is verifiable headless, + end the live run on demand (a real 4-min playthrough
       // is not viable in a throttled tab).
       seedTiming: (ms, n) => { _timingSamples = new Array(Math.max(4, n || 60)).fill((ms || 0) / 1000); return _timingSamples.length; },
+      // A3 pause-calibration probes (strip at content-freeze): rAF is throttled headless so pauseGame() can't be driven
+      // normally — pauseCal() force-renders the injected pause-overlay block and returns the line it rendered (or null
+      // below the floor); pauseCalInfo() returns the pure {n, medianMs, text} read used to build it.
+      pauseCalInfo: () => _pauseCalInfo(),
+      pauseCal: () => { _renderPauseCalibration(); const el = document.getElementById('rr-pause-cal'); const l = el && el.firstChild; return l ? l.textContent : null; },
       beatsRaw: () => ({ period: beats._period || 0, phase: beats._phase || 0, on: beats.map(b => [Math.round(b.t * 1000) / 1000, Math.round((b.strength || 1) * 100) / 100]) }),   // build104 s4 diag (strip at freeze)
       notesRaw: () => notes.map(n => ({ t: Math.round(n.time * 1000) / 1000, l: n.lane, ty: n.type, h: n.hold ? Math.round(n.hold * 1000) / 1000 : 0, ch: n.chord ? 1 : 0, lead: n.chordLead ? 1 : 0, f: n._fill ? 1 : 0, tr: n._trill ? 1 : 0, pat: (typeof n._pat === 'number') ? n._pat : -1, db: n._downbeat ? 1 : 0, teach: n._teach || 0, rail: (n.type === 'rail' && n.rail) ? n.rail.map(w => [Math.round(w.t * 1000) / 1000, w.lane]) : 0 })),   // build104 s5/6 diag (strip at freeze); teach = T7 head glyph tag
       // T7 teaching (strip at freeze): the per-profile learn counters (capped at 2 each). buildNotes tags heads only while a counter is < 2.
@@ -8939,12 +9064,14 @@
   function openCalib() {
     calibActive = true;
     calibDeltas = []; calibClicks = [];
-    $('calib-count').textContent = '0 / ' + CALIB_TARGET;
-    $('calib-measured').textContent = '— ms';
     const startMs = Math.round(audioOffset * 1000);
-    $('calib-slider').value = startMs;
-    $('calib-slider-val').textContent = (startMs > 0 ? '+' : '') + startMs + ' ms';
-    calibScreen.classList.add('active');
+    // A3 polish: null-guard the DOM writes (matches updateCalibMenuVal's guarded style). openCalib is now also reached
+    // from the pause-overlay RE-CALIBRATE shortcut, so a partial/stripped DOM should degrade gracefully, not throw.
+    { const c = $('calib-count'); if (c) c.textContent = '0 / ' + CALIB_TARGET; }
+    { const m = $('calib-measured'); if (m) m.textContent = '— ms'; }
+    { const sl = $('calib-slider'); if (sl) sl.value = startMs; }
+    { const sv = $('calib-slider-val'); if (sv) sv.textContent = (startMs > 0 ? '+' : '') + startMs + ' ms'; }
+    if (calibScreen) calibScreen.classList.add('active');
     calibCtx = new (window.AudioContext || window.webkitAudioContext)();
     calibNext = calibCtx.currentTime + 0.4;
     calibScheduler();
@@ -9674,9 +9801,13 @@
   });
   $('calib-save').addEventListener('click', () => {
     const ms = parseInt($('calib-slider').value, 10) || 0;
+    const _prevMs = Math.round(audioOffset * 1000);
     audioOffset = ms / 1000;
     try { localStorage.setItem('rr_offset_ms', String(ms)); } catch (e) {}
     updateCalibMenuVal();
+    // A3 telemetry — same consent-gated event as the post-run auto-cal chip, so a manual re-calibrate (incl. the new
+    // pause-overlay RE-CALIBRATE shortcut, which lands here) is measured too.
+    try { _tlog('calibrate_apply', { source: 'wizard', offsetMs: ms, prevMs: _prevMs, deltaMs: ms - _prevMs }); } catch (e) {}
     closeCalib();
   });
 

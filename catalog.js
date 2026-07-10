@@ -1288,6 +1288,56 @@
     else { _dailyRiftArmedId = null; _dailyRiftTriple = false; }
   }
 
+  // ===========================================================================
+  // WAVE-5 SPOTLIGHT (B3) — one deterministic-by-date "Spotlight" track per day that pays
+  // DOUBLE XP on its first clear of the day. STATUS ONLY: the ×2 is pure XP / level progress
+  // (goals.js), NEVER Sparks / Bonus Sparks / score / leaderboard / multiplier — the locked
+  // currency model stands. The pick reuses the dailyPicks date-stable seed (hashStr + dailyRiftToday),
+  // so it's the SAME song for every player today, stable across reloads, and rotates tomorrow.
+  // The ×2 grant lifecycle lives in recordLocal (block 3), downstream of the preview/practice/failed gates.
+  // ===========================================================================
+  // In-memory once-per-session guard for the ×2 XP grant (holds the dailyRiftToday() string it was granted
+  // for). Mirrors the Daily-Rift ×3 belt-and-suspenders: this survives a stamp-WRITE failure (so a second run
+  // THIS session can't re-grant), while the persisted rr_spotlight_xp stamp survives reloads / new sessions.
+  let _spotlightXpDay = null;   // null = the ×2 has not been granted yet this session
+  // Persisted anti-farm stamp, mirrors dailyRiftState(): { date, done }. A stale (yesterday) record reads NOT done today.
+  function spotlightXpState() {
+    let s = {}; try { s = JSON.parse(localStorage.getItem('rr_spotlight_xp') || '{}'); } catch (e) {}
+    const today = dailyRiftToday();
+    return { date: today, done: !!(s && s.date === today && s.done) };
+  }
+  // The day's Spotlight track (SYNC). Reuses dailyPicks' date-stable seed + playable pool (ready, non-video,
+  // decode-confident), then salts a single stable index into it so the Spotlight is a distinct pick from the
+  // daily-picks head yet still identical for everyone today and stable across reloads. null until music loads.
+  // MEMOIZED, and it must be: isSpotlight() is called once per rendered song row / shelf card / coverflow cover, and
+  // dailyPicks() filters the whole ~852-track music catalog and then sorts it with two hashStr() calls per comparison.
+  // Unmemoized that is a full O(N log N) catalog sort per CARD — filling the All-Songs list (40 rows/page + scroll
+  // appends) re-sorted the catalog 100+ times and hitched the render. (build58 memoized the rr_scores JSON.parse for
+  // exactly this reason: getBest() is the list-render hot path.) Cache on the day-key AND the catalog length, so the
+  // pick still rotates at midnight and still resolves once the catalog finishes loading (it is null before that).
+  var _spotCache = { day: null, len: -1, track: null };
+  function spotlightTrack() {
+    try {
+      var today = dailyRiftToday();
+      var len = (typeof musicTracks === 'function' ? (musicTracks() || []).length : 0);
+      if (_spotCache.day === today && _spotCache.len === len) return _spotCache.track;
+      var t = null;
+      var picks = dailyPicks(8);
+      if (picks && picks.length) {
+        var idx = ((typeof hashStr === 'function' ? hashStr('spotlight|' + today) : 0) >>> 0) % picks.length;
+        t = picks[idx] || null;
+        if (!t || isVideo(t) || !trackReady(t)) t = null;   // defense-in-depth: never a video, must be playable
+      }
+      _spotCache = { day: today, len: len, track: t };
+      return t;
+    } catch (e) { return null; }
+  }
+  // SYNC boolean: is this track id today's Spotlight? (consumed by the library UI + the ×2 grant gate in recordLocal)
+  function isSpotlight(trackId) {
+    if (trackId == null) return false;
+    try { var t = spotlightTrack(); return !!(t && String(t.id) === String(trackId)); } catch (e) { return false; }
+  }
+
   // ---------- catalog query helpers (consumed by the library UI) --------------
   function allTracks() { return catalogTracks; }
   function allMedia() { return catalogTracks.concat(catalogVideos); }   // music + videos, for cross-search (Phase 5)
@@ -2127,6 +2177,36 @@
           if (_rrGoalsOut && _rrGoalsOut.xpEarned) { results._xpEarned = _rrGoalsOut.xpEarned; try { renderXpLine(_rrGoalsOut.xpEarned); } catch (e) {} }
         }
       } catch (e) {}
+      // WAVE-5 SPOTLIGHT (B3) ×2 XP — the day's Spotlight track grants DOUBLE XP, ONCE per day. The bonus is granted via
+      // goals.js's XP-ONLY primitive `grantBonusXp`, matching the base XP the run just earned. It deliberately does NOT
+      // call recordLevelComplete a second time: that increments g.levels and re-runs claimDaily/claimWeekly, so a Spotlight
+      // clear would count as TWO levels — reaching the 3-level daily goal (and BUMPING THE STREAK via updateStreakOnDailyClaim)
+      // one real play early, and banking up to 7 phantom levels a week against the 15-level weekly goal. Streak is the
+      // retention ledger and gates the freeze economy; only real plays may move it.
+      // STATUS ONLY: never touches Sparks / Bonus Sparks / score / leaderboard / multiplier. Sits DOWNSTREAM of every
+      // exclusion the base XP uses — the preview/practice/_preview early-returns at the top of recordLocal and this block's
+      // `!failed` gate already dropped preview / practice / bridge / MP / failed runs before we get here.
+      // Anti-farm mirrors the Daily-Rift ×3 lifecycle: consume-once -> grant -> stamp-done. The consume flips an in-memory
+      // day-guard BEFORE granting (so a stamp-write failure can't double-grant this session); the persisted rr_spotlight_xp
+      // stamp blocks re-grant across reloads. Base XP is granted independently above, so a stamp failure can neither
+      // double-grant nor drop it. An older goals.js without grantBonusXp simply skips the bonus (never falls back to a
+      // second recordLevelComplete).
+      try {
+        var _spotToday = dailyRiftToday();
+        var _spotBase = results._xpEarned || 0;   // exactly the base XP this run just earned → granting it again = ×2
+        if (_spotlightXpDay !== _spotToday && !spotlightXpState().done && _spotBase > 0
+            && currentTrack && currentTrack.id && isSpotlight(currentTrack.id)
+            && window.RhythmGoals && typeof window.RhythmGoals.grantBonusXp === 'function') {
+          _spotlightXpDay = _spotToday;   // CONSUME first — a later run this session can't re-grant even if the stamp write below throws
+          var _spotOut = window.RhythmGoals.grantBonusXp(_spotBase, 'Spotlight ×2 XP');
+          if (_spotOut && _spotOut.xpEarned) {
+            results._spotlightXpBonus = _spotOut.xpEarned;                       // the bonus half (results / share card can flag "Spotlight ×2 XP")
+            results._xpEarned = (results._xpEarned || 0) + _spotOut.xpEarned;    // run total = base + bonus
+            try { renderXpLine(results._xpEarned); } catch (e) {}
+          }
+          try { localStorage.setItem('rr_spotlight_xp', JSON.stringify({ date: _spotToday, done: true })); } catch (e) {}   // stamp LAST
+        }
+      } catch (e) {}
       if (bonusServerReady()) {
         // build100i: SERVER-authoritative Bonus. The earn does NOT happen here — it fires from the /score|/plays success
         // handler below, once the canonical play_id is known (POST /bonus-sparks/earn { play_id, daily_rift } → server
@@ -2875,6 +2955,8 @@
     flixBackdrop: _startFlixBackdrop, flixBackdropStop: _stopFlixBackdrop,   // build102z p1.5: multiplayer stages a VIDEO-review backdrop on host+challenger (gated on sel.flixVideo — normal MP never calls these)
     // DAILY RIFT (build100): deterministic-by-date song pick + once/day ×3 Bonus flag (consumed in recordLocal). Menu controller in index.html paints + launches.
     dailyRiftTrack, dailyRiftState, dailyRiftToday, setDailyRift,
+    // WAVE-5 SPOTLIGHT (B3): date-stable daily double-XP track pick + membership test (×2 grant lifecycle in recordLocal).
+    spotlightTrack, isSpotlight, spotlightXpState,
     search, sortTracks, sections, getBest,
     // retention / discovery data layer (derived, read-only; UI rails/cards wired in a later wave)
     getAffinity, forYouTracks, getCollectionStats, chaseTheS, freshSince, lastVisitAgeHours, dailyPicks,

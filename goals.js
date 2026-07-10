@@ -348,6 +348,23 @@
     return { xpEarned: xpTotal, xpState: loadXp(), goalsState: loadGoals(), streakState: loadStreak() };
   }
 
+  // ---- public API: grant BONUS XP ONLY (Wave-5 Spotlight ×2 XP, catalog.js) ----
+  // XP and nothing else. Deliberately NOT recordLevelComplete(): that increments g.levels and re-runs
+  // claimDaily/claimWeekly, so calling it twice to "double the XP" would inflate the goal ledger — a Spotlight
+  // clear would count as TWO levels, letting a player reach the 3-level daily goal (and thus BUMP THEIR STREAK,
+  // via updateStreakOnDailyClaim) one real play early, and bank up to 7 phantom levels a week against the
+  // 15-level weekly goal. Streak is the retention ledger and gates the freeze economy; it must only ever be
+  // moved by real plays. grantXp() touches rr_xp alone (plus the level-threshold cosmetic unlocks, which are
+  // the intended XP→status path), so this is the correct primitive for a pure XP multiplier.
+  // Cosmetic status only: never Sparks, Bonus Sparks, score, leaderboard, or multiplier.
+  function grantBonusXp(amt, label) {
+    var n = Math.round(Number(amt) || 0);
+    if (!isFinite(n) || n <= 0) return { xpEarned: 0, xpState: loadXp() };
+    if (n > 500) n = 500;                                  // sanity clamp — no caller should ever need more
+    grantXp(n, label || 'Bonus XP');
+    return { xpEarned: n, xpState: loadXp() };
+  }
+
   // ---- public API: record a completed MP MATCH (recordMpResult hook, multiplayer.js) ----
   // result: 'win' | 'loss' | 'draw'; info: whatever multiplayer.js passes (not required here).
   function recordMpComplete(result, info) {
@@ -403,6 +420,7 @@
     goalsState: goalsState,
     checkRollover: checkRollover,
     recordLevelComplete: recordLevelComplete,
+    grantBonusXp: grantBonusXp,                     // Wave-5: XP-only grant (no goal-counter / streak side effects)
     recordMpComplete: recordMpComplete,
     claimDaily: claimDaily,
     claimWeekly: claimWeekly,

@@ -37,7 +37,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=462" />
+<link rel="stylesheet" href="jukebox.css?v=463" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -62,6 +62,16 @@
     /* spacing scale (4px base) */
     --rr-sp-1: 4px;  --rr-sp-2: 8px;  --rr-sp-3: 12px;
     --rr-sp-4: 16px; --rr-sp-5: 24px; --rr-sp-6: 32px;
+    /* TYPE SCALE (D4 role-ladder) — the 5 canonical font-size rungs. build160 fixed the font
+       STACKS; this codifies the SIZES so they stop drifting (stray 13.5px/11.5px one-offs snap
+       to the nearest rung). SIZE only — role decides the family: numbers/HUD stay Oxanium,
+       labels stay the Chakra→sans stack. Sub-10px micro (pips, RIFT seg-sub) sits below the
+       floor by design and stays literal. */
+    --rr-fs-xs: 10px;   /* micro   — mono kickers, status pills, counters, tiny legends */
+    --rr-fs-sm: 12px;   /* label   — tabs, chips, secondary labels, mono body copy */
+    --rr-fs-md: 14px;   /* body    — list titles, button text, primary control labels */
+    --rr-fs-lg: 18px;   /* heading — card / section titles, sheet & modal headers */
+    --rr-fs-xl: 24px;   /* display — large Unbounded headers (fixed, non-clamp) */
     /* MOTION (U-4): three duration tokens + one easing pair.
        ease-out = enter (settle), ease-in = exit. reduce-motion collapses both. */
     --rr-t-fast: 140ms;
@@ -682,7 +692,7 @@
   .ho-star { font-family: 'Oxanium', sans-serif; font-size: 26px; line-height: 1; color: var(--gold); background: radial-gradient(circle at 40% 32%, #2a1d08, #0c0703); border: 1px solid rgba(224,169,63,0.6); box-shadow: 0 0 16px rgba(224,169,63,0.5); border-radius: 50%; text-shadow: 0 0 10px rgba(255,212,128,0.85); }
   .howto-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .howto-txt b { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: var(--ink); }
-  .howto-txt span { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; color: var(--ink-dim); line-height: 1.4; }
+  .howto-txt span { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); color: var(--ink-dim); line-height: 1.4; }
   .howto-txt kbd, .results-keys kbd { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--chrome); background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
   .results-keys { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: var(--ink-dim); text-transform: uppercase; }
   .howto-txt em { color: var(--crimson); font-style: normal; font-weight: 700; }
@@ -701,7 +711,7 @@
   .pn-avatar.guest svg { width: 32px; height: 32px; }
   .pn-id { min-width: 0; text-align: left; }
   .pn-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; color: var(--crimson); }
-  .pn-name { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 24px; line-height: 1.1; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+  .pn-name { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: var(--rr-fs-xl); line-height: 1.1; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
   .pn-hint { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--ink-dim); margin-top: 2px; }
   /* build58: equipped-guitar trophy case — a large preview of the selected loadout guitar, left of the stats */
   /* build58: a DARK display case — a spotlight cone from above + a warm floor pool. The dark backdrop lets black-background
@@ -761,7 +771,7 @@
     background: linear-gradient(90deg, rgba(224,169,63,0.85), #f0c870); box-shadow: 0 0 10px rgba(224,169,63,0.45);
     transition: width .7s cubic-bezier(.2,.9,.26,1); }
   html.rr-reduce-motion .pn-rankfill { transition: none; }
-  .pn-rankcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-dim); }
+  .pn-rankcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); letter-spacing: 0.08em; color: var(--ink-dim); }
   /* build110 Phase 5: XP LEVEL chip — SEPARATE, faster-moving number that sits ALONGSIDE the existing
      prestige rank (never re-keys rankTitle()/RANK_FLOORS). Gold/crimson, mirrors .rbadge language. */
   .pn-rankrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -780,7 +790,7 @@
     background: linear-gradient(90deg, #b3121f, #ff2a38); box-shadow: 0 0 10px rgba(255,31,46,0.45);
     transition: width .7s cubic-bezier(.2,.9,.26,1); }
   html.rr-reduce-motion .pn-xpfill { transition: none; }
-  .pn-xpcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.08em; color: var(--ink-dim); }
+  .pn-xpcap { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); letter-spacing: 0.08em; color: var(--ink-dim); }
   /* RECENT XP feed — transparency feature (spec §2.2): "exactly what earned every point" */
   .profile-xpfeed-wrap { width: 100%; margin-top: 16px; }
   .profile-xpfeed-wrap[hidden] { display: none; }
@@ -1108,7 +1118,7 @@
   #lbd-diff button.active .seg-sub { color: rgba(224,218,214,0.75); }
   /* RIFT trophy = gold (the sanctioned non-crimson accent), set apart from the crimson tiers */
   #lbd-diff .seg-rift.active { border-color: rgba(224,169,63,0.6); color: #f4d488; background: rgba(224,169,63,0.13); }
-  .lbd-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
+  .lbd-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
     box-shadow: inset 0 1px 0 rgba(255,238,200,0.18), 0 10px 26px -16px rgba(0,0,0,0.55), 0 0 18px -10px rgba(224,169,63,0.4);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
@@ -1302,7 +1312,7 @@
     border: 1px solid rgba(255,42,48,0.45); box-shadow: 0 18px 60px rgba(0,0,0,0.7), 0 0 30px rgba(255,31,46,0.18), inset 0 1px 0 rgba(255,176,80,0.10);
     opacity: 0; pointer-events: none; transition: opacity .35s ease, transform .35s cubic-bezier(.2,1,.3,1); }
   #rr-consent.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
-  #rr-consent .rrc-copy { flex: 1 1 280px; min-width: 240px; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; line-height: 1.5; letter-spacing: 0.02em; color: var(--ink, #f6eef0); }
+  #rr-consent .rrc-copy { flex: 1 1 280px; min-width: 240px; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); line-height: 1.5; letter-spacing: 0.02em; color: var(--ink, #f6eef0); }
   #rr-consent .rrc-copy a { color: var(--gold, #ffb050); text-decoration: underline; text-underline-offset: 2px; }
   #rr-consent .rrc-actions { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
   #rr-consent button { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
@@ -1341,7 +1351,7 @@
   .store-getmore:hover, .store-getmore:focus-visible { box-shadow: 0 8px 26px rgba(224,169,63,0.5), inset 0 1px 0 rgba(255,255,255,0.5); }
   .store-getmore:active { transform: translateY(1px); }
   .store-getmore svg { width: 15px; height: 15px; }
-  .store-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
+  .store-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
     box-shadow: inset 0 1px 0 rgba(255,238,200,0.18), 0 10px 26px -16px rgba(0,0,0,0.55), 0 0 18px -10px rgba(224,169,63,0.4);
     -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
@@ -1364,7 +1374,7 @@
   .store-item.owned .store-art { filter: saturate(0.85); }
   .store-item.owned .store-art::before { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px rgba(224,169,63,0.5); pointer-events: none; z-index: 1; }
   .store-body { display: flex; flex-direction: column; gap: 4px; padding: 14px 15px 15px; flex: 1; }
-  .store-item-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 14.5px; letter-spacing: 0.01em; color: var(--ink); line-height: 1.2; }
+  .store-item-t { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: var(--rr-fs-md); letter-spacing: 0.01em; color: var(--ink); line-height: 1.2; }
   .store-item-d { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); line-height: 1.5; min-height: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .store-foot { display: flex; flex-direction: column; align-items: stretch; gap: 7px; margin-top: auto; padding-top: 11px; border-top: 1px solid rgba(255,255,255,0.05); }
   .store-payline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1457,7 +1467,7 @@
   .sh-rule{ height:1px; border:0; width:100%; margin:0; opacity:.6; background:linear-gradient(90deg, var(--gold), rgba(224,169,63,0)); }
   .sh-lore{ margin:0; font-family:'Chakra Petch',sans-serif; font-weight:500; font-size:15px; line-height:1.6; color:var(--ink-dim); max-width:46ch; }
   .sh-traits{ display:flex; flex-wrap:wrap; gap:8px; }
-  .sh-trait{ font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.04em; color:var(--chrome); padding:6px 12px; border:1px solid var(--glass-line); border-radius:999px;
+  .sh-trait{ font-family:'JetBrains Mono',monospace; font-size:var(--rr-fs-xs); letter-spacing:.04em; color:var(--chrome); padding:6px 12px; border:1px solid var(--glass-line); border-radius:999px;
     background:var(--glass-fill); box-shadow:var(--glass-bevel), 0 4px 12px -8px rgba(0,0,0,.55); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
   /* PURCHASE CARD — the eye's anchor: price (with $ anchor) up top, BUY just below. Premium framed panel. */
   .sh-pricebox{ display:flex; flex-direction:column; gap:7px; padding:18px 20px 16px; border-radius:16px; border:1px solid rgba(224,169,63,.32);
@@ -1540,7 +1550,7 @@
   @keyframes rLegendSheen{ 0%,100%{background-position:0 0,0% 50%} 50%{background-position:0 0,100% 50%} }
   html.rr-reduce-motion .store-item[data-rarity="legendary"] .store-art::after{ animation:none; }
   .store-art .r-gem{ position:absolute; top:9px; right:9px; z-index:3; width:14px; height:14px; color:var(--r-gem); }
-  .store-art .si-flag{ position:absolute; top:9px; left:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#fff; padding:4px 9px 4px 8px; border-radius:7px; box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18); }
+  .store-art .si-flag{ position:absolute; top:9px; left:9px; z-index:3; display:inline-flex; align-items:center; gap:5px; font-family:'Chakra Petch',sans-serif; font-weight:700; font-size:var(--rr-fs-xs); letter-spacing:.14em; text-transform:uppercase; color:#fff; padding:4px 9px 4px 8px; border-radius:7px; box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.18); }
   .store-art .si-flag.new{ background:linear-gradient(180deg,#ff2a38,#b3121f); }
   .store-art .si-flag.featured{ color:#1a0f08; background:linear-gradient(180deg,#ffd98a,#e0a93f); }
   .store-art .si-flag .ic{ width:10px; height:10px; }
@@ -1553,7 +1563,7 @@
   .store-item.owned .si-owned-tab .ic{ width:11px; height:11px; }
   .store-item.equipped{ border-color:var(--gold); box-shadow:0 10px 30px rgba(0,0,0,.5), 0 0 22px rgba(224,169,63,.3); }
   .store-item.equipped .store-art::before{ box-shadow:inset 0 0 0 2px var(--gold), inset 0 0 26px rgba(224,169,63,.25); }
-  .store-item.equipped .si-equip-banner{ position:absolute; left:0; right:0; bottom:0; z-index:3; text-align:center; font-family:'Chakra Petch',sans-serif; font-weight:800; font-size:9.5px; letter-spacing:.2em; text-transform:uppercase; color:#1a0f08; padding:5px 0; background:linear-gradient(180deg,#ffd98a,#e0a93f); box-shadow:0 -2px 12px rgba(224,169,63,.5); }
+  .store-item.equipped .si-equip-banner{ position:absolute; left:0; right:0; bottom:0; z-index:3; text-align:center; font-family:'Chakra Petch',sans-serif; font-weight:800; font-size:var(--rr-fs-xs); letter-spacing:.2em; text-transform:uppercase; color:#1a0f08; padding:5px 0; background:linear-gradient(180deg,#ffd98a,#e0a93f); box-shadow:0 -2px 12px rgba(224,169,63,.5); }
   .store-item.equipped .si-equip-banner .ic{ width:10px; height:10px; vertical-align:-1px; margin-right:5px; }
   .ic{ display:inline-block; width:1em; height:1em; color:currentColor; vertical-align:-2px; }
   .store-buy.equipped .ic{ width:13px; height:13px; margin-right:6px; }
@@ -1867,7 +1877,7 @@
     box-shadow: 0 2px 10px -4px rgba(0,0,0,0.6); backdrop-filter: blur(2px); opacity: 0.9; }
   #vs-nowplaying .vs-np-t { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.06em;
     color: #ffe7dc; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #vs-nowplaying .vs-np-a { font-family: 'Chakra Petch', sans-serif; font-size: 9.5px; letter-spacing: 0.1em;
+  #vs-nowplaying .vs-np-a { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.1em;
     color: #d7b2ac; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #vs-nowplaying .vs-np-a:empty { display: none; }
   #game.vs-mode #vs-seam { display: block; position: absolute; left: calc(50% - 8px); top: 0; bottom: 0; width: 16px; z-index: 46; pointer-events: none; }
@@ -2854,7 +2864,7 @@
      U-13: pops in once then sits still (its steady pulse was one of the competing results loops). */
   #results-almost {
     display: inline-block; margin-top: 14px; padding: 7px 16px;
-    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700;
+    font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-sm); font-weight: 700;
     letter-spacing: 0.18em; text-transform: uppercase; color: #ff7a4a;
     border-top: 1px solid rgba(218,215,210,0.3); border-bottom: 1px solid rgba(218,215,210,0.3);
     /* U-13: one-shot entrance only (dropped the infinite resultsAlmostPulse) — the chrome hairline already
@@ -3514,7 +3524,7 @@
   /* build102y step5: challenger seat-policy chips (with GO LIVE) */
   #review-launch .rvl-seatpol { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
   #review-launch .rvl-seatpol[hidden] { display: none; }
-  #review-launch .rvl-seatpol button { padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.62); font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.08em; cursor: pointer; transition: border-color .12s ease, color .12s ease; }
+  #review-launch .rvl-seatpol button { padding: 7px 11px; border-radius: 999px; border: 1px solid rgba(222,216,212,0.18); background: rgba(255,255,255,0.03); color: rgba(238,230,226,0.62); font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.08em; cursor: pointer; transition: border-color .12s ease, color .12s ease; }
   #review-launch .rvl-seatpol button:hover { border-color: rgba(224,169,63,0.5); color: #eee6e2; }
   #review-launch .rvl-seatpol button.active { border-color: var(--gold, #e0a93f); color: var(--gold, #e0a93f); background: rgba(224,169,63,0.10); }
   /* build102y step5: SWAP IN THE ARTIST (gold pill) + TAKE THE STAGE row on the show seat card */
@@ -3535,12 +3545,12 @@
   #review-launch .rvl-golive:hover { transform: translateY(-1px); background: rgba(224,169,63,0.14); box-shadow: 0 10px 30px -12px rgba(224,169,63,0.55); }
   #review-launch .rvl-live-dot { color: var(--crimson, #ff1f2e); animation: rvlPulse 1.2s ease-in-out infinite; display: inline-block; }
   @keyframes rvlPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-  #review-launch .rvl-golive-hint { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; color: rgba(238,230,226,0.55); margin-top: 7px; letter-spacing: 0.05em; }
+  #review-launch .rvl-golive-hint { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); color: rgba(238,230,226,0.55); margin-top: 7px; letter-spacing: 0.05em; }
   /* build102s — LIVE SHOW room chrome (mpx-step-setup; hidden unless room.show). Warm darks only (R>=G>=B). */
   .mpx-show-banner { display: flex; align-items: center; gap: 12px; margin: 0 2px 12px; padding: 10px 12px; border-radius: 13px; background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(26,16,12,0.55)); border: 1px solid rgba(224,169,63,0.4); }
   .mpx-show-banner .msb-art { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; border: 1px solid rgba(222,216,212,0.16); background: #1a100e; flex: none; }
   .mpx-show-banner .msb-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
-  .mpx-show-banner .msb-badge { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9.5px; letter-spacing: 0.22em; color: var(--gold, #e0a93f); }
+  .mpx-show-banner .msb-badge { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: var(--rr-fs-xs); letter-spacing: 0.22em; color: var(--gold, #e0a93f); }
   .mpx-show-banner .msb-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; color: #f3ece8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mpx-show-banner .msb-artist { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: rgba(238,230,226,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mpx-show-banner .msb-diff { margin-left: auto; flex: none; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.16em; color: var(--crimson, #ff1f2e); border: 1px solid rgba(255,31,46,0.45); border-radius: 999px; padding: 4px 10px; }
@@ -3554,7 +3564,7 @@
   #mpx-show-accept:hover { background: linear-gradient(180deg, rgba(224,169,63,0.5), rgba(148,102,26,0.35)); }
   #mpx-show-decline { border: 1px solid rgba(222,216,212,0.25); background: rgba(255,255,255,0.04); color: #cdbfae; }
   .mpx-show-invite-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .mpx-show-invite-btn { flex: 1; min-width: 200px; padding: 11px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12.5px; letter-spacing: 0.12em; cursor: pointer; }
+  .mpx-show-invite-btn { flex: 1; min-width: 200px; padding: 11px 0; border-radius: 11px; border: 1px solid rgba(224,169,63,0.6); background: rgba(224,169,63,0.10); color: var(--gold, #e0a93f); font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: var(--rr-fs-sm); letter-spacing: 0.12em; cursor: pointer; }
   .mpx-show-invite-btn:hover:not(:disabled) { background: rgba(224,169,63,0.18); }
   .mpx-show-invite-btn:disabled { opacity: 0.55; cursor: default; }
   .mpx-show-invite-state { font-family: 'Chakra Petch', sans-serif; font-size: 11px; color: var(--gold, #e0a93f); }
@@ -3698,7 +3708,7 @@
   }
   .practice-panel .pp-spd:hover { color: var(--ink); border-color: rgba(224,169,63,0.5); }
   .practice-panel .pp-spd.active { background: rgba(224,169,63,0.18); border-color: var(--gold); color: var(--gold); }
-  .practice-panel .pp-hint { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; line-height: 1.5; color: var(--ink-dim); letter-spacing: 0.02em; text-align: center; }
+  .practice-panel .pp-hint { font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); line-height: 1.5; color: var(--ink-dim); letter-spacing: 0.02em; text-align: center; }
   .practice-panel .pp-start-btn {
     width: 100%; padding: 15px; border-radius: 12px; cursor: pointer;
     background: linear-gradient(180deg, rgba(224,169,63,0.95), rgba(196,138,42,0.95));
@@ -4100,7 +4110,7 @@
   .mh-tile:hover .mh-ico, .mh-tile:focus-visible .mh-ico { transform: translateY(-2px) scale(1.08); }
   .mh-tile .mh-ico svg { width: 100%; height: 100%; }
   .mh-tile .mh-t { position: relative; z-index: 1; font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; }
-  .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 10.5px;
+  .mh-tile .mh-d { position: relative; z-index: 1; font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: var(--rr-fs-xs);
     letter-spacing: 0.06em; color: var(--ink-dim); text-transform: uppercase; }
   /* per-tile accent identity (the six instruments). IDs match the markup. */
   #mh-campaign    { --ta: var(--crimson); }   /* hero path — crimson */
@@ -4124,7 +4134,7 @@
   @media (max-width: 600px) {
     .mh-tile.mh-hero { flex-direction: column; align-items: center; text-align: center; gap: 8px; padding-top: 30px; }
     .mh-tile.mh-hero .mh-ico { width: 42px; height: 42px; }
-    .mh-tile.mh-hero .mh-t { font-size: 24px; }
+    .mh-tile.mh-hero .mh-t { font-size: var(--rr-fs-xl); }
     .mh-hero-textcol { align-items: center; }
   }
   #mh-quickplay   { --ta: #ff7a4a; }          /* ember — fast/play */
@@ -4142,7 +4152,7 @@
   .mh-tile.mh-daily::before { background: linear-gradient(180deg, rgba(224,169,63,0.10), rgba(224,169,63,0) 55%); }
   .mh-tile.mh-daily .mh-ico { color: #e0a93f; filter: drop-shadow(0 0 10px rgba(224,169,63,0.55)); }
   .mh-tile.mh-daily .mh-daily-tags { position: relative; z-index: 1; margin-top: 5px;
-    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9.5px; letter-spacing: 0.14em;
+    font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: var(--rr-fs-xs); letter-spacing: 0.14em;
     text-transform: uppercase; color: #f0c86e; text-shadow: 0 1px 6px rgba(0,0,0,0.8); }
   .mh-tile.mh-daily .mh-daily-pct { position: relative; z-index: 1; margin-top: 3px;
     font-family: 'Chakra Petch', sans-serif; font-weight: 600; font-size: 9px; letter-spacing: 0.08em;
@@ -4203,7 +4213,7 @@
     text-transform: uppercase; color: var(--gold); }
   .mh-status-spark { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.04em; color: var(--ink-dim); }
   .mh-status-spark b { color: var(--gold); font-weight: 700; }
-  .mh-status-cont { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+  .mh-status-cont { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
   .mh-status-cont::before { content: '▶'; color: var(--crimson); font-size: 8px; }
   .mh-status-cont[hidden], .mh-status-spark[hidden] { display: none; }
@@ -4268,7 +4278,7 @@
   .mgc-row { display: flex; flex-wrap: wrap; gap: 14px 22px; }
   .mgc-row[hidden] { display: none; }   /* build112 p1: [hidden] attr must beat the class's own display:flex — otherwise .hidden=true (goalsRow/completeRow) never actually hides (found while verifying the daily-complete-bug fix) */
   .mgc-goal { display: flex; flex-direction: column; gap: 4px; }
-  .mgc-goal-l { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700;
+  .mgc-goal-l { font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); font-weight: 700;
     letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); }
   /* gem-style pips — chrome outline, gold fill on, crimson pulse on the pip that just completed */
   .mgc-dots { display: inline-flex; gap: 5px; }
@@ -4279,12 +4289,12 @@
   @keyframes mgcPop { 0% { transform: scale(1); box-shadow: 0 0 8px rgba(224,169,63,0.6); } 45% { transform: scale(1.4); box-shadow: 0 0 16px rgba(255,31,46,0.75); } 100% { transform: scale(1); box-shadow: 0 0 8px rgba(224,169,63,0.6); } }
   html.rr-reduce-motion .mgc-dots .dot.pip-just-on, body.rr-fx-lite .mgc-dots .dot.pip-just-on { animation: none; }
   .mgc-complete-row { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-  .mgc-complete-txt { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 13.5px;
+  .mgc-complete-txt { font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: var(--rr-fs-md);
     letter-spacing: 0.02em; color: var(--ink); text-transform: none; line-height: 1.32; }
-  .mgc-complete-xp { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 10.5px;
+  .mgc-complete-xp { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: var(--rr-fs-xs);
     letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); }
   .mgc-xprow { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
-  .mgc-xp-cap { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.06em;
+  .mgc-xp-cap { font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
   .mgc-xp-track { flex: 1 1 auto; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.06);
     border: 1px solid var(--line); overflow: hidden; min-width: 60px; }
@@ -4296,7 +4306,7 @@
     display: inline-flex; align-items: center; gap: 6px;
     padding: 8px 16px; border: 1px solid rgba(255,31,46,0.55); border-radius: 999px;
     background: linear-gradient(180deg, rgba(255,31,46,0.16), rgba(163,6,15,0.12));
-    font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
+    font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--ink); white-space: nowrap;
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease, transform .15s ease; }
   .mgc-cta:hover, .mgc-cta:focus-visible { color: #fff; border-color: var(--crimson);
@@ -4320,14 +4330,14 @@
   .mh-streak-ribbon[hidden] { display: none; }
   .mh-streak-ribbon .msr-ico { font-size: 15px; filter: drop-shadow(0 0 5px rgba(224,169,63,0.55)); flex: none; }
   .mh-streak-ribbon .msr-txt {
-    flex: 1 1 auto; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; letter-spacing: 0.02em;
+    flex: 1 1 auto; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.02em;
     color: var(--ink-dim); text-align: left; min-width: 0;
   }
   .mh-streak-ribbon .msr-txt b { color: var(--gold); font-family: 'Oxanium', sans-serif; font-weight: 700; }
   .mh-streak-ribbon .msr-cal {
     flex: none; cursor: pointer; text-decoration: none;
     padding: 5px 12px; border: 1px solid rgba(224,169,63,0.4); border-radius: 999px;
-    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+    font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--gold); background: rgba(224,169,63,0.06);
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
@@ -4375,7 +4385,7 @@
   }
   .mh-weekly .mwk-meta {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.06em;
+    font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink-dim);
   }
   .mh-weekly .mwk-best { color: #f0c86e; font-family: 'Oxanium', sans-serif; font-weight: 700; }
@@ -4394,7 +4404,7 @@
   .mh-weekly .mwk-share {
     cursor: pointer; padding: 8px 12px; border-radius: 999px;
     border: 1px solid rgba(224,169,63,0.4); background: rgba(224,169,63,0.06);
-    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; letter-spacing: 0.12em;
+    font-family: 'JetBrains Mono', monospace; font-size: var(--rr-fs-xs); font-weight: 700; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--gold);
     transition: color .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
@@ -4432,7 +4442,7 @@
     text-shadow: 0 0 26px rgba(224,169,63,0.6), 0 2px 0 rgba(0,0,0,0.45);
   }
   #streak-saved-reveal .ssr-sub {
-    font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; letter-spacing: 0.1em;
+    font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.1em;
     text-transform: uppercase; color: #cdbf9a; margin-top: 8px;
   }
   html.rr-reduce-motion #streak-saved-reveal { transition: opacity .2s ease; transform: translate(-50%, 0) scale(1); }
@@ -4775,7 +4785,7 @@
     border: 1px solid var(--line, rgba(218,215,210,0.16)); transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
   .mpx-actionbar .mpx-act:hover { transform: translateY(-1px); border-color: rgba(255,31,46,0.45); box-shadow: 0 8px 22px rgba(0,0,0,0.4); }
   .mpx-actionbar .mpx-act .a-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.04em; color: var(--ink, #f3eceb); }
-  .mpx-actionbar .mpx-act .a-d { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.04em; color: #9c918e; text-transform: uppercase; }
+  .mpx-actionbar .mpx-act .a-d { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.04em; color: #9c918e; text-transform: uppercase; }
   .mpx-actionbar .mpx-act.accent { background: linear-gradient(180deg, rgba(255,31,46,0.16), rgba(255,31,46,0.05)); border-color: rgba(255,31,46,0.4); }
   .mpx-actionbar .mpx-act.accent .a-t { color: #fff; }
   .mpx-actionbar .mpx-act.full { grid-column: 1 / -1; }
@@ -4849,7 +4859,7 @@
   .mpx-hero-eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.28em; color: #ffd9c4; }
   .mpx-hero-title { font-family: 'Unbounded', sans-serif; font-weight: 800; font-size: 26px; line-height: 1; letter-spacing: 0.03em; color: #fff;
     text-shadow: 0 2px 16px rgba(255,31,46,0.55); }   /* pkg1.3: 26px — the hero must sit ≥2 visual steps above the tiles */
-  .mpx-hero-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.02em; color: #ffd8cd; text-transform: uppercase; }
+  .mpx-hero-sub { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.02em; color: #ffd8cd; text-transform: uppercase; }
   .mpx-hero .mpx-ranked-tag { top: 12px; right: 14px; }
   html.rr-reduce-motion .mpx-hero { transition: none; }
   html.rr-reduce-motion .mpx-hero:hover { transform: none; }
@@ -4866,8 +4876,8 @@
     box-shadow: var(--glass-bevel), var(--glass-sheen), 0 14px 30px -10px rgba(0,0,0,0.62), 0 0 22px -8px rgba(255,31,46,0.4); }
   .mpx-tile-ico { font-size: 18px; line-height: 1; margin-bottom: 3px; color: #ff7a4a; }
   .mpx-tile-ico svg { width: 22px; height: 22px; }   /* visual-overhaul: SVG icons replace off-brand emoji */
-  .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13.5px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
-  .mpx-tile-d { font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.03em; color: var(--ink-dim, #a0938f); text-transform: uppercase; }
+  .mpx-tile-t { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: var(--rr-fs-md); letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
+  .mpx-tile-d { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.03em; color: var(--ink-dim, #a0938f); text-transform: uppercase; }
   html.rr-reduce-motion .mpx-tile { transition: none; }
   html.rr-reduce-motion .mpx-tile:hover { transform: none; }
   .mpx-act-cpu-min { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 8px 0 0;
@@ -4898,7 +4908,7 @@
   @keyframes qmPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,42,48,0.0); } 50% { box-shadow: 0 0 16px 1px rgba(255,42,48,0.28); } }
   html.rr-reduce-motion .mpx-qm-pill.searching { animation: none; }
   /* build102y step3: rivalry ledger — head-to-head line (winner step) + crimson REVENGE chip + pulsing challenge */
-  .mpx-h2h { font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; color: var(--ink-dim, #a0938f); margin: -6px 0 10px; }
+  .mpx-h2h { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); color: var(--ink-dim, #a0938f); margin: -6px 0 10px; }
   .mpx-h2h b { color: var(--ink, #f3eceb); }
   .mpx-revenge { display: inline-block; padding: 1px 7px; border-radius: 6px; margin-left: 6px; vertical-align: 1px;
     font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 0.08em; color: #fff;
@@ -4949,7 +4959,7 @@
     padding: 4px 2px; font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: #b3a8a5; }
   .mpx-livenow-empty .mln-empty-txt { flex: 1; min-width: 140px; line-height: 1.4; }
   .mln-host-cta { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 9px 15px; border-radius: 10px; cursor: pointer;
-    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: var(--rr-fs-sm); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
     color: #ffe1a6; background: linear-gradient(180deg, rgba(224,169,63,0.20), rgba(224,169,63,0.06));
     border: 1px solid rgba(224,169,63,0.5); transition: border-color .12s ease, box-shadow .12s ease, color .12s ease; }
   .mln-host-cta svg { width: 15px; height: 15px; }
@@ -4974,7 +4984,7 @@
   .mpx-friends-panel .mpx-act .mpx-act-ico svg { width: 20px; height: 20px; }
   .mpx-friends-panel .mpx-act .mpx-act-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .mpx-friends-panel .mpx-act .a-t { display: block; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: var(--ink, #f3eceb); }
-  .mpx-friends-panel .mpx-act .a-d { display: block; font-family: 'Chakra Petch', sans-serif; font-size: 10.5px; letter-spacing: 0.04em; color: var(--ink-dim, #9c918e); text-transform: uppercase; }
+  .mpx-friends-panel .mpx-act .a-d { display: block; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); letter-spacing: 0.04em; color: var(--ink-dim, #9c918e); text-transform: uppercase; }
   /* gold is for the tournament host row (it lives in the drawer, so the actionbar-scoped .gold rule never applied) */
   .mpx-friends-panel .mpx-act.gold { background: linear-gradient(180deg, rgba(224,169,63,0.14), rgba(224,169,63,0.035)); border-color: rgba(224,169,63,0.4); }
   .mpx-friends-panel .mpx-act.gold:hover { border-color: rgba(224,169,63,0.7); box-shadow: 0 8px 22px -8px rgba(224,169,63,0.35); }
@@ -5019,7 +5029,7 @@
   .mpx-tour-hero .mth-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .mpx-tour-hero .mth-name { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 18px; line-height: 1.1; color: #fff7e8;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 12px rgba(224,169,63,0.35); }
-  .mpx-tour-hero .mth-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.02em; color: #d8c39a; }
+  .mpx-tour-hero .mth-sub { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); letter-spacing: 0.02em; color: #d8c39a; }
   .mpx-tour-hero .mth-cta { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
     padding: 12px 16px; border-radius: 12px; cursor: pointer;
     font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: #2a1c08;
@@ -5088,7 +5098,7 @@
     background: linear-gradient(135deg, rgba(255,31,46,0.26), rgba(255,122,74,0.1)); color: #ffd9c2; }
   .mpx-coach-row .mc-ico svg { width: 17px; height: 17px; }   /* visual-overhaul: SVG icons replace emoji */
   .mpx-coach-row b { display: block; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; color: var(--ink, #f3eceb); }
-  .mpx-coach-row span { display: block; font-family: 'Chakra Petch', sans-serif; font-size: 12.5px; line-height: 1.4; color: #b3a8a5; }
+  .mpx-coach-row span { display: block; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); line-height: 1.4; color: #b3a8a5; }
 
   /* build60: waiting-room status + invite/add-cpu bar */
   .mpx-waitstatus { font-family: 'Chakra Petch', sans-serif; font-size: 13px; color: #cdbfae; text-align: center; margin: 2px 0 10px; }
@@ -5169,7 +5179,7 @@
   #mpx-ring .mr-idrow { display: flex; align-items: center; gap: 10px; }
   #mpx-ring .mr-av { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
     font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; color: #1a1010; background: var(--gold, #e0a93f); }
-  #mpx-ring .mr-sub { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; color: #b3a8a5; margin: 6px 0 2px; }
+  #mpx-ring .mr-sub { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); color: #b3a8a5; margin: 6px 0 2px; }
   #mpx-ring .mr-cd { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; color: var(--gold, #e0a93f); letter-spacing: 0.05em; margin: 2px 0 8px; }
 
   .mpx-rooms-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 10px; }
@@ -5276,7 +5286,7 @@
   .mpx-tour-seat .ts-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background-size: cover; background-position: center;
     background-color: rgba(255,31,46,0.18); color: #ffd9c2; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; position: relative; }
   .mpx-tour-seat .ts-av .ts-crown { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-size: 11px; }
-  .mpx-tour-seat .ts-n { font-family: 'Chakra Petch', sans-serif; font-size: 9.5px; color: #cdc4c1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mpx-tour-seat .ts-n { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-xs); color: #cdc4c1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mpx-tour-trackrow { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 12px; text-align: left;
     background: linear-gradient(180deg, rgba(218,215,210,0.05), rgba(218,215,210,0.02)); border: 1px solid var(--line, rgba(218,215,210,0.16)); }
   /* build66: WAGER — buy-in input + Bonus-Sparks currency chip + stake hint */
@@ -5285,7 +5295,7 @@
   #mpx-tour-buyin:focus { outline: none; border-color: rgba(224,169,63,0.6); box-shadow: 0 0 12px -4px rgba(224,169,63,0.5); }
   .mpx-buyin-cur { display: inline-flex; align-items: center; gap: 5px; font-family: 'Chakra Petch', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.05em; color: var(--gold, #e0a93f); }
   .mpx-buyin-cur .spk-glyph { width: 13px; height: 13px; filter: drop-shadow(0 0 3px rgba(224,169,63,0.5)); }
-  .mpx-tour-stakehint { font-size: 11.5px; color: var(--ink-dim); line-height: 1.5; margin: 2px 2px 8px; }
+  .mpx-tour-stakehint { font-size: var(--rr-fs-sm); color: var(--ink-dim); line-height: 1.5; margin: 2px 2px 8px; }
   .mpx-tour-stakehint b { color: var(--gold, #e0a93f); }
   /* build66: side-bet — the PLACE YOUR BET prompt + the WHO-WINS picker overlay (parimutuel). Brand: warm darks + gold. */
   .mpx-tour-bet { display:block; width:100%; margin:2px 2px 10px; padding:11px 14px; border:1px solid rgba(224,169,63,0.55);
@@ -5297,7 +5307,7 @@
   .mpx-bet-card { width:min(420px,94vw); max-height:84vh; overflow:auto; background:linear-gradient(180deg,#191210,#120c0a);
     border:1px solid rgba(224,169,63,0.4); border-radius:16px; padding:20px 18px; box-shadow:0 24px 70px -20px rgba(0,0,0,0.85); }
   .mpx-bet-title { font-family:'Unbounded',sans-serif; font-weight:800; font-size:18px; color:var(--ink,#f5ece0); margin:0 0 6px; }
-  .mpx-bet-sub { font-family:'Chakra Petch',sans-serif; font-size:12.5px; color:var(--ink-dim,#b9a892); line-height:1.5; margin:0 0 14px; }
+  .mpx-bet-sub { font-family:'Chakra Petch',sans-serif; font-size:var(--rr-fs-sm); color:var(--ink-dim,#b9a892); line-height:1.5; margin:0 0 14px; }
   .mpx-bet-sub b { color:var(--gold,#e0a93f); }
   .mpx-bet-list { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
   .mpx-bet-pick { display:flex; align-items:center; gap:10px; width:100%; padding:12px 14px; text-align:left; border:1px solid rgba(224,169,63,0.25);
@@ -5523,7 +5533,7 @@
   #beta-gate .bg-kicker { font-size: 12px; letter-spacing: .42em; text-transform: uppercase; color: var(--crimson); font-weight: 700; margin-bottom: 14px; }
   #beta-gate .bg-title { font-family: 'Oxanium','Chakra Petch',sans-serif; font-size: 30px; line-height: 1.05; font-weight: 800; color: var(--ink); margin-bottom: 10px; }
   #beta-gate .bg-title b { color: var(--crimson); }
-  #beta-gate .bg-sub { font-size: 13.5px; line-height: 1.5; color: var(--ink-dim); margin-bottom: 24px; }
+  #beta-gate .bg-sub { font-size: var(--rr-fs-md); line-height: 1.5; color: var(--ink-dim); margin-bottom: 24px; }
   #beta-gate form { display: flex; flex-direction: column; gap: 12px; }
   #beta-gate input {
     width: 100%; text-align: center; font-family: 'Oxanium',ui-monospace,monospace;
@@ -5545,7 +5555,7 @@
   #beta-gate .bg-msg { min-height: 18px; font-size: 13px; margin-top: 2px; }
   #beta-gate .bg-msg.err { color: #ff6b78; }
   #beta-gate .bg-msg.ok { color: var(--gold); }
-  #beta-gate .bg-foot { margin-top: 22px; font-size: 11.5px; color: var(--ink-dim); line-height: 1.5; }
+  #beta-gate .bg-foot { margin-top: 22px; font-size: var(--rr-fs-sm); color: var(--ink-dim); line-height: 1.5; }
   #beta-gate .bg-foot a { color: var(--chrome); text-decoration: none; border-bottom: 1px solid var(--line); }
   #beta-gate .bg-checking { display: none; color: var(--ink-dim); font-size: 13px; }
   #beta-gate[data-state="checking"] form, #beta-gate[data-state="checking"] .bg-foot { display: none; }
@@ -5558,7 +5568,7 @@
   #beta-gate[data-state="signin"] .bg-signin { display: flex; }
   #beta-gate .bg-signin-cont { background: transparent; border: 1px solid var(--line); color: var(--chrome); box-shadow: none; font-size: 13px; padding: 11px; letter-spacing: .08em; }
   #beta-gate .bg-signin-cont:hover { filter: brightness(1.12); }
-  #beta-gate .bg-signin-status { min-height: 16px; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); margin-top: 2px; }
+  #beta-gate .bg-signin-status { min-height: 16px; font-size: var(--rr-fs-sm); line-height: 1.45; color: var(--ink-dim); margin-top: 2px; }
   /* ===== HORROR-CAM LENS (build64) — a per-level found-footage film layer over the SCENE backdrop + cutaway videos.
      Lives inside #game-bg (z 3, above #bg-image z1 / .bg-accent z2) so the gameplay notes + HUD render crisp ON TOP.
      Toggled by body.rr-lens-horror (set when a level with lens:'horror' launches). Reduce-motion safe. ===== */
@@ -5680,7 +5690,7 @@
   .album-art.album-art-fallback .album-art-glyph { display: flex; }
   .album-meta { display: flex; flex-direction: column; gap: 5px; padding: 11px 12px 13px; }
   .album-badge {
-    align-self: flex-start; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: 9.5px;
+    align-self: flex-start; font-family: 'Chakra Petch', sans-serif; font-weight: 700; font-size: var(--rr-fs-xs);
     letter-spacing: 0.12em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; line-height: 1;
     display: inline-flex; align-items: center; gap: 5px;
   }
@@ -5693,7 +5703,7 @@
   .album-badge.album-new { color: var(--gold); background: rgba(224,169,63,0.13); border: 1px solid rgba(224,169,63,0.4); }
   .album-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 14px; line-height: 1.16; color: var(--ink);
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .album-artist { font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; color: var(--ink-dim);
+  .album-artist { font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); color: var(--ink-dim);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .album-partial { font-family: 'Chakra Petch', sans-serif; font-size: 10px; letter-spacing: 0.04em; color: var(--gold);
     margin-top: 1px; opacity: 0.92; }
@@ -5701,6 +5711,36 @@
     .album-card { width: 146px; }
     .album-shelf-head .ash-title { font-size: 16px; }
     .album-title { font-size: 13px; }
+  }
+
+  /* =========================================================================
+     D2 (Wave-5) — MOBILE ERGONOMICS (game / leaderboard / MP chrome). >=44px
+     tap targets — grow the HIT AREA (padding / min-height), NOT the glyph, so
+     the look survives — plus safe-area insets on bottom-anchored floating chrome
+     and a hard no-sideways-scroll guard. jukebox.css carries the matching block
+     for the library surfaces. Touch + narrow viewports only.
+     ========================================================================= */
+  @media (max-width: 768px) {
+    /* results star rating — keep the 24px glyph, grow the tap padding to 44x44 */
+    .rr-star { padding: 10px; }
+    /* results "feel" chips + leaderboard tabs — 44px targets, glyph centered */
+    .rr-chip { min-height: 44px; display: inline-flex; align-items: center; }
+    .lbd-tab { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    /* RIFT difficulty segment — 44px per segment (already flex-centered) */
+    #lbd-diff button { min-height: 44px; }
+    /* leaderboard rows — 44px so row + any injected chase button read as one target */
+    .lbd-board .lb-row { min-height: 44px; }
+    /* multiplayer rows + host CTA */
+    .mpx-online-row { min-height: 44px; }
+    .mln-host-cta { min-height: 44px; }
+    /* difficulty select buttons are already tall (18px padding) — left as-is */
+
+    /* safe-area insets on bottom-anchored FLOATING chrome (env()=0 without a notch) */
+    #mpx-ring   { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+    #rvl-return { bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); }
+
+    /* HARD GUARD: the page body must never scroll sideways */
+    html, body { overflow-x: hidden; }
   }
 </style>
 </head>
@@ -7274,11 +7314,11 @@
       </div>
       <!-- build65: discoverable currency legend (was tooltip-only). Ethical-monetization transparency — make it obvious what
            costs real money vs what's earned by play, so nothing is hidden. -->
-      <div class="store-legend" style="font-size:11.5px; color:var(--ink-dim); margin:0 auto 12px; line-height:1.55; text-align:center; max-width:520px;">
+      <div class="store-legend" style="font-size:var(--rr-fs-sm); color:var(--ink-dim); margin:0 auto 12px; line-height:1.55; text-align:center; max-width:520px;">
         <b style="color:var(--crimson)">◆&nbsp;Sparks</b> — your real balance, topped up on the website · spend on anything &nbsp;·&nbsp; <b style="color:var(--gold,#e0a93f)">◆&nbsp;Bonus&nbsp;Sparks</b> — earned just by playing, spend on cosmetics. Purchases never pay-to-win.
       </div>
       <!-- build100h: Commission a Custom Level ($59.95) — deep-links to the platform /commission page (Lovable backend). -->
-      <button class="store-commission" id="store-commission" type="button" title="Commission a bespoke level built from your own reference images ($59.95)" style="margin:0 auto 14px;display:block;max-width:520px;width:100%;padding:11px 16px;border-radius:12px;border:0.5px solid var(--gold,#e0a93f);background:linear-gradient(180deg,rgba(224,169,63,0.12),rgba(224,169,63,0.04));color:#f4d488;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:0.05em;cursor:pointer;">✦ COMMISSION YOUR OWN LEVEL — built from your reference images · $59.95 →</button>
+      <button class="store-commission" id="store-commission" type="button" title="Commission a bespoke level built from your own reference images ($59.95)" style="margin:0 auto 14px;display:block;max-width:520px;width:100%;padding:11px 16px;border-radius:12px;border:0.5px solid var(--gold,#e0a93f);background:linear-gradient(180deg,rgba(224,169,63,0.12),rgba(224,169,63,0.04));color:#f4d488;font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:var(--rr-fs-sm);letter-spacing:0.05em;cursor:pointer;">✦ COMMISSION YOUR OWN LEVEL — built from your reference images · $59.95 →</button>
       <div class="store-banner" id="store-banner" hidden></div>
       <div class="store-grid" id="store-grid"></div>
       <p class="store-empty" id="store-empty" hidden>The shop is restocking — check back soon.</p>
@@ -7484,7 +7524,7 @@
       </div>
       <!-- build99M (launch): support / report-a-chart channel — a tester (or a player) can flag a broken chart or a failed purchase. -->
       <div style="margin-top:18px;text-align:center;">
-        <a href="mailto:reactivvibeai@gmail.com?subject=Reactive%20Rhythm%20%E2%80%94%20report&amp;body=What%20happened%3A%0A%0ASong%2Flevel%3A%0ADevice%2Fbrowser%3A%0A" style="font-family:'Chakra Petch',sans-serif;font-size:11.5px;color:var(--ink-dim);text-decoration:none;border-bottom:1px solid var(--line);">Found a bug or a broken chart? Report it →</a>
+        <a href="mailto:reactivvibeai@gmail.com?subject=Reactive%20Rhythm%20%E2%80%94%20report&amp;body=What%20happened%3A%0A%0ASong%2Flevel%3A%0ADevice%2Fbrowser%3A%0A" style="font-family:'Chakra Petch',sans-serif;font-size:var(--rr-fs-sm);color:var(--ink-dim);text-decoration:none;border-bottom:1px solid var(--line);">Found a bug or a broken chart? Report it →</a>
       </div>
     </div>
 
@@ -7900,7 +7940,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=462"></script>
+<script src="telemetry.js?v=463"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8079,17 +8119,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=462"></script>
-<script src="game.js?v=462"></script>
-<script src="procbg.js?v=462"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=462"></script>
-<script src="chat.js?v=462"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=462"></script>
-<script src="goals.js?v=462"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=462"></script>
-<script src="share.js?v=462"></script>
-<script src="replay.js?v=462"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=462"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=463"></script>
+<script src="game.js?v=463"></script>
+<script src="procbg.js?v=463"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=463"></script>
+<script src="chat.js?v=463"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=463"></script>
+<script src="goals.js?v=463"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=463"></script>
+<script src="share.js?v=463"></script>
+<script src="replay.js?v=463"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=463"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -13186,8 +13226,8 @@
       '#rrs-suspend-gate .rrs-kicker{font-size:12px;letter-spacing:.38em;text-transform:uppercase;color:#ff1f2e;font-weight:700;margin-bottom:14px;}' +
       '#rrs-suspend-gate .rrs-title{font-family:"Oxanium","Chakra Petch",sans-serif;font-size:27px;line-height:1.1;font-weight:800;color:#f4eef0;margin-bottom:14px;}' +
       '#rrs-suspend-gate .rrs-msg{font-size:14px;line-height:1.55;color:#dad7d2;margin-bottom:16px;}' +
-      '#rrs-suspend-gate .rrs-until{display:inline-block;font-family:"Oxanium",sans-serif;font-size:12.5px;letter-spacing:.06em;color:#e0a93f;background:rgba(224,169,63,0.10);border:1px solid rgba(224,169,63,0.32);border-radius:999px;padding:7px 16px;margin-bottom:20px;}' +
-      '#rrs-suspend-gate .rrs-foot{font-size:11.5px;color:#a0938f;line-height:1.5;}' +
+      '#rrs-suspend-gate .rrs-until{display:inline-block;font-family:"Oxanium",sans-serif;font-size:var(--rr-fs-sm);letter-spacing:.06em;color:#e0a93f;background:rgba(224,169,63,0.10);border:1px solid rgba(224,169,63,0.32);border-radius:999px;padding:7px 16px;margin-bottom:20px;}' +
+      '#rrs-suspend-gate .rrs-foot{font-size:var(--rr-fs-sm);color:#a0938f;line-height:1.5;}' +
       '#rrs-suspend-gate .rrs-foot a{color:#dad7d2;text-decoration:none;border-bottom:1px solid rgba(160,40,46,0.32);}' +
       // pending-notice modal — severity-scaled tone (info=gentle chrome, warning=firm gold, severe=final crimson)
       '#rrs-notice-scrim{position:fixed;inset:0;z-index:99900;background:rgba(6,3,3,0.74);display:flex;align-items:center;justify-content:center;padding:16px;font-family:"Chakra Petch",sans-serif;}' +
@@ -13197,18 +13237,18 @@
       '#rrs-notice-scrim .rrs-nmodal.sev-info::before{background:linear-gradient(90deg,transparent,#dad7d2,transparent);}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-warning::before{background:linear-gradient(90deg,transparent,#e0a93f,transparent);}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-severe::before{background:linear-gradient(90deg,transparent,#ff1f2e,transparent);}' +
-      '#rrs-notice-scrim .rrs-ntag{font-family:"Oxanium",sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;margin-bottom:10px;}' +
+      '#rrs-notice-scrim .rrs-ntag{font-family:"Oxanium",sans-serif;font-size:var(--rr-fs-xs);font-weight:800;letter-spacing:.24em;text-transform:uppercase;margin-bottom:10px;}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-info .rrs-ntag{color:#dad7d2;}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-warning .rrs-ntag{color:#e0a93f;}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-severe .rrs-ntag{color:#ff1f2e;}' +
-      '#rrs-notice-scrim h3{font-family:"Oxanium",sans-serif;font-size:16.5px;letter-spacing:.02em;color:#f4eef0;margin-bottom:8px;}' +
+      '#rrs-notice-scrim h3{font-family:"Oxanium",sans-serif;font-size:var(--rr-fs-lg);letter-spacing:.02em;color:#f4eef0;margin-bottom:8px;}' +
       '#rrs-notice-scrim .rrs-nbody{font-size:13px;line-height:1.55;color:#dad7d2;margin-bottom:18px;white-space:pre-wrap;}' +
-      '#rrs-notice-scrim .rrs-nbtn{width:100%;cursor:pointer;font-family:"Oxanium",sans-serif;font-size:13.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px;transition:filter .15s;}' +
+      '#rrs-notice-scrim .rrs-nbtn{width:100%;cursor:pointer;font-family:"Oxanium",sans-serif;font-size:var(--rr-fs-md);font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px;transition:filter .15s;}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-info .rrs-nbtn, #rrs-notice-scrim .rrs-nmodal.sev-warning .rrs-nbtn{background:linear-gradient(180deg,#3a2422,#211110);color:#f4eef0;border-color:rgba(218,210,206,0.22);}' +
       '#rrs-notice-scrim .rrs-nmodal.sev-severe .rrs-nbtn{background:linear-gradient(180deg,#ff3a47 0%,#e21d2b 46%,#b3121f 100%);}' +
       '#rrs-notice-scrim .rrs-nbtn:hover{filter:brightness(1.1);}' +
       // small non-blocking mute hint painted into the chat drawer area
-      '#rrs-mute-hint{position:fixed;left:16px;bottom:78px;z-index:519;max-width:min(290px,calc(100vw - 32px));background:linear-gradient(180deg,rgba(40,20,22,0.90),rgba(10,7,6,0.94));border:1px solid rgba(224,169,63,0.35);border-radius:12px;padding:9px 13px;font-family:"Chakra Petch",sans-serif;font-size:11.5px;line-height:1.4;color:#e0a93f;box-shadow:0 14px 30px -12px rgba(0,0,0,0.6);pointer-events:none;}' +
+      '#rrs-mute-hint{position:fixed;left:16px;bottom:78px;z-index:519;max-width:min(290px,calc(100vw - 32px));background:linear-gradient(180deg,rgba(40,20,22,0.90),rgba(10,7,6,0.94));border:1px solid rgba(224,169,63,0.35);border-radius:12px;padding:9px 13px;font-family:"Chakra Petch",sans-serif;font-size:var(--rr-fs-sm);line-height:1.4;color:#e0a93f;box-shadow:0 14px 30px -12px rgba(0,0,0,0.6);pointer-events:none;}' +
       '#rrs-mute-hint[hidden]{display:none;}' +
       // MP-entry social-block banner text uses the existing #mpx-lobby-msg surface — no extra CSS needed there.
       '';
