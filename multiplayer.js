@@ -623,7 +623,7 @@
     ['lobby', 'rooms', 'tour', 'setup', 'go', 'winner'].forEach(function (s) {
       var el = screen.querySelector('.mpx-step-' + s); if (el) el.hidden = (s !== name);
     });
-    if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); paintLastVerdictBtn(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows; build112 p2: + VIEW LAST RESULT
+    if (name === 'lobby') { try { paintRankChip(); paintCombatToggle(); paintLastVerdictBtn(); } catch (e) {} try { _mountJoinByCode(); } catch (e) {} }   // v254: keep the rank chip + combat toggle in sync whenever the lobby shows; build112 p2: + VIEW LAST RESULT; Wave-3: mount the join-by-code entry (idempotent)
     if (name === 'setup') { try { renderStageRow(); } catch (e) {} }   // v262: render the room STAGE picker when the setup step shows
     try { if (name === 'lobby') _onlineStart(); else _onlineStop(); } catch (e) {}   // build105: ONLINE NOW polls only while the lobby step shows (stop cold otherwise — qm teardown discipline)
   }
@@ -2873,12 +2873,21 @@
     if (emp) emp.hidden = _onUsers.length !== 0;
     list.innerHTML = _onUsers.map(function (u, i) {   // esc()/safeUrl() on EVERY server string (peer-supplied names/avatars)
       var av = u.avatar ? ' style="background-image:url(&quot;' + esc(safeUrl(u.avatar)) + '&quot;)"' : '';
+      // Wave-3: GET /presence/online now carries in_match=true when this user currently owns a live room. STRICT
+      // === true so an absent field on an older server → not-in-match (byte-identical to the current behavior).
+      // You can't battle-call someone mid-match: show a gold "IN A MATCH" pill + soften the CHALLENGE (dim+disabled).
+      var im = (u.in_match === true);
+      var badge = im ? '<span class="mpx-online-inmatch" style="flex:0 0 auto;font-family:\'Oxanium\',sans-serif;font-weight:800;font-size:9px;letter-spacing:0.14em;color:#ffd98c;border:1px solid rgba(224,169,63,0.5);background:rgba(224,169,63,0.10);border-radius:999px;padding:3px 8px;white-space:nowrap;">IN A MATCH</span>' : '';
+      var btn = im
+        ? '<button class="mpx-online-call dim" type="button" data-i="' + i + '" disabled aria-disabled="true" title="They’re mid-match — can’t battle-call them right now.">CHALLENGE</button>'
+        : '<button class="mpx-online-call" type="button" data-i="' + i + '">CHALLENGE</button>';
       return '<div class="mpx-online-row" data-uid="' + esc(String(u.id || '')) + '">' +
         '<span class="mpx-online-av"' + av + '>' + (u.avatar ? '' : PERSON_GLYPH) + '</span>' +
         '<span class="mpx-online-name">' + esc(String(u.name || 'Player').slice(0, 24)) + '</span>' +
-        '<button class="mpx-online-call" type="button" data-i="' + i + '">CHALLENGE</button></div>';
+        badge + btn + '</div>';
     }).join('');
     _onUsers.forEach(function (u) {   // re-apply live cooldown states across repaints
+      if (u && u.in_match === true) return;   // Wave-3: in_match wins — never resurrect a live call button for someone mid-match
       var rs = _onRowState[u.id];
       if (rs && (!rs.until || Date.now() < rs.until)) _paintCallBtn(u.id, rs.state, rs.label);
     });
@@ -2900,6 +2909,7 @@
   function _setRow(uid, state, label, ms) { _onRowState[uid] = { state: state, label: label, until: ms ? Date.now() + ms : 0 }; _paintCallBtn(uid, state, label); }
   function battleCall(u) {
     if (!u || !u.id) return;
+    if (u.in_match === true) { banner('mpx-lobby-msg', String(u.name || 'That player').slice(0, 24) + ' is in a match right now — try again when they’re free.'); return; }   // Wave-3: defense-in-depth (the row button is already disabled) — never ring someone mid-match
     if (!ME.signedIn) { banner('mpx-lobby-msg', 'Sign in to battle-call players.'); return; }
     var uid = u.id, nm = String(u.name || 'them').slice(0, 24);
     _setRow(uid, 'calling', 'CALLING…', 15000);
@@ -3744,6 +3754,7 @@
     reannounce();
     enterRoomWaiting();
     advertiseRoom();
+    try { _announceMyRoom(); } catch (e) {}   // Wave-3: mint + display a shareable join-by-code (fail-soft; host-only display)
   }
   function advertiseRoom() {
     if (!lobbyCh || !room.id || !room.isHost) return;
@@ -3808,6 +3819,9 @@
       var _wy = screen.querySelector('.mpx-sc.you .mpx-sc-who'); if (_wy) _wy.textContent = 'YOU';   // undo the spectator-verdict relabel
     }
     if (room.id && room.isHost && lobbyCh) { try { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); } catch (e) {} }
+    // Wave-3: revoke the shareable join-by-code so it can't resolve to this now-dead room (server also self-expires at
+    // 2h TTL). Fire-and-forget, host-only, only if we actually announced one — never blocks the close.
+    if (room.id && room.isHost && room.shareCode) { try { _roomAnnounce(room.id, { closing: true }); } catch (e) {} }
     leaveRoomChannel();
     room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null,
       show: false, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };
@@ -4192,6 +4206,98 @@
   }
   function roomInviteLink(rid) { return location.origin + location.pathname + '?mproom=' + encodeURIComponent(rid); }
 
+  // ===================== Wave-3: JOIN-BY-CODE (server room codes) =====================
+  // Two brand-new game-catalog endpoints (live now):
+  //   POST /room-announce { rid, code?, closing? } — host-locked, idempotent per host+room, 2h TTL. Omit `code` and
+  //        the server mints one; { closing:true } revokes it. Returns { code }.
+  //   GET  /room-resolve?code=XXXX — anon-readable; returns { rid } for a live code (404/empty when expired/unknown).
+  // The local roomCode() hash above is a DISPLAY-only derivation a peer can't reverse; these give a real, typeable,
+  // server-resolvable code. Everything here is fire-and-forget + fail-soft: an older/offline server just leaves the
+  // share code blank and makes join-by-code say "code not found" — never throws, never blocks a room. No realtime
+  // channels touched (pure authed REST), so every MP presence/channel invariant is untouched.
+  function _apiBase() { try { return String((window.RHYTHM_CONFIG && window.RHYTHM_CONFIG.API_BASE) || '').replace(/\/$/, ''); } catch (e) { return ''; } }
+  function _normCode(c) { return String(c || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); }
+  function _roomAnnounce(rid, opts) {
+    opts = opts || {};
+    var base = _apiBase(); if (!base || !rid) return Promise.resolve(null);
+    return _bcGetToken().then(function (tok) {   // host-locked → authed; reuses the live-session JWT reader
+      var headers = { 'content-type': 'application/json' };
+      if (tok) headers.authorization = 'Bearer ' + tok;
+      var body = { rid: String(rid) };
+      if (opts.code) body.code = _normCode(opts.code);
+      if (opts.closing) body.closing = true;
+      return fetch(base + '/room-announce', { method: 'POST', headers: headers, body: JSON.stringify(body) })
+        .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    }).catch(function () { return null; });
+  }
+  function _roomResolve(code) {
+    var base = _apiBase(), c = _normCode(code);
+    if (!base || !c) return Promise.resolve(null);
+    return fetch(base + '/room-resolve?code=' + encodeURIComponent(c), { headers: { 'content-type': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+  // Host-only, non-show room-code display — reuses the existing #mpx-invite-code slot (already gated to
+  // room.isHost + hidden for show rooms + never shown to a guest/spectator, so spectate byte-identity holds).
+  // Shows a real server code once room-announce lands; a neutral placeholder (never the un-joinable local hash)
+  // meanwhile, so a code a peer types always resolves. The invite LINK/button stays the always-works share path.
+  function _paintShareCode() {
+    var codeEl = $('mpx-invite-code'); if (!codeEl) return;
+    if (!room.id || !room.isHost) return;
+    codeEl.textContent = room.shareCode || '····';
+  }
+  // Fired from openRoomWithId (host path). Idempotent server-side per host+room; harmless on battle-call / qm rooms.
+  function _announceMyRoom() {
+    if (!room.id || !room.isHost) return;
+    var _rid = room.id;
+    room.shareCode = null;
+    _roomAnnounce(_rid).then(function (r) {
+      if (r && r.code && room.id === _rid && room.isHost) { room.shareCode = _normCode(r.code); try { _paintShareCode(); } catch (e) {} }
+    }).catch(function () {});
+  }
+
+  // ---- Join-by-code entry UI (lobby step only; a child of .mpx-step-lobby so step() hides it in every
+  //      match/spectate view → spectate byte-identity holds with no extra gate). Built in JS (no index.html edit),
+  //      mounted idempotently on lobby activation. No timers — event listeners only. ----
+  function _jbcMsg(txt, quiet) { var m = $('mpx-joinbycode-msg'); if (!m) return; if (txt) { m.textContent = txt; m.hidden = false; m.style.color = quiet ? '#9c918e' : '#ff8a93'; } else { m.hidden = true; m.textContent = ''; } }
+  function _jbcBusy(on) { var i = $('mpx-joinbycode-input'), b = $('mpx-joinbycode-go'); if (i) i.disabled = !!on; if (b) { b.disabled = !!on; b.textContent = on ? '…' : 'JOIN'; } }
+  function _joinByCode() {
+    var input = $('mpx-joinbycode-input'); if (!input) return;
+    var code = _normCode(input.value);
+    if (!code) { _jbcMsg('Enter a room code.'); try { input.focus(); } catch (e) {} return; }
+    if (room.id || matchLive || spectating) { _jbcMsg('Leave your current room first.'); return; }
+    _jbcMsg('Finding room…', true); _jbcBusy(true);
+    _roomResolve(code).then(function (r) {
+      _jbcBusy(false);
+      var rid = r && (r.rid || r.room_id || r.room || r.id);
+      if (!rid) { _jbcMsg('Code not found or expired.'); return; }   // fail-soft: never throws
+      _jbcMsg(''); var i2 = $('mpx-joinbycode-input'); if (i2) i2.value = '';
+      try { _tel('mp_joinbycode', { rid: String(rid).slice(0, 48) }); } catch (e) {}
+      _pendJoin(String(rid), { role: 'guest', label: 'Joining room ' + code + '…' });   // reuse the unified join funnel (meta fast-path → direct join → 45s fail card)
+    }).catch(function () { _jbcBusy(false); _jbcMsg('Code not found or expired.'); });
+  }
+  function _mountJoinByCode() {
+    if (document.getElementById('mpx-joinbycode')) return;   // idempotent — mounted once, survives repaints
+    var lob = screen.querySelector('.mpx-step-lobby'); if (!lob) return;
+    var anchor = screen.querySelector('.mpx-quicklinks-3');
+    var wrap = document.createElement('div'); wrap.id = 'mpx-joinbycode';
+    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:4px 2px 12px;';
+    var input = document.createElement('input');
+    input.id = 'mpx-joinbycode-input'; input.type = 'text'; input.maxLength = 8; input.autocomplete = 'off'; input.spellcheck = false;
+    input.placeholder = 'Have a code? Join a room'; input.setAttribute('aria-label', 'Join a room by code');
+    input.style.cssText = 'flex:1;min-width:150px;box-sizing:border-box;padding:8px 12px;border-radius:9px;border:1px solid var(--mx-line,rgba(222,216,212,0.14));background:rgba(255,255,255,0.03);color:var(--ink,#f3eceb);font-family:\'Oxanium\',sans-serif;font-weight:700;font-size:14px;letter-spacing:0.18em;text-transform:uppercase;';
+    var btn = document.createElement('button');
+    btn.id = 'mpx-joinbycode-go'; btn.type = 'button'; btn.className = 'mpx-online-call'; btn.textContent = 'JOIN';
+    btn.style.cssText = 'flex:0 0 auto;';
+    var msg = document.createElement('div'); msg.id = 'mpx-joinbycode-msg'; msg.hidden = true;
+    msg.style.cssText = 'flex:1 0 100%;font-family:\'Chakra Petch\',sans-serif;font-size:12px;color:#ff8a93;padding:2px 2px 0;';
+    input.addEventListener('input', function () { var v = _normCode(input.value); if (v !== input.value) input.value = v; });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); _joinByCode(); } });
+    btn.addEventListener('click', function (ev) { if (ev && ev.isTrusted === false) return; _joinByCode(); });   // same synthetic-click guard every MP entry button uses
+    wrap.appendChild(input); wrap.appendChild(btn); wrap.appendChild(msg);
+    if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+    else lob.appendChild(wrap);
+  }
+
   // ---- waiting-room view (reuses the setup step shell) ----
   function enterRoomWaiting() {
     enterSetup();   // reuse the existing setup UI (track pick disabled for non-host as usual)
@@ -4209,7 +4315,7 @@
     { var _bbr = $('mpx-beat-room'); if (_bbr) _bbr.hidden = true; }   // build102y step6: default-hidden — only endSpectate's paint (right after this) may show it
     if (room.isHost && room.id) {
       if (codeRow) codeRow.hidden = false;
-      if (codeEl) codeEl.textContent = roomCode(room.id);
+      if (codeEl) codeEl.textContent = room.shareCode || '····';   // Wave-3: the real server join-by-code (·· placeholder until room-announce lands / if the server is older); _paintShareCode updates it live
       if (addCpu) addCpu.hidden = false;
     } else {
       if (codeRow) codeRow.hidden = true;
@@ -7174,8 +7280,8 @@
   // build60: invite a friend to a basic room (share link + short room code — reuses the tournament copy-link pattern)
   wire('mpx-invite-friend', 'click', function () {
     if (!room.id) return;
-    var code = roomCode(room.id), link = roomInviteLink(room.id);
-    var share = 'Join my Reactive Rhythm room — code ' + code + ': ' + link;
+    var code = room.shareCode || '', link = roomInviteLink(room.id);   // Wave-3: prefer the REAL server join-by-code (the local hash isn't peer-resolvable); the link always works either way
+    var share = (code ? 'Join my Reactive Rhythm room — code ' + code + ' or open: ' : 'Join my Reactive Rhythm room: ') + link;
     var btn = $('mpx-invite-friend');
     function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ COPIED — SEND IT' : 'VS PLAYER — INVITE'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = 'VS PLAYER — INVITE'; }, 2600); }
     try { navigator.clipboard.writeText(share).then(function () { flash(true); }, function () { window.prompt('Copy this — send it to a friend:', share); }); }
