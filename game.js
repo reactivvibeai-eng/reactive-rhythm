@@ -80,6 +80,15 @@
   };
   function timingProf() { return TIMING_PROFILES[timingFeel] || TIMING_PROFILES.classic; }
 
+  // ---- FIRST PULSE (Wave-4 onboarding bridge) --------------------------------------------------------------
+  // A "bridge run" lets a graduating Easy player rehearse MEDIUM's density + speed at EASY's forgiving 0.20 hit
+  // window — UNRANKED (endGame stamps results.preview=true → recordLocal AND every submit path early-return). The
+  // run's chart is a REAL Medium chart (difficulty === 'medium' at build time), so only the RUN-TIME judging window
+  // is eased. effHitWindow() is that single seam: it returns Easy's window ONLY while _bridgeRun is armed; otherwise
+  // it returns diff.hitWindow verbatim → a normal Easy/Medium run judges byte-identically. Chart-BUILD clearances
+  // keep reading DIFFICULTY[difficulty].hitWindow directly, so the Medium chart layout is untouched by the bridge.
+  function effHitWindow(diff) { return _bridgeRun ? DIFFICULTY.easy.hitWindow : (diff && diff.hitWindow); }
+
   // Scoring: base per-hit is LOW; the combo multiplier + Overdrive scale it up, HARD-CAPPED at MAX_MULT (=4) total
   // (v258: clamped at all 3 mult sites — the 'tight' profile's comboCap:5 + overdrive could otherwise reach 6×).
   // ---- SCORE CEILING (build104 / CHART_VERSION 2 scoring epoch — any server enforcement must budget ALL of these;
@@ -107,6 +116,10 @@
   // ---------- STATE ----------
   let difficulty = 'medium';
   let _firstRunEasy = false;   // build83: set when a brand-new player (no saved diff + no history) is auto-started on Easy
+  // FIRST PULSE bridge run (Wave-4 onboarding): the CURRENT run is a MEDIUM-chart rehearsal judged at EASY's window,
+  // UNRANKED. Armed by play(opts.bridgeRun); cleared on every run end/abort → normal runs stay byte-identical.
+  let _bridgeRun = false;
+  let _bridgePrevDiff = null;  // the tier to restore if a bridge run is abandoned without clearing (typically 'easy')
   let _timingSamples = [];     // build83: per-hit signed timing error (sec) for the results early/late summary
   let provider = null;       // async () => session
   let session = null;        // { beats, duration, player, meta, live, submit }
@@ -2953,6 +2966,19 @@
     } else {
       _practiceOn = false; _practiceSection = null; _practiceRate = 1;
     }
+    // FIRST PULSE bridge run arm/disarm (single-player ONLY — a bridge is a solo rehearsal like practice). Re-decided
+    // on EVERY play() so a normal launch clears any stale bridge state → the default path stays byte-identical. When
+    // armed it forces the real MEDIUM chart (density/speed) for THIS run; endGame stamps results.preview=true (unranked)
+    // and effHitWindow() eases judging to Easy's 0.20. difficulty is forced here but NOT persisted (rr_diff keeps the
+    // player's easy) — a CLEAR persists Medium in endGame; a non-clear/abort restores _bridgePrevDiff.
+    if (!_mpLive && opts && opts.bridgeRun) {
+      if (!_bridgeRun) _bridgePrevDiff = difficulty;   // snapshot the tier to restore on a non-clear (first arm only; a restart keeps the bridge armed)
+      _bridgeRun = true;
+      difficulty = 'medium';
+      try { syncDiffButtons(); } catch (e) {}
+    } else {
+      _bridgeRun = false;
+    }
     // re-assert the equipped skin at start UNLESS a per-level override is active (launchLevel sets it via applyLevelTheme before play())
     try { if (!_levelSkinActive && typeof applyEquippedSkin === 'function') applyEquippedSkin(); } catch (e) {}
     $('play-btn').disabled = true;
@@ -3768,6 +3794,11 @@
       // practice run has ZERO competitive/economy side effects. Default false → normal runs record exactly as before.
       practice: _practiceOn,
       isPractice: _practiceOn,   // alias — the requested __rrDebug.practiceState() surface + any future reader
+      // FIRST PULSE bridge run = UNRANKED. This single flag drives every exclusion: recordLocal early-returns on
+      // `results.preview` (no career / per-song best / Bonus Sparks / Daily-Rift ×3 / XP / streak / account submit),
+      // _ratingsTidFor returns null (no ranked results-extras, no ratings widget), and the live-submit block below
+      // short-circuits it. Default false → a normal run records + submits exactly as before.
+      preview: _bridgeRun,
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     // build148 T8: clearing FRACTURE (Hard) at ≥85% on a real (non-practice, non-failed) run UNLOCKS the RIFT
@@ -3841,6 +3872,10 @@
     if (_practiceOn) {
       // PRACTICE: NEVER submit to the leaderboard (server chart OR account). Show the local-practice note only.
       try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
+    } else if (_bridgeRun) {
+      // FIRST PULSE bridge run — UNRANKED: no leaderboard submit at all (server chart OR account). No practice note
+      // either; _renderBridgeResults paints the dedicated "BRIDGE RUN — unranked" chip instead. This closes the last
+      // submit surface (session.submit) on top of recordLocal's results.preview early-return.
     } else if (timingFeel === 'tight') {
       try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'practice' }, results); } catch (e) {}
     } else if (session && session.submit) {
@@ -3850,6 +3885,43 @@
           window.RhythmCatalog.onSubmitResult(out, results);
         }
       } catch (e) { console.warn('submit failed', e); }
+    }
+    // FIRST PULSE — the bridge run's OWN results (chip + difficulty handoff). Called LAST so _bridgeRun was still
+    // armed through the results object build, recordLocal, and the submit gate above; this disarms it.
+    try { _renderBridgeResults(results, grade); } catch (e) {}
+  }
+
+  // FIRST PULSE — paints the bridge run's UNRANKED results and hands off the difficulty. UNRANKED: it only touches
+  // DOM (a "BRIDGE RUN — unranked" chip + blurb) and the rr_diff UI preference — never score/career/best/leaderboard.
+  // On a strong clear (grade A/S, not failed) it fires a PULSE-READY toast and PRE-SELECTS Medium for this track's
+  // next NORMAL launch (persists rr_diff='medium'); on a non-clear it restores the pre-bridge tier. Always disarms the
+  // bridge state so it can never leak into the next run.
+  function _renderBridgeResults(results, grade) {
+    if (!results || !results.preview || !_bridgeRun) return;   // only a genuine bridge run reaches here
+    var cleared = (grade === 'A' || grade === 'S') && !results.failed;
+    try {
+      var badges = document.getElementById('results-badges');
+      if (badges) {
+        var old = document.getElementById('rr-bridge-chip'); if (old && old.parentNode) old.parentNode.removeChild(old);
+        badges.insertAdjacentHTML('afterbegin',
+          '<span id="rr-bridge-chip" class="rbadge" style="background:linear-gradient(180deg,rgba(255,31,46,0.22),rgba(224,169,63,0.16));border:1px solid rgba(224,169,63,0.55);color:#ffe08a;">◇ BRIDGE RUN — UNRANKED</span>');
+      }
+      var bl = document.getElementById('results-blurb');
+      if (bl) bl.textContent = cleared
+        ? 'PULSE cleared on the bridge — that was Medium density at the Easy window. Take it ranked.'
+        : 'Bridge run — a Medium rehearsal at the Easy window. Nothing counted here; run it back or take Easy ranked.';
+    } catch (e) {}
+    // difficulty handoff — rr_diff is a UI preference, NOT a ranked surface, so it is untouched by the unranked law.
+    var prev = _bridgePrevDiff;
+    _bridgeRun = false; _bridgePrevDiff = null;   // disarm FIRST so nothing below can re-enter as a bridge run
+    if (cleared) {
+      difficulty = 'medium';
+      try { localStorage.setItem('rr_diff', 'medium'); } catch (e) {}
+      try { syncDiffButtons(); } catch (e) {}
+      setTimeout(function () { try { window.RhythmGame.showToast('◆ PULSE-READY — Medium is queued for your next run', 'success'); } catch (e) {} }, 1400);
+    } else {
+      if (prev != null) difficulty = prev;   // restore the pre-bridge tier (Easy); rr_diff on disk was never changed
+      try { syncDiffButtons(); } catch (e) {}
     }
   }
 
@@ -4128,7 +4200,7 @@
   function _renderResultsExtras(results, accShown, grade, accFrac) {
     // Always clear any prior run's injected lines FIRST — endGame is the sole results path, so a later SUPPRESSED
     // run (practice/MP/demo) must not leave an earlier real run's delighter on screen.
-    ['rr-neargoal', 'rr-trouble', 'rr-pace', 'rr-odstat', 'rr-today-pct'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
+    ['rr-neargoal', 'rr-trouble', 'rr-pace', 'rr-odstat', 'rr-today-pct', 'rr-firstpulse'].forEach(function (id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); });
     if (!results) return;
 
     var tid = null; try { tid = _ratingsTidFor(results); } catch (e) { tid = null; }
@@ -4137,6 +4209,32 @@
     var dur = songDuration || 0;
     var badges = document.getElementById('results-badges');
     var lb = document.getElementById('results-leaderboard');
+
+    // ---- FIRST PULSE : the graduating-Easy INVITATION (Wave-4). On an EASY run cleared strong (grade A/S, real solo
+    // — this whole function is already tid-gated), offer ONE inviting card to rehearse Medium's density+speed at the
+    // FORGIVING window, UNRANKED. It reads as a next-step invite, not a remedial class. Clicking launches the same
+    // track's Medium chart as a bridge run (RhythmCatalog.launchBridgeRun). Never appears on a bridge run's own
+    // results (those are preview → this function early-returned above), on Medium/Hard, or on a failed run.
+    try {
+      var _bridgeOk = true; try { if (window.RhythmCatalog && window.RhythmCatalog.bridgeReady) _bridgeOk = !!window.RhythmCatalog.bridgeReady(); } catch (e) { _bridgeOk = true; }
+      if (!results.failed && (results.difficulty || difficulty) === 'easy' && (grade === 'A' || grade === 'S') && _bridgeOk && badges) {
+        var fphtml = '<div id="rr-firstpulse" style="margin:12px auto 0;max-width:360px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;'
+          + 'padding:11px 15px;border-radius:12px;border:1px solid rgba(224,169,63,0.5);border-left:3px solid #ff1f2e;'
+          + 'background:linear-gradient(100deg,rgba(255,31,46,0.16),rgba(224,169,63,0.12));box-shadow:0 0 18px rgba(224,169,63,0.16);">'
+          + '<div style="text-align:left;min-width:180px;flex:1;">'
+          + '<div style="font-family:\'Oxanium\',sans-serif;font-weight:800;font-size:14px;letter-spacing:0.05em;color:#ffe08a;text-shadow:0 0 10px rgba(224,169,63,0.35);">READY FOR PULSE?</div>'
+          + '<div style="font-family:\'Chakra Petch\',sans-serif;font-size:11px;letter-spacing:0.03em;color:#cfc8c1;margin-top:3px;">Feel Medium’s pace at the Easy window — a no-pressure bridge run. Unranked.</div>'
+          + '</div>'
+          + '<button id="rr-firstpulse-go" type="button" style="flex:0 0 auto;padding:7px 16px;border-radius:9px;cursor:pointer;font-family:\'Chakra Petch\',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;color:#0d0605;background:linear-gradient(180deg,#f4c65a,#e0a93f);border:1px solid rgba(255,224,138,0.85);">Take the bridge</button>'
+          + '</div>';
+        badges.insertAdjacentHTML('afterend', fphtml);
+        var fpbtn = document.getElementById('rr-firstpulse-go');
+        if (fpbtn) fpbtn.addEventListener('click', function (ev) {
+          if (ev && ev.isTrusted === false) return;
+          try { if (window.RhythmCatalog && window.RhythmCatalog.launchBridgeRun) window.RhythmCatalog.launchBridgeRun(); } catch (e) {}
+        });
+      }
+    } catch (e) {}
 
     // ---- R-1 : NEAR-MISS + NEXT-GOAL (forward-framed) + RETRY -------------------------------------------------
     // Supersede the build122 "results-almost" stamp on real runs (it covers the same near-FC/near-grade idea at a
@@ -4401,7 +4499,11 @@
   { const rsec = document.getElementById('restart-section-btn'); if (rsec) {
     rsec.addEventListener('click', () => { _disarmRestart(); hidePause(); if (_practiceOn) practiceRearm(); });
   } }
-  $('exit-btn').addEventListener('click', () => { _disarmRestart(); hidePause(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
+  $('exit-btn').addEventListener('click', () => { _disarmRestart(); hidePause(); _abortBridge(); stopGame(); try { _fireSongEnd('exit'); } catch (e) {} showScreen('menu'); });
+  // FIRST PULSE: quitting a bridge run mid-song never reaches endGame's handoff, so disarm here — restore the
+  // pre-bridge tier (rr_diff on disk was never changed) so the player returns to menu on their Easy tier, and clear
+  // the bridge state so it can't leak into the next run. No-op when no bridge run is active.
+  function _abortBridge() { if (!_bridgeRun && _bridgePrevDiff == null) return; var prev = _bridgePrevDiff; _bridgeRun = false; _bridgePrevDiff = null; if (prev != null) difficulty = prev; try { syncDiffButtons(); } catch (e) {} }
   let lastResults = null;
   $('results-replay').addEventListener('click', () => { restartGame(); });
   $('results-menu').addEventListener('click', () => { stopGame(); showScreen('menu'); });
@@ -5282,14 +5384,15 @@
     const inputLag = evTime ? Math.min(0.05, Math.max(0, (performance.now() - evTime) / 1000)) : 0;
     const t = songTime() - audioOffset - inputLag;
     const diff = DIFFICULTY[difficulty];
+    const _hw = effHitWindow(diff);   // FIRST PULSE: eased (Easy 0.20) window while a bridge run is armed; otherwise === diff.hitWindow (byte-identical)
     let target = null, targetDiff = Infinity;
     for (const n of notes) {
       // OPEN note (openNotes flag) matches a press in ANY lane; all others stay lane-locked
       // (n.open is false unless the flag built it → default behavior byte-identical).
       if (!n.open && n.lane !== lane) continue;
       if (n.judged) continue;
-      if (n.time < t - diff.hitWindow) continue;
-      if (n.time > t + diff.hitWindow) break;
+      if (n.time < t - _hw) continue;
+      if (n.time > t + _hw) break;
       const d = Math.abs(n.time - t);
       // build100d (bug-swarm): on an EXACT distance tie, prefer a non-bomb over a bomb. A gap-fill tap can land on a
       // bomb-row's exact lane+time (the bomb-collision guard runs before gap-fill), and the bomb sorts first in `notes`,
@@ -5339,8 +5442,8 @@
     const ad = targetDiff;
     const _tp = timingProf();
     let kind;
-    if (ad < diff.hitWindow * _tp.perfFrac) kind = 'perfect';
-    else if (ad < diff.hitWindow * _tp.greatFrac) kind = 'great';
+    if (ad < _hw * _tp.perfFrac) kind = 'perfect';
+    else if (ad < _hw * _tp.greatFrac) kind = 'great';
     else kind = 'good';
     // signed timing error (sec): >0 = pressed LATE, <0 = pressed EARLY. Drives the early/late tick.
     const _signed = t - target.time;
@@ -5487,11 +5590,12 @@
   // resolve consecutive HOPO ("flow") notes off a clean hit without a re-strum.
   function chainHopos(t) {
     const diff = DIFFICULTY[difficulty];
+    const _hw = effHitWindow(diff);   // FIRST PULSE: eased window during a bridge run; else === diff.hitWindow
     let resolved = 0;
     for (const n of notes) {
       if (n.judged || !n.hopo || n.type === 'rail') continue;   // SLIDE RAILS: a rail head is a commitment, not a flow tap — never hopo-resolved
-      if (n.time < t - diff.hitWindow * 0.5) continue;
-      if (n.time > t + diff.hitWindow) break;
+      if (n.time < t - _hw * 0.5) continue;
+      if (n.time > t + _hw) break;
       n.judged = true; n.hit = 'great';
       counts.great++; combo++; if (combo > maxCombo) maxCombo = combo;
       checkClutch(n.lane);   // build122 p1: observational-only CLUTCH recovery check
@@ -6521,6 +6625,7 @@
     const t = songTime();
     const jt = t - audioOffset;
     const diff = DIFFICULTY[difficulty];
+    const _hw = effHitWindow(diff);   // FIRST PULSE: eased miss window during a bridge run; else === diff.hitWindow (byte-identical)
     // build108: the fail-out wipeout beat (_endingLock) freezes note-judging/scoring for its ~550ms window — the
     // run is already lost, endGame() is already scheduled (see failRun), so nothing here should keep mutating
     // score/combo/notes or call endGame() a second time. The FX-decay code below (particles/lane pulses/
@@ -6544,11 +6649,11 @@
     while (_missCursor < notes.length && notes[_missCursor].judged) _missCursor++;
     for (let _i = _missCursor; _i < notes.length; _i++) {
       const n = notes[_i];
-      if (jt <= n.time + diff.hitWindow) break;   // this note (and all later) still inside their miss window → done
+      if (jt <= n.time + _hw) break;   // this note (and all later) still inside their miss window → done
       if (n.judged) continue;
       if (n.type === 'bomb') { n.judged = true; n.hit = 'avoided'; if (n._fuseFx) { try { n._fuseFx.stop(); } catch (e) {} n._fuseFx = null; } if (n._warnFx) { try { n._warnFx.stop(); } catch (e) {} n._warnFx = null; } continue; }   // dodged the hazard — safe, no penalty
       if (n.type === 'hold' || n.type === 'rail') { missNote(n); continue; }   // SLIDE RAILS: an unstruck rail head misses like a hold head
-      if (jt <= n.time + diff.hitWindow + MISS_GRACE) continue;
+      if (jt <= n.time + _hw + MISS_GRACE) continue;
       missNote(n);
     }
 

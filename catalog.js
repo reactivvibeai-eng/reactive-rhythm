@@ -1890,7 +1890,16 @@
     // gates on catalogLive||_review: liveProvider() re-fetches /track/:id, meaningless for a fake MOCK-preview row
     // (id 'm5' with a synthetic has_chart) — so a mock row (catalogLive false, no _review) skips it, finds no
     // audio_url, and correctly falls to the preview demo, byte-identical to before.
-    if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo && (catalogLive || track._review)) {
+    if ((opts && opts.bridgeRun) && isLaunchable(track)) {
+      // FIRST PULSE bridge run: force the in-browser MEDIUM chart (the REAL Medium density/speed, deterministic
+      // client-side) — deliberately BEFORE the server-chart branch so a bridge NEVER routes a scored liveProvider.
+      // game.js (seeing the bridgeRun opt) forces difficulty=medium, eases judging to Easy's 0.20 window, and stamps
+      // results.preview=true → UNRANKED (recordLocal + every submit path early-return).
+      window.RhythmGame.playUrl(trackAudioUrl(track), {
+        id: track.id,
+        title: track.title, artist: track.artist_credit_name || track.artist_name, genre: track.genre, artwork: track.artwork_url,
+      }, { bridgeRun: true });
+    } else if (hasServerChart(track) && track.id && track.id !== 'demo' && !track.demo && (catalogLive || track._review)) {
       window.RhythmGame.play(liveProvider(track.id));               // pre-baked chart → scored + leaderboard
     } else if (isLaunchable(track)) {
       window.RhythmGame.playUrl(trackAudioUrl(track), {             // decodable audio_url → chart in-browser
@@ -1902,6 +1911,21 @@
     }
     return true;
   }
+
+  // FIRST PULSE (Wave-4 onboarding bridge) — re-launch the CURRENT track as an UNRANKED bridge run: the REAL Medium
+  // chart judged at Easy's forgiving window. game.js owns the window override, the difficulty force, and the unranked
+  // (results.preview) stamping; catalog just re-routes the current track through launchTrack with the bridge opt.
+  // Requires a decodable audio_url (isLaunchable) so the Medium chart is built in-browser — a bridge NEVER submits.
+  function launchBridgeRun() {
+    var t = currentTrack;
+    if (!t || !isLaunchable(t)) {
+      try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Bridge run needs the full track — pick another song', 'neutral'); } catch (e) {}
+      return false;
+    }
+    return launchTrack(t, { bridgeRun: true });
+  }
+  // Can the current track launch a FIRST PULSE bridge run? Drives whether game.js shows the "READY FOR PULSE?" offer.
+  function bridgeReady() { return !!(currentTrack && isLaunchable(currentTrack)); }
 
   if (sheet) {
     $('sheet-scrim').addEventListener('click', closeSheet);
@@ -2675,6 +2699,7 @@
 
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
+    launchBridgeRun, bridgeReady,   // FIRST PULSE (Wave-4): re-launch the current track as an UNRANKED Medium-at-Easy-window bridge run + the offer-card readiness gate
     getLastPlayStats,  // Wave-3: last real run's {percentile,count,trackId,difficulty} off the /plays|/score response (null when absent/offline/older-server) — read-only, results-screen social proof
 
     submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback

@@ -1130,3 +1130,46 @@ html.rr-reduce-motion .rr-streak-chip { animation: none !important; }
 html.rr-reduce-motion .rr-streak-chip.at-risk { box-shadow: 0 0 16px -3px rgba(255,90,20,0.6), inset 0 1px 0 rgba(255,255,255,0.05); }
 @media (max-width: 900px) { .rr-streak-chip { height: 36px; font-size: 13px; padding: 0 11px 0 9px; } }
 
+/* =========================================================================
+   "RUN THIS DOWN" (Wave 4) — the ghost-chase launcher injected onto per-song
+   leaderboard rows / podium cards / the chase card by jukebox.js. Gold ghost
+   accent (the same gold the engine's target pill uses — sanctioned non-crimson,
+   no purple/blue/green). Placed layout-safe so it never squeezes the existing
+   row grid, and sized as a comfortable tap target.
+   ========================================================================= */
+.rr-rtd {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+  font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase;
+  color: #ffe9a8;
+  padding: 8px 14px; min-height: 36px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(224,169,63,0.22), rgba(224,169,63,0.08));
+  border: 1px solid rgba(224,169,63,0.55);
+  box-shadow: inset 0 1px 0 rgba(255,238,200,0.22), 0 6px 16px -10px rgba(224,169,63,0.6);
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  transition: background var(--rr-t-std, 220ms) var(--rr-ease-out, ease), border-color var(--rr-t-std, 220ms) var(--rr-ease-out, ease), box-shadow var(--rr-t-std, 220ms) var(--rr-ease-out, ease), transform 0.1s ease;
+}
+.rr-rtd:hover {
+  background: linear-gradient(180deg, rgba(224,169,63,0.34), rgba(224,169,63,0.15));
+  border-color: rgba(224,169,63,0.85);
+  box-shadow: inset 0 1px 0 rgba(255,238,200,0.30), 0 9px 22px -10px rgba(224,169,63,0.85);
+}
+.rr-rtd:active { transform: translateY(1px) scale(0.98); }
+.rr-rtd:focus-visible { outline: 2px solid var(--gold, #e0a93f); outline-offset: 2px; }
+.rr-rtd .rr-rtd-ico { font-size: 12px; line-height: 1; filter: drop-shadow(0 0 4px rgba(224,169,63,0.55)); }
+
+/* list rows are a 5-col grid — drop the button to a full-width SECOND line at the
+   right edge so the rank/name/score/acc columns keep their sizing untouched */
+.lbd-board .lb-row .rr-rtd { grid-column: 1 / -1; justify-self: end; }
+/* podium cards are vertical flex — the button sits under the meta, filling the plinth */
+.lbd-board .lb-pod .rr-rtd { margin-top: 8px; align-self: stretch; font-size: 9px; letter-spacing: 0.06em; padding: 7px 8px; min-height: 32px; overflow: hidden; }
+/* chase card is a centered flex row — the button flows inline after "X pts to pass NAME" */
+.lbd-chase .rr-rtd { flex: 0 0 auto; }
+
+@media (max-width: 560px) {
+  .lbd-board .lb-row .rr-rtd { justify-self: stretch; }
+}
+/* a11y: reduce-motion drops the transform/transition nudges */
+html.rr-reduce-motion .rr-rtd { transition: none; }
+html.rr-reduce-motion .rr-rtd:active { transform: none; }
+

@@ -1396,5 +1396,166 @@
     }
     requestAnimationFrame(draw);
   })();
+
+  // =========================================================================
+  // "RUN THIS DOWN" (Wave 4) — ghost chase from the per-song leaderboard. Turns
+  // the leaderboard from a reading room into a race: each rival row (and the
+  // "X pts to pass …" chase card) gets a compact gold target button that
+  // relaunches THIS board's track carrying the engine's DISPLAY-ONLY ghost
+  // target — RhythmCatalog.launchTrack({targetScore,targetName}) → the existing
+  // setGhostTarget seam → game.js's gold "🎯 BEAT <name>" HUD pill + one-time
+  // "BEAT IT! 🏆" flash. CEILING-SAFE: the target is cosmetic; no scoring path
+  // is touched. The board itself is rendered by index.html's inline leaderboard
+  // script (not this file), so this is pure PROGRESSIVE ENHANCEMENT — a
+  // MutationObserver augments the rendered rows + a delegated click launches —
+  // and it FAILS SOFT (simply omits the button) whenever a single real track or
+  // a positive numeric score can't be resolved.
+  // =========================================================================
+  (function ghostChase() {
+    const screen = $('leaderboard-screen');
+    const board = $('lbd-board');
+    if (!screen || !board) { setTimeout(ghostChase, 500); return; }   // markup not parsed yet — retry (mirrors waveLoop's defensive boot)
+
+    const chase = $('lbd-chase');
+    const songbar = $('lbd-songbar');   // visible ONLY on the By-Song tab → the one board that maps to a single track
+    const pickT = $('lbd-pick-t');      // the picked track's title (header)
+    const pickA = $('lbd-pick-a');      // the picked track's artist (header)
+    const pickArt = $('lbd-pick-art');  // header artwork (an <img src> when set) — tie-breaker
+
+    let lastPickId = '';   // exact track id captured from an explicit picker click (most reliable resolver)
+
+    function norm(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
+    function playable(t) {
+      try { const C = RC(); return !!(t && C && (!C.trackReady || C.trackReady(t)) && !(C.isVideo && C.isVideo(t))); }
+      catch (e) { return !!t; }
+    }
+    // Resolve the ONE track this By-Song board is showing. Prefer the exact id captured from a
+    // picker click (validated against the current header title, so a later defaultPick reseed
+    // can't leave a stale id); else match the header title (+ artist / artwork) against the
+    // catalog, accepting ONLY an unambiguous, playable hit. null → caller omits every button.
+    function resolveTrack() {
+      let C; try { C = RC(); } catch (e) { C = null; }
+      if (!C || !C.allTracks) return null;
+      const headTitle = pickT ? norm(pickT.textContent) : '';
+      if (!headTitle || headTitle === 'choose a track') return null;
+      let all; try { all = C.allTracks() || []; } catch (e) { return null; }
+      if (lastPickId) {
+        const byId = all.filter((t) => t && t.id === lastPickId)[0];
+        if (byId && norm(byId.title) === headTitle && playable(byId)) return byId;   // exact + fresh
+      }
+      const headArtist = pickA ? norm(pickA.textContent) : '';
+      let matches = all.filter((t) => t && norm(t.title) === headTitle);
+      if (headArtist && headArtist !== 'tap to pick') {
+        const withArtist = matches.filter((t) => norm(t.artist_name || t.artist_credit_name || '') === headArtist);
+        if (withArtist.length) matches = withArtist;
+      }
+      matches = matches.filter(playable);
+      if (matches.length > 1 && pickArt) {   // disambiguate a title/artist tie by the header artwork
+        const img = pickArt.querySelector('img');
+        const src = img ? norm(img.getAttribute('src')) : '';
+        if (src) { const byArt = matches.filter((t) => norm(t.artwork_url || '') === src); if (byArt.length === 1) return byArt[0]; }
+      }
+      return matches.length === 1 ? matches[0] : null;   // ambiguous / none → fail soft
+    }
+
+    function digits(s) { const n = parseInt(String(s == null ? '' : s).replace(/[^\d]/g, ''), 10); return isFinite(n) ? n : 0; }
+    function rowName(el) {
+      try {
+        const nameEl = el.querySelector('.lb-name, .lb-pod-name');
+        if (!nameEl) return '';
+        const clone = nameEl.cloneNode(true);
+        const sub = clone.querySelector('.lb-sub'); if (sub) sub.remove();   // drop the " · SUB" chip the render appends
+        return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+      } catch (e) { return ''; }
+    }
+    const PLACEHOLDER = { 'your best': 1, 'you': 1, 'unclaimed': 1 };   // local/self rows — never a rival to race
+    function isRival(el, name) {
+      if (!el || el.classList.contains('you')) return false;   // GATE: can't race yourself
+      const n = norm(name);
+      if (!n || PLACEHOLDER[n]) return false;                  // placeholder / your-own local rows
+      return true;
+    }
+    function mkBtn(score, name) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'rr-rtd';
+      b.setAttribute('data-score', String(score));
+      b.setAttribute('data-name', name);
+      b.setAttribute('aria-label', 'Run this down — race ' + name + ' at ' + Number(score).toLocaleString() + ' points');
+      b.innerHTML = '<span class="rr-rtd-ico" aria-hidden="true">🎯</span><span class="rr-rtd-t">RUN THIS DOWN</span>';
+      return b;
+    }
+
+    let pending = 0;
+    // coalesce a burst of render mutations, then augment once the DOM settles. setTimeout (not rAF)
+    // so it still fires when the tab is backgrounded / idle — rAF is throttled there and would strand the buttons.
+    const obs = new MutationObserver(() => { if (pending) return; pending = setTimeout(() => { pending = 0; augment(); }, 16); });
+    function augment() {
+      const onSong = !!(songbar && !songbar.hidden);
+      obs.disconnect();   // our own DOM writes below must not re-trigger the observer (no feedback loop)
+      try {
+        // wipe any prior buttons first so a tab / track / difficulty change never leaves a stale target
+        screen.querySelectorAll('.rr-rtd').forEach((n) => { if (n.parentNode) n.parentNode.removeChild(n); });
+        screen.querySelectorAll('.rr-rtd-host').forEach((n) => n.classList.remove('rr-rtd-host'));
+        if (!onSong) return;                       // GATE: only the By-Song board maps to a single track
+        const track = resolveTrack();
+        if (!track) return;                        // GATE: no resolvable real track → no buttons (fail soft)
+        board.querySelectorAll('.lb-row, .lb-pod').forEach((el) => {
+          const name = rowName(el);
+          if (!isRival(el, name)) return;
+          const scoreEl = el.querySelector('.lb-score, .lb-pod-score');
+          const score = scoreEl ? digits(scoreEl.textContent) : 0;
+          if (!(score > 0)) return;                // GATE: zero / invalid score → no button
+          el.classList.add('rr-rtd-host');
+          el.appendChild(mkBtn(score, name));
+        });
+        // chase card "X pts to pass <name>" → race the player directly above you (read their row score)
+        if (chase && !chase.hidden && chase.textContent) {
+          let above = '';
+          try { const bEl = chase.querySelector('b'); above = bEl ? (bEl.textContent || '').replace(/\s+/g, ' ').trim() : ''; } catch (e) {}
+          if (above) {
+            let aScore = 0;
+            board.querySelectorAll('.lb-row, .lb-pod').forEach((el) => {
+              if (aScore || el.classList.contains('you')) return;
+              if (norm(rowName(el)) === norm(above)) { const sEl = el.querySelector('.lb-score, .lb-pod-score'); aScore = sEl ? digits(sEl.textContent) : 0; }
+            });
+            if (aScore > 0) chase.appendChild(mkBtn(aScore, above));
+          }
+        }
+      } catch (e) {} finally {
+        obs.observe(board, { childList: true, subtree: true });
+        if (chase) obs.observe(chase, { childList: true, subtree: true });
+      }
+    }
+
+    // capture an explicit pick (picker rows carry data-id) — capture phase so we see it before the inline handler
+    screen.addEventListener('click', (e) => {
+      try { const row = e.target && e.target.closest && e.target.closest('.lbd-res-row[data-id]'); if (row) lastPickId = row.getAttribute('data-id') || ''; } catch (err) {}
+    }, true);
+
+    // click a RUN THIS DOWN button → launch the ghost duel on this board's track
+    screen.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('.rr-rtd');
+      if (!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      let score = 0; try { score = parseInt(btn.getAttribute('data-score'), 10) || 0; } catch (err) {}
+      if (!(score > 0)) return;
+      const name = (btn.getAttribute('data-name') || '').slice(0, 22);   // truncate sanely for the HUD pill
+      const track = resolveTrack();
+      let C; try { C = RC(); } catch (err) { C = null; }
+      if (!track || !C || !C.launchTrack) return;   // fail soft — nothing launchable
+      let ok = false;
+      try { ok = !!C.launchTrack(track, { targetScore: score, targetName: name }); } catch (err) { ok = false; }
+      if (ok) {   // close the overlay so the run is visible (mirrors launchLevel's close())
+        try { const p = $('lbd-picker'); if (p) p.hidden = true; } catch (err) {}
+        try { screen.classList.remove('active'); } catch (err) {}
+      }
+    });
+
+    obs.observe(board, { childList: true, subtree: true });
+    if (chase) obs.observe(chase, { childList: true, subtree: true });
+    augment();
+  })();
+
   window.RhythmLibrary = { render, showView, relayout };
 })();
