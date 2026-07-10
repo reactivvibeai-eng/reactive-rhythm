@@ -5,10 +5,16 @@ answered. Two adversarial swarms ran; 27 claims were refuted down to 13 real def
 The multiplayer invite-link bug you hit is **found, fixed, and proven** with a live two-peer test I
 ran myself. Nothing was published — that's still yours.
 
-**The one thing that matters most:** production is **17 builds stale** (`?v=451`; local is `?v=468`).
-You have not seen — or heard — most of this. The new audio package does not exist in production, which
-is why you didn't hear the sound effects. **Publishing is the single highest-value action available,
-and it takes you about a minute.**
+**The one thing that matters most: you still have to press Publish.** The code is all the way through
+the pipeline — the Lovable deploy repo now carries `?v=467`, and the `?v=468` sync is in flight — but a
+Lovable repo is not a published site. Until you Publish, the live game keeps serving the old bundle, and
+you keep not hearing the audio package. **Publishing is the single highest-value action available and it
+takes you about a minute.**
+
+*(Precision, because it matters: earlier in this session I measured the live site at `?v=451`. I cannot
+re-verify that number now — this sandbox has no DNS for `reactivvibe.com`, so every request returns
+nothing. I'm reporting the deploy-repo version, which I did verify, and flagging the live version as
+last-known-not-currently-checkable rather than restating a number I can't stand behind.)*
 
 ---
 
@@ -131,8 +137,10 @@ yes, we don't flip the switch and still get nothing.
 
 ## Waiting on you
 
-1. **Publish.** Ships builds 152→169, delivers the audio you never heard, and closes a live
-   `?open=1` scoring hole that is reachable in production today.
+1. **Publish.** Ships builds 152→169 and delivers the audio you never heard. It should also close the
+   `?open=1` scoring hole — that hole was confirmed live in production earlier in this session; I could
+   not re-confirm it tonight (no network to the live host from here), so treat it as "almost certainly
+   still open" rather than as re-measured fact.
 2. **Telemetry consent** — flip the default, or accept flying blind. Privacy call, yours.
 3. **R6** — do you want the right HUD panel reworked? It amends your own decree.
 4. **A playtest of the frame heat and the Overdrive brand pulse.** Both are verified to *work*; whether
@@ -154,10 +162,15 @@ You asked me to critique myself. Not a formality; here is the honest list.
   Syntax-valid, runtime-fatal, and only reachable on a real 401 — i.e. it would have shipped and broken
   exactly the thing it was meant to fix. I caught it by grepping every call site against its enclosing
   catch parameter. A syntax check is not a correctness check.
-- **I ran three vacuous tests and nearly believed them.** A reduce-motion "control" where the videos
-  were already hidden by two other rules; a loading-trap test against a port that fails in 1ms so the
-  loading screen never appeared; a bomb-row probe reading a debug hook that doesn't expose bombs. Each
-  one *passed*. An assertion that passes trivially proves nothing, and I have to keep re-learning that.
+- **I ran five vacuous tests and nearly believed them.** A reduce-motion "control" where the videos were
+  already hidden by two other rules; a loading-trap test against a port that fails in 1ms so the loading
+  screen never appeared; a bomb-row probe reading a debug hook that doesn't expose bombs; a `curl` that
+  "proved" a production security hole was still open when in fact the sandbox has no DNS for that host
+  and every response was empty; and a grep for a `game.js` symbol run against `index.html`. Each one
+  *passed*. The last two I ran **minutes after writing this very bullet** about the first three — which
+  is the most useful thing in this report. An assertion that passes trivially proves nothing, and
+  knowing that is clearly not the same as doing it. The countermeasure is mechanical, not attitudinal:
+  every check needs a control that is *known to fail*.
 - **I doubted Fable and was wrong.** I said `meterSheen` animated one layer, not three. There are three
   `.song-progress` elements. Measured: the census drops by exactly 3.
 - **I trusted Fable and was wrong.** §6's "ceiling-safe by construction" would have moved the score
