@@ -2049,6 +2049,7 @@
     // lanes at one instant — a clear "dodge this" moment. Reuses the 'bomb' type (render+penalty+
     // auto-avoid exist), adds NO scored notes, placed ONLY in a clean rest gap, never shares a time
     // with a real note. Default (flag off) → none, chart byte-identical. ----
+    const bombRowAnchors = {};   // build169: histogram of which lane each wall was anchored at (__rrChartStats)
     if (noteVariety && difficulty !== 'easy') {
       const rowEveryT = _rift ? 14 : difficulty === 'hard' ? 20 : 22;   // min seconds between rows · build141 (beta data): Hard 14→20 — rarer walls
       const leadIn = 0.85, restAfter = 0.85;
@@ -2067,17 +2068,53 @@
         const COLLIDE = 0.17;                               // > max hitWindow (med 0.16) → dodge stays clean
         const occupied = {};
         for (const n of notes) { if (Math.abs(n.time - rowT) <= COLLIDE) occupied[n.lane] = true; }
-        const startLane = Math.max(0, Math.floor((LANE_COUNT - rowLanes) / 2));
-        const wall = [];
-        for (let k = 0; k < rowLanes; k++) {
-          const lane = startLane + k;
-          if (lane < 0 || lane >= LANE_COUNT) continue;
-          if (occupied[lane]) continue;
-          wall.push(lane);
+        // ---- build169 HAZARD-SHAPES v1: the wall's ANCHOR walks ----------------------------------
+        // Until now `startLane` was a constant, so every bomb wall in every song on every run spanned
+        // the identical centre lanes and left the identical lanes open. The dodge never moved. The
+        // anchor now walks left/centre/right, seeded off the millisecond-rounded row time — never
+        // Math.random, because a chart must rebuild identically for replays, for a re-listen, and for
+        // both peers of a multiplayer match.
+        //
+        // CEILING SAFETY — read this before changing anything here.
+        //   GAP FILL (below, ~:2210) runs AFTER this pass and the fillers it invents are SCORED taps.
+        //   A bomb inside a long rest splits that rest (it is the `b` of an adjacent pair), so a bomb's
+        //   TIME can change how many fillers exist → notes_total → the score ceiling → a forced
+        //   CHART_VERSION bump that would segment the live leaderboards.
+        //   So this pass moves bomb LANES ONLY. `rowT` and the row-acceptance predicate are bit-identical
+        //   to build168 — acceptance is still decided on the CENTRE wall — so row TIMES and the row COUNT
+        //   are unchanged, and every bomb in a row shares one `rowT`. Every downstream pass either skips
+        //   bombs outright (post-insert sanitizer :2287/:2307, gap-fill's `a` :2217) or reads only their
+        //   time. Therefore notes_total is invariant and CHART_VERSION stays 2.
+        //   Corollary, and the reason Fable's proposed diagonal is NOT implemented: staggering a wall
+        //   across two adjacent instants introduces a NEW rest boundary, which WOULD move the ceiling on
+        //   any filler difficulty (Medium, fillMax 2.6). It is only provably safe where fillMax is
+        //   Infinity (Hard) — and prod data says Hard is already a combo wall, so it does not belong there
+        //   either. Anchor variety is the part that answers the complaint and costs nothing.
+        const centreLane = Math.max(0, Math.floor((LANE_COUNT - rowLanes) / 2));
+        const buildWall = (start) => {
+          const w = [];
+          for (let k = 0; k < rowLanes; k++) {
+            const lane = start + k;
+            if (lane < 0 || lane >= LANE_COUNT) continue;
+            if (occupied[lane]) continue;
+            w.push(lane);
+          }
+          return w;
+        };
+        // ACCEPTANCE stays on the centre wall → `lastRowT` advances exactly as it did in build168.
+        const centreWall = buildWall(centreLane);
+        if (centreWall.length < 2) continue;
+        let wall = centreWall, anchor = centreLane;
+        const anchorMax = LANE_COUNT - rowLanes;                 // 5 lanes, 3-wide → anchors 0,1,2 (left/centre/right)
+        if (anchorMax > 0) {
+          const h = (Math.round(rowT * 1000) * 2654435761) >>> 0;
+          const pick = h % (anchorMax + 1);
+          const cand = buildWall(pick);
+          if (cand.length >= 2) { wall = cand; anchor = pick; }  // an occupied re-anchor falls back to centre
         }
-        if (wall.length < 2) continue;
+        bombRowAnchors[anchor] = (bombRowAnchors[anchor] || 0) + 1;
         for (const lane of wall) {
-          notes.push({ time: rowT, strength: 1, lane: lane, type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false, _bombRow: true });
+          notes.push({ time: rowT, strength: 1, lane: lane, type: 'bomb', hold: 0, spin: 0, judged: false, hit: null, _pulsed: false, _bombRow: true, _rowAnchor: anchor });
         }
         lastRowT = rowT;
       }
@@ -2493,6 +2530,8 @@
         hopos: notes.filter(n => n.hopo).length,
         openNotes: openNotes,
         bombRows: notes.filter(n => n._bombRow).length,
+        bombRowAnchors: bombRowAnchors,                          // build169: {anchorLane: rowCount} — proves the wall moves
+        bombRowTimes: [...new Set(notes.filter(n => n._bombRow).map(n => n.time))].sort((a, b) => a - b),
         patNotes: notes.filter(n => typeof n._pat === 'number').length,
         fillers: fillers.length,
         noteVariety: noteVariety,

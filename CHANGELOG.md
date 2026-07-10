@@ -15,6 +15,57 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build169 — hazard-shapes v1: the bomb wall finally moves  ✅ ceiling invariance proven two ways (300-chart differential + a real-track before/after) · 0 console errors  ·  ?v=468
+
+The owner, after playing Medium: *"there was a couple row of bombs but it wasn't very diverse."* He was
+describing the emitter, not an impression. `startLane = floor((LANE_COUNT − rowLanes) / 2)` was a
+**constant**, so every bomb wall in every song on every run spanned the identical centre lanes and left
+the identical two lanes open. The dodge never moved. And on Medium `bombGap = Infinity`, so walls are the
+*only* hazard he could have met.
+
+Now the anchor walks left / centre / right, seeded off the millisecond-rounded row time — never
+`Math.random`, because a chart must rebuild identically for a replay, a re-listen, and both peers of a
+multiplayer match. New `__rrChartStats.bombRowAnchors` + `bombRowTimes` make it verifiable.
+
+**Fable's §6 said this was "ceiling-safe by construction: bombs add no scored notes and are excluded from
+`total`." That is true but incomplete, and the gap is a live trap.** `GAP FILL` runs *after* the bomb-row
+pass, and the fillers it invents are **scored taps**. A bomb sitting inside a long rest splits that rest —
+it is the `b` of an adjacent pair (game.js gap-fill skips bombs only as `a`) — so a bomb's **time** silently
+determines how many scored notes exist, hence `notes_total`, hence the score ceiling. Moving a bomb on a
+filler difficulty would force `CHART_VERSION` 3 and segment every live leaderboard. Same family as the
+star-placement ceiling trap.
+
+So this pass moves bomb **lanes only**:
+- `rowT` and the row-acceptance predicate are bit-identical to build168 — acceptance is still decided on the
+  centre wall, so `lastRowT` advances exactly as before and row *times* and row *count* cannot change.
+- Every bomb in a wall shares one `rowT`, so wall width can vary freely without moving a rest boundary.
+- Every downstream pass either skips bombs outright (post-insert sanitizer, gap-fill's `a`) or reads only
+  their time.
+
+⇒ `notes_total` is invariant, the ceiling is invariant, **CHART_VERSION stays 2**.
+
+**Fable's proposed diagonal (staggering a wall across two adjacent instants) is deliberately NOT built.**
+A new instant is a new rest boundary: on Medium (`fillMax` 2.6) it *would* move the ceiling. It is only
+provably safe where `fillMax` is Infinity — i.e. Hard — and prod data says Hard is already a combo wall
+(2× Medium's break rate, 6% reach max combo). It belongs in neither place. Anchor variety is the part that
+answers the complaint and costs nothing.
+
+**Proof, two independent ways.**
+1. *Differential harness* (300 synthetic charts, 4405 walls placed): row times and row count identical
+   between the old and new emitters — **0 mismatches**. Positive control against a vacuous pass: 67% of
+   walls actually change, the anchor histogram lands 1416 / 1436 / 1553 across left / centre / right, and
+   rebuilding the same chart twice yields identical anchors (determinism).
+2. *Real track, real engine* — "There Was Never A Sun" @ Medium, charted in-browser on build168 and again on
+   build169: `notes = 413` both times → ceiling `619,500` both times; bombs 6, rows 6, holds 68, chords 60,
+   trills 4 — every scalar identical. Only `bombRowAnchors` differs: `{0:1, 1:1}` where build168 could only
+   ever have produced `{1:2}`. One wall now sits hard left.
+
+**Human-only, still unproven:** whether a wall that slides under your fingers actually *feels* more varied
+at speed, or just less predictable. That is a playtest question.
+
+**Invariants held:** `score +=` = 17 · `CHART_VERSION` = 2 · `MAX_MULT` = 4 · notes stay time-sorted ·
+difficulty untouched (no lane count, gap, or frequency changed).
+
 ### build168 — the frame joins the game: Fable's in-game UI polish (R2–R5 + §4 deletions)  ✅ every claim proven with a positive control · 0 console errors on a clean instrument  ·  ?v=467
 
 Executes `INGAME_UI_POLISH_v1.md` R2–R5 and its §4 deletions. **R6 (Judgment Log / Vibe Channel) is
