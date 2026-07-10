@@ -1084,26 +1084,85 @@
     try { localStorage.setItem('rr_welcome_dismiss', today); } catch (e) {}
     if (card && card.parentNode) card.parentNode.removeChild(card);
   }
-  function maybeWelcomeCard() {
+  // ---- Wave-4b (B1) RECLAIM helpers — read the parallel-agent contract DEFENSIVELY ----
+  // RhythmCatalog.getReclaimTargets() is SYNC → Array<{trackId,trackTitle,myScore,passerName,
+  // passerScore,margin,passedAt}>, [] when nothing/unauthed/offline. It may not exist yet while
+  // that agent works, so guard on typeof; anything unexpected collapses to [] (silent).
+  function _reclaimRows() {
+    try {
+      const C = RC();
+      if (C && typeof C.getReclaimTargets === 'function') {
+        const a = C.getReclaimTargets();
+        return Array.isArray(a) ? a : [];
+      }
+    } catch (e) {}
+    return [];
+  }
+  function _resolveTrackById(id) {
+    try {
+      const pool = RC().allTracks(); const sid = String(id);
+      for (let i = 0; i < pool.length; i++) { if (pool[i] && String(pool[i].id) === sid) return pool[i]; }
+    } catch (e) {}
+    return null;
+  }
+  // D1 ATTENTION CAP — enforce "at most ONE pulsing accent" by precedence
+  // reclaim > streak-at-risk > everything else. The welcome card carries at most one
+  // pulse (its reclaim mode); here we HUSH the always-on streak chip whenever the reclaim
+  // card owns the pulse, so the chip and card never shout at the same time.
+  function applyAttentionCap() {
+    try {
+      const card = $('rr-welcome');
+      const mode = card ? (card.getAttribute('data-mode') || '') : '';
+      const chip = $('rr-streak-chip');
+      if (chip) chip.classList.toggle('rr-hush', mode === 'reclaim');
+    } catch (e) {}
+  }
+  function maybeWelcomeCard(opts) {
     try {
       const menu = $('menu');
       if (!(menu && menu.classList.contains('active'))) return;   // library not on screen yet (observer re-fires on activation)
-      if (sessionStorage.getItem('rr_welcome_shown')) return;     // one proactive card per session
       if (_coachVisible()) return;                                // YIELD — don't stack on a first-run nudge
       const today = _todayKey();
       let dismissed = ''; try { dismissed = localStorage.getItem('rr_welcome_dismiss') || ''; } catch (e) {}
       if (dismissed === today) return;                            // dismissed today → stay gone for the day
+      // B1: a reclaim UPGRADE (fired by the async 'rr:reclaim' event when the deltas land) may PROMOTE
+      // an already-shown lower-priority card to the top-priority reclaim branch. It reuses the SAME
+      // one-per-session slot (still one card), so it alone bypasses the rr_welcome_shown gate here.
+      const isUpgrade = !!(opts && opts.reclaimUpgrade);
+      if (!isUpgrade && sessionStorage.getItem('rr_welcome_shown')) return;   // one proactive card per session
 
       const risk = _streakAtRisk();
       let fresh = []; try { fresh = (RC().freshSince ? RC().freshSince() : []) || []; } catch (e) {}
-      let mode, title, sub, cta, onCta;
-      if (risk > 0) {
+      let mode, title, titleHtml, sub, cta, onCta;
+      // ---- TOP PRIORITY (B1): a rival passed your score → reclaim it (ghost chase). Positive
+      // framing ALWAYS — "passed you / reclaim it", never "you lost". Silent when the array is empty. ----
+      const reclaim = _reclaimRows();
+      if (reclaim.length) {
+        let row = null, track = null;
+        for (let i = 0; i < reclaim.length; i++) {                 // resolve to a playable track; skip rows we can't resolve
+          const t = _resolveTrackById(reclaim[i] && reclaim[i].trackId);
+          if (t) { row = reclaim[i]; track = t; break; }
+        }
+        if (row && track) {
+          mode = 'reclaim';
+          const who = RC().escapeHtml(String(row.passerName || 'A rival'));
+          const song = String(row.trackTitle || track.title || 'this track');
+          title = row.passerName + ' passed you on ' + song;      // plain aria/fallback string
+          titleHtml = '<b>' + who + '</b> passed you on ' + RC().escapeHtml(song);
+          sub = 'Reclaim it — chase their ' + Number(row.passerScore || 0).toLocaleString();
+          cta = 'RECLAIM IT';
+          onCta = () => { try { RC().launchTrack(track, { targetScore: row.passerScore, targetName: row.passerName }); } catch (e) {} };
+        }
+      }
+      // an upgrade exists ONLY to promote to reclaim — if there's no reclaimable row, leave the current card alone
+      if (!mode && isUpgrade) return;
+      if (!mode && risk > 0) {
         mode = 'streak';
         title = 'Keep your ' + risk + '-day streak alive';
         sub = 'Play a track today so it doesn’t reset.';
         cta = 'Play now';
         onCta = () => { try { const d = RC().dailyPicks(1); if (d && d[0]) RC().openSheet(d[0]); } catch (e) {} };
-      } else if (fresh.length > 0) {
+      } else if (!mode && fresh.length > 0) {
         mode = 'fresh';
         let ageH = null; try { ageH = RC().lastVisitAgeHours(); } catch (e) {}
         const ago = _agoPhrase(ageH);
@@ -1111,7 +1170,7 @@
         sub = (ago ? ago + ' · ' : '') + 'Fresh drops in your library.';
         cta = 'See what’s new';
         onCta = () => { try { openSongs(RC().freshSince(), 'Fresh since your last visit', 'jukebox'); } catch (e) {} };
-      } else {
+      } else if (!mode) {
         return;   // nothing worth saying → no card (empty-guard)
       }
       try { sessionStorage.setItem('rr_welcome_shown', '1'); } catch (e) {}
@@ -1119,17 +1178,21 @@
       const old = $('rr-welcome'); if (old) old.remove();
       const card = document.createElement('div');
       card.id = 'rr-welcome'; card.className = 'rr-welcome rr-welcome-' + mode; card.setAttribute('role', 'status');
+      card.setAttribute('data-mode', mode);   // D1: the attention-cap governor reads this to decide who pulses
       const icon = mode === 'streak'
         ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 4.2 4 7a4 4 0 0 1-8 0c0-1 .4-1.8 1-2.5C9.6 9 10 10 11 10.4 10.2 8 12 6 12 3z"></path><path d="M8.5 15a3.5 3.5 0 0 0 7 0"></path></svg>'
+        : mode === 'reclaim'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle><path d="M12 1v3M12 20v3M1 12h3M20 12h3"></path></svg>'
         : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-3.6 3 1.1 4.8L12 14.5 8 16.8l1.1-4.8L5.5 9l4.6-1.4L12 3z"></path></svg>';
       card.innerHTML =
         '<span class="rw-ic" aria-hidden="true">' + icon + '</span>' +
-        '<span class="rw-txt"><span class="rw-title">' + RC().escapeHtml(title) + '</span><span class="rw-sub">' + RC().escapeHtml(sub) + '</span></span>' +
+        '<span class="rw-txt"><span class="rw-title">' + (titleHtml || RC().escapeHtml(title)) + '</span><span class="rw-sub">' + RC().escapeHtml(sub) + '</span></span>' +
         '<button class="rw-cta" type="button">' + RC().escapeHtml(cta) + '</button>' +
         '<button class="rw-x" type="button" aria-label="Dismiss">✕</button>';
       card.querySelector('.rw-cta').addEventListener('click', () => { _dismissWelcome(card, today); if (onCta) onCta(); });
-      card.querySelector('.rw-x').addEventListener('click', () => _dismissWelcome(card, today));
+      card.querySelector('.rw-x').addEventListener('click', () => { _dismissWelcome(card, today); applyAttentionCap(); });
       view.insertBefore(card, view.firstChild);
+      applyAttentionCap();   // D1: re-run the one-pulse cap now the card's mode is on screen
     } catch (e) {}
   }
 
@@ -1187,6 +1250,7 @@
       chip.setAttribute('aria-label', label);
       chip.setAttribute('title', label);
       chip.innerHTML = '<span class="rsc-flame" aria-hidden="true">' + _STREAK_FLAME + '</span><span class="rsc-n">' + st.count + '</span>';
+      applyAttentionCap();   // D1: a repaint of the chip re-asserts the one-pulse cap (reclaim owns the pulse → chip hushed)
     } catch (e) {}
   }
 
@@ -1274,6 +1338,10 @@
           mo.observe(menuEl, { attributes: true, attributeFilter: ['class'] });
         }
       } catch (e) {}
+      // B1: the reclaim deltas land ASYNC (endpoint 404s today → usually never). When they DO arrive,
+      // RhythmCatalog dispatches 'rr:reclaim' once — promote the (already-shown) welcome card to the
+      // top-priority reclaim branch a single time. Listen ONCE; the upgrade reuses the one-per-session slot.
+      try { window.addEventListener('rr:reclaim', () => { try { maybeWelcomeCard({ reclaimUpgrade: true }); } catch (e) {} }, { once: true }); } catch (e) {}
     }
     computeCv();
     // GOLDEN BUZZER coverflow rail: reveal its tab ONLY when the backend has flagged winners (else stays hidden →

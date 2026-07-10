@@ -191,6 +191,54 @@
   // it replaces — transfers award ZERO score (no new score sites; the notes_total*1500 ceiling never learns rails
   // exist). Transfer failure resolves through the EXISTING endHoldEarly GRACE/SLIP/DROP bands (one mercy model).
   function RAILS_ON() { try { if (/[?&]rails=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_rails') === '1'; } catch (e) {} return false; }
+  // ---- A2 STARSTRUCK star-phrases (Wave-4b) — DARK behind STARPHRASE_ON. Default OFF → the chart post-pass never
+  // runs, no note carries a phraseId, and the runtime hooks (guarded on phraseId != null) are byte-identical no-ops.
+  // When ON it's PURE LEGIBILITY: clearing a whole star-phrase fires a STARSTRUCK callout + gold burst. It NEVER adds
+  // score, Overdrive charge, or multiplier — OD charge stays EXACTLY per-note (the star charge line is untouched). The
+  // notes_total*1500 ceiling never learns phrases exist. The ceremony IS the reward.
+  function STARPHRASE_ON() { try { if (/[?&]odphrase=1/.test(location.search)) return true; } catch (e) {} try { return localStorage.getItem('rr_odphrase') === '1'; } catch (e) {} return false; }
+  // A2 STARSTRUCK grouping — Fable's ANCHORED rule (SCORING_RULINGS_v2). A STARSTRUCK phrase is the APPROACH RUN that
+  // ENDS at an existing star: from each star, walk BACKWARD collecting eligible preceding notes within PHRASE_WIN, up
+  // to PHRASE_CAP-1 of them, with the star itself the LAST member (so the existing _phraseCredit fires exactly on the
+  // star hit). Runs of >= PHRASE_MIN members become a phrase (each member tagged phraseId + phraseLen). This moves NO
+  // note — it only ADDS the two tags — so the array (count/time/lane/type) is byte-identical to flag-off and the chart
+  // rides at CHART_VERSION 2 (no star is re-placed → no accent forfeits its PERFECT bonus → no ceiling term moves).
+  // ELIGIBLE = plain tap/accent only (holds, rails, chords, bombs, fillers, and other stars are excluded). Stars are
+  // processed LATEST-first and a member already owned by a later phrase is skipped, so phrases never overlap. Operates
+  // on an ASCENDING-by-time array and READS times only — never reorders. Cosmetic tags ONLY: never touches score/OD/mult.
+  const PHRASE_MIN = 3;
+  const PHRASE_WIN = { easy: 6.0, medium: 5.0, hard: 4.0, rift: 4.0 };   // s — approach window before the star
+  const PHRASE_CAP = { easy: 4,   medium: 6,   hard: 8,   rift: 8   };   // max members INCLUDING the star
+  function _tagStarPhrases(arr, diff) {
+    let pid = 0;
+    try {
+      const win = (PHRASE_WIN[diff] != null) ? PHRASE_WIN[diff] : PHRASE_WIN.hard;
+      const cap = (PHRASE_CAP[diff] != null) ? PHRASE_CAP[diff] : PHRASE_CAP.hard;
+      const eligible = (n) => n && (n.type === 'tap' || n.type === 'accent') && !n._fill && !n.chord;
+      const starIdx = [];
+      for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i].type === 'star') starIdx.push(i);
+      for (let s = starIdx.length - 1; s >= 0; s--) {   // latest star first → its approach claims shared notes
+        const si = starIdx[s], star = arr[si], t = star.time;
+        const members = [];                              // preceding eligible notes, nearest→furthest
+        for (let k = si - 1; k >= 0 && members.length < cap - 1; k--) {
+          const n = arr[k];
+          if (!n) continue;
+          if (t - n.time > win) break;                   // outside the approach window (ascending array) → stop
+          if (n.type === 'star') break;                  // the previous star bounds this phrase — don't reach past it
+          if (n.phraseId != null) continue;              // already owned by a later phrase → skip, keep looking back
+          if (!eligible(n)) continue;                    // holds/rails/chords/bombs/fillers are not phrase members
+          members.push(n);
+        }
+        const total = members.length + 1;                // + the star itself (LAST member in time)
+        if (total >= PHRASE_MIN) {
+          pid++;
+          star.phraseId = pid; star.phraseLen = total;
+          for (const m of members) { m.phraseId = pid; m.phraseLen = total; }
+        }
+      }
+    } catch (e) {}
+    return pid;
+  }
   const RAIL_MIN_LEN = 1.0;                                     // s — a rail needs room to read a transfer (spec A1.2)
   const RAIL_DRIFT_MIN = 0.18;                                  // min |centroid drift| for a sustain to qualify as a slide
   const RAIL_MAX_XFER = { easy: 1, medium: 2, hard: 3, rift: 4 };          // max transfers per rail, per difficulty
@@ -416,6 +464,18 @@
   let _g1MissTimes = [];    // G-1: song-time (sec) of every miss/dropped-hold this run → cluster into the worst window
   let _paceSamples = [];    // G-3: cumulative score sampled at 10 evenly-spaced progress points (0..9)
   let _paceBucket = 0;      // G-3: next pace bucket to fill (advances as progress crosses each 10%)
+  // ---- A2 STARSTRUCK star-phrases (Wave-4b, DARK behind rr_odphrase) run-state — reset every run in resetScoring().
+  // Cosmetic ONLY: never read by scoring/OD-charge/mult/accuracy/grade. Off-flag charts carry no phraseId, so both maps
+  // stay empty and the runtime hooks (guarded on phraseId != null) are byte-identical no-ops.
+  let _phraseHit = {};      // phraseId -> count of member STAR notes hit so far this run
+  let _phraseDone = {};     // phraseId -> true once fired (all hit) OR voided (a member missed) — locks the phrase either way
+  // ---- B2 ENCORE CHAIN (Wave-4b) — SESSION-ONLY chain depth (module var; never persisted to career/localStorage). A run
+  // reached via the ENCORE button extends the chain; ANY other launch or a failed run resets it to 0 (see resetScoring +
+  // endGame). The one-time SETLIST badge is the only thing that persists (its own key rr_setlist, never rr_career).
+  let _encoreChain = 0;         // consecutive encores accepted this session → shown as "ENCORE ×n" on the next results
+  let _encoreArmed = false;     // this results screen offered an encore (S/A/FC) with a curated next available
+  let _encoreNext = null;       // the curated next track from RhythmCatalog.encoreNextTrack (null → same-song replay fallback)
+  let _encoreAccepting = false; // set by the ENCORE button so the NEXT run's resetScoring KEEPS (not resets) the chain
   let stability = 1.0;
   let runFailed = false;   // true when the current run ended via the (optional) fail-out
   // build108 (fail-out freeze-frame fix): true for the ~550ms "wipeout beat" between failRun() declaring the run
@@ -2310,9 +2370,17 @@
         }
       } catch (e) {}
     })();
+    // ---- A2 STARSTRUCK star-phrase post-pass (Wave-4b) — DARK behind STARPHRASE_ON (default OFF). Tags each existing
+    // star's APPROACH RUN (the eligible tap/accent notes leading into it, per _tagStarPhrases above) with phraseId +
+    // phraseLen. PURELY a legibility tag: the runtime reads it only to fire a cosmetic STARSTRUCK callout when the whole
+    // run is carried clean into the star — NO score/charge/mult (OD charge stays per-note; NO star is moved/re-placed,
+    // so no accent forfeits its PERFECT bonus). Adds ONLY the two props (never reorders/adds/removes/retypes a note), so
+    // flag ON vs OFF is array-identical → CHART_VERSION 2 safe. Flag OFF → not called, __rrChartStats.phrases is 0.
+    if (STARPHRASE_ON()) { try { _tagStarPhrases(notes, difficulty); } catch (e) {} }
     try {
       window.__rrChartStats = {
         notes: notes.length,
+        phrases: (function () { const s = new Set(); for (const n of notes) if (n.phraseId != null) s.add(n.phraseId); return s.size; })(),   // A2 STARSTRUCK: distinct star-phrases (0 unless rr_odphrase built them)
         emphSpread: (function () { const e = notes.filter(n => typeof n._emph === 'number').map(n => n._emph); return e.length ? +(Math.max.apply(null, e) - Math.min.apply(null, e)).toFixed(3) : 0; })(),
         holds: notes.filter(n => n.type === 'hold').length,   // holds ONLY (rails are counted separately below)
         rails: notes.filter(n => n.type === 'rail').length,   // SLIDE RAILS (0 unless RAILS_ON built them)
@@ -3193,6 +3261,9 @@
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
     wastedInputs = 0;   // build108 s4: reset the display-only sloppiness counter each run
     _g1MissTimes = []; _paceSamples = []; _paceBucket = 0;   // G-1/G-3 results-only trackers → fresh per run
+    _phraseHit = {}; _phraseDone = {};   // A2 STARSTRUCK: phrase completion tracking is per-run (cosmetic; never scoring)
+    // B2 ENCORE CHAIN: a run launched via the ENCORE button (accepting) KEEPS the chain; every other launch resets it to 0.
+    if (_encoreAccepting) { _encoreAccepting = false; } else { _encoreChain = 0; }
     _endingLock = false;   // build108: a fresh run always starts unlocked
     stability = 1.0; particles = []; cameraShake = 0; glitchAmount = 0;
     if (fx) { try { fx.clear(); } catch (e) {} }
@@ -4084,6 +4155,23 @@
       badges.innerHTML = (results.full_combo ? '<span class="rbadge fc">Full Combo</span>' : '')
         + ((results.clutch_count > 0) ? '<span class="rbadge clutch">⚡ CLUTCH ×' + results.clutch_count + '</span>' : '');
     }
+    // ---- B2 ENCORE CHAIN chips ------------------------------------------------------------------------------------
+    // A FAILED run breaks the chain (spec: any fail resets to 0) → no chip. Otherwise, if this run was reached by
+    // accepting an encore (chain >= 1), stamp an "ENCORE ×n" chip; at a chain of 3 also stamp the one-time SETLIST
+    // career badge, reusing the EXISTING .rbadge chip mechanism (like Full Combo / CLUTCH above). The SETLIST badge is
+    // cosmetic status — it persists in its OWN key (rr_setlist), never rr_career, and never touches score. Appended
+    // (not innerHTML-set) so it coexists with FC/CLUTCH here and the NEW BEST / GRADE UP the catalog layer prepends.
+    try {
+      if (results.failed) { _encoreChain = 0; }
+      else if (badges && _encoreChain >= 1) {
+        badges.insertAdjacentHTML('beforeend', '<span class="rbadge clutch" id="rr-encore-chip">🎸 ENCORE ×' + _encoreChain + '</span>');
+        if (_encoreChain >= 3) {
+          let _hadSetlist = false; try { _hadSetlist = localStorage.getItem('rr_setlist') === '1'; } catch (e) {}
+          if (!_hadSetlist) { try { localStorage.setItem('rr_setlist', '1'); } catch (e) {} }
+          badges.insertAdjacentHTML('beforeend', '<span class="rbadge gradeup" id="rr-setlist-badge">★ SETLIST' + (_hadSetlist ? '' : ' — NEW') + '</span>');
+        }
+      }
+    } catch (e) {}
     // build122 p2 — ONE NOTE FROM GLORY (delighter #2): a dedicated near-miss stamp when the run barely
     // missed Full Combo OR barely missed crossing into the next grade. Render-only — reads counts/accPct/
     // grade that are already computed above; never touches scoring/grade itself. Mirrors the existing
@@ -4152,6 +4240,19 @@
       const encEl = $('results-encore'), rep = $('results-replay');
       if (encEl) { encEl.hidden = !encore; encEl.classList.toggle('show', encore); }
       if (rep) { rep.textContent = encore ? '🎸 ENCORE' : 'PLAY AGAIN'; rep.classList.toggle('encore-armed', encore); }
+      // B2 ENCORE CHAIN: on a REAL solo strong finish, ask the catalog for ONE curated next track (peak-end: feed the
+      // catalog while the player is euphoric). Gated to real solo runs via _ratingsTidFor (practice/preview/MP/demo →
+      // null → no curated next → the button stays a same-song replay). Defensive against the getter being absent or
+      // returning null → EXACT fallback to today's same-song replay (no regression, no dead button). No score surface.
+      _encoreArmed = false; _encoreNext = null;
+      try {
+        let _realTid = null; try { _realTid = _ratingsTidFor(results); } catch (e) { _realTid = null; }
+        if (encore && _realTid && window.RhythmCatalog && typeof window.RhythmCatalog.encoreNextTrack === 'function') {
+          let _curId = null; try { _curId = (window.RhythmCatalog.currentTrackId && window.RhythmCatalog.currentTrackId()) || null; } catch (e) { _curId = null; }
+          _encoreNext = window.RhythmCatalog.encoreNextTrack(_curId) || null;
+          _encoreArmed = !!_encoreNext;
+        }
+      } catch (e) { _encoreArmed = false; _encoreNext = null; }
       // build60 FEEL: EVERY non-failed finish now lands a grade-scaled STING under the count-up (a B/C/D used to
       // finish silently — only the encore/S-A branch played one). S/A → the big 6-note run; B/C/D → the softer
       // 4-note arpeggio. A FAILED run stays silent (no reward for a fail-out). playStingSfx is mute/mixer-gated.
@@ -4505,7 +4606,24 @@
   // the bridge state so it can't leak into the next run. No-op when no bridge run is active.
   function _abortBridge() { if (!_bridgeRun && _bridgePrevDiff == null) return; var prev = _bridgePrevDiff; _bridgeRun = false; _bridgePrevDiff = null; if (prev != null) difficulty = prev; try { syncDiffButtons(); } catch (e) {} }
   let lastResults = null;
-  $('results-replay').addEventListener('click', () => { restartGame(); });
+  // B2 ENCORE CHAIN: the shared PLAY AGAIN / ENCORE button. When a strong finish armed an encore AND the catalog gave a
+  // curated next track, accepting LAUNCHES that track and extends the ENCORE ×n chain (peak-end: feed the catalog). Any
+  // other case — no armed encore, no curated next, or a failed launch — falls back to the EXACT same-song replay
+  // (restartGame), so there's never a regression or a dead button. Pure launch + counter; no score surface.
+  function _onReplayClick() {
+    if (_encoreArmed && _encoreNext && window.RhythmCatalog && typeof window.RhythmCatalog.launchTrack === 'function') {
+      const _t = _encoreNext;
+      _encoreArmed = false; _encoreNext = null;              // consume the offer (a second click can't double-launch)
+      _encoreAccepting = true;                                // tell the next run's resetScoring to KEEP the chain
+      _encoreChain = Math.min(_encoreChain + 1, 999);         // extend BEFORE launch so this run's results read the new depth
+      let ok = false; try { ok = !!window.RhythmCatalog.launchTrack(_t); } catch (e) { ok = false; }
+      if (ok) return;
+      // launch failed (unlaunchable track): undo the extend + accept flag, fall back to a same-song replay (no dead button)
+      _encoreChain = Math.max(0, _encoreChain - 1); _encoreAccepting = false;
+    }
+    restartGame();
+  }
+  $('results-replay').addEventListener('click', () => { _onReplayClick(); });
   $('results-menu').addEventListener('click', () => { stopGame(); showScreen('menu'); });
   // SHARE SCORE — the #1 marketing surface. Builds the branded "Signal Card" PNG and shares it
   // (native share sheet WITH the image on mobile/Safari; a brand-styled fallback panel elsewhere).
@@ -4798,6 +4916,54 @@
       setHints: (h, r) => { try { localStorage.setItem('rr_hints', JSON.stringify({ hold: h | 0, rail: r | 0 })); } catch (e) {} return window.__rrDebug.hints(); },   // T7 test lever: seed/clear the learn counters
       // ---- SLIDE RAILS dev hooks (spec A2.5 / A1.3 / A3.3; strip at content-freeze) --------------------------------
       railsOn: (v) => { if (v === undefined) return RAILS_ON(); try { localStorage.setItem('rr_rails', v ? '1' : '0'); } catch (e) {} return RAILS_ON(); },
+      // A2 STARSTRUCK dev hooks (strip at content-freeze): toggle the dark flag + read the live phrase state.
+      odPhraseOn: (v) => { if (v === undefined) return STARPHRASE_ON(); try { localStorage.setItem('rr_odphrase', v ? '1' : '0'); } catch (e) {} return STARPHRASE_ON(); },
+      phrases: () => { const s = new Set(); for (const n of notes) if (n.phraseId != null) s.add(n.phraseId); return { on: STARPHRASE_ON(), count: s.size, tagged: notes.filter(n => n.phraseId != null).length, hit: Object.assign({}, _phraseHit), done: Object.assign({}, _phraseDone) }; },
+      // exercise the SHIPPED ANCHORED _tagStarPhrases on a synthetic approach-run: two taps + an accent leading into a
+      // star (within hard's 4s window) → one phrase of 4, the star LAST; a lone star with no eligible approach → none.
+      starPhraseTest: () => {
+        const mk = (t, ty) => ({ type: ty, time: t });
+        const a = [mk(1.0, 'tap'), mk(1.9, 'tap'), mk(2.7, 'accent'), mk(3.3, 'star'),   // approach run → phrase len 4
+                   mk(9.0, 'hold'), mk(9.5, 'star'),                                       // only a hold precedes → 1 member < min → none
+                   mk(20.0, 'tap'), mk(20.8, 'tap'), mk(21.6, 'star')];                    // approach run → phrase len 3
+        const count = _tagStarPhrases(a, 'hard');
+        return { phrases: count, tags: a.map(n => ({ t: n.time, ty: n.type, pid: n.phraseId == null ? null : n.phraseId, len: n.phraseLen == null ? null : n.phraseLen })) };
+      },
+      // V2-SAFETY PROOF (deterministic): buildNotes has NO Math.random, so rebuilding on the FIXED live `beats` (analyzeBeats
+      // NOT re-run) with the flag OFF then ON yields note arrays that must be IDENTICAL in {time,lane,type} — the only
+      // difference is the added phraseId/phraseLen. Reports the flag-on real-chart phrase count + the array-identity result.
+      phraseV2Proof: (diff) => {
+        const prevDiff = difficulty, hadFlag = STARPHRASE_ON();
+        try {
+          if (diff && DIFF_STEP[diff]) difficulty = diff;
+          const proj = () => notes.map(n => (Math.round(n.time * 1e4) / 1e4) + '|' + n.lane + '|' + n.type);
+          try { localStorage.setItem('rr_odphrase', '0'); } catch (e) {}
+          buildNotes(); const off = proj(); const offPhrases = window.__rrChartStats.phrases; const offTagged = notes.filter(n => n.phraseId != null).length;
+          try { localStorage.setItem('rr_odphrase', '1'); } catch (e) {}
+          buildNotes(); const on = proj(); const onPhrases = window.__rrChartStats.phrases; const onTagged = notes.filter(n => n.phraseId != null).length;
+          let firstDiff = -1; const identical = (off.length === on.length) && off.every((v, i) => { if (v === on[i]) return true; if (firstDiff < 0) firstDiff = i; return false; });
+          const lens = {}; for (const n of notes) if (n.phraseId != null) lens[n.phraseId] = (lens[n.phraseId] || 0) + 1;
+          const lenHist = {}; for (const k in lens) { lenHist[lens[k]] = (lenHist[lens[k]] || 0) + 1; }
+          return { difficulty: difficulty, songSec: window.__rrChartStats.durationSec, count: { off: off.length, on: on.length }, arraysIdentical: identical, firstDiffIndex: firstDiff, offPhrases, offTagged, onPhrases, onTagged, phraseLenHistogram: lenHist };
+        } finally {
+          difficulty = prevDiff;
+          try { localStorage.setItem('rr_odphrase', hadFlag ? '1' : '0'); } catch (e) {}
+          try { buildNotes(); } catch (e) {}   // leave the live chart consistent with the restored flag
+        }
+      },
+      // B2 ENCORE CHAIN dev hooks (strip at content-freeze): read the session-only chain + armed offer, and exercise
+      // the REAL accept path (_onReplayClick) to prove the chain increments + the keep flag arms. encoreTest LAUNCHES a
+      // real run as a side effect (the accepted track) — resetScoring then KEEPS the incremented chain.
+      encore: () => ({ chain: _encoreChain, armed: _encoreArmed, accepting: _encoreAccepting, nextId: (_encoreNext && _encoreNext.id) || null, setlist: (function () { try { return localStorage.getItem('rr_setlist') === '1'; } catch (e) { return false; } })() }),
+      encoreSetChain: (n) => { _encoreChain = Math.max(0, n | 0); return _encoreChain; },   // seed the chain to test the SETLIST-at-3 stamp without 3 real runs
+      encoreTest: () => {
+        var before = _encoreChain;
+        var t = null; try { t = (window.RhythmCatalog && window.RhythmCatalog.encoreNextTrack) ? window.RhythmCatalog.encoreNextTrack(null) : null; } catch (e) {}
+        if (!t) return { skipped: 'no curated next track available' };
+        _encoreArmed = true; _encoreNext = t;
+        _onReplayClick();   // the real handler: extend chain + set keep flag, then launchTrack(next)
+        return { chainBefore: before, chainAfterAccept: _encoreChain, keepFlag: _encoreAccepting, armedConsumed: !_encoreArmed, nextConsumed: !_encoreNext, launchedId: t.id };
+      },
       rail: () => {   // live state of the active rail (the migrating slot)
         for (let l = 0; l < LANE_COUNT; l++) {
           const hn = holdNote[l]; if (!hn || hn.type !== 'rail') continue;
@@ -5525,6 +5691,7 @@
     spawnHitParticles(lane, kind);
     emitFx(kind === 'perfect' ? 'perfect' : 'hit', kind, lane);
     if (target.type === 'star') emitFx('star', kind, lane);   // build8b: star-pickup pop on a surge note
+    _phraseCredit(target);   // A2 STARSTRUCK (dark unless rr_odphrase tagged phrases): count this hit toward its star-phrase — NO-OP when untagged; never scores/charges
     // build8c: chord-bar strike — a strum ripple centered between the chord's lanes (lead note only)
     if (target.chordLead && target.chordLanes && target.chordLanes.length > 1) {
       try { const _cg = fretGeom(); let _cx = 0; for (let _ci = 0; _ci < target.chordLanes.length; _ci++) _cx += _cg.nearX[target.chordLanes[_ci]] || 0;
@@ -5604,6 +5771,11 @@
       laneHitPulse[n.lane] = 1.0; lanePluckT[n.lane] = 0;
       spawnHitParticles(n.lane, 'great');
       emitFx('hit', 'great', n.lane);
+      // A2 STARSTRUCK: a hopo-resolved note is still a HIT, so it must credit its star-phrase. Without this the note is
+      // judged here and therefore skipped by the miss sweep too — so it is neither credited nor voided, and any phrase
+      // whose approach run gets flow-chained can never reach phraseLen (ceremony silently never fires). NO-OP when the
+      // note carries no phraseId (the only state a flag-OFF chart has) → flag-OFF play stays byte-identical.
+      _phraseCredit(n);
       resolved++;
       if (resolved >= 3) break;
     }
@@ -6160,6 +6332,8 @@
 
   function missNote(note) {
     note.judged = true; note.hit = 'miss';
+    _phraseVoid(note);   // A2 STARSTRUCK (dark unless rr_odphrase tagged phrases): a missed member voids its star-phrase — NO-OP when untagged; never scores
+
     // build148 T1 FLOW SHIELD: while Overdrive is LIVE, a missed note does NOT break your combo — it burns ~25%
     // of the OD meter (≈2s of OD time) instead. Bombs are never shielded (they resolve on the bomb path, which keeps
     // its own combo reset). The note still scores 0 and still counts as a miss for accuracy (accW 0), so momentum
@@ -6362,6 +6536,31 @@
     const el = $('judge-flash');
     el.textContent = text; el.style.color = color;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  }
+  // ---- A2 STARSTRUCK runtime (Wave-4b) — DARK behind rr_odphrase. All three are byte-identical NO-OPS when the note
+  // carries no phraseId (the only state a flag-OFF chart ever has), so flag-OFF play is unchanged. A completed phrase
+  // fires a callout + gold burst through the EXISTING flashJudgment / spawnHitParticles / emitFx helpers — no new FX
+  // path, and CRUCIALLY no score / Overdrive charge / multiplier (the ceremony IS the reward; OD stays per-note).
+  function _phraseCredit(note) {
+    if (!note || note.phraseId == null) return;                 // no phrase tag → nothing to do (flag-OFF path)
+    const id = note.phraseId;
+    if (_phraseDone[id]) return;                                // already fired or already voided
+    _phraseHit[id] = (_phraseHit[id] || 0) + 1;
+    if (_phraseHit[id] >= (note.phraseLen || Infinity)) { _phraseDone[id] = true; _fireStarstruck(note.lane); }
+  }
+  function _phraseVoid(note) {
+    if (!note || note.phraseId == null) return;                 // no phrase tag → nothing to void (flag-OFF path)
+    const id = note.phraseId;
+    if (_phraseDone[id]) return;
+    _phraseDone[id] = true;                                     // missing ANY member silently voids it — no callout, no punishment
+  }
+  function _fireStarstruck(lane) {
+    try {
+      _armJudgePriority(520);                                   // protect the ceremony from the next plain GREAT
+      flashJudgment('★ STARSTRUCK', '#ffd98a');                 // brand gold, existing callout system
+      if (typeof lane === 'number' && lane >= 0) { try { spawnHitParticles(lane, 'perfect'); emitFx('star', 'perfect', lane); } catch (e) {} }   // gold burst via existing helpers
+      try { comboGlow = 1; } catch (e) {}                       // flare the strings gold (cosmetic; existing var)
+    } catch (e) {}
   }
   // tiny EARLY / LATE hint under the judgment popup. _signed > 0 = LATE, < 0 = EARLY (seconds).
   // Perfects are dead-on → no tick. Suppressed when the hint setting is off. NEVER affects scoring.
@@ -8119,6 +8318,16 @@
       ctx.strokeStyle = 'rgba(255,122,74,0.85)'; ctx.lineWidth = Math.max(1.2, w * 0.12);
       ctx.shadowColor = '#ff7a4a'; ctx.shadowBlur = 8;
       ctx.beginPath(); ctx.arc(cx, y, w * 0.62, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    // A2 STARSTRUCK phrase-member cue (Fable: "an invisible phrase is a slot machine") — a subtle warm-GOLD rim marks
+    // the approach-run notes that feed a star, so carrying the run clean into the gold gem reads as a deliberate gamble.
+    // Flag-gated BY CONSTRUCTION: only a flag-on chart carries phraseId. Cosmetic; drops once judged; on-brand gold.
+    if (note.phraseId != null && note.type !== 'star' && !note.judged) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(224,169,63,0.6)'; ctx.lineWidth = Math.max(1, w * 0.08);
+      ctx.shadowColor = 'rgba(224,169,63,0.85)'; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(cx, y, w * GEM_K * 0.56, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
     // ---- T6 GRAMMAR: ACCENT SPIKE-RING (spec B3) — 8 short dark-outlined, lane-colored triangular spikes on the

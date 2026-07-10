@@ -2697,10 +2697,160 @@
     }).slice(0, n);
   }
 
+  // ===========================================================================
+  // WAVE-4b DATA LAYER (derived, read-only) — two curated getters the results /
+  // library UIs consume SYNCHRONOUSLY. The reclaim list is backed by an async fetch
+  // that's event-driven (mirrors _capturePlayStats / rr:playstats exactly); the
+  // encore pick is a cheap deterministic scan. Neither touches scoring or any write
+  // path — both fail-soft to []/null and never throw.
+  // ===========================================================================
+
+  // ---- RECLAIM TARGETS (Wave-4b): boards where a rival passed YOUR score since last visit ----
+  // Backing fetch: GET /leaderboard/deltas?since=<unix_ms> (authed, reuses getToken()/api()).
+  // The endpoint is NOT DEPLOYED YET → it 404s today. EVERY failure path (404/401/network/
+  // non-JSON) leaves the cache [] and is SILENT (api() throws on !ok before json-parse; a 200
+  // with non-JSON throws inside api() too — both are swallowed here). Because the fetch is async
+  // but consumers render synchronously, we kick it ONCE (lazily, on the first getReclaimTargets()
+  // call = first library/results view) and, on the FIRST resolve with >=1 sanitized row, dispatch
+  // a window CustomEvent 'rr:reclaim' so the renderer can repaint — the identical pattern to
+  // _capturePlayStats + 'rr:playstats'. Sanitize: whole-number/clamp scores, cap 10 rows, scrub the
+  // passer name (scrubName), drop any row where passerScore<=myScore or the track can't resolve to a
+  // playable (non-video, trackReady) catalog track.
+  var _reclaimCache = [];        // never null — [] until a fetch yields >=1 valid row
+  var _reclaimInflight = false;  // a fetch attempt is currently running — SYNC guard against concurrent bursts (render loops)
+  var _reclaimDone = false;      // a fetch actually reached the endpoint WITH a token — don't repeat (even on a 404/empty)
+  function getReclaimTargets() {
+    if (!_reclaimDone && !_reclaimInflight) { try { _fetchReclaimTargets(); } catch (e) {} }
+    return _reclaimCache.slice();   // defensive copy — always an Array, never null
+  }
+  function _reclaimSince() {
+    // the player's PREVIOUS-visit stamp (ms), via _prevLastVisit (set by _stampLastVisit at boot,
+    // the same stamp lastVisitAgeHours() reads); 7-day fallback on a first-ever visit / unreadable.
+    try { if (_prevLastVisit && isFinite(_prevLastVisit) && _prevLastVisit > 0) return Math.floor(_prevLastVisit); } catch (e) {}
+    return Date.now() - 7 * 24 * 3600 * 1000;
+  }
+  function _resolveReclaimTrack(id) {
+    // resolve an id to a PLAYABLE MUSIC track (catalogTracks is already trackReady + video-stripped);
+    // null → the row gets dropped (can't reclaim a board for a dead / video / unknown track).
+    if (id == null) return null;
+    var sid = String(id), pool = allTracks();
+    for (var i = 0; i < pool.length; i++) { if (pool[i] && String(pool[i].id) === sid) return pool[i]; }
+    return null;
+  }
+  function _sanitizeReclaimRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    var out = [];
+    for (var i = 0; i < rows.length && out.length < 10; i++) {   // cap ~10
+      var r = rows[i]; if (!r || typeof r !== 'object') continue;
+      var tk = _resolveReclaimTrack(r.track_id != null ? r.track_id : r.trackId);
+      if (!tk) continue;                                          // unresolvable / video / dead → drop
+      var myScore = Math.max(0, Math.round(Number(r.my_score != null ? r.my_score : r.myScore) || 0));
+      var passerScore = Math.max(0, Math.round(Number(r.passer_score != null ? r.passer_score : r.passerScore) || 0));
+      if (!(passerScore > myScore)) continue;                    // only genuine overtakes
+      var passer = scrubName(r.passer_name != null ? r.passer_name : (r.passerName != null ? r.passerName : r.display_name));
+      var pAt = Number(r.passed_at != null ? r.passed_at : r.passedAt);
+      if (!isFinite(pAt) || pAt <= 0) pAt = Date.now();
+      out.push({
+        trackId: String(tk.id),
+        trackTitle: String(tk.title || 'Unknown'),
+        myScore: myScore,
+        passerName: passer,
+        passerScore: passerScore,
+        margin: passerScore - myScore,
+        passedAt: pAt,
+      });
+    }
+    return out;
+  }
+  function _fetchReclaimTargets() {
+    if (_reclaimDone || _reclaimInflight) return;   // one real attempt; no concurrent bursts
+    if (!API_BASE) return;                          // no backend → cache stays []
+    _reclaimInflight = true;
+    (async function () {
+      try {
+        var tk = await getToken();
+        if (!tk) return;             // unauthed → cache stays []; leave _reclaimDone FALSE so a later sign-in retries
+        _reclaimDone = true;         // have a token + about to hit the endpoint — count this as the one real attempt (a 404/empty won't re-hammer)
+        var out = await api('/leaderboard/deltas?since=' + _reclaimSince(), { auth: true });
+        var rows = Array.isArray(out) ? out : (out && (out.deltas || out.rows || out.reclaim));   // bare array (real shape) OR a wrapped body — both tolerated
+        var clean = _sanitizeReclaimRows(rows);
+        if (clean.length) {
+          _reclaimCache = clean;
+          // async resolve lands AFTER the synchronous first render — nudge the UI to repaint (mirror of rr:playstats).
+          try { window.dispatchEvent(new CustomEvent('rr:reclaim')); } catch (e) {}
+        }
+      } catch (e) { /* 404 / 401 / network / non-JSON / non-array → fail-soft, cache stays [], no throw, no spam */ }
+      finally { _reclaimInflight = false; }
+    })();
+  }
+
+  // ---- ENCORE (Wave-4b): ONE curated "play this next" track for the results screen ----
+  // Curation over allTracks() (music-only, already trackReady-filtered), priority order:
+  //   same genre  →  BPM within ±10% (bonus filter — applied ONLY when BOTH tracks carry a finite
+  //   numeric bpm; many live rows have none, so it never GATES) → prefer UNPLAYED (no saved best via
+  //   getBest) → prefer decode-confident/playable (_discoverConfident / trackReady). Never a video,
+  //   never the current track. Relax path when strict yields nothing: same-genre-playable, then
+  //   any-playable(-unplayed-first); null if still nothing. Cheap + deterministic (stable hash tiebreak),
+  //   so calling it twice for the same track returns the SAME pick.
+  function encoreNextTrack(currentTrackOrId) {
+    try {
+      var cur = null;
+      if (currentTrackOrId && typeof currentTrackOrId === 'object') cur = currentTrackOrId;
+      else if (currentTrackOrId != null) cur = _resolveReclaimTrack(currentTrackOrId);
+      var curId = cur ? String(cur.id) : (currentTrackOrId != null && typeof currentTrackOrId !== 'object' ? String(currentTrackOrId) : null);
+      var curGenre = cur ? cleanGenre(cur.genre) : '';
+      var curBpm = (cur && typeof cur.bpm === 'number' && isFinite(cur.bpm) && cur.bpm > 0) ? cur.bpm : null;
+
+      var pool = allTracks();
+      if (!pool || !pool.length) return null;
+
+      // playable, non-video, not the current track
+      var base = [];
+      for (var j = 0; j < pool.length; j++) {
+        var t = pool[j];
+        if (!t || t.id == null) continue;
+        if (curId != null && String(t.id) === curId) continue;
+        if (isVideo(t) || !trackReady(t)) continue;
+        base.push(t);
+      }
+      if (!base.length) return null;
+
+      var isUnplayed = function (t) { try { return !getBest(t.id); } catch (e) { return true; } };
+      var confident = function (t) { try { return _discoverConfident(t); } catch (e) { return false; } };
+      var stable = function (t) { return hashStr('encore|' + (curId || '') + '|' + (t.id || t.title || '')); };
+      var pick = function (arr) {
+        if (!arr.length) return null;
+        // decorate once (cheap), then sort deterministically: unplayed-first, then decode-confident, then stable hash.
+        var dec = arr.map(function (t) { return { t: t, u: isUnplayed(t) ? 0 : 1, c: confident(t) ? 0 : 1, h: stable(t) }; });
+        dec.sort(function (a, b) { return (a.u - b.u) || (a.c - b.c) || (a.h - b.h); });
+        return dec[0].t;
+      };
+
+      if (curGenre) {
+        // STRICT: same genre + (bpm within ±10% when both carry a numeric bpm)
+        var strict = base.filter(function (t) {
+          if (cleanGenre(t.genre) !== curGenre) return false;
+          if (curBpm != null && typeof t.bpm === 'number' && isFinite(t.bpm) && t.bpm > 0) {
+            if (Math.abs(t.bpm - curBpm) > curBpm * 0.10) return false;
+          }
+          return true;
+        });
+        var s = pick(strict);
+        if (s) return s;
+        // RELAX 1: same-genre-playable (drop the bpm window)
+        var g = pick(base.filter(function (t) { return cleanGenre(t.genre) === curGenre; }));
+        if (g) return g;
+      }
+      // RELAX 2: any-playable (unplayed-first via pick())
+      return pick(base) || null;
+    } catch (e) { return null; }
+  }
+
   window.RhythmCatalog = {
     onSubmitResult, recordLocal, getCareer, liveProvider, openSheet, launchTrack, mpSettle, mpRoundStart,
     launchBridgeRun, bridgeReady,   // FIRST PULSE (Wave-4): re-launch the current track as an UNRANKED Medium-at-Easy-window bridge run + the offer-card readiness gate
     getLastPlayStats,  // Wave-3: last real run's {percentile,count,trackId,difficulty} off the /plays|/score response (null when absent/offline/older-server) — read-only, results-screen social proof
+    getReclaimTargets, encoreNextTrack,   // Wave-4b: reclaim boards a rival passed since last visit (async fetch → 'rr:reclaim' event; [] unauthed/offline) + one curated "play next" pick (sync, null when nothing) — derived read-only
 
     submitReport,      // build119 p1: LIVE POST /reports (authed), localStorage rr_reports_queue as offline/failure fallback
     flushReportsQueue, // build119 p1: drains rr_reports_queue against the live endpoint — call opportunistically (e.g. after boot/getUser)

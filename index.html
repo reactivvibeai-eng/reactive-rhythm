@@ -37,7 +37,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=461" />
+<link rel="stylesheet" href="jukebox.css?v=462" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -1101,6 +1101,13 @@
   .lbd-diff-row { width: 100%; display: flex; justify-content: center; }
   .lbd-diff-row[hidden] { display: none; }
   .lbd-diff { align-self: center; }
+  /* C2: RIFT segment + the "mixed tiers" honesty sub-label on All. Buttons stack column so the
+     optional sub-label rides under the label; flex-row still equalizes every button's height. */
+  #lbd-diff button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; line-height: 1.05; }
+  #lbd-diff .seg-sub { font-family: 'JetBrains Mono', monospace; font-size: 7.5px; font-weight: 400; letter-spacing: 0.06em; text-transform: none; color: var(--ink-dim); }
+  #lbd-diff button.active .seg-sub { color: rgba(224,218,214,0.75); }
+  /* RIFT trophy = gold (the sanctioned non-crimson accent), set apart from the crimson tiers */
+  #lbd-diff .seg-rift.active { border-color: rgba(224,169,63,0.6); color: #f4d488; background: rgba(224,169,63,0.13); }
   .lbd-banner { width: 100%; font-family: 'Chakra Petch', sans-serif; font-size: 11.5px; letter-spacing: 0.12em; line-height: 1.55; color: #e0a93f; border: 1px solid rgba(224,169,63,0.42);
     background: linear-gradient(180deg, rgba(224,169,63,0.12), rgba(224,169,63,0.04)); border-radius: 13px; padding: 12px 16px;
     box-shadow: inset 0 1px 0 rgba(255,238,200,0.18), 0 10px 26px -16px rgba(0,0,0,0.55), 0 0 18px -10px rgba(224,169,63,0.4);
@@ -7166,10 +7173,11 @@
            filtered Global) — hidden on Level/MP where difficulty doesn't apply. -->
       <div class="lbd-diff-row" id="lbd-diff-row">
         <div class="lbd-diff set-seg" id="lbd-diff">
-          <button data-diff="" class="active">All</button>
+          <button data-diff="" class="active">All<small class="seg-sub">mixed tiers</small></button>
           <button data-diff="easy">Easy</button>
           <button data-diff="medium">Medium</button>
           <button data-diff="hard">Hard</button>
+          <button data-diff="rift" class="seg-rift">Rift</button>
         </div>
       </div>
 
@@ -7892,7 +7900,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=461"></script>
+<script src="telemetry.js?v=462"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8071,17 +8079,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=461"></script>
-<script src="game.js?v=461"></script>
-<script src="procbg.js?v=461"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=461"></script>
-<script src="chat.js?v=461"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=461"></script>
-<script src="goals.js?v=461"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=461"></script>
-<script src="share.js?v=461"></script>
-<script src="replay.js?v=461"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=461"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=462"></script>
+<script src="game.js?v=462"></script>
+<script src="procbg.js?v=462"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=462"></script>
+<script src="chat.js?v=462"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=462"></script>
+<script src="goals.js?v=462"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=462"></script>
+<script src="share.js?v=462"></script>
+<script src="replay.js?v=462"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=462"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -10562,7 +10570,10 @@
     var runs = localRuns().filter(function (r) { return !diff || r.difficulty === diff; });
     if (!runs.length) {
       board.innerHTML = '';
-      showEmpty(diff ? 'No ' + diff + ' scores yet — finish a run and you\'ll appear here.' : 'No scores yet — finish a run and you\'ll appear here.');
+      // C2: RIFT board empty-guard — a branded invitation, never a blank rectangle (the deltas endpoint 404s today).
+      showEmpty(diff === 'rift'
+        ? 'No Rift runs banked yet — play this week’s Weekly Rift to claim the trophy.'
+        : (diff ? 'No ' + diff + ' scores yet — finish a run and you\'ll appear here.' : 'No scores yet — finish a run and you\'ll appear here.'));
       return;
     }
     empty.hidden = true;
@@ -10627,7 +10638,7 @@
     var rows = [];
     diffs.forEach(function (d) { var r = scores[pickTrack.id + '|' + d]; if (r && r.score) rows.push({ d: d, score: r.score, accuracy: r.accuracy, grade: r.grade }); });
     rows.sort(function (a, b) { return b.score - a.score; });
-    if (!rows.length) { board.innerHTML = head; showEmpty('No score on this track yet — play it to set the pace.'); return; }
+    if (!rows.length) { board.innerHTML = head; showEmpty(diff === 'rift' ? 'No Rift run on this track yet — play the Weekly Rift to set the pace.' : 'No score on this track yet — play it to set the pace.'); return; }
     empty.hidden = true;
     // build99k: these are your bests per difficulty — naming every one literally 'You' made the podium read "You/You/You".
     // Label as "Your best" (the difficulty is in `sub`) and only highlight the top one.
@@ -10780,6 +10791,17 @@
       if (tab === 'song' || tab === 'global') render();
     });
   });
+  // C2: default the difficulty row to the player's LAST-PLAYED tier (the engine's persisted rr_diff),
+  // NOT "All" — All silently mixes incomparable note-count ceilings. rr_diff holds easy|medium|hard; if
+  // it matches a segment button, select it (RIFT is opt-in, never auto-selected unless it was last played).
+  try {
+    var _lastDiff = localStorage.getItem('rr_diff') || '';
+    if (_lastDiff) {
+      var _dbtns = $('lbd-diff').children, _match = null;
+      for (var _di = 0; _di < _dbtns.length; _di++) { if ((_dbtns[_di].getAttribute('data-diff') || '') === _lastDiff) { _match = _dbtns[_di]; break; } }
+      if (_match) { diff = _lastDiff; [].forEach.call(_dbtns, function (x) { x.classList.toggle('active', x === _match); }); }
+    }
+  } catch (e) {}
   // picker
   var pk = $('lbd-pick'); if (pk) pk.addEventListener('click', openPicker);
   var sr = $('lbd-search'); var sdt = 0;
