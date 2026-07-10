@@ -453,6 +453,40 @@
     { min: 500, name: 'ASCENDANT', rgb: [255, 255, 252], glow: [226, 206, 184], board: [232, 214, 192] },
   ];
   function comboTierIdx(c) { let i = 0; for (let k = 0; k < COMBO_TIERS.length; k++) { if (c >= COMBO_TIERS[k].min) i = k; } return i; }
+  // ── build168 (R2) HEAT-REACTIVE FRAME ───────────────────────────────────────
+  // The two side HUD panels used to sit at room temperature for a whole run while the center
+  // escalated — the "game in the middle, dashboard on the sides" seam. Now the frame joins the
+  // same warm ladder: ONE custom property + two classes written on #game once per tier CHANGE
+  // (never per frame); every consumer is CSS. Cosmetic — no score path, no motion, no per-frame
+  // cost. At tier 0 the classes are absent and the property is removed, so the frame renders
+  // byte-identical to build167.
+  const TIER_HOT = 2;   // BLAZE — from here up the tier hue outranks a themed level's own accent
+  function _applyTierFrame(ti) {
+    const g = $('game'); if (!g) return;
+    const t = COMBO_TIERS[ti] || COMBO_TIERS[0];
+    if (ti > 0) g.style.setProperty('--rr-tier', t.board.join(','));
+    else g.style.removeProperty('--rr-tier');
+    g.classList.toggle('rr-tier-on', ti > 0);
+    g.classList.toggle('rr-tier-hot', ti >= TIER_HOT);
+    // build168 (R3): the vertical multiplier-gauge label speaks the tier's NAME once the streak earns one.
+    const lab = $('mult-gauge-lab'); if (lab) lab.textContent = ti === 0 ? 'MULTIPLIER' : t.name;
+  }
+  // build168 (R4) BRAND THE PEAK: the wordmark used to exist only as a permanent 10px whisper. It now
+  // stamps the single best moment the game produces — Overdrive ignition — with one gold pulse, then
+  // goes quiet again. Never loops; self-clears; skipped entirely under reduce-motion.
+  let _brandPulseT = 0;
+  function _pulseBrand() {
+    if (reduceMotion) return;
+    const br = document.querySelector('#game .hud-panel.left .brand-row'); if (!br) return;
+    br.classList.remove('od-stamp'); void br.offsetWidth;   // re-ignition inside 1.2s must restart, not no-op
+    br.classList.add('od-stamp');
+    clearTimeout(_brandPulseT);
+    _brandPulseT = setTimeout(function () { try { br.classList.remove('od-stamp'); } catch (e) {} }, 1300);
+  }
+  // build168 (R5): the keyboard legend is tutorial residue after the first few bars. Cached lookup —
+  // updateHUD consults it every frame and must never pay for a querySelector.
+  let _fhEl = null;
+  function _footerHint() { if (!_fhEl) _fhEl = document.querySelector('#game .footer-hint'); return _fhEl; }
   let comboTierCur = 0;   // highest tier reached on the CURRENT streak (resets on break) — gates the cross-up beat
   // The "you entered a new MODE" beat — fired once when the streak crosses up a tier.
   function onComboTierUp(idx, lane) {
@@ -3320,6 +3354,8 @@
 
   function resetScoring() {
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
+    try { _applyTierFrame(0); } catch (e) {}   // build168 R2: a fresh run always starts on a cold frame
+    try { const _fh0 = _footerHint(); if (_fh0) { _fh0._faded = false; _fh0.classList.remove('faded'); } } catch (e) {}   // build168 R5
     _peakCombo = 0; _lastBreakPeak = 0; _clutchCount = 0; _clutchArmed = false;   // build122 p1: CLUTCH per-run state
     _missCursor = 0;   // build60 PERF: fresh run → miss-sweep cursor points at the first (unjudged) note
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
@@ -4617,6 +4653,8 @@
   function pauseGame() {
     if (state !== 'playing' || _endingLock) return;   // build108 review fix (critical): NEVER pause during the fail-out wipeout beat — a pause (Escape/gamepad/blur/visibilitychange all route here) would flip state off 'playing', so the deferred endGame() re-entry guard would silently swallow the only teardown call and strand the failed run (resume then continues it as if it never failed).
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
+    // build168 (R5): the loop stops calling updateHUD while paused → restore the legend here, not there.
+    try { const _fh = _footerHint(); if (_fh) { _fh._faded = false; _fh.classList.remove('faded'); } } catch (e) {}
     // A3: surface this run's timing bias + a one-tap RE-CALIBRATE (deduped every pause; renders nothing below the floor).
     try { _renderPauseCalibration(); } catch (e) {}
     // PRACTICE: the RESTART SECTION action is only meaningful in a practice run — show it there, hide it otherwise.
@@ -5364,6 +5402,7 @@
     flashJudgment('OVERDRIVE', '#ffd98a');
     _scorePop(true);   // build51: big gold score punch when Overdrive engages
     if (odFlame) odFlame.classList.add('active');
+    _pulseBrand();   // build168 R4: the brand rides the peak, not the margins
     // build8: tell a level its big moment landed (Skully kicks the intense backdrop). No-op when unset.
     try { if (window.RhythmLevelFx && window.RhythmLevelFx.onCombo) window.RhythmLevelFx.onCombo(combo, true); } catch (e) {}
     playOverdriveHitSfx();   // build157: real Star-Power slam sample (falls back to the procedural riser if unloaded)
@@ -6862,7 +6901,7 @@
     const mb = $('mult-badge'); if (mb) { mb.textContent = tier + 'x'; if (mb.parentElement) mb.parentElement.classList.toggle('boosted', tier >= 3); }
     const mf = $('mult-fill'); if (mf) mf.style.height = (within * 100) + '%';
     // FEVER readout — lazily injected INTO the existing #mult-gauge (index.html untouched; enriches the multiplier block only).
-    if (!_feverEl) { const _mg = $('mult-gauge'); if (_mg) { const w = document.createElement('div'); w.id = 'mult-fever'; w.style.cssText = "margin-top:5px;text-align:center;line-height:1.1;pointer-events:none;"; w.innerHTML = '<div id="mult-fever-txt" style="font-family:\'Chakra Petch\',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.07em;white-space:nowrap;text-shadow:0 0 6px rgba(255,120,40,0.45);"></div><div style="height:3px;margin:3px auto 0;max-width:52px;border-radius:2px;background:rgba(255,255,255,0.10);overflow:hidden;"><i id="mult-fever-bar" style="display:block;height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,#ff6e46,#ffd98a);box-shadow:0 0 6px rgba(255,150,60,0.6);"></i></div>'; _mg.appendChild(w); _feverEl = w; } }
+    if (!_feverEl) { const _mg = $('mult-gauge'); if (_mg) { const w = document.createElement('div'); w.id = 'mult-fever'; w.style.cssText = "margin-top:5px;text-align:center;line-height:1.1;pointer-events:none;"; w.innerHTML = '<div id="mult-fever-txt" style="font-family:\'Chakra Petch\',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.07em;white-space:nowrap;text-shadow:0 0 6px rgba(255,120,40,0.45);"></div><div style="height:3px;margin:4px auto 0;max-width:62px;border-radius:2px;background:rgba(255,255,255,0.10);overflow:hidden;"><i id="mult-fever-bar" style="display:block;height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,#ff6e46,#ffd98a);box-shadow:0 0 6px rgba(255,150,60,0.6);"></i></div>'; _mg.appendChild(w); _feverEl = w; } }
     if (_feverEl) {
       let _inVs = false; try { const _gEl = document.getElementById('game'); _inVs = !!(_gEl && _gEl.classList.contains('vs-mode')); } catch (e) {}
       _feverEl.style.display = (_inVs || combo < 1) ? 'none' : 'block';
@@ -6909,6 +6948,7 @@
         cd.style.setProperty('--ct-glow', 'rgb(' + _tin.glow.join(',') + ')');
         const _lab = cd.querySelector('.lab');
         if (_lab) _lab.textContent = _ti === 0 ? 'COMBO' : _tin.name;
+        _applyTierFrame(_ti);   // build168 R2/R3: the frame + the gauge label ride the same cross-up
       }
     }
     if (cd) { if (combo >= 10) cd.classList.add('show'); else cd.classList.remove('show'); }
@@ -6917,6 +6957,11 @@
     if (stability < 0.3) stxt = 'COLLAPSING'; else if (stability < 0.6) stxt = 'UNSTABLE';
     else if (stability < 0.85) stxt = 'FLUCTUATING';
     { const _stx = $('stability-text'); if (_stx) _stx.textContent = stxt + ' · ' + Math.floor(stability * 100) + '%'; }
+    // build168 (R5): the A S D J K · ESC · SPACE legend retires 8s into the run. First-timers keep the
+    // full countdown + eight bars of exposure; veterans get their pixels back. Returns on every pause.
+    { const _fh = _footerHint();
+      if (_fh) { const _want = state === 'playing' && songTime() > 8;
+        if (_want !== _fh._faded) { _fh._faded = _want; _fh.classList.toggle('faded', _want); } } }
   }
 
   // ---------- RENDER HELPERS ----------

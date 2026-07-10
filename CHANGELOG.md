@@ -15,6 +15,68 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build168 — the frame joins the game: Fable's in-game UI polish (R2–R5 + §4 deletions)  ✅ every claim proven with a positive control · 0 console errors on a clean instrument  ·  ?v=467
+
+Executes `INGAME_UI_POLISH_v1.md` R2–R5 and its §4 deletions. **R6 (Judgment Log / Vibe Channel) is
+untouched** — Fable flagged it OWNER DECISION REQUIRED because it amends the owner-locked playtest-2
+HUD decree, and neither of us gets to amend that quietly.
+
+Fable's diagnosis of the solo screen: *the game is in the middle and a dashboard is bolted to the
+sides.* The center escalates all run long — strings ignite, catchers catch fire, neck energy climbs
+the named combo ladder — while the two 280px side panels sit at room temperature from first note to
+last. This build makes the frame feel the heat.
+
+**R2 — heat-reactive frame.** `_applyTierFrame(i)` writes ONE custom property (`--rr-tier`, the
+`COMBO_TIERS[i].board` rgb triple) and two classes (`rr-tier-on`, `rr-tier-hot`) onto `#game`, from
+inside the once-per-tier block that already sets `--ct-num`/`--ct-glow`. CSS does the rest: panel
+borders, corner brackets, label diamonds and the brand dot climb the same crimson→ember→gold→chrome
+ladder as the board. **Measured: 0 style/class mutations across combo 1→24, 2 on the cross-up into
+HOT, 0 across combo 26→60** — once per tier change, never per frame. Zero per-frame cost, zero score
+paths, colour only (reduce-motion unaffected). At tier 0 both classes are absent, so the frame is
+byte-identical to build167 — identity comes from the classes being off, not from a fallback that has
+to be trusted. A themed level keeps its own accent through tier 0–1 and yields to the tier hue from
+BLAZE up; that's the two-armed `:is()` selector.
+
+**R3 — FEVER at full voice.** The named-tier ladder — the one thing that keeps climbing after the
+honest ×4 badge caps — was rendering at **9px**, the smallest text on the screen. Now 12px, bar
+52→62px, and the vertical gauge label swaps `MULTIPLIER` → the live tier name.
+
+**R4 — brand the peak, not the margins.** The brand was a permanent 10px URL: a watermark, not a
+brand. `_pulseBrand()` welds it to the best moment the game produces — one gold pulse on the brand
+row at Overdrive ignition, ~1.2s, never looping, never added at all under reduce-motion. Proven on a
+live demo run: the stamp appears 467ms after Space (the ignite ramp), holds 1122ms, self-clears.
+
+**R5 — footer-hint auto-fade.** `A S D J K · ESC · SPACE` sat on screen for every run, forever, for
+every player. It now fades 8s in and returns on every pause.
+
+**§4 deletions.**
+- `meterSheen` — an *infinite* 2.4s gradient sweep. It hung on `.song-progress > i::after`, and there
+  are **three** `.song-progress` elements (progress, Overdrive, stability), so it repainted three
+  layers for a whole run to convey nothing. Measured: the animation census on `#game` drops by exactly
+  **3** (10 → 7). I doubted Fable's "three" and was wrong.
+- Dead `font-family:'Unbounded'` on `.judge-flash` — overridden by `#judge-flash` (Oxanium) since
+  build60. Verified the class only ever appears on that one id'd element.
+- `.val.cyan` → `.val.chrome`; `.calib-cell .n.cyan` → `.n.silver` (both already resolved to warm
+  colours — only the banned-palette *name* was wrong). `.val.green` and `.meta-cell .v.cyan` were
+  referenced by no markup and no script in any file, so they were deleted rather than renamed.
+- Brand-linter stays at **0 violations**.
+
+**Verification notes (for whoever reads this next).** Headless freezes CSS transitions, so a
+synchronous `getComputedStyle` read after a tier change returns the *pre-transition* colour — three
+separate probes read "unchanged" and looked like a broken rule. The rules are correct; proving it
+needs `transition: none` (or a real browser). Two of the repointed properties also happen to *equal*
+their own fallbacks at tier 0, so a naive read is ambiguous in both directions. The positive control
+that actually discriminates: cold `rgba(160,40,46,0.32)` → BLAZE `rgba(255,124,44,0.32)` → ASCENDANT
+`rgba(232,214,192,0.32)`, restoring to cold. Under `rr-reduce-motion` the count of *infinite*
+animations on `#game` is **0**.
+
+**Human-only, still unproven:** whether the heated frame stays readable over bright level videos at
+60fps, and whether the Overdrive brand pulse reads as signature rather than noise.
+
+**Invariants held:** `score +=` = 17 (15 real + 2 comments) · `CHART_VERSION` = 2 · `MAX_MULT` = 4 ·
+no new scoring site · `node --check` clean · spectate/vs-mode untouched (a watcher's local combo is 0,
+so no tier class is ever written on their frame).
+
 ### build167 — pre-launch hardening: 9 confirmed defects + the MP session latch  ✅ every fix verified headlessly with a positive control · 0 console errors on a clean instrument  ·  ?v=466
 
 Two adversarial swarms (27 claims → 13 confirmed; and a 9-defect silent-guest audit) plus a Fable ruling.
