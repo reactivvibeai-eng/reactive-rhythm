@@ -15,6 +15,14 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build178 — F2 reconnect hardening: drop the handle on an explicit MP leave  ·  ?v=477
+
+Adversarial self-review of the build176 F2 reconnect for show-readiness caught one edge: leaving MP via the back
+button from a NORMAL room tore down the channels but never cleared the `rr_room` handle — so a later reload could
+auto-rejoin a room the player had intentionally left. Fixed: the `mp-back` handler now `clearRoom()`s a normal room
+on leave (show rooms already route through `closeRoom` which clears it). Re-verified on the harness: two peers
+converge on build 477, guest seated, `rr_room` persisted, both consoles clean. `node --check` clean, score `+=` 17.
+
 ### build177 — MP reconnect (Fable F3): a host reload HOLDS the opponent's seat — PROVEN  ·  ?v=476
 
 Second half of the reconnect story (F2 was "the reloader auto-rejoins"; F3 is "the OTHER player isn't stranded").
