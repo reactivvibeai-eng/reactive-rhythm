@@ -9,7 +9,8 @@ Publish.** That includes the entire held stack (builds 152→179): the reconnect
 challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
 **Already done for you overnight (verified, no action needed):**
-- ✅ Deploy ref now **`db077bb`** (build181, `?v=480`) — adds the 4 show-critical fixes from the full-system
+- ✅ Deploy ref now **`801ddf1`** (build182, `?v=481`) — adds the VFX-level visual step-up (dawn/weave/ember)
+  on top of build181's 4 show-critical fixes from the full-system
   audit: consent bar no longer covers the mobile tap-zones mid-song (the QR audience!), previews can't play the
   wrong audio, the show host can't be ejected by a forged broadcast, and telemetry survives tab-hide. All
   live-verified. (Includes build179 attach-hardening + build180 telemetry.)
