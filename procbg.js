@@ -392,7 +392,10 @@
     var ambA = (0.05 + bass * 0.10 + comboGlow * 0.06 + (st.od || 0) * 0.06) * calm;
     gA.addColorStop(0, 'rgba(' + amb[0] + ',' + amb[1] + ',' + amb[2] + ',' + clamp(ambA * 2.4, 0, 0.7) + ')');
     gA.addColorStop(0.5, 'rgba(' + amb[0] + ',' + amb[1] + ',' + amb[2] + ',' + clamp(ambA, 0, 0.4) + ')');
-    gA.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gA; ctx.fillRect(-w * 0.06, h * 0.28, w * 1.12, h * 0.78);
+    // build182 (visual QA): fill the FULL overscanned frame — the old rect started at h*0.28, slicing the radial
+    // mid-alpha into a hard full-width SEAM across the frame (caught on capture review). The gradient's own
+    // radius (0.95h from the bottom) reaches zero before the frame top, so the full fill is naturally seamless.
+    gA.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gA; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
     // ground glow — bottom-anchored, subtle (alpha 0.04 + bass·0.12)
     var gr0 = _hslToRgb(_warmHue(0.3, pal, 0), 82, 40);
     var gG = ctx.createLinearGradient(0, h, 0, h * 0.5);
@@ -414,10 +417,27 @@
         ctx.globalAlpha = clamp(hzA, 0, 0.3); ctx.drawImage(smkV, hzx - hzsz, hzY - hzsz, hzsz * 2, hzsz * 2); ctx.globalAlpha = 1;
       }
     }
-    // ROAD — two sagging polylines from the bottom corners to the VP (the drive)
-    ctx.strokeStyle = _hsl(20, 50, 14 + bassN * 8, 0.5); ctx.lineWidth = 2 * _dpr; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-w * 0.04, h * 1.04); ctx.quadraticCurveTo(w * 0.24, h * 0.88, VPX, VPY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(w * 1.04, h * 1.04); ctx.quadraticCurveTo(w * 0.76, h * 0.88, VPX, VPY); ctx.stroke();
+    // ROAD — two sagging rails from the bottom corners toward the VP. build182 (visual QA): the old single-stroke
+    // pair met at the VP as a hard-edged WIREFRAME TRIANGLE apex — it read as a vector glitch, not a road (the
+    // exact "lines and blocks" failure the owner hates). Now each rail is sampled along the same quadratic and
+    // drawn in 6 short segments whose alpha FADES to zero approaching the VP (perspective haze), so the rails
+    // ground the composition then dissolve into the glow. Cost: 12 short strokes vs 2 long (still trivial).
+    ctx.lineCap = 'round';
+    for (var rd = 0; rd < 2; rd++) {
+      var x0r = rd ? w * 1.04 : -w * 0.04, cxr = rd ? w * 0.76 : w * 0.24;
+      var RSEGS = 6, pxr = x0r, pyr = h * 1.04;
+      for (var rq = 1; rq <= RSEGS; rq++) {
+        var tq = rq / RSEGS, uq = 1 - tq;   // quadratic bezier sample: P0=(x0r,1.04h) C=(cxr,0.88h) P1=(VPX,VPY)
+        var qx = uq * uq * x0r + 2 * uq * tq * cxr + tq * tq * VPX;
+        var qy = uq * uq * h * 1.04 + 2 * uq * tq * h * 0.88 + tq * tq * VPY;
+        var ra2 = 0.5 * (1 - tq * tq) * calm; if (tq > 0.83) ra2 = 0;   // last stretch fully dissolves — no apex
+        if (ra2 > 0.02) {
+          ctx.strokeStyle = _hsl(20, 50, 14 + bassN * 8, ra2); ctx.lineWidth = (2.4 - tq * 1.3) * _dpr;
+          ctx.beginPath(); ctx.moveTo(pxr, pyr); ctx.lineTo(qx, qy); ctx.stroke();
+        }
+        pxr = qx; pyr = qy;
+      }
+    }
     // build127: glowing forge COAL BED along the bottom — the SOURCE the embers rise from. Each coal is a warm glow
     // sprite + hot core, flickering on its own phase (bass/beat drive the flare). Fixed positions (pool) → no motion
     // reset → LOOP-SEAMLESS; only brightness breathes. This is the single biggest "give the embers an origin" win.
@@ -556,11 +576,13 @@
     if (_state.whz) return _state.whz;
     var s = document.createElement('canvas'); s.width = s.height = 128;
     var c = s.getContext('2d');
+    // build182 (visual QA): baked ~50% brighter — at the old values the "fabric" was invisible over black and the
+    // loom read as bare graph-paper lines in a void (the owner's "lines and blocks" failure, caught on capture review).
     var g = c.createRadialGradient(64, 64, 4, 64, 64, 78);
-    g.addColorStop(0, 'rgba(60,34,20,0.55)'); g.addColorStop(0.5, 'rgba(38,22,14,0.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    g.addColorStop(0, 'rgba(88,50,30,0.8)'); g.addColorStop(0.5, 'rgba(56,32,20,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(0, 0, 128, 128);
-    // faint warm cross-hatch to read as woven cloth (baked once — not per-frame)
-    c.globalAlpha = 0.10; c.strokeStyle = 'rgba(150,96,56,1)'; c.lineWidth = 1;
+    // warm cross-hatch to read as woven cloth (baked once — not per-frame)
+    c.globalAlpha = 0.16; c.strokeStyle = 'rgba(170,110,64,1)'; c.lineWidth = 1;
     for (var hx = 8; hx < 128; hx += 12) { c.beginPath(); c.moveTo(hx, 0); c.lineTo(hx, 128); c.stroke(); }
     for (var hy = 8; hy < 128; hy += 16) { c.beginPath(); c.moveTo(0, hy); c.lineTo(128, hy); c.stroke(); }
     c.globalAlpha = 1;
@@ -577,6 +599,13 @@
       // WARP threads (xf base + sway phase) that cross the horizontal weft strings into a woven fabric, so the loom
       // fills the frame instead of being a few lonely lines. Nodes are computed inline at draw (no pool needed).
       W = _state.wv = { NS: NS, NW: NW, S: [], warp: [], pulses: [], pi: 0, sweep: -1, sweepCd: 0, swept: 0, dust: [] };
+      // build182 (visual QA): LOOM-LIGHT — a cached warm radial wash behind the loom so the scene has a light
+      // SOURCE instead of pure void (the single biggest "not just lines on black" win; mirrors ember's ambient
+      // forge glow). Built ONLY here at reseed (resize re-dirties _state → rebuilds); drawn as one fill per frame
+      // with live globalAlpha modulation — zero per-frame allocation, inside the path-op budget.
+      var lg = ctx.createRadialGradient(w * 0.5, h * 0.55, h * 0.06, w * 0.5, h * 0.55, h * 0.85);
+      lg.addColorStop(0, 'rgba(122,70,38,0.34)'); lg.addColorStop(0.55, 'rgba(84,46,26,0.18)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+      W.lightG = lg;
       for (var i0 = 0; i0 < NS; i0++) W.S.push({ amp: 0 });
       for (var iw = 0; iw < NW; iw++) W.warp.push({ xf: (iw + 0.5) / NW, ph: Math.random() * 6.28, band: Math.random() });   // xf across the frame, own sway phase, own spectrum band for its shimmer
       for (var p0 = 0; p0 < 3; p0++) W.pulses.push({ on: false, i: 0, x: 0 });                  // max 3 concurrent (ring buffer)
@@ -603,9 +632,16 @@
     ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
     // build127: woven-texture BACKDROP HAZE — 3 overlapping warm cloth patches (source-over, low alpha) behind the
     // loom so the frame reads as fabric, not lonely lines on black. brightens gently with combo (the loom "warms up").
+    // build182: LOOM-LIGHT first — the cached warm radial wash gives the scene a light source (never a void).
+    // Breathes with level/combo/OD via globalAlpha only; the gradient object itself is reseed-cached (no alloc).
+    if (W.lightG) {
+      ctx.globalAlpha = clamp(0.55 + level * 0.35 + comboGlow * 0.30 + (st.od || 0) * 0.25, 0, 1.2) * (1 - missK * 0.35);
+      ctx.fillStyle = W.lightG; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
+      ctx.globalAlpha = 1;
+    }
     if (!lite) {
-      var haze = _weaveHaze(), hzA = 0.22 + comboGlow * 0.22 + level * 0.10;
-      ctx.globalAlpha = clamp(hzA, 0, 0.6);
+      var haze = _weaveHaze(), hzA = 0.30 + comboGlow * 0.25 + level * 0.12;   // build182: +~40% — the fabric must READ
+      ctx.globalAlpha = clamp(hzA, 0, 0.75);
       ctx.drawImage(haze, w * 0.02, h * 0.10, w * 0.5, h * 0.82);
       ctx.drawImage(haze, w * 0.30, h * 0.06, w * 0.55, h * 0.9);
       ctx.drawImage(haze, w * 0.58, h * 0.12, w * 0.5, h * 0.8);
@@ -619,8 +655,8 @@
       var Ss = W.S[si], amp = Math.min(1.4, Math.max(Ss.amp, strum * 1.0));
       var yB = h * (0.14 + 0.76 * Math.pow((si + 1) / NS, 1.25));
       var lit = si >= litFrom;
-      var alpha = (lit ? 0.33 : 0.18) + amp * 0.25 + strum * 0.3;
-      var lightC = 55 + amp * 35 + (lit ? 12 : 0) + strum * 24;     // strum drives lightness → 90+
+      var alpha = (lit ? 0.42 : 0.26) + amp * 0.28 + strum * 0.3;   // build182: string BODY — floors raised so the loom reads at rest, not just when a band spikes
+      var lightC = 58 + amp * 35 + (lit ? 12 : 0) + strum * 24;     // strum drives lightness → 90+
       for (var pass = lite ? 1 : 0; pass < 2; pass++) {             // glow pass (lighter) + pixel-snapped core; lite = core only
         ctx.beginPath();
         for (var g2 = 0; g2 <= SEG; g2++) {
@@ -631,7 +667,7 @@
           if (pass === 1) yy = (yy | 0) + 0.5;                      // 3.0(E) pixel-snap the 1.6px core
           if (g2 === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
         }
-        if (pass === 0) { ctx.strokeStyle = _hsl(38, 80, 60, clamp(0.05 + amp * 0.25, 0, 0.5)); ctx.lineWidth = (5 + amp * 8) * _dpr; }
+        if (pass === 0) { ctx.strokeStyle = _hsl(38, 80, 60, clamp(0.10 + amp * 0.28, 0, 0.55)); ctx.lineWidth = (6 + amp * 8) * _dpr; }   // build182: glow floor 0.05→0.10 + a touch wider — the halo is what makes a string read as LIGHT
         else { ctx.strokeStyle = _hsl(40, 72, clamp(lightC, 30, 96), clamp(alpha, 0, 1)); ctx.lineWidth = 1.6 * _dpr; }
         ctx.stroke();
       }
@@ -663,8 +699,8 @@
     for (var wn = 0; wn < warpN; wn++) {
       var TW = W.warp[wn], spr = 0.06 + 0.88 * TW.xf;                // near layer spans the full frame
       var wv2 = sp[(TW.band * NS) | 0] || 0, wamp = Math.min(1.2, Math.max(wv2 * wv2 * 1.4, strum * 0.6));
-      var wAlpha = (0.10 + 0.10 * warpLit) + wamp * 0.22 + strum * 0.25;
-      var wLight = 44 + wamp * 34 + warpLit * 14 + strum * 22;
+      var wAlpha = (0.15 + 0.12 * warpLit) + wamp * 0.24 + strum * 0.25;   // build182: warp floor up — the crossing threads are half the "woven" read
+      var wLight = 48 + wamp * 34 + warpLit * 14 + strum * 22;
       ctx.strokeStyle = _hsl(36, 66, clamp(wLight, 30, 92), clamp(wAlpha, 0, 0.9)); ctx.lineWidth = (1.2 + wamp * 1.6) * _dpr;
       ctx.beginPath();
       for (var gn = 0; gn <= WSEG; gn++) {
@@ -688,9 +724,9 @@
           var nyB = h * (0.14 + 0.76 * Math.pow((nsi + 1) / NS, 1.25));
           var ntn = clamp((nyB - loomTop) / (loomBot - loomTop), 0, 1);
           var nfan = (nspr - 0.5) * (0.5 + 0.5 * ntn), nx = w * (0.5 + nfan);
-          var na = (0.14 + 0.5 * nodePulse) * (0.5 + 0.5 * (W.S[nsi].amp || 0)); if (na < 0.04) { nodeCount++; continue; }
-          if (nodeGlow && !_soft) { var ngd = (10 + nodePulse * 14) * _dpr; ctx.globalAlpha = clamp(na * 0.5, 0, 0.7); ctx.drawImage(nodeGlow, nx - ngd * 0.5, nyB - ngd * 0.5, ngd, ngd); ctx.globalAlpha = 1; }
-          ctx.fillStyle = _hsl(42, 88, 84, clamp(na, 0, 0.85)); ctx.beginPath(); ctx.arc(nx, nyB, (1.3 + nodePulse * 1.4) * _dpr, 0, 6.2832); ctx.fill();
+          var na = (0.20 + 0.5 * nodePulse) * (0.5 + 0.5 * (W.S[nsi].amp || 0)); if (na < 0.04) { nodeCount++; continue; }   // build182: floor 0.14→0.20 — the jewelled lattice must be visible at rest
+          if (nodeGlow && !_soft) { var ngd = (12 + nodePulse * 16) * _dpr; ctx.globalAlpha = clamp(na * 0.55, 0, 0.7); ctx.drawImage(nodeGlow, nx - ngd * 0.5, nyB - ngd * 0.5, ngd, ngd); ctx.globalAlpha = 1; }
+          ctx.fillStyle = _hsl(42, 88, 84, clamp(na, 0, 0.85)); ctx.beginPath(); ctx.arc(nx, nyB, (1.9 + nodePulse * 1.5) * _dpr, 0, 6.2832); ctx.fill();   // build182: core 1.3→1.9 — a 1px dot vanished at 1080p
           nodeCount++;
         }
       }
@@ -739,12 +775,12 @@
     if (!lite && !_soft) {                                          // dust — 90 slow 1px motes; pt4: _soft watchdog drops this loop first (dust is decorative, cheapest to cut)
       // pt4: DENSITY scales with treble — base floor 0.6 keeps the field visibly full at rest (Backdrop-LAW), audio adds the top ~40% (reuses trebleN, no new plumbing)
       var dustActive = W.dust.length * (0.6 + 0.4 * trebleN);
-      ctx.fillStyle = _hsl(40, 40, 80, clamp(0.1 + trebleN * 0.2, 0, 0.35));
+      ctx.fillStyle = _hsl(40, 40, 82, clamp(0.16 + trebleN * 0.24, 0, 0.42));   // build182: brighter — the motes fill the negative space between strings
       for (var dm = 0; dm < W.dust.length; dm++) {
         if (dm > dustActive) break;
         var Dd = W.dust[dm];
         if (!frozen && !reduce) { Dd.y -= Dd.v * dt * mf * 8; if (Dd.y < 0) { Dd.y = 1; Dd.x = Math.random(); } }
-        ctx.fillRect(((Dd.x * w) | 0) + 0.5, ((Dd.y * h) | 0) + 0.5, _dpr, _dpr);
+        ctx.fillRect(((Dd.x * w) | 0) + 0.5, ((Dd.y * h) | 0) + 0.5, 1.5 * _dpr, 1.5 * _dpr);   // build182: 1px→1.5px (visible at 1080p)
       }
     }
     if (st.cut > 0 && !lite) _shockRing(1 - st.cut, 40, w * 0.5, h * 0.5);   // pt4: restore combo/OD tier-up shockwave into weave's cutaway (matches ember/dawn payoff for consistency)
@@ -798,9 +834,15 @@
     var sunY = HY + h * 0.10 - elev * h * 0.22;
     if (!D.sky || Math.abs(elev - D.skyElev) > 0.03) {              // sky gradient CACHED — rebuilt only on real elevation moves
       D.skyElev = elev;
+      // build182 (visual QA): the atmospheric STRATA now live INSIDE this cached gradient as feathered stops —
+      // the old 4 hard-edged band fillRects produced visible full-width SEAMS across the sky at high elevation
+      // (caught on capture review). Same layered-dawn read, zero seams, and 4 fewer fills per frame.
       var g0 = ctx.createLinearGradient(0, -h * 0.06, 0, HY);
-      g0.addColorStop(0, '#000');                                   // black → warm dark → horizon amber (all warm hues)
+      g0.addColorStop(0, '#000');
+      g0.addColorStop(0.38, _hsl(6 + elev * 10, 46 + elev * 18, 3 + elev * 6, 1));
       g0.addColorStop(0.55, _hsl(8 + elev * 14, 50 + elev * 20, 4 + elev * 9, 1));
+      g0.addColorStop(0.70, _hsl(12 + elev * 15, 56 + elev * 20, 5 + elev * 13, 1));   // strata: each step slightly warmer/brighter
+      g0.addColorStop(0.84, _hsl(16 + elev * 16, 62 + elev * 18, 6 + elev * 18, 1));
       g0.addColorStop(1, _hsl(20 + elev * 16, 70, 8 + elev * 24, 1));
       D.sky = g0;
     }
@@ -811,15 +853,8 @@
     // build127: atmospheric SKY BANDS — 4 stratified warm bands stacked toward the horizon so the sky reads as a
     // living, layered dawn (not one flat fill). Alpha grows with elevation; hue warms band-by-band down to the horizon.
     // Cheap: 4 fillRects, source-over. LOOP-SEAMLESS — no motion, purely elevation-driven (a slow state, not a strobe).
-    if (!lite) {
-      var bandTop = HY - h * 0.34, bandH = (HY - bandTop) / 4;
-      for (var bb = 0; bb < 4; bb++) {
-        var bf = bb / 3;                                            // 0=high, 1=at horizon
-        var bAlpha = (0.06 + 0.14 * bf) * (0.4 + 0.6 * clamp(elev, 0, 1));
-        ctx.fillStyle = _hsl(6 + bf * 22 + elev * 8, 62 + bf * 20, 8 + bf * 16 + elev * 10, bAlpha);
-        ctx.fillRect(-w * 0.06, bandTop + bb * bandH, w * 1.12, bandH + 1);
-      }
-    }
+    // build182: the 4 stratified band fillRects are DELETED — their hard edges were visible full-width seams.
+    // The strata now ride the cached D.sky gradient above as feathered color stops (same read, no seams).
     if (!lite) {                                                    // stars — treble twinkles them, elevation dissolves them
       // pt4: DENSITY scales with live audio, not just per-star twinkle intensity — quiet passages show fewer stars lit,
       // loud passages fill the sky. activeFrac reuses trebleN (existing normalized input, no new plumbing).
@@ -929,7 +964,10 @@
     for (f = 0; f < FL; f++) {
       p = ((f / FL + D.scroll) % 1 + 1) % 1;
       var fy = ((HY + (h - HY) * p * p) | 0) + 0.5;                 // 3.0(E) pixel-snap
-      var halfW = (w * 0.56) * p + w * 0.02;
+      // build182 (visual QA): width rides the SAME p² perspective curve as the y-spacing (was linear p — mid-
+      // distance frets stuck out ~2× beyond the string-rail fan, reading as a TRON grid glued under a separate
+      // fan instead of ONE converging fretboard highway).
+      var halfW = (w * 0.56) * p * p + w * 0.02;
       var isNear = f === nearestI && D.flash > 0.05;
       ctx.strokeStyle = isNear ? _hsl(44, 90, clamp(30 + p * 20 + D.flash * 40, 0, 95), 0.5 + D.flash * 0.4)
                                : _hsl(24, 60, 30 + p * 20, 0.30 + p * 0.28);

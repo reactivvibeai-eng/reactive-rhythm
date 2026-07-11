@@ -15,6 +15,35 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build182 — VFX-levels visual QA: seen, critiqued, stepped up (dawn/weave/ember)  ·  ?v=481
+
+First VISUAL review of the three Tier-I procedural backdrops done by actually LOOKING at them — drove each
+renderer with the `_feed` harness at REST (quiet, tier 0) and PEAK (loud, tier 4 + OD), captured lossless frames,
+and read them as images. Verified before/after with pixel-row seam analysis. All changes are constants + one
+reseed-cached gradient — zero new per-frame allocations, all pools untouched, reduce-motion/lite behavior preserved.
+
+- **EMBER (Ember Drift)** — the two road strokes met at the vanishing point as a hard WIREFRAME TRIANGLE apex
+  (read as a vector glitch, the classic "lines and blocks" failure). The rails are now sampled in 6 fading
+  segments that ground the composition then dissolve into perspective haze before the VP. Also fixed a real
+  full-width SEAM: the ambient forge-glow radial was fillRect-cut at h·0.28 mid-alpha — now fills the overscanned
+  frame so the gradient reaches its natural zero (verified: the y=126 brightness jump is gone from the row scan).
+- **DAWN (First Light)** — the 4 stratified sky-band fillRects produced visible hard horizontal steps across the
+  sky at high elevation; the strata now ride the CACHED sky gradient as feathered color stops (same layered-dawn
+  read, zero seams, 4 fewer fills/frame). And a real geometry bug: fret-line width used a LINEAR p curve while
+  fret spacing used p², so mid-distance frets stuck out ~2× beyond the string-rail fan (a TRON grid glued under a
+  separate fan). Width now rides the same p² — the ground is ONE converging one-point-perspective fretboard.
+- **WEAVE (Steady Hands) — the problem child.** At rest AND peak it was dim graph-paper on a black VOID (the
+  owner's exact historic complaint). Now: a reseed-cached warm LOOM-LIGHT radial wash gives the scene a light
+  source (mirrors ember's forge glow; alpha breathes with level/combo/OD, dims on miss); the woven-cloth haze
+  sprite is baked ~50% brighter with a stronger cross-hatch; weft strings got BODY (alpha floors 0.18/0.33 →
+  0.26/0.42, glow pass floor 0.05→0.10 + wider); warp threads up (0.10→0.15 floor); intersection nodes visible at
+  rest (floor 0.14→0.20, core 1.3→1.9px); dust motes brighter + 1.5px. Verified: the captured frame went from
+  void-with-lines to a warm-lit fabric.
+- Residual P3 (noted, not chased): a ~3% full-width brightness band near the frame top in ember peak captures —
+  possibly an artifact of the synthetic constant-beat test feed; re-check under live audio.
+
+`node --check` clean; score `+=` **17** (game.js untouched). Captures in the session scratchpad (before/after).
+
 ### build181 — full-system audit: the 4 show-critical fixes  ·  ?v=480
 
 A 30-agent adversarially-verified audit (8 area auditors × engine/catalog/MP/UI/satellites/perf/backend/design →
