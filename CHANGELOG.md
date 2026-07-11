@@ -15,6 +15,48 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build171 — cosmetics panel: "the preview IS the renderer" (Fable ruling)  ✅ panel proven live: 16 tiles / 9 inline SVG / 0 `<img>` / 0 console errors  ·  ?v=469
+
+Owner opened Career → COSMETIC UNLOCKS and reacted: *"makes no sense, it doesn't work, looks really sloppily
+done."* He was right. Ground truth (verified in code + live): `assets/cosmetics/` is an **empty folder** — all
+four emblem/frame PNGs **404**, so every Emblem tile fell back to a meaningless flat colour block and Badge
+Frame to an empty box; NOTE COLOR reused the *name*-text preview ("RYO"); NOTE SKIN was a flat rectangle;
+"Undying Ring" was defined twice. Consulted **Fable 5** as creative director (per owner request); Fable ruled
+and found **four more defects** I verified before building:
+1. `notecolor:embertrail` is a **ghost tile** — never granted (goals.js grants `noteskin:embertrail` at XP5).
+2. NOTE COLOR / NOTE SKIN equips were **dead in gameplay** — `rr_equip_*` written by the panel, read by nothing.
+3. `flair:badgeframe_anim` (emblem:null) rendered **nothing live** — renderPlayerName gated flair on a truthy PNG.
+4. the "spin ring" **never spun** — `@keyframes` animated an **unregistered** `--rpn-a` (no `@property`) → a
+   discrete flip, visually frozen. And every emblem/frame `<img>` 404'd on the **live nameplate/leaderboard/MP**
+   too, not just the panel.
+
+**Fable's decree — one renderer.** Every preview is now inline **SVG / pure CSS**, consumed by BOTH the panel
+tile and `renderPlayerName` (nameplate, leaderboard, chat, MP roster). No PNG can 404 again, and this fixes the
+live surfaces for free.
+- **Emblems** → 4 distinct SVG crests: **Ember Spark** (gold 4-point star), **Crimson Slash** (twin chevrons),
+  **Rift Crest** (gold shield + crimson bolt), **Century Laurel** (cream wreath) — renamed from generic titles.
+- **Frames** → pure CSS: **Gilded Frame** (gold plaque) + **Undying Ring** (conic spin — now with the missing
+  `@property --rpn-a` so it *actually rotates*).
+- **NOTE COLOR + NOTE SKIN → merged into "NOTE TRAIL"** (an SVG note-gem + tail per item); the **ghost tile is
+  cut**; equipping one trail clears the sibling so exactly one is active.
+- **Title** → SVG bolts (platform-independent) instead of the ⚡ emoji.
+- Group headers gain **earned counts** (`EMBLEM 4/4`, gold when complete) — a trophy-case read.
+
+**Proven (clean instrument, port 8791):** the panel renders **16 tiles, 9 inline SVG, ZERO `<img>`, zero
+console errors**; groups = `NAME COLOR 4/4 · NAME FONT 2/2 · EMBLEM 4/4 · FRAME 2/2 · NOTE TRAIL 3/3 · TITLE
+1/1`; `renderPlayerName` emits SVG (no img) so emblems/frames show live; `@property --rpn-a` registered; under
+`rr-reduce-motion` **0** infinite animations (3 alive without it). Brand-linter **0** violations (warm palette
+only). game.js untouched → `score +=` 17, `CHART_VERSION` 2, `MAX_MULT` 4 all unchanged.
+
+**Two self-caught bugs while building** (both the same class — a helper called across an IIFE boundary it
+wasn't in scope for): `esc is not defined` and `emblemSvg is not defined`, each surfaced by turning the panel's
+silent `catch(e){}` into a logging catch (kept — a silent swallow is what cost the debugging time). Fixed by
+dropping the needless `esc()` (values are hardcoded literals) and exporting the SVG helpers on `RhythmCosmetics`.
+
+**Still to come (Fable P1, next build):** wire the equipped NOTE TRAIL to actually tint the in-game note
+glow/hit-burst (additive only — never `LANE_COLORS`, never scoring). Until then the trail previews are real but
+the in-game effect is unchanged — the same pre-existing gap, now better presented.
+
 ### build169 — hazard-shapes v1: the bomb wall finally moves  ✅ ceiling invariance proven two ways (300-chart differential + a real-track before/after) · 0 console errors  ·  ?v=468
 
 The owner, after playing Medium: *"there was a couple row of bombs but it wasn't very diverse."* He was

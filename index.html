@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=468" />
+<link rel="stylesheet" href="jukebox.css?v=469" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -876,30 +876,33 @@
     transition: width .7s cubic-bezier(.2,.9,.26,1); }
   html.rr-reduce-motion .pgw-weekly-fill { transition: none; }
   .profile-goals-track { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 8px; margin-top: 10px; }
-  /* cosmetic-tile-specific bits not covered by the cloned .pl-tile family: a colored swatch stand-in
-     for tiles with no thumbnail image (name-color / note-color / flair are procedural, not art assets). */
+  /* build171 (Fable "the preview IS the renderer"): cosmetic previews are inline SVG / pure CSS — every tile
+     DEPICTS the real cosmetic; no PNG can 404. --rpn-a MUST be @property-registered or the conic ring can't
+     interpolate (it was animating an unregistered var → a discrete flip, i.e. visually frozen). */
+  @property --rpn-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
   .pcg-swatch { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
     border-radius: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; }
-  /* build118 p2: grouped labeled sub-rows (NAME COLOR / NAME FONT / EMBLEM / FRAME / …) — reuses the
-     .profile-badges-wrap header rhythm (pg-head) for visual parity, spec item 2 last bullet. */
   .pgt-group + .pgt-group { margin-top: 14px; }
   .pgt-group-label { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; }
-  /* real previews (spec item 2): name-color/name-font tiles render actual sample text, not a flat chip */
-  .pcg-nameprev { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
-    border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506);
-    font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.04em; }
-  .pcg-titleprev { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; color: #f4cf6a; }
-  /* emblem/frame tiles: actual PNG art (owner-generated via Higgsfield) — onerror hides a missing asset
-     cleanly (never a broken-image icon) and falls back to the swatch dot already in the DOM behind it. */
-  .pcg-emblem { position: relative; z-index: 1; width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
-  .pl-thumb:has(.pcg-emblem) { position: relative; }
-  .pl-thumb .pcg-fallback { position: absolute; inset: 0; z-index: 0; opacity: 0; }
-  .pl-thumb.pcg-noart .pcg-fallback, .pcg-noart .pcg-fallback { opacity: 1; }
-  .pcg-frameprev { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
+  .pgt-count { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.06em; color: var(--ink-dim); margin-left: 4px; }
+  .pgt-count.done { color: var(--gold); text-shadow: 0 0 8px rgba(224,169,63,0.4); }
+  /* shared 58px thumb well (name text, note gem, emblem, frame all sit in it) */
+  .pcg-nameprev, .pcg-glyph, .pcg-frameprev { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
     border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506); position: relative; }
-  .pcg-frameprev img { width: 40px; height: 40px; object-fit: contain; }
-  /* animated frame tier — PURE CSS rotating conic-gradient ring, zero asset (spec item 2, "Animated Tiers") */
+  .pcg-nameprev { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 15px; letter-spacing: 0.04em; }
+  .pcg-titleprev { gap: 4px; padding: 0 6px; }
+  .pcg-titletxt { font-size: 10px; letter-spacing: 0.08em; color: #f4cf6a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pcg-bolt { width: 11px; height: 11px; flex: 0 0 auto; }
+  /* emblem / note-gem — inline SVG, sized + softly shadowed */
+  .pcg-glyph svg { width: 46px; height: 46px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55)); }
+  .pcg-fx-pulse svg { animation: pcgPulse 2.4s ease-in-out infinite; transform-origin: 50% 50%; }
+  .pcg-fx-shimmer svg { animation: pcgShimmer 3s ease-in-out infinite; }
+  @keyframes pcgPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  @keyframes pcgShimmer { 0%,100% { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55)) brightness(1); } 50% { filter: drop-shadow(0 0 8px rgba(224,169,63,0.55)) brightness(1.18); } }
+  /* frame previews — a small "RYO" inside a real frame treatment */
+  .pcg-frameprev-nm { position: relative; z-index: 1; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: 0.04em; color: var(--ink); }
+  .pcg-frame-gilded { box-shadow: inset 0 0 0 1.5px var(--gold), inset 0 0 10px rgba(224,169,63,0.18), 0 0 8px rgba(224,169,63,0.12); }
   .pcg-frameprev.pcg-frame-spin::before { content: ''; position: absolute; width: 46px; height: 46px; border-radius: 50%;
     background: conic-gradient(from var(--rpn-a, 0deg), var(--gold), var(--crimson), var(--gold));
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
@@ -907,21 +910,24 @@
     animation: rr-frame-spin 3.2s linear infinite; }
   .pcg-frameprev.pcg-frame-spin.locked::before { opacity: 0.35; animation-play-state: paused; }
   @keyframes rr-frame-spin { to { --rpn-a: 360deg; } }
-  html.rr-reduce-motion .pcg-frameprev.pcg-frame-spin::before { animation: none; }
+  html.rr-reduce-motion .pcg-frameprev.pcg-frame-spin::before,
+  html.rr-reduce-motion .pcg-fx-pulse svg, html.rr-reduce-motion .pcg-fx-shimmer svg { animation: none; }
+  /* locked tiles dim as a group (CSS-driven — no branch threads an inline filter) */
+  .pl-tile.locked .pcg-nameprev, .pl-tile.locked .pcg-glyph, .pl-tile.locked .pcg-frameprev, .pl-tile.locked .pcg-swatch { filter: grayscale(0.6) brightness(0.55); }
   /* ---- renderPlayerName() output — shared across MP roster / chat / VS-bar / leaderboard rows ---- */
   .rpn { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
   .rpn-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 0.85em; color: #f4cf6a; letter-spacing: 0.02em; }
   .rpn-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .rpn-flair { width: 1.1em; height: 1.1em; object-fit: contain; vertical-align: -0.15em; flex: 0 0 auto; }
-  .rpn-frame { position: relative; display: inline-flex; align-items: center; padding: 1px 4px; border-radius: 999px; }
-  .rpn-frame-art { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); object-fit: fill; pointer-events: none; z-index: 0; }
+  .rpn-flair { width: 1.15em; height: 1.15em; display: inline-flex; vertical-align: -0.2em; flex: 0 0 auto; }
+  .rpn-flair svg { width: 100%; height: 100%; }
+  .rpn-frame { position: relative; display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 999px; }
   .rpn-frame > .rpn { position: relative; z-index: 1; }
+  .rpn-frame-gilded { box-shadow: inset 0 0 0 1px var(--gold), 0 0 5px rgba(224,169,63,0.22); }
   .rpn-frame-spin::before { content: ''; position: absolute; inset: -3px; border-radius: 999px;
     background: conic-gradient(from var(--rpn-a, 0deg), var(--gold), var(--crimson), var(--gold));
     -webkit-mask: linear-gradient(#000, #000) content-box, linear-gradient(#000, #000);
     -webkit-mask-composite: xor; mask-composite: exclude; padding: 1.5px; animation: rr-frame-spin 3.2s linear infinite; z-index: 0; }
   html.rr-reduce-motion .rpn-frame-spin::before { animation: none; }
-  .rpn-frame.rpn-frame-noart::before { padding: 0; -webkit-mask: none; mask: none; background: none; border: 1px solid rgba(224,169,63,0.4); animation: none; }
   @media (max-width: 560px) { .profile-stats { grid-template-columns: repeat(2, 1fr); } .profile-title { font-size: 36px; } }
 
   /* ============ LEVELS (tiered Level Select) ============ */
@@ -8040,7 +8046,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=468"></script>
+<script src="telemetry.js?v=469"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8219,17 +8225,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=468"></script>
-<script src="game.js?v=468"></script>
-<script src="procbg.js?v=468"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=468"></script>
-<script src="chat.js?v=468"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=468"></script>
-<script src="goals.js?v=468"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=468"></script>
-<script src="share.js?v=468"></script>
-<script src="replay.js?v=468"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=468"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=469"></script>
+<script src="game.js?v=469"></script>
+<script src="procbg.js?v=469"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=469"></script>
+<script src="chat.js?v=469"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=469"></script>
+<script src="goals.js?v=469"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=469"></script>
+<script src="share.js?v=469"></script>
+<script src="replay.js?v=469"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=469"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8370,9 +8376,11 @@
     { id: 'rare_crimson', title: 'Rare Crimson',  swatch: '#ff2e43', unlockHint: 'Reach XP Level 12' },
     { id: 'whitehot',     title: 'White Hot',     swatch: '#fdf6e3', unlockHint: '60-day streak' }
   ];
+  // build171 (Fable ruling): `notecolor:embertrail` CUT — it was a ghost tile, never granted (goals.js grants
+  // noteskin:embertrail at XP5, only notecolor:embertrail_perm at streak14). NOTE COLOR + NOTE SKIN now merge
+  // into one "NOTE TRAIL" panel group (renderGoalsTrack) — ids/types unchanged for grant/ownership compat.
   var NOTE_COLORS = [
-    { id: 'embertrail',      title: 'Embertrail Notes', swatch: '#ff9a4a', unlockHint: 'Reach XP Level 5' },
-    { id: 'embertrail_perm', title: 'Embertrail Perm',  swatch: '#ffb066', unlockHint: '14-day streak' }
+    { id: 'embertrail_perm', title: 'Everburn Trail',  swatch: '#ffb066', unlockHint: '14-day streak' }
   ];
   // build118 p2 (NEW): name-font tiles — pure CSS font-family swap, no assets. Distinct display faces from the
   // base brand fonts (Oxanium/Chakra Petch/Unbounded) — opt-in cosmetics only, never used in base UI chrome.
@@ -8380,26 +8388,61 @@
     { id: 'rajdhani', title: 'Rajdhani Display', family: "'Rajdhani', sans-serif", unlockHint: 'Reach XP Level 10' },
     { id: 'orbitron', title: 'Orbitron Display',  family: "'Orbitron', sans-serif", unlockHint: '21-day streak' }
   ];
+  // build171 (Fable ruling "the preview IS the renderer"): emblems are now inline SVG (emblemSvg by id), not
+  // PNGs — the whole assets/cosmetics/*.png set 404'd (folder empty), so every tile fell back to a flat colour
+  // block AND every emblem was invisible on live nameplates/leaderboard/MP. SVG can never 404. Titles renamed to
+  // distinct crest identities; ids UNCHANGED (they key rr_bonus_owns + the goals.js grant tables). fx = a
+  // reduce-motion-gated ambient flourish on the emblem.
   var FLAIRS = [
-    { id: 'badgeframe_anim', title: 'Animated Frame', swatch: '#e0a93f', unlockHint: 'Reach XP Level 8', emblem: null },
-    { id: 'accent_decal',    title: 'Accent Decal',   swatch: '#ff2a38', unlockHint: '30-day streak', emblem: 'assets/cosmetics/emblem_accent_decal.png' },
-    { id: 'animated_badge',  title: 'Animated Badge', swatch: '#e0a93f', unlockHint: 'Reach XP Level 20', emblem: 'assets/cosmetics/emblem_ember.png' },
-    { id: 'undying_ring',    title: 'Undying Ring',   swatch: '#fdf6e3', unlockHint: '100-day streak', emblem: 'assets/cosmetics/emblem_undying_ring.png' }
+    { id: 'badgeframe_anim', title: 'Ember Spark',    swatch: '#e0a93f', unlockHint: 'Reach XP Level 8',  fx: 'pulse' },
+    { id: 'accent_decal',    title: 'Crimson Slash',  swatch: '#ff2a38', unlockHint: '30-day streak' },
+    { id: 'animated_badge',  title: 'Rift Crest',     swatch: '#e0a93f', unlockHint: 'Reach XP Level 20', fx: 'shimmer' },
+    { id: 'undying_ring',    title: 'Century Laurel',  swatch: '#fdf6e3', unlockHint: '100-day streak' }
   ];
-  // build118 p2 (NEW): frame/ring tiles — border around avatar+name. badgeframe = static ring art (PNG,
-  // transparent center); the two "anim"/prestige tiers use a pure-CSS rotating conic-gradient (no asset).
+  // frame/ring tiles — border around avatar+name. Both now PURE CSS (no PNG): 'gilded' = static gold plaque,
+  // 'spin' = rotating conic ring (needs the @property --rpn-a registration in CSS to actually rotate).
   var FRAMES = [
-    { id: 'badgeframe',   title: 'Badge Frame',   unlockHint: 'Reach XP Level 18', art: 'assets/cosmetics/frame_badgeframe.png' },
-    { id: 'undying_ring', title: 'Undying Ring Frame', unlockHint: '45-day streak', anim: 'spin' }
+    { id: 'badgeframe',   title: 'Gilded Frame',  unlockHint: 'Reach XP Level 18', style: 'gilded' },
+    { id: 'undying_ring', title: 'Undying Ring',  unlockHint: '45-day streak', anim: 'spin' }
   ];
   var NOTE_SKINS = [
-    { id: 'embertrail',   title: 'Embertrail Skin',  swatch: '#ff9a4a', unlockHint: 'Reach XP Level 5' },
-    { id: 'exclusive_15', title: 'Exclusive Skin',   swatch: '#f0c870', unlockHint: 'Reach XP Level 15' }
+    { id: 'embertrail',   title: 'Embertrail',   swatch: '#ff9a4a', unlockHint: 'Reach XP Level 5' },
+    { id: 'exclusive_15', title: 'Molten Gold',  swatch: '#f0c870', unlockHint: 'Reach XP Level 15' }
   ];
   // prestige title tag — id kept in sync with goals.js RhythmGoals.PRESTIGE_ITEM ('title:rift_legend').
   var TITLES = [
     { id: 'rift_legend', title: 'Rift Legend', prefix: '⚡ RIFT LEGEND ⚡', unlockHint: 'XP Level 20 + 100-day streak' }
   ];
+
+  // ---- build171 (Fable "the preview IS the renderer"): inline-SVG cosmetics — ONE source of truth consumed by
+  // both the panel tile (cosmeticTilePreview) and the live nameplate (renderPlayerName). Warm brand palette only
+  // (crimson #ff2e43 · gold #e0a93f · chrome #ece7e3 · cream #fdf6e3 · warm-dark #1a0a08). Solid fills, no <defs>
+  // gradients → no cross-instance id collisions when the same emblem renders in a tile AND on a pill at once. ----
+  var _EMBLEM_SVG = {
+    // Ember Spark — 4-point gold star, crimson core, chrome edge
+    badgeframe_anim: '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 3 L28.5 19.5 L45 24 L28.5 28.5 L24 45 L19.5 28.5 L3 24 L19.5 19.5 Z" fill="#e0a93f"/><path d="M24 3 L28.5 19.5 L45 24 L28.5 28.5 L24 45 L19.5 28.5 L3 24 L19.5 19.5 Z" fill="none" stroke="#ece7e3" stroke-width="0.9" stroke-opacity="0.65"/><circle cx="24" cy="24" r="5" fill="#ff2e43"/><circle cx="24" cy="24" r="5" fill="none" stroke="#ffd9c2" stroke-width="0.8" stroke-opacity="0.6"/></svg>',
+    // Crimson Slash — two chevrons, crimson body + dark under-edge + chrome glint
+    accent_decal: '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><g transform="rotate(-20 24 24)" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M13 13 L25 24 L13 35" stroke="#7a0d15" stroke-width="6.5"/><path d="M23 13 L35 24 L23 35" stroke="#7a0d15" stroke-width="6.5"/><path d="M13 13 L25 24 L13 35" stroke="#ff2a38" stroke-width="4"/><path d="M23 13 L35 24 L23 35" stroke="#ff2a38" stroke-width="4"/><path d="M13.5 14 L24 23" stroke="#ece7e3" stroke-width="1" stroke-opacity="0.55"/></g></svg>',
+    // Rift Crest — gold shield, warm-dark fill, crimson bolt
+    animated_badge: '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M24 4 L40 9 V24 C40 34 33 40 24 44 C15 40 8 34 8 24 V9 Z" fill="#1a0a08" stroke="#e0a93f" stroke-width="2"/><path d="M24 4 L40 9 V24 C40 34 33 40 24 44 C15 40 8 34 8 24 V9 Z" fill="none" stroke="#ffe6b0" stroke-width="0.7" stroke-opacity="0.4"/><path d="M26 13 L17 26 H23 L21 36 L32 21 H25 Z" fill="#ff2e43"/></svg>',
+    // Century Laurel — two cream leaf arcs + gold berries (organic, vs the geometric ring frame)
+    undying_ring: '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><g stroke="#fdf6e3" stroke-width="2" fill="none" stroke-linecap="round"><path d="M16 40 C7 33 6 20 12 9"/><path d="M32 40 C41 33 42 20 36 9"/></g><g stroke="#fdf6e3" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.9"><path d="M12 14 C8 15 6 18 6 21"/><path d="M13 21 C9 22 7 25 7 28"/><path d="M15 28 C11 29 10 32 10 35"/><path d="M36 14 C40 15 42 18 42 21"/><path d="M35 21 C39 22 41 25 41 28"/><path d="M33 28 C37 29 38 32 38 35"/></g><circle cx="24" cy="10" r="2.4" fill="#e0a93f"/><circle cx="19" cy="12" r="1.6" fill="#e0a93f"/><circle cx="29" cy="12" r="1.6" fill="#e0a93f"/></svg>'
+  };
+  function emblemSvg(id) { return _EMBLEM_SVG[id] || _EMBLEM_SVG.badgeframe_anim; }
+  // note-trail gem — gem right-of-centre + tail streaming left (reads as motion in a landscape tile); mirrors the
+  // in-game gem (rim + top-left highlight). variant tweaks the tail so the three trails are distinct beyond hue.
+  function noteGemSvg(color, variant) {
+    var tail;
+    if (variant === 'embertrail_perm') tail = '<path d="M32 24 L4 19 L11 24 L4 29 Z" fill="' + color + '" fill-opacity="0.5"/><circle cx="12" cy="15" r="1.5" fill="#e0a93f"/><circle cx="7" cy="24" r="1.5" fill="#e0a93f"/><circle cx="12" cy="33" r="1.5" fill="#e0a93f"/>';
+    else if (variant === 'exclusive_15') tail = '<path d="M31 24 L9 20 L15 24 L9 28 Z" fill="' + color + '" fill-opacity="0.55"/>';
+    else tail = '<path d="M31 24 L12 20 L17 24 L12 28 Z" fill="' + color + '" fill-opacity="0.55"/>';
+    var facets = variant === 'exclusive_15' ? '<path d="M27 19 L37 29 M37 19 L27 29" stroke="#ece7e3" stroke-width="1" stroke-opacity="0.55"/>' : '';
+    return '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true">' + tail +
+      '<circle cx="32" cy="24" r="9" fill="' + color + '"/>' +
+      '<circle cx="32" cy="24" r="9" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="1.4"/>' +
+      facets + '<circle cx="29" cy="21" r="2.6" fill="#ffffff" fill-opacity="0.55"/></svg>';
+  }
+  function boltSvg() { return '<svg viewBox="0 0 24 24" class="pcg-bolt" aria-hidden="true"><path d="M13 2 L4 14 H11 L10 22 L20 9 H13 Z" fill="#f4cf6a"/></svg>'; }
 
   function ownsCosmetic(itemType, id) {
     try { var C = window.RhythmCatalog; if (C && C.ownsItem && C.ownsItem(itemType, id)) return true; } catch (e) {}
@@ -8445,16 +8488,17 @@
     if (opts.compact) return '<span class="rpn rpn-compact">' + nameHtml + '</span>';
 
     var prefixHtml = titleOn ? '<span class="rpn-title">' + esc(byId(TITLES, 'rift_legend').prefix) + '</span> ' : '';
+    // build171: emblem is now inline SVG (same source as the panel tile) — renders everywhere the name renders
+    // (roster/chat/VS-bar/leaderboard), and can never 404. Drop the emblem-truthy gate so Ember Spark shows too.
     var flairRow = flairId ? byId(FLAIRS, flairId) : null;
-    // onerror hides a missing emblem PNG (owner is still generating these via Higgsfield) — never a broken-image icon.
-    var flairHtml = (flairRow && flairRow.emblem) ? ' <img class="rpn-flair" src="' + esc(flairRow.emblem) + '" alt="" onerror="this.style.display=\'none\'">' : '';
+    var flairHtml = flairRow ? ' <span class="rpn-flair">' + emblemSvg(flairRow.id) + '</span>' : '';
 
     var out = '<span class="rpn">' + prefixHtml + nameHtml + flairHtml + '</span>';
     var frameRow = frameId ? byId(FRAMES, frameId) : null;
     if (frameRow) {
-      var frameCls = 'rpn-frame' + (frameRow.anim === 'spin' ? ' rpn-frame-spin' : '');
-      var frameArt = frameRow.art ? '<img class="rpn-frame-art" src="' + esc(frameRow.art) + '" alt="" onerror="this.parentNode.classList.add(\'rpn-frame-noart\')">' : '';
-      out = '<span class="' + frameCls + '">' + frameArt + out + '</span>';
+      // both frames are pure CSS now: spin ring or static gilded plaque (no PNG art).
+      var frameCls = 'rpn-frame ' + (frameRow.anim === 'spin' ? 'rpn-frame-spin' : 'rpn-frame-gilded');
+      out = '<span class="' + frameCls + '">' + out + '</span>';
     }
     return out;
   }
@@ -8465,6 +8509,9 @@
     owns: ownsCosmetic, equipped: equippedCosmetic, equip: equipCosmetic, byId: byId,
     hasPrestigeTitle: hasPrestigeTitle,
     renderPlayerName: renderPlayerName,
+    // build171: SVG helpers exported so the SEPARATE profile IIFE's panel (cosmeticTilePreview) uses the exact same
+    // renderer as the nameplate — "the preview IS the renderer". (They're private to this IIFE otherwise.)
+    emblemSvg: emblemSvg, noteGemSvg: noteGemSvg, boltSvg: boltSvg,
     // fields() — the 4 peer-visible cosmetic fields for MY current equips, ready to spread into an outgoing
     // MP presence / chat payload. Empty-string fields are omitted-equivalent (renderPlayerName treats '' as falsy).
     fields: function () {
@@ -8572,7 +8619,7 @@
     renderLoadout();
     renderBadges();
     try { renderXpSection(); } catch (e) {}   // build110 Phase 5: level chip + XP bar + Recent XP feed (review: isolate — an uncaught throw here propagates out of render()→open() and screen.classList.add('active') never runs, so clicking the profile icon would silently do nothing)
-    try { renderGoalsTrack(); } catch (e) {}  // build110 Phase 5: weekly goal strip + cosmetic milestone track (same isolation)
+    try { renderGoalsTrack(); } catch (e) { try { console.warn('[rr] goals track render skipped:', e && e.message || e); } catch (_) {} }  // build110 Phase 5: weekly goal strip + cosmetic milestone track (isolated; build171: log instead of silent-swallow)
   }
   // build110 Phase 5 (spec §2.2): level chip + XP bar (own bar, doesn't touch pn-rankbar/RANK_FLOORS)
   // + the "Recent XP" transparency feed (last 5 entries from rr_xp.log).
@@ -8605,48 +8652,71 @@
   // spin. Grouped into labeled .pgt-group sub-rows (reuses .profile-badges grid pattern for visual parity).
   function cosmeticUnlocked(itemType, id) { var RC = window.RhythmCosmetics; return !!(RC && RC.owns(itemType, id)); }
   function equippedCosmetic(itemType) { var RC = window.RhythmCosmetics; return RC ? RC.equipped(itemType) : ''; }   // kept as a thin local alias — other code in this IIFE may still call it by this name
-  // one tile's preview content, branched by category — real preview, never a flat color chip alone.
+  // build171 (Fable): one tile's preview — EVERY category now DEPICTS the real cosmetic (SVG emblem, note gem,
+  // CSS frame), never a flat colour block or a wrong-type "RYO". Locked dimming is CSS-driven (.pl-tile.locked …)
+  // so no branch threads an inline filter. `.locked` on the spin frame only pauses its animation.
   function cosmeticTilePreview(itemType, s, locked) {
-    var dim = locked ? ';filter:grayscale(0.6) brightness(0.6)' : '';
-    if (itemType === 'namecolor' || itemType === 'notecolor') {
-      return '<span class="pcg-nameprev" style="color:' + s.swatch + dim + '">RYO</span>';
+    if (itemType === 'namecolor') {
+      return '<span class="pcg-nameprev" style="color:' + s.swatch + ';text-shadow:0 0 12px ' + s.swatch + '99">RYO</span>';
     }
     if (itemType === 'namefont') {
-      return '<span class="pcg-nameprev" style="font-family:' + s.family + dim + '">RYO</span>';
+      return '<span class="pcg-nameprev" style="font-family:' + s.family + '">RYO</span>';
     }
-    if (itemType === 'noteskin') {
-      return '<span class="pcg-swatch" style="background:' + s.swatch + dim + '"></span>';
+    var RC = window.RhythmCosmetics || {};   // SVG helpers live in the OTHER (cosmetics-catalog) IIFE — reach them via the export.
+    if (itemType === 'noteskin' || itemType === 'notecolor') {
+      return '<span class="pcg-glyph">' + RC.noteGemSvg(s.swatch, s.id) + '</span>';
     }
     if (itemType === 'flair') {
-      if (s.emblem) return '<img class="pcg-emblem" src="' + s.emblem + '" alt="" style="' + (locked ? 'filter:grayscale(0.6) brightness(0.6)' : '') + '" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'pcg-noart\')">' +
-        '<span class="pcg-swatch pcg-fallback" style="background:' + s.swatch + dim + '"></span>';
-      return '<span class="pcg-swatch" style="background:' + s.swatch + dim + '"></span>';
+      return '<span class="pcg-glyph' + (s.fx ? ' pcg-fx-' + s.fx : '') + '">' + RC.emblemSvg(s.id) + '</span>';
     }
     if (itemType === 'frame') {
-      var spin = s.anim === 'spin' ? ' pcg-frame-spin' : '';
-      var art = s.art ? '<img class="pcg-emblem" src="' + s.art + '" alt="" style="' + (locked ? 'filter:grayscale(0.6) brightness(0.6)' : '') + '" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'pcg-noart\')">' : '';
-      return '<span class="pcg-frameprev' + spin + (locked ? ' locked' : '') + '">' + art + '</span>';
+      var fcls = s.anim === 'spin' ? ' pcg-frame-spin' : ' pcg-frame-gilded';
+      return '<span class="pcg-frameprev' + fcls + (locked ? ' locked' : '') + '"><span class="pcg-frameprev-nm">RYO</span></span>';
     }
     if (itemType === 'title') {
-      return '<span class="pcg-nameprev pcg-titleprev"' + (locked ? ' style="' + dim.slice(1) + '"' : '') + '>' + (s.prefix || s.title) + '</span>';
+      return '<span class="pcg-nameprev pcg-titleprev">' + RC.boltSvg() + '<span class="pcg-titletxt">' + s.title + '</span>' + RC.boltSvg() + '</span>';
     }
-    return '<span class="pcg-swatch" style="background:' + (s.swatch || '#666') + dim + '"></span>';
+    return '<span class="pcg-swatch" style="background:' + (s.swatch || '#666') + '"></span>';
   }
-  function renderCosmeticGroup(itemType, list) {
-    return list.map(function (s) {
-      var on = equippedCosmetic(itemType) === s.id;
-      var locked = !cosmeticUnlocked(itemType, s.id);
-      return '<button class="pl-tile' + (on ? ' on' : '') + (locked ? ' locked' : '') + '" data-type="' + itemType + '" data-id="' + s.id + '" title="' + s.title + (locked ? ' — locked · ' + s.unlockHint : '') + '">' +
-        '<span class="pl-thumb">' + cosmeticTilePreview(itemType, s, locked) + '</span>' +
-        '<span class="pl-name">' + s.title + '</span>' +
-        (on ? '<span class="pl-on">EQUIPPED</span>' : (locked ? '<span class="pl-on pl-lock">' + s.unlockHint.toUpperCase() + '</span>' : '')) +
-      '</button>';
-    }).join('');
+  // build171: one tile — extracted so the flat groups AND the mixed-type NOTE TRAIL group share it.
+  function renderCosmeticTile(itemType, s) {
+    var on = equippedCosmetic(itemType) === s.id;
+    var locked = !cosmeticUnlocked(itemType, s.id);
+    // NOTE: titles/unlockHints are hardcoded literals in FLAIRS/FRAMES/… — no user input, so no esc() (and `esc`
+    // isn't in this IIFE's scope anyway — it lives in the cosmetics-catalog IIFE). Matches the pre-build171 render.
+    return '<button class="pl-tile' + (on ? ' on' : '') + (locked ? ' locked' : '') + '" data-type="' + itemType + '" data-id="' + s.id + '" title="' + s.title + (locked ? ' — locked · ' + s.unlockHint : '') + '">' +
+      '<span class="pl-thumb">' + cosmeticTilePreview(itemType, s, locked) + '</span>' +
+      '<span class="pl-name">' + s.title + '</span>' +
+      (on ? '<span class="pl-on">EQUIPPED</span>' : (locked ? '<span class="pl-on pl-lock">' + s.unlockHint.toUpperCase() + '</span>' : '')) +
+    '</button>';
   }
-  // labeled sub-row wrapper — real section headers instead of one flat grid (spec item 2, last bullet).
+  function renderCosmeticGroup(itemType, list) { return list.map(function (s) { return renderCosmeticTile(itemType, s); }).join(''); }
+  // "X / N" earned count for a group's header (trophy-case read) — gold when complete.
+  function groupEarned(itemType, list) {
+    var n = 0; for (var i = 0; i < list.length; i++) if (cosmeticUnlocked(itemType, list[i].id)) n++;
+    return { n: n, total: list.length };
+  }
+  function groupLabelHtml(label, earned) {
+    var done = earned.n >= earned.total && earned.total > 0;
+    return '<div class="pgt-group-label">' + label + ' <span class="pgt-count' + (done ? ' done' : '') + '">' + earned.n + ' / ' + earned.total + '</span></div>';
+  }
+  // labeled sub-row wrapper — real section headers instead of one flat grid.
   function cosmeticGroupBlock(label, itemType, list) {
     if (!list || !list.length) return '';
-    return '<div class="pgt-group"><div class="pgt-group-label">' + label + '</div><div class="profile-goals-track">' + renderCosmeticGroup(itemType, list) + '</div></div>';
+    return '<div class="pgt-group">' + groupLabelHtml(label, groupEarned(itemType, list)) + '<div class="profile-goals-track">' + renderCosmeticGroup(itemType, list) + '</div></div>';
+  }
+  // NOTE TRAIL — one group merging NOTE_SKINS (type noteskin) + NOTE_COLORS (type notecolor). Each tile keeps its
+  // own data-type so equip/ownership stay type-correct; the click handler clears the sibling type so exactly one
+  // trail is ever active. (Fable: NOTE COLOR + NOTE SKIN were two near-identical dead categories.)
+  function noteTrailBlock() {
+    var RC = window.RhythmCosmetics;
+    var items = (RC.NOTE_SKINS || []).map(function (s) { return { t: 'noteskin', s: s }; })
+      .concat((RC.NOTE_COLORS || []).map(function (s) { return { t: 'notecolor', s: s }; }));
+    if (!items.length) return '';
+    var earned = { n: 0, total: items.length };
+    items.forEach(function (it) { if (cosmeticUnlocked(it.t, it.s.id)) earned.n++; });
+    var tiles = items.map(function (it) { return renderCosmeticTile(it.t, it.s); }).join('');
+    return '<div class="pgt-group">' + groupLabelHtml('NOTE TRAIL', earned) + '<div class="profile-goals-track">' + tiles + '</div></div>';
   }
   function renderGoalsTrack() {
     var wrap = $('profile-goals-wrap'); if (!wrap) return;
@@ -8669,8 +8739,7 @@
       cosmeticGroupBlock('NAME FONT', 'namefont', RC.NAME_FONTS) +
       cosmeticGroupBlock('EMBLEM', 'flair', RC.FLAIRS) +
       cosmeticGroupBlock('FRAME', 'frame', RC.FRAMES) +
-      cosmeticGroupBlock('NOTE COLOR', 'notecolor', RC.NOTE_COLORS) +
-      cosmeticGroupBlock('NOTE SKIN', 'noteskin', RC.NOTE_SKINS) +
+      noteTrailBlock() +
       cosmeticGroupBlock('TITLE', 'title', RC.TITLES);
     var btns = track.querySelectorAll('.pl-tile');
     for (var i = 0; i < btns.length; i++) (function (btn) {
@@ -8680,7 +8749,12 @@
           try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Keep playing to unlock this cosmetic'); } catch (e) {}
           return;
         }
-        RC.equip(itemType, id);
+        // toggle-off if re-clicking the equipped tile; else equip. NOTE TRAIL: equipping one type clears the
+        // sibling (noteskin ⇄ notecolor) so exactly one trail is ever active.
+        var already = equippedCosmetic(itemType) === id;
+        RC.equip(itemType, already ? '' : id);
+        if (!already && itemType === 'noteskin') RC.equip('notecolor', '');
+        if (!already && itemType === 'notecolor') RC.equip('noteskin', '');
         renderGoalsTrack();
       });
     })(btns[i]);
