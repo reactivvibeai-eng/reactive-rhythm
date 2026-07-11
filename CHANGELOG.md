@@ -15,6 +15,37 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build181 — full-system audit: the 4 show-critical fixes  ·  ?v=480
+
+A 30-agent adversarially-verified audit (8 area auditors × engine/catalog/MP/UI/satellites/perf/backend/design →
+skeptic verifiers → synthesis) + a live harness E2E pass (boot → play → pause/exit → all overlays → MP room
+lifecycle; zero console errors) found the platform structurally healthy — all hard invariants hold — with exactly
+four small show-critical defects, all fixed here and live-verified:
+
+- **P0 — consent bar over the mobile tap-zones (index.html).** `#rr-consent` (fixed, z600) floated across the
+  bottom of the viewport DURING GAMEPLAY — exactly where the mobile tap-zone strip lives — so an undecided
+  (consent-unset) first-run phone player got a full-width dead input band across all 5 lanes and read it as broken
+  taps. That's the show-night QR audience. Now suppressed while `#game` is active (`body:has(#game.active)`), back
+  on results/menu. **Verified live**: shown on menu → `opacity:0/pointer-events:none` mid-play → back on exit.
+  Companion: `#rvl-return` z 210→610 so the live-show RETURN pill is never buried under the bar.
+- **P1 — previews could play the WRONG audio (catalog.js).** The preview src list (`analysis||wav||stream||demo`)
+  could hand a bare `<audio>` an HLS `.m3u8` (silent dead preview) or fall back to the lunar-waves DEMO track and
+  play it as the artist's song — a trust-destroying first impression feeding the 1,913→368 preview→play cliff. Now
+  resolves through the same HLS-skipping, `audio_url`-first `trackAudioUrl()` the launch path uses; no playable
+  source → no preview (honest silence beats the wrong song).
+- **P1 security — spoofable mod-kick could eject the SHOW HOST (multiplayer.js).** `byHost` is an unverifiable
+  broadcast payload field, so any room member — or a spectator with a raw Supabase client — could forge
+  `{mod-kick, byHost, id:hostId}` and kill the room mid-show. The host is now NEVER kickable by broadcast, and
+  never a valid mod-mute target. (Durable server-authoritative moderation is roadmapped.)
+- **P1 — telemetry unload flush drained into the dead beacon (telemetry.js).** build180 fixed the LIVE flush path
+  but the unload flush (pagehide/tab-hide) still used `sendBeacon` — the transport a harness probe proved silently
+  never lands — so accepted-consent users' buffered errors + the session's final `song_complete` were destroyed on
+  every tab-hide. sendBeacon fully retired; `fetch({keepalive:true})` (the proven transport, designed to survive
+  unload) everywhere.
+
+The remaining audit output — 20 confirmed deduped issues, 7 optimization themes, and the full forward plan — is in
+**ROADMAP_V3.md** (this build's other deliverable). `node --check` clean ×4; score `+=` **17** / CHART_VERSION 2.
+
 ### build180 — turn the lights on: legitimate-interest funnel telemetry + anonymous ratings  ·  ?v=479
 
 Fable-directed (data-review D5), owner-selected. The prod data showed we were **flying blind**: `game_funnel_events`

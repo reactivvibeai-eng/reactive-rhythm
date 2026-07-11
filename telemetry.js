@@ -143,25 +143,16 @@
   }
 
   // ---- low-level send (fire-and-forget, never throws) ---------------------
-  function postJSON(url, payload, beaconFirst) {
+  function postJSON(url, payload) {
     if (!url) return;
     var body;
     try { body = JSON.stringify(payload); } catch (e) { return; }
-    // build180: PROMPT/LIVE flushes use FETCH (sets the anon-key header + reliably reaches the edge fn). sendBeacon
-    // is reserved for the UNLOAD path (beaconFirst=true, from pagehide/visibilitychange) where a normal fetch may be
-    // killed mid-flight. WHY: a harness probe proved beacon-sent rows silently did NOT land (the beacon can't carry
-    // the apikey header and its content-type trips the insert), while the identical fetch POST landed — so a normal
-    // song_start/complete must go out via fetch, not beacon, or the funnel stays dark.
-    if (beaconFirst) {
-      try {
-        if (navigator && typeof navigator.sendBeacon === 'function') {
-          var blob;
-          try { blob = new Blob([body], { type: 'application/json' }); } catch (e) { blob = body; }
-          if (navigator.sendBeacon(url, blob)) return;
-        }
-      } catch (e) {}
-    }
-    // fetch (keepalive so it ALSO survives unload as the beacon fallback)
+    // build181 (audit P1): FETCH KEEPALIVE ONLY — sendBeacon is fully retired. A harness probe proved beacon-sent
+    // rows silently do NOT land (the beacon can't carry the apikey header and its content-type trips the insert),
+    // and build180 only fixed the LIVE path — the unload flush (pagehide/visibilitychange) still drained the
+    // accepted-consent buffers into the dead beacon, permanently losing the highest-value rows (errors, the final
+    // song_complete of a session). fetch({keepalive:true}) is designed to survive unload and is the transport that
+    // provably lands; callers' extra args are ignored (signature kept lean, flush() no longer branches).
     try {
       if (typeof fetch === 'function') {
         var headers = { 'Content-Type': 'application/json' };

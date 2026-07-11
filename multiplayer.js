@@ -3934,12 +3934,19 @@
     ch.on('broadcast', { event: 'mod-kick' }, function (m) {
       var p = m && m.payload; if (!p || !p.id || p.byHost !== room.p1) return;
       if (p.id !== ME.id) return;   // not for me
+      // build181 (audit P1, security): the HOST is NEVER kickable by broadcast. byHost is a spoofable payload
+      // field (broadcast sender identity isn't verifiable client-side), so without this bail any room member —
+      // or a live-show SPECTATOR with a raw Supabase client — could forge {mod-kick, byHost:room.p1, id:hostId}
+      // and eject the show host, killing the room for everyone mid-show. Real moderation of the host doesn't
+      // exist as a concept; the durable fix (server-authoritative kick via an edge fn) is roadmapped.
+      if (room.isHost) return;
       try { sessionStorage.setItem('rr_kick_' + room.id, String(Date.now() + 120000)); } catch (e) {}   // ~2 min rejoin cooldown, honored on room-join
       try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Removed by host', 'error'); } catch (e) {}
       leaveGuestRoom();
     });
     ch.on('broadcast', { event: 'mod-mute' }, function (m) {
       var p = m && m.payload; if (!p || !p.id || p.byHost !== room.p1) return;
+      if (p.id === room.p1) return;   // build181 (audit P1 companion): the HOST can never be the mute TARGET — same forgery class as mod-kick (the host doesn't mute itself; a spoofed mute of the host would silence the show's MC for every listener)
       try { if (window.RhythmChat && window.RhythmChat.applyModMute) window.RhythmChat.applyModMute(p.id, p.kind, !!p.on); } catch (e) {}
     });
     ch.subscribe(function (status) {

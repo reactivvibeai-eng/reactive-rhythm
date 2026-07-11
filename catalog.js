@@ -1483,9 +1483,19 @@
       ensurePreviewTap();
     }
     try { previewEl.pause(); } catch (e) {}
-    let src = 'assets/lunar-waves.mp3'; // mock/demo fallback
+    let src = 'assets/lunar-waves.mp3'; // demo-card / mock-catalog fallback ONLY (never substituted for a real track — see below)
     if (catalogLive && track && track.id && track.id !== 'demo') {
-      try { const t = await api('/track/' + track.id, { auth: true }); src = t.analysis_url || t.wav_url || t.stream_url || src; } catch (e) { return; }
+      // build181 (audit P1): resolve the preview through the SAME HLS-skipping, audio_url-first resolver the
+      // launch path uses (trackAudioUrl). The old inline list (analysis||wav||stream||demo) could hand a bare
+      // <audio> an HLS .m3u8 (silent dead preview) or — worse — fall back to the lunar-waves DEMO track and play
+      // it as if it were the artist's song: a trust-destroying first impression feeding the preview→play cliff.
+      // No playable source → NO preview at all (honest silence beats the wrong song).
+      try {
+        const t = await api('/track/' + track.id, { auth: true });
+        const u = trackAudioUrl(t);
+        if (!u) return;
+        src = u;
+      } catch (e) { return; }
     }
     if (tok !== previewToken) return;
     try {
