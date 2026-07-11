@@ -15,6 +15,33 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build176 — MP RECONNECT funnel (Fable F2): a room now survives a reload — PROVEN  ·  ?v=475
+
+Executed the top P0 of the Fable-directed MP-attach plan (MP_ATTACH_HARDENING_v1.json) — the owner's #1 mandate:
+"if someone doesn't connect there has to be an easier way to reconnect to that room." Confirmed the gap cold on the
+2-authed-peer harness (a normal battle-call room persisted NOTHING; a reloaded guest landed on the TITLE screen,
+`rid:null`, no rejoin) — then fixed and re-PROVED it.
+
+**F2 — normal-room reconnect funnel** (multiplayer.js). A normal 1v1 room now survives a reload/drop via TWO handles,
+mirroring the show-room revive:
+- `history.replaceState` stamps `?mproom=<rid>&mprole=<role>&skipIntro=1` into the LIVE URL on every seat
+  (`persistRoom` in `enterRoomWaiting`), so a plain refresh re-runs the PROVEN deep-link boot (build174) and
+  auto-rejoins with zero new boot code — and the URL doubles as a shareable room link.
+- `sessionStorage rr_room` {rid, role, name, at} revives even if the URL is lost this tab-session:
+  `maybeReconnectRoom()` (added to the boot revive chain after rr_tour/rr_showroom) reads it, opens MP, and
+  `_pendJoin`s the same rid (5-min TTL; self-guards when the URL already carries the rid).
+- Cleared on explicit leave only (`clearRoom` in `closeRoom`/`leaveGuestRoom`) so a later reload never yanks back
+  into a room you left.
+
+**Harness proof (rrrc2):** guest converged → `rr_room` written + URL stamped → **reloaded to a PLAIN url (no ?mproom)**
+→ auto-rejoined: `activeScreens:["multiplayer-screen"]`, `rid:rrrc2`, opponent dot "here", roster both seated, URL
+re-stamped. Before F2 this same reload stranded the guest on the title screen. `node --check` clean, score `+=` 17,
+zero console errors.
+
+Follow-ups from the Fable plan (not in this build): F1 site caller-seat (Lovable P0), F3 host room-brb hold, F4
+retrying preflight, F5 server-of-record, F6 REJOIN pill + mini conn chip, F7 challenge→room unification, F8
+battle-room auto-start, F9 stale-discovery. F2b: localStorage mirror (TTL+nonce) for tab-CLOSE recovery.
+
 ### build175 — in-game CHALLENGE hardening: delivery PROVEN + late-accept rescue  ·  ?v=474
 
 Drove the in-game **People → Challenge** rail on the two-peer harness (both on the shared `rr-lobby` broadcast

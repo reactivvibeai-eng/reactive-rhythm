@@ -3841,6 +3841,7 @@
   // mod-kick can trigger the SAME leave a manual "LEAVE ROOM" click already does — one code path, two triggers).
   function leaveGuestRoom() {
     var _wasShow = !!room.show;
+    try { clearRoom(); } catch (e) {}   // build176 (F2): an explicit leave drops the reconnect handles so a later reload doesn't yank back in
     leaveRoomChannel();
     room = { id: null, name: null, priv: false, combat: false, matched: false, isHost: false, ch: null, seat: null, members: {}, p1: null, p2: null };
     spectating = false;
@@ -3848,6 +3849,7 @@
     reannounce(); backToLobby();
   }
   function closeRoom(silent) {
+    try { clearRoom(); } catch (e) {}   // build176 (F2): closing/leaving a room drops the reconnect handles (rr_room + ?mproom URL)
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
     _ghostRunActive = false;   // build102y review fix C: no room, nothing to park (inert var write for normal MP)
     try { paintQmPill(_qm.on ? 'searching' : 'off'); } catch (e) {}   // v405 review fix: leaving a matched qm room un-sticks the '🎯 MATCHED!' pill (pure pill-element UI — inert for normal rooms, where it's already 'off')
@@ -4460,6 +4462,7 @@
         screen.classList.add('active');
       }
     } catch (e) {}
+    try { persistRoom(); } catch (e) {}   // build176 (F2): stamp the reconnect handles (rr_room + ?mproom URL) on every room entry
   }
   function paintRoomWaiting() {
     try { refreshReadyEnabled(); } catch (e) {}   // playtest-3 fix (Bug D): every room repaint (opponent arrives/leaves, track picked) re-evaluates the READY button so it enables the moment the duel is joinable — the old code left it disabled because it only re-checked on the match channel
@@ -5720,6 +5723,44 @@
       joinRoomChannel(P.rid, 'p1');   // channels are unregistered strings — rejoining + re-advertising revives the room; the SUBSCRIBED snap (mid:null) also recovers stranded watchers
       reannounce(); enterRoomWaiting(); advertiseRoom(); startShowHeartbeat(); persistShowRoom();
       banner('mpx-setup-msg', 'Reconnected — your show room is back.');
+    } catch (e) {}
+  }
+  // ===================== build176 (Fable F2) — NORMAL-ROOM RECONNECT FUNNEL (owner's #1 mandate) =====================
+  // A normal 1v1 room now survives a reload/drop, mirroring the show-room revive. TWO handles:
+  //  (1) history.replaceState stamps ?mproom=<rid>&mprole=<role>&skipIntro=1 into the LIVE URL on every seat, so a
+  //      plain refresh re-runs the PROVEN deep-link boot (build174) and auto-rejoins with ZERO new boot code; and it
+  //      doubles as a shareable room link.
+  //  (2) sessionStorage `rr_room` revives even if the URL is lost within the same tab session (maybeReconnectRoom).
+  // Cleared ONLY on an explicit leave. Show rooms keep their own rr_showroom path. See MP_ATTACH_HARDENING_v1.json.
+  // (Self-critique honoured: sessionStorage does NOT survive tab-CLOSE — the localStorage mirror w/ TTL+nonce is a
+  //  deliberate follow-up, F2b; this build fixes the confirmed reload/refresh strand.)
+  function _roomUrlWrite(rid, role) {
+    try { var u = new URL(location.href); u.searchParams.set('mproom', rid); u.searchParams.set('mprole', role); u.searchParams.set('skipIntro', '1');
+      history.replaceState(history.state, '', u.pathname + '?' + u.searchParams.toString() + (u.hash || '')); } catch (e) {}
+  }
+  function _roomUrlClear() {
+    try { var u = new URL(location.href); if (!u.searchParams.has('mproom') && !u.searchParams.has('mprole')) return;
+      u.searchParams.delete('mproom'); u.searchParams.delete('mprole'); var qs = u.searchParams.toString();
+      history.replaceState(history.state, '', u.pathname + (qs ? '?' + qs : '') + (u.hash || '')); } catch (e) {}
+  }
+  function persistRoom() {
+    try {
+      if (!room.id || room.show || spectating || room.seat === 'spec') return;   // show rooms + spectators don't own a rejoinable seat
+      var role = room.isHost ? 'host' : 'guest';
+      sessionStorage.setItem('rr_room', JSON.stringify({ rid: room.id, role: role, name: room.name || '', at: Date.now() }));
+      _roomUrlWrite(room.id, role);
+    } catch (e) {}
+  }
+  function clearRoom() { try { sessionStorage.removeItem('rr_room'); } catch (e) {} _roomUrlClear(); }
+  function maybeReconnectRoom() {
+    try {
+      if (room.id || tour.id || matchLive || !supa) return;                 // already engaged / mid-match (fresh boot has none set)
+      if (/[?&]mproom=/i.test(location.search)) return;                     // URL-carried rid → the deep-link boot path already revives it
+      var raw = sessionStorage.getItem('rr_room'); if (!raw) return;
+      var P = JSON.parse(raw); if (!P || !P.rid) return;
+      if (Date.now() - (P.at || 0) > 300000) { clearRoom(); return; }       // >5 min stale — never yank into a long-dead room
+      try { open(); } catch (e) {}
+      _pendJoin(P.rid, { role: (P.role === 'host' ? 'host' : 'guest'), label: 'Reconnecting to your room…' });   // reuses the proven convergence funnel; self-heals or fail-cards on its own
     } catch (e) {}
   }
   // ---- sel.audioUrl launcher: the buffered decoder or a LOUD abort — NEVER the demo (stability judge blocker)
@@ -7808,6 +7849,9 @@
     if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500);
     // build102s: host refresh ≤90s revives the SHOW room (rr_showroom mirrors the rr_tour pattern — no other pending deep-link wins)
     else if (sessionStorage.getItem('rr_showroom')) setTimeout(function () { try { open(); setTimeout(maybeReconnectShowRoom, 800); } catch (e) {} }, 1500);
+    // build176 (F2): revive a NORMAL 1v1 room whose URL handle was lost this tab-session (a URL-carried ?mproom already
+    // revives via the deep-link boot above; maybeReconnectRoom self-guards on that + a 5-min TTL and opens MP itself).
+    else if (sessionStorage.getItem('rr_room')) setTimeout(function () { try { maybeReconnectRoom(); } catch (e) {} }, 1500);
   } catch (e) {} }
 
   // public hook

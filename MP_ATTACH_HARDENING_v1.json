@@ -1,0 +1,653 @@
+{
+  "summary": "Fable-directed plan to make MP connection bulletproof: map every entry-path failure mode, then Fable 5 designs the aggressive auto-attach + reconnect architecture and an executable test matrix",
+  "agentCount": 5,
+  "logs": [],
+  "result": {
+    "maps": [
+      {
+        "path": "Auto-battle-call / ?mproom deep-link convergence",
+        "entryFlow": "Owner path (1): a website battle-call is meant to deep-link BOTH peers into one server-minted room — caller to ?mproom=<rid>&mprole=host, callee to ?mproom=<rid>&mprole=guest. Game side: caller boot sets _qmBootRoom + nulls _pendingRoomJoin (multiplayer.js:300-304), auto-opens MP (7805), and on lobby SUBSCRIBED runs _qmHostFallback → _pendJoin(rid,{role:'host'}) → openRoomWithId + advertiseRoom (772, 3704-3712, 3788-3800). Callee boot sets _pendingRoomJoin (286), auto-opens MP (7796), SUBSCRIBED runs _pendJoin(rid,{role:'guest'}) (762-766); the guest fast-paths on the host's lobby room-meta (onRoomMeta:4546) or, after ~10s, joinRoomDirect + a 45s _hostEvidence watchdog (4156-4241). Convergence = both on rr-lobby with the SAME rid, host emitting room-meta, guest reading host evidence over realtime (softPresence broadcast; native presence never syncs).",
+        "failureModes": [
+          {
+            "scenario": "THE SITE GAP: the website only navigates the CALLEE into ?mproom=&mprole=guest and never opens the CALLER as host. The caller never boots ?mprole=host, so _qmBootRoom is never set, _qmHostFallback never runs, and no host room is ever opened. rr_active_rooms shows only the callee. The lone guest runs its full _pendJoin, the roomStatus preflight returns alive:false (or never answers), and the callee dead-cards on 'THAT ROOM IS CLOSED' / 'ROOM DIDN'T ANSWER'.",
+            "cause": "Site (Lovable) edge/navbar emits only the guest URL; the game's host-side boot fallback (multiplayer.js:296-304 → _qmHostFallback:3704) has no trigger. The game cannot self-heal because the caller's tab never loads with the pairing.",
+            "severity": "P0",
+            "codeRef": "multiplayer.js:300-304 (host boot-fallback) + SITE battle-call accept/navigation (Lovable, not in repo)"
+          },
+          {
+            "scenario": "BOTH-AS-GUEST / NO HOST: if the site sends both peers mprole=guest (or omits mprole, which defaults both to the guest pend), nobody opens the room as host. Both guests joinRoomDirect and synthesize room.id off the rid, but _hostEvidence() never becomes true (no host in room.members, no matchCh, no host room-meta), so both hit the 45s 'NO HOST IN THIS ROOM' fail card. Two guests in a channel is never a playable 1v1.",
+            "cause": "mprole defaults to guest when absent/!=host (multiplayer.js:302-304); _hostEvidence requires real host proof (4165-4173); no election promotes a guest to host in a battle room.",
+            "severity": "P0",
+            "codeRef": "multiplayer.js:302-304, 4165-4173, 4225-4238"
+          },
+          {
+            "scenario": "CALLEE-ARRIVES-FIRST / one-shot preflight ejects a merely-slow host: the guest's roomStatus preflight fires ONCE at tick===2 (~5s). If the host is still booting (1800ms open delay + lobby subscribe + game.js decode) and hasn't registered the room server-side yet, roomStatus returns alive:false → _roomDead latches true → guest is ejected with 'THAT ROOM IS CLOSED' even though the host is a few seconds behind. There is no re-check after tick 2.",
+            "cause": "Single-shot preflight + permanent _roomDead latch (multiplayer.js:4200-4217); the host's openRoomWithId never POSTs a room-create, so server aliveness lags realtime and depends entirely on the site row.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:4200-4217, 3788-3800"
+          },
+          {
+            "scenario": "HOST NEVER REGISTERS THE ROOM SERVER-SIDE: openRoomWithId only broadcasts realtime room-meta and mints a join-by-code; it never creates an rr_active_rooms row. So the guest's roomStatus preflight and any server-side reconnect reflect only whatever the SITE registered — the exact 'rr_active_rooms empty' symptom — and a host that opens purely from the deep-link is invisible to every server-authoritative check.",
+            "cause": "No room-create REST call in the host open path (multiplayer.js:3788-3800); convergence rides realtime broadcast only, which the preflight (a REST check) can contradict.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:3788-3800, 4202-4204"
+          },
+          {
+            "scenario": "STALE / MISMATCHED RID: host opens under _qmBootRoom (the caller URL's rid) while the guest pends its own URL's rid. If the site mints two different rids, reuses a stale rid from a prior call, or the two URLs disagree, the channels never intersect — host sits in an empty room, guest 45s-fails. No cross-check that the two rids match.",
+            "cause": "Each side trusts its own URL rid (multiplayer.js:286, 300-304); no server confirmation the pairing rid is shared/live.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:286, 300-304, 3706-3710"
+          },
+          {
+            "scenario": "NO RECONNECT FOR A BATTLE ROOM: only rr_tour and rr_showroom are persisted for boot-time revival (7807-7811); there is NO rr_room key. If either peer's tab reloads or the engine reload drops the ?mproom query (mid-match crash, blur/refresh after navigation), there is no auto-rejoin to the battle room. Battle rooms are private, so they are also not findable via Browse. This directly violates the owner's 'EASY intelligent reconnect to that room' mandate.",
+            "cause": "No sessionStorage persistence of the active normal room + private rooms excluded from the directory (multiplayer.js:7807-7811, 4552).",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:7807-7811, 4552, 5692/5997 (only showroom/tour persisted)"
+          },
+          {
+            "scenario": "PRESENCE NON-CONVERGENCE after direct-join: once the guest joinRoomDirects, _hostEvidence depends on the host's room-meta (lobby) or host heartbeat landing in room.members over softPresence broadcast. If the host's lobby channel is mid-resubscribe (CHANNEL_ERROR/TIMED_OUT at 773) when the guest pings, no re-advertise fires, room.members[p1] stays empty, and the guest 45s-fails despite a live host.",
+            "cause": "room-ping re-advertise is best-effort and only fires if the host's lobbyCh is currently SUBSCRIBED (multiplayer.js:737, 4186); softPresence heartbeat is the only 'who's here' signal and can miss a reconnecting peer.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:737, 4165-4173, 4186, 773-776"
+          },
+          {
+            "scenario": "HOST-SLOW-BEYOND-45s loop: maxTries=18 (~45s). A cold-cache host (large game.js decode, video backdrop) can exceed 45s to open, so the guest fail-cards; TRY AGAIN re-pends but the host may STILL be booting, producing a loop of fail cards instead of convergence.",
+            "cause": "Fixed 45s guest patience with no adaptive backoff or server-confirmed 'host is coming' signal (multiplayer.js:4158, 4218-4238).",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:4156-4158, 4218-4238"
+          },
+          {
+            "scenario": "HOST _openHost silently no-ops if already engaged: _pendJoin's host branch bails when room.id||tour.id||matchLive is set (4136). A leftover show room, a boot-revived tour (rr_tour), or a stale room means the paired battle room never opens — with NO fail card — and the guest strands.",
+            "cause": "Guarded open with no fallback/close-and-retry when the host is already in another context (multiplayer.js:4132-4143); reconnect revival (7807-7810) can win the boot race and occupy the host.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:4132-4143, 7807-7810"
+          },
+          {
+            "scenario": "_qmBootRoom LEAKS under ?mpqm=resume + 'waiting': if the accept URL carries ?mpqm=resume alongside the pairing, the SUBSCRIBED handler runs qmResume (not the _qmBootRoom else-branch, 771). If matchStatus returns 'waiting', qmResume sets the searching state and returns WITHOUT consuming _qmBootRoom, so the pre-minted host room is never opened and the guest strands.",
+            "cause": "qmResume's 'waiting' branch has no _qmHostFallback call before returning (multiplayer.js:3724-3730); the _qmBootRoom consumer is only the else-branch at 772.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:771-772, 3724-3730"
+          },
+          {
+            "scenario": "REALTIME DOWN = bare banner, no rope: if the guest's lobby subscribe never reaches SUBSCRIBED (Realtime/anon auth failure), _pendingRoomJoin is never consumed; the player sees only a grey 'Could not reach the live lobby' banner and no fail card / retry rope. The battle call silently evaporates.",
+            "cause": "Deep-link consumption lives entirely inside the SUBSCRIBED branch (multiplayer.js:762-772); the error branch only schedules a resub + banner (773-776).",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:743-776"
+          },
+          {
+            "scenario": "HOST-SIDE DEAD-END (no re-ring): after the host opens the paired room, if the guest never boots/declines, the host sits at 'waiting for 1 player' with no timeout, no NO-ANSWER escalation, and no automatic re-call — contrary to the 'aggressively rope two people in' mandate.",
+            "cause": "openRoomWithId → enterRoomWaiting has no host-side inbound-call watchdog for the auto-battle path (multiplayer.js:3798, 4490-4492).",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:3798, 4490-4492"
+          }
+        ],
+        "gaps": [
+          "Owner mandate 'receiving a call SHOVES you directly into a host room' is unmet: the SITE never opens the caller as host, so the game's host boot-fallback (_qmBootRoom → _qmHostFallback) has no trigger. FIX = site emits the caller ?mproom=<rid>&mprole=host into the SAME rid it created and registers server-side; game side is already wired.",
+          "Owner mandate 'EASY intelligent RECONNECT to that room' is unmet for battle rooms: no rr_room persistence + private rooms absent from Browse means a reloaded/dropped peer cannot get back in. FIX = persist an rr_room descriptor (rid+role) like rr_tour/rr_showroom and revive it in the boot chain (7807-7811); optionally re-pend from a server /room-status.",
+          "No server-authoritative room registration on the host open path: openRoomWithId never creates an rr_active_rooms row, so roomStatus preflight and any server reconnect see only site state (the 'rr_active_rooms empty' symptom). FIX = host POSTs a room-create/heartbeat so aliveness is truthful.",
+          "One-shot roomStatus preflight + permanent _roomDead latch ejects a merely-slow/late-booting host (callee-arrives-first). FIX = re-preflight (or trust realtime host-evidence over a single REST alive:false) before hard-ejecting.",
+          "No rid-agreement guarantee between the two URLs and no host-side re-ring when the guest is absent — both weaken the 'aggressive + intelligent roping' mandate. FIX = server confirms a shared live pairing rid; host re-emits the call on a timeout."
+        ],
+        "reconnectStory": "Today's reconnect for a battle-call room is effectively ABSENT. Boot-time revival only covers rr_tour (bracket) and rr_showroom (show), never a normal/battle room (multiplayer.js:7807-7811; only 5692/5997 persist). The sole 'reconnect' is that if the tab reloads with the ?mproom query still intact, the deep-link re-pends — but a mid-match engine reload or any in-app navigation drops that query, and battle rooms are private so they never appear in Browse to rejoin manually. In-flight resilience exists ONLY within a single page life: _pendJoin re-pings + retries for 45s, onRoomMeta heals a direct-joined guest's p1/flags (4534-4544), room-gone triggers _roomGoneRescue (4079-4089), and the guest watchdog ejects from a dead/host-never-came room with a TRY-AGAIN card (4218-4238). Once the page reloads without the query, all of that is gone — no rid is remembered, so neither peer can be shoved back into the room. This is the concrete gap against the owner's 'EASY, intelligent reconnect' requirement."
+      },
+      {
+        "path": "Reconnection / room-rejoin after reload or dropped connection — normal 1v1 \"Battle Room\" path (the target of all 4 MP entry paths: auto-battle-call, host-panel launch, browse rooms, People→Challenge)",
+        "entryFlow": "All four entry paths converge on the SAME normal (non-show) room object + `rr-room-<rid>` channel. Auto-battle-call: callee is SHOVED in via `_pendJoin` (deep-link `?mproom=&mprole=guest` at :286/:3141) while the caller opens the paired room via `_qmBootRoom`→`_qmHostFallback()` (:772/:3704/:7805). Host-panel \"Play in Reactive Rhythm\": `?mproom=<rid>` → `_pendingRoomJoin` → `_pendJoin` (:285/:7796). Browse rooms: `joinRoom(rid)` off `roomsDir` meta (:4247). People→Challenge: `_pendJoin(rid,{notificationId})` (:3090). `_pendJoin` is the unified funnel (:4121): meta fast-path → tick-4 `joinRoomDirect` late-host fallback → tick-2 `roomStatus` preflight → 45s fail card. Once seated, the host authors a versioned `room-state` beat every 4s (:464) that `onRoomState` (:474) converges guests from.",
+        "reconnectStory": "Reconnect today is strong for LIVE-CHANNEL FLAPS (socket drops with the tab still alive) and NON-EXISTENT for RELOADS of a normal room. Flap handling: `joinRoomChannel`'s subscribe callback catches CHANNEL_ERROR/TIMED_OUT/CLOSED → `_scheduleChannelResub('room')` (:3934) rebuilds the room channel with bounded exponential backoff (≤20 tries, 2s→15s, :3288) while module-level `room`/`sel`/`meReady` survive; `_roomResubActive` guards the counter (:3312); on SUBSCRIBED it re-asserts READY (:3315) and flushes the MP-5 crit-queue. Mid-MATCH flaps: `_rebuildMatchChannel` (:3363, MP FIX #21) reopens the read side WITHOUT teardownMatch, `_oppGoneGrace` (:2374) suppresses a false forfeit for a my-side blip, and the crit-queue re-sends my FINAL on reconnect. The connection chip (`_paintConnChip` :3262) surfaces LIVE/RECONNECTING/OFFLINE and is tap-to-retry (`_connRetry` :3321, wired :7350). `onRoomState` (:474) is a versioned self-healing snapshot that re-converges an EXISTING guest's setup state. RELOAD recovery, however, exists ONLY for SHOW rooms (`rr_showroom`/`maybeReconnectShowRoom` :5689/:5702, host-only) and tournaments (`rr_tour`/`maybeReconnectTour` :5993/:6002, both roles). A normal 1v1 battle room has ZERO sessionStorage persistence and ZERO boot-revive.",
+        "failureModes": [
+          {
+            "scenario": "Host of a normal 1v1 battle room reloads or crashes the tab (any of the 4 entry paths — created via lobby, auto-call caller, challenge acceptor-as-host). On reload the room is permanently dead; the guest is stranded and neither peer can get back to the room.",
+            "cause": "No persistence for normal rooms. `persistShowRoom` is guarded `room.show && room.isHost` (:5691) so it never fires for a battle room; the boot-revive only checks `rr_tour`/`rr_showroom` (:7807-7810). A created room's rid is never written to the URL (no replaceState; `?mproom=` is only ever READ at :286), so a host with no URL param has no handle to revive. `beforeunload` even broadcasts `room-gone` (:7769), actively killing the guest's session. There is no host-migration for 1v1 (that exists only for tournaments, `maybePromoteHost` :6018).",
+            "severity": "P0",
+            "codeRef": "multiplayer.js:5691 (persistShowRoom guard), :7807-7810 (boot revive omits normal rooms), :7769 (beforeunload room-gone), :6018 (host-migration is tour-only)"
+          },
+          {
+            "scenario": "Either peer reloads or crashes MID-MATCH in a normal 1v1. The live run is lost for both; there is no rejoin into the in-progress match and no persisted match pointer.",
+            "cause": "`matchId`/`matchCh`/`matchLive`/`sel` are module vars with no sessionStorage mirror; nothing persists a normal match. The surviving peer's `_oppGoneGrace` (:2374) expires → `oppLeft=true` forfeit (:2388) and the 8s settle-safety hollow-forfeits. The reloaded peer boots with no match memory and no `?mproom` (URL never carries the match/room), so no boot path re-enters. Contrast tournaments, which persist the live snapshot (`persistTour` :5993) and rejoin in place.",
+            "severity": "P0",
+            "codeRef": "multiplayer.js:2374-2388 (opp-gone→forfeit), :2116 (matchLive is a bare module flag), :5993 (tour persists but 1v1 does not), :7807-7810 (no match/room boot-revive)"
+          },
+          {
+            "scenario": "Guest who joined a battle room via BROWSE ROOMS or People→Challenge (no `?mproom=` in their URL) reloads. They cannot get back into the room even though it is still live and the host is present — they land on the plain lobby with no memory they were ever in a room.",
+            "cause": "Reload recovery for a guest depends entirely on the boot-time `?mproom=` param (:286→`_pendingRoomJoin`→:7796). `joinRoom`/`_pendJoin` never push the rid into the URL (no history.replaceState anywhere) and never write a `rr_room` sessionStorage key. So the only battle-room joiners who survive a reload are those who arrived via a deep-link that is still in the address bar; browse/challenge joiners have nothing. No 'you were in a room' memory, no REJOIN pill — the exact affordances the mandate calls for.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:4247 (joinRoom — no persist/URL write), :4121 (_pendJoin — no persist), :286 (mproom read-only at boot), :7796"
+          },
+          {
+            "scenario": "A normal room's connection exhausts the 20-attempt resub cap and goes 'dead' (conn chip → OFFLINE, tap-to-retry) WHILE a match is live. On the #game screen the retry affordance is invisible, so the player cannot recover without knowing to navigate back to the MP screen.",
+            "cause": "`_scheduleChannelResub` gives up loud at `_connResubN>=20` → `_setConnState('...','dead')` (:3294). The only recovery UI is the conn chip/mini, but both live inside `#multiplayer-screen` (index.html:6118 `#mpx-conn-chip`, :6505 `#mpx-conn-mini`) — during a live run the active screen is `#game`, so neither is on-screen. There is no in-#game reconnect pill, so a dead socket mid-match is a silent dead end for the user.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:3294 (dead after 20), :3321 (_connRetry only via chip), index.html:6118/6505 (chip lives on MP screen, not #game)"
+          },
+          {
+            "scenario": "Deep-link guest (auto-battle-call / host-panel invite) reloads while the HOST is ALSO gone (both reload, or host closed the room). The guest re-pends but is dead-ended with a fail card rather than reconnected — there is no revive of the room the way a show room self-heals.",
+            "cause": "On reload the guest's `?mproom=` re-drives `_pendJoin` (:7796), but `_pendJoin` only JOINS an existing host channel — after the tick-4 `joinRoomDirect` synthesizes a channel with no host evidence, the tick-2 `roomStatus` preflight (:4200) or the 45s `_hostEvidence` timeout (:4225) fires the 'NO HOST IN THIS ROOM' / 'ROOM DIDN'T ANSWER' card. Because a normal room is never host-persisted/revived (unlike `maybeReconnectShowRoom` which re-advertises the channel :5720), there is no path for the room itself to come back.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:4225-4238 (no-host fail card), :4200 (roomStatus preflight), :5720 (show room self-revives; no normal-room equivalent)"
+          },
+          {
+            "scenario": "Any battle-room participant reloads after the rid handle was stripped from the URL (e.g. site nav that drops `?mproom=&skipIntro=1`, or the game normalizing its own URL). The single reconnect handle is gone, so even a still-live host+room become unreachable.",
+            "cause": "The rid lives ONLY in the transient `?mproom=` query param; nothing mirrors it to sessionStorage or re-writes it back into the URL after consumption (`_pendingRoomJoin` is nulled once consumed, :4149/:4192/:4221). The invite URL is built on demand (`roomInviteLink` :4308) but the live URL is never kept in sync, so a reload after any URL change has no rid to recover from.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:4308 (invite link built, never persisted to location), :4149/:4192/:4221 (_pendingRoomJoin nulled after use), :286 (single source is the boot query param)"
+          }
+        ],
+        "gaps": [
+          "No sessionStorage persistence for a normal 1v1 battle room (neither host nor guest). `rr_showroom` is show-host-only and `rr_tour` is tournament-only; there is no `rr_room` key and no `maybeReconnectRoom()` boot path (:5691, :7807-7810). This is the root gap behind the mandate's 'auto-rejoin on reload' + 'persistent you-were-in-a-room memory'.",
+          "No host-side revive of a battle room on host reload, and no 1v1 host migration. `maybeReconnectShowRoom` re-advertises the show channel (:5720) and `maybePromoteHost` migrates a tournament host (:6018), but a normal 1v1 has neither — a host reload permanently kills the room for both peers.",
+          "No mid-match reconnect for a RELOAD (only for a socket flap). `_rebuildMatchChannel` (:3363) recovers an in-tab blip, but a reloaded peer has no persisted `matchId`/`sel` and no boot path, so a normal 1v1 in progress is unrecoverable — unlike tournaments which persist the live snapshot (:5993).",
+          "No REJOIN pill / one-tap rejoin surfaced anywhere. The only rejoin affordance is the conn chip's tap-to-retry (`_connRetry` :3321), which (a) only re-subscribes an already-open channel — it cannot reconstruct a room after reload — and (b) is not present on the #game screen during a live run (index.html:6118/6505).",
+          "The reconnect handle is fragile: the rid exists only in the boot-time `?mproom=` query param; it is never written to sessionStorage nor kept in the live URL (no history.replaceState). Browse-joined and challenge-joined guests have NO handle at all, and deep-link guests lose it if the URL changes (:286, :4308).",
+          "`beforeunload` actively broadcasts `room-gone` for a host (:7769) with no grace/persist, so even a fast reload tells the guest the room is dead rather than holding the seat for a returning host — the opposite of the mandate's 'hold the room for a returning peer'.",
+          "Guest-reload recovery, where it works at all, is a fresh JOIN (`_pendJoin`) that dead-ends on a fail card if the host isn't present (:4225-4238) — there is no 'the room is holding your seat, rejoining…' state and no auto-retry loop that survives a temporarily-absent host beyond the flat 45s window."
+        ]
+      },
+      {
+        "path": "People → Challenge → live 1v1 (lobby-presence roster CHALLENGE button → sendChallenge handshake → rr-match-<mid>)",
+        "entryFlow": "Lobby-presence roster (`mpx-roster`, populated from `lobby[]` softPresence broadcast-heartbeats via onLobbySync/renderRoster, multiplayer.js:781-848) renders a per-peer CHALLENGE button wired to sendChallenge (:844). sendChallenge (:851) mints a mid, sets pendingOut + a 24s _chalGrace (:854-856), broadcasts `challenge` on rr-lobby targeted by toId, re-emits ≤4×/2s (_chalRetry :868-873), and arms a 12s no-response timeout (_chalT :861). Target's onChallenge (:876) sets incoming[fromId]={mid} → roster row flips to ACCEPT/✕ (:829-830). acceptChallenge (:881) broadcasts `challenge-ans{ok:true}`, clears incoming, and opens rr-match-<mid> as GUEST via startMatchChannel (:886), re-emitting the ans ≤6×/2s until oppPresent (_ansRetry :892-896). Challenger's onChallengeAns (:903) opens the SAME rr-match-<mid> as HOST (:918). Both converge in enterSetup (first match SUBSCRIBED, :3349); host picks track + both READY → maybeStart broadcasts `start` (+re-emits, :1404-1415) → beginMatch (:2102). Convergence key = the shared mid on rr-match; presence via softPresence hb heartbeats (:312-356).",
+        "reconnectStory": "For this path reconnect is CHANNEL-level only. A transient socket blip on rr-match-<mid> is rebuilt in place: _onMatchSubStatus's error branch calls _scheduleChannelResub('match')→_rebuildMatchChannel (bounded backoff ≤20, matchId preserved, :3354-3369); on re-SUBSCRIBED it re-asserts READY and (host) re-delivers the locked song so a mid-setup blip can't deadlock (:3350-3353). Packet-loss resilience: challenger's 24s _chalGrace honors a late accept even after the 12s timeout nulled pendingOut (:910); guest's _ansRetry (:892-896) and host-side start re-emits (:1412-1415) each tolerate a single dropped broadcast; the A6 both-ready watchdog re-fires the emitter at T+6s and loud-fails with a READY-again failcard at T+14s (:3492-3516). CRITICAL LIMIT: a pure challenge duel has NO room and NO server record — matchId/pendingOut/incoming live only in memory. A full backToLobby, page reload, or a peer that truly leaves has no 'rejoin this duel' affordance; the mandate's 'easy reconnect to that room' cannot apply because there is no room to reconnect to (unlike the ONLINE-NOW roster's battleCall path, which opens a real room).",
+        "failureModes": [
+          {
+            "scenario": "Accept broadcast never reaches the challenger (dropped or challenger stalled) → guest stranded alone on rr-match while the challenger never opens the host side.",
+            "cause": "Guest re-emit budget is shorter than the rescue window it is meant to fill: _ansRetry stops at ~12s (`++_rt > 6`, 6×2s) while the challenger's _chalGrace advertises 24s. Between 12-24s no ans is being sent, so a challenger whose stall clears late (or drops onChallengeAns entirely) never opens rr-match-<mid>; the guest sits on the match channel with only an escalating 'Waiting for your opponent to join…' line and NO teardown/auto-return.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:892-896 (_ansRetry cap) vs :856/:910 (_chalGrace 24s); no stranded-guest match-channel timeout"
+          },
+          {
+            "scenario": "Presence never converges on rr-match → READY button stays disabled forever, silent start deadlock with no failcard.",
+            "cause": "A roomless challenge duel gates READY purely on oppPresent (refreshReadyEnabled: roomStage=false so oppHere=oppPresent, :1183; ok requires oppHere, :1192). softPresence beats only every 10s after the initial hb (:342), so a single dropped heartbeat once both are already SUBSCRIBED delays convergence up to 10s, and a persistent drop deadlocks it. Because neither can set meReady, the A6 both-ready watchdog never arms (requires meReady&&peerReady, :3494) → no COULDN'T-SYNC failcard ever fires; only the escalating wait line shows.",
+            "severity": "P1",
+            "codeRef": "multiplayer.js:1183,1192 (presence-gated READY); :342 (10s hb); :3492-3494 (watchdog needs meReady)"
+          },
+          {
+            "scenario": "Both players challenge each other near-simultaneously and both click ACCEPT → two guests on two different match channels, no host, deadlock.",
+            "cause": "renderRoster shows incoming (ACCEPT) with precedence over pendingOut/WAITING (:829-834), so each sees the other's ACCEPT. Each acceptChallenge opens rr-match-<other's mid> as GUEST (:886); the reciprocal challenge-ans is discarded because its mid matches neither pendingOut.mid nor _chalGrace.mid (:909-911). Result: A is guest on mid_B, B is guest on mid_A — no host on either channel, permanent deadlock.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:829-834 (incoming precedence), :881-886 (guest-only accept), :909-911 (mid-mismatch discard)"
+          },
+          {
+            "scenario": "12s no-response timeout fires before a legitimately slow accept, dropping the duel.",
+            "cause": "_chalT nulls pendingOut and shows 'No response' at 12s (:861). Under a background-tab-clamped target, or a dropped initial 'challenge' that only _chalRetry re-delivers at ~8s (:870) followed by human reaction, the accept commonly lands >12s. _chalGrace (:910) is supposed to rescue this to 24s, but per failure #1 the guest stops re-emitting its ans at 12s, so the 12-24s grace window is effectively unbacked.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:861 (_chalT 12s), :870 (retry ~8s), :892-896/:910 (grace unbacked)"
+          },
+          {
+            "scenario": "Challenging someone who just entered a match (stale inMatch flag) → dead challenge, 12s 'No response'.",
+            "cause": "sendChallenge and the row-disable both key on lobby[toId].inMatch (:852,:834), but inMatch rides presence meta refreshed only every ~10s (softPresence beat :342, myPresence(matchLive||matchCh)). In that window the target is on the match screen; onChallenge sets incoming (:876-879) but they never see the ACCEPT (not on the lobby roster) → challenger eats the 12s timeout.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:852,834 (inMatch gate), :342 (10s refresh), :876-879"
+          },
+          {
+            "scenario": "Challenging a ghost peer that crashed/closed without a 'bye' → 12s wait on nothing.",
+            "cause": "softPresence holds a peer for 75s after its last heartbeat (:345); a hard-closed tab lingers in the roster. onLobbySync only clears the dead pendingOut once the ghost finally expires from lobby[] (:785), so the challenger sits on WAITING… until the 12s _chalT fires 'No response'.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:345 (75s expiry), :785 (clear-on-absent), :861"
+          },
+          {
+            "scenario": "Guest's rr-match SUBSCRIBE errors/timeouts → guest never reaches setup and is left on the lobby while the challenger waits as host.",
+            "cause": "enterSetup runs only on the FIRST match SUBSCRIBED (_matchSubbedOnce, :3349). If the guest's channel subscribe hits CHANNEL_ERROR/TIMED_OUT, it never enters setup; it has already broadcast its accept, so the challenger opens the host side and waits on an escalating line. The guest gets only a bounded resub (≤20) then a dead-conn chip — no auto-return to lobby, no failcard.",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:3349 (setup gated on SUBSCRIBED), :3354-3360 (error→resub only)"
+          },
+          {
+            "scenario": "Phantom ACCEPT re-appears for a duel the guest is already in.",
+            "cause": "acceptChallenge clears incoming={} and opens the match (:885-886), but the challenger's _chalRetry keeps re-emitting 'challenge' for up to ~8s (:868-873). A re-received challenge re-sets incoming[fromId]={mid} (:876-879); if the guest backs out to the lobby it sees a stale ACCEPT for the match it already joined (idempotent but confusing).",
+            "severity": "P2",
+            "codeRef": "multiplayer.js:868-873 (_chalRetry), :876-879 (re-set incoming), :885"
+          }
+        ],
+        "gaps": [
+          "No room = weakest reconnect of the four mandated paths. A pure sendChallenge duel has no room/server record — recovery is limited to in-memory bounded channel-resub of rr-match-<mid> (_scheduleChannelResub/_rebuildMatchChannel :3354-3369). A full leave, backToLobby, or page reload has NO 'rejoin this duel' affordance; the mandate's 'easy, intelligent reconnect to that room' is structurally unmet because no room exists.",
+          "Two different buttons are both labeled CHALLENGE: the lobby-PRESENCE roster (mpx-roster) → sendChallenge (this path, roomless); the ONLINE-NOW roster (mpx-online, :2918-2933) → battleCall (site path, opens a real room). The path that satisfies the reconnect mandate is battleCall, NOT this one — so 'People → Challenge' is ambiguous and the reconnect-capable variant is not the presence-roster CHALLENGE.",
+          "Window mismatch: challenger _chalGrace = 24s (:856) but guest _ansRetry only re-emits for ~12s (:894 `++_rt > 6`). The rescue window the challenger honors is not backed by the guest's re-emit budget, so late-accept rescue silently fails past 12s.",
+          "No stranded-participant timeout on the challenge match channel: if the handshake half-completes (one side on rr-match, the other never joins), BOTH sides wait indefinitely (host and guest each on an escalating 'waiting' line) with no auto-forfeit, no 'opponent never joined — back to lobby' failcard, and no re-challenge shortcut.",
+          "READY is gated purely on presence convergence with a 10s heartbeat and no fallback (:1183/1192/342) — a single dropped hb stalls the start up to 10s, and a persistent drop deadlocks it silently because the both-ready watchdog can't arm without meReady (:3494).",
+          "onChallenge lacks a p.fromId!==ME.id guard (:876-877); only the roster's ME.id row-filter (:810) prevents a self-challenge today — defense-in-depth gap if any reflected/duplicated challenge carried fromId===ME.id."
+        ]
+      },
+      {
+        "entryFlow": "Two \"seat a 2nd player\" paths. (A) BROWSE ROOMS: a host opens a public room via openRoom→openRoomWithId (multiplayer.js:3780/3788), which one-shot-broadcasts room-meta via advertiseRoom (3802) into every peer's roomsDir (4217/4553). Other players discover it in the lobby LIVE NOW list (renderLiveNow, 4595) or the Browse screen (renderRooms, 4719) and click JOIN → joinRoom(rid,false) (4247) → joinRoomChannel → onRoomPeers seats the first non-spec joiner as p2 host-side (3977-3982); host START→startRoomMatch→room-start hands both seats into the match channel. (B) HOST-PANEL \"PLAY IN REACTIVE RHYTHM\": the site opens /game?review=<token>; catalog.js resolves it → #review-launch card (catalog.js:3025+); the host presses PLAY (solo launchTrack) or GO LIVE → RhythmMP.openShowRoom (catalog.js:3199 → multiplayer.js:4912) → a PUBLIC room.show=true room where the host runs and everyone else WATCHES; a 2nd player only arrives via the artist call-in (/show/invite, catalog.js:3236) or a host-opened challenger seat.",
+        "path": "MP second-player seating — Path A (Browse Rooms) and Path B (Host-panel \"Play in Reactive Rhythm\" / GO LIVE show room)",
+        "reconnectStory": "Transient socket flaps are covered: room channel resub with bounded ≤20 backoff preserving `room` state (_scheduleChannelResub('room'), 3934/3308), mid-match \"Reconnecting…\" banner (3359), room-start re-emit + both-ready watchdog, _critQ re-flush on SUBSCRIBED (3918), _pendJoin re-pings a late host ~45s (4156-4194), and _roomGoneRescue on positive room-gone proof (4079). But PAGE-LEVEL reconnect exists ONLY for show rooms and tournaments: rr_showroom persist + maybeReconnectShowRoom (5689/5702/7810) and rr_tour. There is NO rr_room persistence for a normal 1v1 room — neither host nor guest. A normal-room host who refreshes/crashes vanishes with no rejoin (guest then hits the \"host never showed\" fail card, 4236); a guest who refreshes has no way back except an ?mproom deep-link they usually don't have. There is also no in-UI \"reconnect to the room you dropped from\" affordance for normal rooms — the mandate's \"easy, intelligent reconnect\" is only realized for show/tournament, not for the core browse/battle 1v1.",
+        "failureModes": [
+          {
+            "scenario": "Path A: A room whose advertised count is a stale 2/2 (guest peeked then left, or a presence lull) renders its JOIN button DISABLED as 'FULL' in both the Browse directory and (by exclusion) drops out of LIVE NOW — so the real second player literally cannot click to seat, even though the seat is open.",
+            "cause": "build173 removed the stale-count hard bail INSIDE joinRoom (multiplayer.js:4260-4266, host is now seat-authoritative), but the UI renderers were NOT updated: renderRooms still computes full=(r.count||1)>=(r.max||2) and emits `disabled`/FULL (4741,4751,4760), and renderLiveNow's rids filter only lists a room when count<max OR show OR (live&&full) (4595) — a full-but-not-live normal room is excluded entirely. The seat-authoritative fix is unreachable because no click can fire.",
+            "codeRef": "multiplayer.js:4741,4760 (renderRooms full/disabled) & 4595 (renderLiveNow filter) vs 4260-4266 (joinRoom bail removed)",
+            "severity": "P1"
+          },
+          {
+            "scenario": "Path A: A fresh player who opens the MP lobby AFTER a host advertised sees an EMPTY/stale LIVE NOW list and cannot discover the open room to join it.",
+            "cause": "advertiseRoom's room-meta is a one-shot broadcast (never replayed to a late subscriber), and the only periodic re-advertise (startLiveAdvertise, 3831) is guarded by matchLive — a WAITING/open room never re-advertises. On lobby SUBSCRIBED no room-ping is sent unless a deep-link pend exists (joinLobby 743-777); reconcileRoomsFromPresence only PRUNES roomsDir, never adds (4556). Only navigating to the Browse screen pings (gotoRooms, 3773), so the lobby-level LIVE NOW surface (the intended discovery hero) stays blank.",
+            "codeRef": "multiplayer.js:743-777 (no ping on lobby SUBSCRIBED), 3831-3838 (live-only re-advertise), 4556-4563 (reconcile prunes only)",
+            "severity": "P1"
+          },
+          {
+            "scenario": "Path B: The host-panel 'Play in Reactive Rhythm' / GO LIVE launch does NOT reliably produce a 1v1 — by default it opens a solo broadcast that seats nobody.",
+            "cause": "openShowRoom creates room.show=true with the host as sole player (solo-always-works, 4907-4911) and default openSeat 'artist' (_consumeShowRoom 4942; catalog default _rvSeatPol). advertiseRoom only sets open=1 when openSeat && openSeat!=='artist' (3821), so renderRooms/renderLiveNow paint WATCH-only (no seat button, 4745-4749/4623-4638). Getting a 2nd player requires the separate artist call-in (/show/invite) succeeding AND the artist accepting — otherwise the host runs solo forever. This structurally violates the 'every entry path reliably ends in a live 1v1' mandate.",
+            "codeRef": "multiplayer.js:4912-4964 (openShowRoom/_consumeShowRoom), 3821 (open flag), 4745-4749 (WATCH-only render); catalog.js:3199-3214",
+            "severity": "P1"
+          },
+          {
+            "scenario": "Path B: The GO LIVE attempt silently degrades to a solo review card (no room at all) when the lobby is slow to subscribe.",
+            "cause": "openShowRoom raises MP and waits for lobby SUBSCRIBED (or a 500ms poll) to consume the spec, guarded by an 8s watchdog that calls _showRoomFail → drops back to the solo review card (4919-4932, 4983-4992); a second 8s watchdog guards the room-channel subscribe (4955-4957). On a cold/slow Realtime connect the host never even gets an advertised room, so no browser/LIVE NOW entry ever appears for a second player to find.",
+            "codeRef": "multiplayer.js:4924-4932 (8s lobby watchdog), 4955-4957 (8s room-subscribe watchdog), 4983-4992 (_showRoomFail→solo)",
+            "severity": "P2"
+          },
+          {
+            "scenario": "Path A: A joiner is told 'That match is already in progress — WATCH instead' and cannot take the open seat of a room that is actually idle/waiting.",
+            "cause": "joinRoom hard-bails to spectate on meta.live (4266). meta.live comes from advertiseRoom's live:matchLive?1:0 (3811) and is only cleared by the host's post-match re-advertise (settleIfReady 2521, endMatch/teardown). Because broadcasts aren't replayed, a lobby user holding a stale live:1 roomsDir entry is mis-branched to WATCH; the fresh live:0 only arrives after a gotoRooms ping, but a click in the stale window seats them as spectator.",
+            "codeRef": "multiplayer.js:4266 (meta.live bail), 3811 (live flag source), 2521 (post-settle re-advertise)",
+            "severity": "P2"
+          },
+          {
+            "scenario": "Path A/B: A normal-room HOST refresh or crash orphans the room — the seated/joining guest is stranded with no reconnect and the room can never become a live 1v1.",
+            "cause": "No rr_room persistence for normal rooms (only rr_showroom/rr_tour exist, 5689/5997/7808-7810). A host crash sends no room-gone, so the guest sits until _pendJoin/onRoomPeers grace expires → 'NO HOST IN THIS ROOM' fail card (4236). The host, on reload, boots to the menu with no revive path. Mandate's 'easy intelligent reconnect' is unimplemented for the core 1v1 room.",
+            "codeRef": "multiplayer.js:5689/5702 (show-only persist), 7808-7810 (only tour/show revive on boot), 4225-4238 (guest strand fail card)",
+            "severity": "P1"
+          },
+          {
+            "scenario": "Path A/B: The picked track/level fails to carry into the SEATED opponent's client, so the 1v1 half-starts (host runs, guest gets a dead/blank board) or the seated player's decode fails.",
+            "cause": "The host's song pick is a one-shot 'song' broadcast (3895) a late joiner misses; the safety net is the 4s room-state beat that ships sel and onRoomState re-applies it via onSong (455-491) — but if the guest joined via joinRoomDirect with an unknown host (p1 null) or the host's room-state beat hasn't run (host not yet re-subscribed), sel can be stale at START. Separately, if the resolved track's audio_url is HLS/undecodable, chartUrl decode fails for p2 (spectator path shows this at 5253-5257) and the seated match can't chart.",
+            "codeRef": "multiplayer.js:3895 (one-shot song), 455-491 (room-state sel safety net), 5253-5266 (decode-fail fallback)",
+            "severity": "P2"
+          },
+          {
+            "scenario": "Path A: Two players clicking JOIN on the same 1-seat room both attempt to seat; only host-side onRoomPeers arbitration resolves it, and the loser gets no clear 'seat taken, spectate?' outcome.",
+            "cause": "joinRoom no longer pre-checks capacity (4260-4266) and optimistically sets room.p2=ME.id locally (4267); the host seats whichever non-spec member onRoomPeers picks first (others[0], 3978-3982) and re-advertises count. The un-seated client isn't demoted to spectator or told — it waits in enterRoomWaiting believing it's p2 until presence/room-state contradicts it, with no dedicated 'the seat was taken' card.",
+            "codeRef": "multiplayer.js:4267 (optimistic local p2), 3977-3982 (host arbitration), no loser-demote branch",
+            "severity": "P2"
+          }
+        ],
+        "gaps": [
+          "Mandate 'every entry path reliably ends in a live 1v1' is NOT met by Path B: GO LIVE defaults to a solo broadcast (openSeat 'artist'); a 1v1 depends on a separate artist call-in succeeding, and no seat button is surfaced to browsers/LIVE NOW unless the host explicitly picks the non-default 'auto'/'confirm' policy.",
+          "Mandate 'SHOVED DIRECTLY into a host room, no lobby limbo' — Browse/JOIN and the review GO LIVE both leave players in enterRoomWaiting until the host manually presses START; there is no auto-start when both seats are filled + ready, so a filled room can idle indefinitely.",
+          "Mandate 'easy intelligent RECONNECT to that room if a peer drops' — realized only for show rooms (rr_showroom) and tournaments (rr_tour). Normal 1v1 rooms have NO page-refresh/crash persistence for either host or guest and no in-UI 'rejoin your room' affordance; a host refresh permanently orphans the room.",
+          "Discovery reliability gap: the lobby LIVE NOW hero (the primary Browse-path discovery surface) is not primed on lobby entry — no room-ping fires on lobby SUBSCRIBED, and waiting rooms never periodically re-advertise, so a fresh user's list is empty until they manually open Browse or hit refresh.",
+          "UI/logic drift: renderRooms/renderLiveNow still encode the OLD 'full → cannot join' capacity rule (disabled FULL button, filtered-out card) that build173 deliberately removed from joinRoom — the seat-authoritative fix is dead because the click can't be issued.",
+          "Stale-broadcast branching: seat-vs-watch (meta.live at 4266) and capacity (r.count) decisions ride one-shot broadcasts that are never replayed to late subscribers, so mis-branches (WATCH instead of seat; FULL instead of open) persist until an out-of-band ping refreshes roomsDir.",
+          "No loser-of-race resolution: concurrent JOINs resolve only host-side with no explicit 'seat taken → spectate?' path for the client that lost, risking a ghost 'you are p2' state."
+        ]
+      }
+    ],
+    "design": {
+      "architecture": "DIRECTOR'S THESIS: today MP has four doors but only one hallway that actually holds weight (show rooms/tournaments). Everything else rides one-shot broadcasts and a query param that evaporates on reload. The fix is not more patches — it is ONE FUNNEL, THREE HANDLES, A SERVER OF RECORD, AND A VISIBLE ROPE.\n\n1) ONE FUNNEL — every entry path ends in a normal ROOM, converged by _pendJoin. Auto-battle-call, host-panel launch, and Browse already do; People→Challenge (the roomless rr-match duel) gets converted: on acceptChallenge the CHALLENGER opens a private room (openRoomWithId with a minted rid) and broadcasts `challenge-room{mid,rid}`; the acceptor _pendJoin(rid,{role:'guest'}). This is deliberate unification: the duel inherits the room's entire reconnect machinery (resub, room-state beat, rr_room persistence below) instead of maintaining a parallel, weaker rr-match-only handshake. Mutual-challenge deadlock is killed with a deterministic tie-break: if incoming[fromId] exists AND pendingOut targets fromId, the LOWER ME.id becomes the room opener and the other side's outgoing is auto-cancelled.\n\n2) THREE HANDLES — the room id must survive anything short of clearing the browser. (a) sessionStorage `rr_room` = {rid, role, name, sel, matchId, fromCall, ts} written on EVERY seat event: openRoomWithId (host), joinRoom/_pendJoin success (guest), updated at beginMatch, TTL 120s refreshed by the existing 4s room-state beat; cleared ONLY on explicit leave/room-gone-confirmed. (b) URL: history.replaceState writes ?mproom=<rid>&mprole=<role> into the live URL on seat and strips it on clean leave — this makes a reload of a Browse- or Challenge-joined guest identical to a deep-link boot, with zero new boot code. (c) Server row (below). Boot chain (multiplayer.js:7807-7811) gains `maybeReconnectRoom()` after rr_tour/rr_showroom: revive host → re-open rr-room-<rid>, advertiseRoom, re-emit room-state (guests re-converge via the existing onRoomState versioned snapshot at :474); revive guest → _pendJoin(rid,{role:'guest'}) which already self-heals via onRoomMeta.\n\n3) SERVER OF RECORD — openRoomWithId (multiplayer.js:3788) currently never registers the room, so roomStatus preflight reflects only what the SITE wrote (the proven 'rr_active_rooms EMPTY' symptom). Game adds three tiny REST calls through catalog.js: room-create on open, room-heartbeat every 20s while room.id is set (piggyback the room-state beat), room-close on clean leave. Guest preflight (:4200-4217) becomes a RETRYING check (ticks 2/6/10) that NEVER hard-latches _roomDead off a single alive:false — realtime host-evidence (:4165) always overrides REST, and a server row with recent host_seen_at extends the 45s guest patience (\"host is coming\") instead of fail-carding a slow-booting host. FAIL-OPEN: if the edge function 404s (the known Lovable says-Ships-but-prod-404s gotcha), preflight is treated as unknown, never as dead.\n\n4) THE HOST NEVER SILENTLY KILLS THE ROOM — beforeunload (:7768) stops broadcasting room-gone when rr_room persistence is armed; it broadcasts `room-brb{rid,holdMs:90000}` instead. The guest enters a HOLDING state (\"Opponent reconnecting — seat held\") with the seat reserved for 90s; host reload revives via maybeReconnectRoom and re-advertises, guest re-converges without ever seeing a dead card. Only an explicit LEAVE or a 90s expiry produces room-gone semantics. Host-side busy guard (_openHost bail at :4132-4143) stops being a silent no-op: if _qmBootRoom's rid differs from the current context and matchLive is false, close the stale context and open the paired room; if matchLive, show a \"finish or forfeit to answer the call\" card. qmResume's 'waiting' branch (:3724-3730) calls _qmHostFallback() before returning so ?mpqm=resume can never eat the pairing.\n\n5) THE VISIBLE ROPE — a REJOIN pill: whenever rr_room exists and we are not currently seated in that rid, paint a crimson \"REJOIN MATCH\" pill on the start screen, jukebox header, and MP lobby; one tap = _pendJoin(rid,{role}). The connection chip (currently trapped on #multiplayer-screen, index.html:6118/6505) gets a mini clone inside #game HUD so a dead socket mid-match (resub cap at :3294) is tap-to-retry where the player actually is.\n\n6) NO LOBBY LIMBO — battle-sourced rooms (fromCall/challenge flag in rr_room) honor the playtest-3 decree: each-readies-auto-start. When both seats are filled, both clients auto-focus READY; when both ready, maybeStart fires without the host pressing START. The callee is SHOVED: deep-link boot already auto-opens MP (:7796/:7805) — we add skipIntro handling so no menu is ever seen between click and seat.\n\n7) DISCOVERY THAT CAN'T GO STALE — waiting rooms re-advertise every 10s (startLiveAdvertise loses its matchLive-only guard, :3831); joinLobby's SUBSCRIBED branch always sends a room-ping (not only when a deep-link pends, :743-777); renderRooms/renderLiveNow drop the pre-build173 'FULL=disabled' rendering (:4741/:4760/:4595) — JOIN is always clickable, the host is seat-authoritative, and a seat-race loser receives an explicit host `seat-denied` broadcast → \"Seat taken — WATCH instead?\" card. GO LIVE (openShowRoom) defaults openSeat to 'auto' so the host-panel launch surfaces a real challenger seat in LIVE NOW instead of a solo broadcast.\n\nWHAT THE SITE (LOVABLE) MUST DO — three things, all mandatory: (S1) THE P0: on battle-call accept, navigate BOTH peers — callee to /game?mproom=<rid>&mprole=guest&skipIntro=1 (already done) AND the CALLER to /game?mproom=<rid>&mprole=host&skipIntro=1 with the SAME server-minted rid; if the caller is already inside the game, deliver the rid over the existing bc:user:<id> broadcast as {type:'call-accepted', rid} so multiplayer.js opens the host room in place with no navigation. (S2) register the rid in rr_active_rooms at call-creation time and expose room-create / room-heartbeat / room-status / room-close on the game-catalog edge function (anon-key writable for these four ops, rid-scoped) — and EXPLICITLY DEPLOY the function (known gotcha: agent says Ships while prod 404s; verify with a curl before declaring done). (S3) never strip the ?mproom query when routing /game, and keep the caller/callee rids provably identical (one mint, two URLs).",
+      "fixes": [
+        {
+          "id": "F1",
+          "side": "site",
+          "priority": "P0",
+          "file": "Lovable: battle-call accept flow (edge function + navbar/live-panel navigation)",
+          "problem": "The site only navigates the CALLEE into ?mproom=<rid>&mprole=guest; the caller's tab never loads with mprole=host, so _qmBootRoom/_qmHostFallback (multiplayer.js:300-304, 3704) never trigger, no host room ever opens, rr_active_rooms stays empty, and the lone guest dead-cards. Proven root cause of the auto-battle-call P0.",
+          "fix": "One rid mint per call. On accept: navigate callee to /game?mproom=<rid>&mprole=guest&skipIntro=1 AND converge the caller into the SAME rid — full navigation to /game?mproom=<rid>&mprole=host&skipIntro=1 if the caller is on the site, or a bc:user:<callerId> broadcast {type:'call-accepted', rid} if the caller is already in-game (game listens and opens the host room in place). Register the rid in rr_active_rooms at mint time. Verify with curl against prod before sign-off (deploy gotcha)."
+        },
+        {
+          "id": "F2",
+          "side": "game",
+          "priority": "P0",
+          "file": "multiplayer.js (openRoomWithId :3788, joinRoom :4247, _pendJoin :4121, boot chain :7807-7811)",
+          "problem": "No persistence for normal 1v1 rooms: rr_showroom is show-host-only, rr_tour is tournament-only. Any reload by either peer permanently orphans the room; Browse/Challenge joiners have no handle at all. Owner's 'easy intelligent reconnect' mandate is structurally unmet.",
+          "fix": "Add rr_room sessionStorage descriptor {rid, role, name, sel, matchId, fromCall, ts} written on every seat (host open + guest join), refreshed by the 4s room-state beat, cleared only on explicit leave/confirmed room-gone. Add maybeReconnectRoom() to the boot revive chain after rr_tour/rr_showroom: host revives by re-opening rr-room-<rid> + advertiseRoom + room-state re-emit; guest revives via _pendJoin(rid,{role:'guest'}). Also history.replaceState ?mproom=<rid>&mprole=<role> into the live URL on seat (strip on clean leave) so reload==deep-link for all joiners."
+        },
+        {
+          "id": "F3",
+          "side": "game",
+          "priority": "P0",
+          "file": "multiplayer.js (beforeunload :7768, onRoomGone/_roomGoneRescue :4079, guest waiting UI)",
+          "problem": "beforeunload broadcasts room-gone on host reload, actively telling the guest the room is dead even when the host is coming right back — the opposite of 'hold the room for a returning peer'.",
+          "fix": "When rr_room persistence is armed, beforeunload sends room-brb{rid,holdMs:90000} instead of room-gone. Guest enters a HOLDING state ('Opponent reconnecting — seat held', countdown) instead of the dead card; seat reserved 90s; host revival re-advertises and the guest re-converges via onRoomMeta/onRoomState. Explicit LEAVE still sends room-gone immediately."
+        },
+        {
+          "id": "F4",
+          "side": "game",
+          "priority": "P0",
+          "file": "multiplayer.js (_pendJoin preflight :4200-4217, _hostEvidence :4165, watchdog :4218-4238)",
+          "problem": "One-shot roomStatus preflight at tick 2 with a permanent _roomDead latch ejects a merely-slow host ('THAT ROOM IS CLOSED'); fixed 45s patience fail-cards a cold-booting host; a single REST alive:false contradicts live realtime evidence.",
+          "fix": "Re-preflight at ticks 2/6/10; never latch _roomDead unless 2+ consecutive alive:false AND no realtime host evidence; realtime evidence always wins over REST. If the server row exists with recent host_seen_at, extend patience beyond 45s with a 'host is joining…' line. Fail-OPEN when the endpoint 404s/errors (treat as unknown, not dead)."
+        },
+        {
+          "id": "F5",
+          "side": "both",
+          "priority": "P1",
+          "file": "game: multiplayer.js:3788-3800 + catalog.js (REST helpers); site: game-catalog edge function",
+          "problem": "openRoomWithId never registers the room server-side — roomStatus and any reconnect logic see only site-written state ('rr_active_rooms EMPTY' symptom); host aliveness is unverifiable.",
+          "fix": "Game POSTs room-create on open, room-heartbeat every 20s (piggyback the room-state beat) while room.id is set, room-close on clean leave. Site adds these rid-scoped anon ops to game-catalog and returns {alive, host_seen_at, count} from room-status. Explicit deploy + curl verification."
+        },
+        {
+          "id": "F6",
+          "side": "game",
+          "priority": "P1",
+          "file": "index.html (start screen, jukebox header, #game HUD) + multiplayer.js (pill painter, conn chip mini)",
+          "problem": "No visible rejoin affordance anywhere: the only recovery UI (conn chip, _connRetry :3321) lives on #multiplayer-screen (index.html:6118/6505) which is off-screen during a live run; after a reload there is nothing at all.",
+          "fix": "REJOIN pill: when rr_room exists and current room.id !== rid, paint a crimson 'REJOIN MATCH' pill on start screen, jukebox header, and MP lobby; tap = _pendJoin(rid,{role}). Clone a mini conn chip into the #game HUD during matchLive so the dead-socket state (:3294) is tap-to-retry in place. Bump ?v=NN."
+        },
+        {
+          "id": "F7",
+          "side": "game",
+          "priority": "P1",
+          "file": "multiplayer.js (acceptChallenge :881, onChallengeAns :903, sendChallenge :851, _ansRetry :892)",
+          "problem": "People→Challenge duels are roomless (bare rr-match-<mid>): no persistence, no reconnect, no rejoin possible; guest _ansRetry stops at 12s while challenger _chalGrace honors 24s (rescue window unbacked); mutual challenges produce two hostless guests (deadlock).",
+          "fix": "Unify onto the room funnel: on accept, the CHALLENGER opens a private room (openRoomWithId, minted rid) and broadcasts challenge-room{mid,rid}; acceptor runs _pendJoin(rid,{role:'guest'}). Duel inherits rr_room persistence + all reconnect machinery. Extend _ansRetry re-emits to 24s (12 tries) to back _chalGrace. Mutual-challenge tie-break: when incoming[from] and pendingOut.to are the same peer, lower ME.id opens the room, other side auto-cancels its outgoing. Add p.fromId!==ME.id guard in onChallenge (:876)."
+        },
+        {
+          "id": "F8",
+          "side": "game",
+          "priority": "P1",
+          "file": "multiplayer.js (maybeStart/enterRoomWaiting, room-state, rr_room.fromCall flag)",
+          "problem": "'SHOVED into a game' fails at the last step: a filled battle room idles until the host manually presses START — lobby limbo by another name.",
+          "fix": "Battle-sourced rooms (fromCall or challenge origin) honor the playtest-3 decree each-readies-auto-start: both seats filled → both clients surface READY prominently; both ready → maybeStart fires with no host START press. skipIntro honored end-to-end so the callee goes click → seat with no menus."
+        },
+        {
+          "id": "F9",
+          "side": "game",
+          "priority": "P1",
+          "file": "multiplayer.js (renderRooms :4741/:4751/:4760, renderLiveNow :4595, startLiveAdvertise :3831, joinLobby :743-777, onRoomPeers :3977)",
+          "problem": "UI still encodes the pre-build173 'FULL=disabled' rule so the seat-authoritative join fix is unreachable; waiting rooms never re-advertise (matchLive-only guard) and no room-ping fires on lobby entry, so LIVE NOW is stale/empty for late arrivals; seat-race losers get no resolution.",
+          "fix": "(a) renderRooms/renderLiveNow: JOIN always clickable, show 'count/max' as info only, list full-but-waiting rooms. (b) startLiveAdvertise drops the matchLive guard — any open room re-advertises every 10s. (c) joinLobby SUBSCRIBED always sends a room-ping. (d) Host onRoomPeers sends seat-denied to non-winners → client shows 'Seat taken — WATCH instead?' card and demotes cleanly."
+        },
+        {
+          "id": "F10",
+          "side": "both",
+          "priority": "P1",
+          "file": "game: multiplayer.js openShowRoom/_consumeShowRoom :4912-4964, advertiseRoom open flag :3821; site: seat-policy default in the host panel",
+          "problem": "Host-panel GO LIVE defaults openSeat='artist' → solo broadcast; advertiseRoom only sets open=1 for non-artist policies, so browsers see WATCH-only and no 1v1 ever forms without a separate call-in succeeding.",
+          "fix": "Default openSeat to 'auto' (first joiner seated) for the Play-in-Reactive-Rhythm launch; advertiseRoom sets open=1 accordingly so LIVE NOW paints a TAKE-THE-SEAT button. Keep artist call-in as an additive path. Site exposes the seat-policy choice but defaults to auto."
+        },
+        {
+          "id": "F11",
+          "side": "game",
+          "priority": "P2",
+          "file": "multiplayer.js (_openHost :4132-4143, qmResume :3724-3730)",
+          "problem": "Host boot-fallback silently no-ops if any room/tour/match context exists (boot-revived rr_tour can win the race and strand the guest); qmResume's 'waiting' branch returns without consuming _qmBootRoom.",
+          "fix": "_openHost: if _qmBootRoom rid differs and !matchLive, close the stale context and open the paired room; if matchLive, show a 'finish or forfeit to answer the call' card (never silent). qmResume 'waiting' branch calls _qmHostFallback() before returning."
+        },
+        {
+          "id": "F12",
+          "side": "game",
+          "priority": "P2",
+          "file": "multiplayer.js (joinLobby error branch :743-776, enterRoomWaiting host watchdog :4490)",
+          "problem": "Realtime-down on the guest silently eats a battle call (grey banner, no rope); host who opened the paired room waits forever with no re-ring when the guest never arrives.",
+          "fix": "If a deep-link pend exists and lobby subscribe errors, show a fail card with RETRY (re-subscribe + re-pend) instead of only the banner. Host-side: 60s no-guest watchdog in a fromCall room → 'They haven't joined — RE-RING / COPY INVITE / BROWSE' escalation card (re-ring re-fires the bc:user call broadcast)."
+        },
+        {
+          "id": "F13",
+          "side": "game",
+          "priority": "P2",
+          "file": "multiplayer.js (joinRoom meta.live bail :4266, advertiseRoom :3811, settleIfReady :2521)",
+          "problem": "Stale live:1 in roomsDir mis-branches a seat-seeking joiner into spectate on an idle room (one-shot broadcasts never replayed).",
+          "fix": "On a live:1 join click, do a room-ping first and branch on the FRESH meta (300ms budget, fall back to stale); post-match re-advertise already clears live — additionally re-advertise on match end via the 10s waiting re-advertise from F9."
+        },
+        {
+          "id": "F14",
+          "side": "site",
+          "priority": "P2",
+          "file": "Lovable: /game route handling + review-token launch",
+          "problem": "Site routing can strip or collide with the ?mproom query (review token + mproom on the same URL), destroying the reconnect handle.",
+          "fix": "Guarantee ?mproom/?mprole pass through /game untouched, coexist with ?review=, and are never rewritten by client-side routing. Add a smoke test to the site: load /game?mproom=test&mprole=guest and assert the query survives to the game's location.search."
+        }
+      ],
+      "testMatrix": [
+        {
+          "id": "T1",
+          "path": "Auto-battle-call convergence (happy path)",
+          "steps": "Tab A: load :8790/index.html?mproom=RIDX&mprole=host&skipIntro=1&cb=<ts>. Tab B: load :8791/index.html?mproom=RIDX&mprole=guest&skipIntro=1&cb=<ts>. Poll RhythmMP debug/room state in both via preview_eval.",
+          "expected": "Within 20s both tabs report room.id===RIDX, host tab isHost:true with guest in members, guest tab seated p2 (not spectator); rr_room written in BOTH tabs; URL still carries mproom; no console errors.",
+          "driveable": true
+        },
+        {
+          "id": "T2",
+          "path": "Callee-arrives-first (slow host)",
+          "steps": "Load guest tab (mprole=guest) first; wait 10s; then load host tab (mprole=host) with the same rid.",
+          "expected": "Guest NEVER shows 'THAT ROOM IS CLOSED' or 'ROOM DIDN'T ANSWER' during the gap (F4 re-preflight, no latch); on host arrival guest converges within 10s; telemetry mp_join_converged fires.",
+          "driveable": true
+        },
+        {
+          "id": "T3",
+          "path": "Both-as-guest / missing mprole",
+          "steps": "Load both tabs with mprole=guest and the same fresh rid (no server row).",
+          "expected": "No silent infinite wait: both reach the fail card within the patience window with TRY AGAIN + BROWSE ropes; neither claims a phantom seated state; with a server row present (F5) the card names 'no host registered'.",
+          "driveable": true
+        },
+        {
+          "id": "T4",
+          "path": "Host reload while room waiting (rr_room revive)",
+          "steps": "T1 setup; foreground host tab; location.reload() it (beforeunload fires). Foreground guest tab and poll its state during the gap; then foreground host and let boot revive run.",
+          "expected": "Guest receives room-brb → HOLDING state ('seat held'), NOT a dead card (F3); host boot runs maybeReconnectRoom, re-advertises; guest re-converges to the same rid within 15s of host revival; match can then start.",
+          "driveable": true
+        },
+        {
+          "id": "T5",
+          "path": "Guest reload after Browse-style join (no original deep-link)",
+          "steps": "Host tab opens a public room via RhythmMP UI/debug hook (no URL params). Guest tab joins via joinRoom(rid) from roomsDir. Verify guest URL now carries ?mproom (F2 replaceState) and rr_room is set. Reload guest tab.",
+          "expected": "Guest boot revives via rr_room/URL → _pendJoin same rid → reseated as p2 without touching Browse; host sees the guest drop then return (brb/hold acceptable), never a permanent empty seat.",
+          "driveable": true
+        },
+        {
+          "id": "T6",
+          "path": "Mid-match reload (guest)",
+          "steps": "Start a 1v1 (auto-start per F8 or debug start). ~10s into the run, reload the guest tab. Observe host tab behavior and guest revival.",
+          "expected": "Host gets _oppGoneGrace hold, then either (a) guest revives into the room and both settle to a clean result/rematch screen, or (b) after grace an honest forfeit — but the ROOM survives and both land back in it for a rematch; rr_room.matchId recorded; no stranded 'waiting' state.",
+          "driveable": true
+        },
+        {
+          "id": "T7",
+          "path": "Dead socket mid-match → visible rope",
+          "steps": "During a live match in the foreground tab, force the room/match channel down via debug (unsubscribe socket or RhythmMP test hook); wait past a resub cycle; read #game DOM for the mini conn chip; tap it via preview_eval click.",
+          "expected": "Mini conn chip visible ON #game showing RECONNECTING/OFFLINE (F6); tap fires _connRetry; on recovery state returns to LIVE and the match channel is rebuilt without teardown.",
+          "driveable": true
+        },
+        {
+          "id": "T8",
+          "path": "People→Challenge ends in a ROOM (F7 unification)",
+          "steps": "Both tabs in MP lobby (presence roster shows each other; allow up to 10s for hb). Tab A sendChallenge(B). Foreground B, acceptChallenge. Poll both for room state.",
+          "expected": "Challenger opens a private room, challenge-room{rid} delivered, acceptor _pendJoins it; BOTH report the same room.id; rr_room written on both; both-ready auto-start (F8) launches the match with no host START press.",
+          "driveable": true
+        },
+        {
+          "id": "T9",
+          "path": "Mutual-challenge tie-break",
+          "steps": "Via debug, fire sendChallenge from A→B and B→A within ~1s (background tab's send may lag; use the crit-queue/debug emit). Then have both accept whatever ACCEPT they see.",
+          "expected": "Exactly ONE room opens (lower ME.id hosts), the other outgoing auto-cancels; both converge into that single room; no two-hostless-guests deadlock; no stale ACCEPT rows remain after seating.",
+          "driveable": true
+        },
+        {
+          "id": "T10",
+          "path": "Stale FULL room is still joinable (F9 UI parity with build173)",
+          "steps": "Host opens room; guest joins then leaves abruptly (close/kill tab B) so advertised count may stay 2/2. Reopen tab B fresh, open Browse, read the room card DOM, click JOIN.",
+          "expected": "JOIN button is ENABLED (no disabled/FULL), room listed in both Browse and LIVE NOW; click seats the new guest via host arbitration; count re-advertises to 2/2 with the new peer.",
+          "driveable": true
+        },
+        {
+          "id": "T11",
+          "path": "Late-arriving browser discovers a waiting room (LIVE NOW priming)",
+          "steps": "Host opens a room and idles in WAITING. 30s later, boot a fresh guest tab straight into the MP lobby (no Browse click). Read the LIVE NOW list DOM within 12s.",
+          "expected": "The waiting room appears in LIVE NOW without opening Browse (lobby-entry room-ping + 10s waiting re-advertise, F9); card shows a seat/JOIN affordance, not WATCH-only.",
+          "driveable": true
+        },
+        {
+          "id": "T12",
+          "path": "Seat race — two joiners, one seat",
+          "steps": "Requires host + 2 concurrent joiners = 3 live peers; the harness has exactly 2 origins/identities and one foreground tab, so the race can't be genuinely concurrent.",
+          "expected": "Winner seated as p2; loser receives seat-denied → 'Seat taken — WATCH instead?' card and demotes to spectator cleanly (no ghost p2 belief).",
+          "driveable": false
+        },
+        {
+          "id": "T13",
+          "path": "Host-panel GO LIVE auto-seats a challenger (F10)",
+          "steps": "Needs a real review-token launch from the site host panel (HMAC token, host-locked) plus a second player taking the seat — site session required.",
+          "expected": "GO LIVE opens a show room with openSeat auto; LIVE NOW shows TAKE-THE-SEAT; first joiner is seated (not spectating); both-ready starts a 1v1 with the host.",
+          "driveable": false
+        },
+        {
+          "id": "T14",
+          "path": "Server of record lifecycle (F5)",
+          "steps": "Host tab opens a room. Via Lovable MCP raw SQL: SELECT rr_active_rooms row for rid at T+5s, T+30s (heartbeat), then leaveRoom and re-query.",
+          "expected": "Row exists within 5s of open with host id; host_seen_at advances with heartbeats; row removed/expired on clean leave. Curl room-status returns alive:true while open, alive:false after.",
+          "driveable": true
+        },
+        {
+          "id": "T15",
+          "path": "Preflight fail-open when edge function is missing (F4)",
+          "steps": "Point RhythmCatalog.roomStatus at a 404ing path via debug override (or temporarily bad API base in tab config); run the T2 slow-host scenario.",
+          "expected": "Guest treats preflight as UNKNOWN (never 'ROOM IS CLOSED'), realtime host-evidence alone converges the join; telemetry notes preflight_error.",
+          "driveable": true
+        },
+        {
+          "id": "T16",
+          "path": "qmResume + pairing leak (F11)",
+          "steps": "Load host tab with ?mpqm=resume&mproom=RID&mprole=host where matchStatus will return 'waiting' (no active qm match for this anon id).",
+          "expected": "_qmBootRoom is still consumed: the paired host room opens (qmResume 'waiting' branch calls _qmHostFallback); guest tab loaded second converges normally.",
+          "driveable": true
+        },
+        {
+          "id": "T17",
+          "path": "Background-tab throttle survival (harness's own constraint as a test)",
+          "steps": "T1 setup, both seated in WAITING. Foreground the host tab and leave the guest backgrounded for 60s (its timers clamp). Then foreground guest and check both states.",
+          "expected": "Guest is NOT evicted (softPresence 75s expiry outlasts the clamp); heartbeats resume on foreground; room-state beat re-converges any drift; no dead card on either side.",
+          "driveable": true
+        },
+        {
+          "id": "T18",
+          "path": "Host answers a battle call while mid-match elsewhere (F11 busy branch)",
+          "steps": "Host tab in a live match (or with a boot-revived rr_tour); deliver a call-accepted {rid} via bc:user debug emit.",
+          "expected": "NOT a silent no-op: matchLive → 'finish or forfeit to answer' card; idle-but-in-stale-room → stale context closed, paired room opened, guest converges.",
+          "driveable": true
+        },
+        {
+          "id": "T19",
+          "path": "Full end-to-end from the real website UI + feel",
+          "steps": "Two real devices, both foregrounded: user A battle-calls user B from reactivvibe.com People/live panel; B accepts; play a full 1v1 with audio; mid-song, A pulls wifi for 10s; later B refreshes the tab.",
+          "expected": "Both shoved into the same room, auto-start, sync feels simultaneous (<300ms perceived), wifi blip shows RECONNECTING then heals, B's refresh shows the REJOIN pill / auto-revive and the match/room recovers. Audio, AV sync, and 'feel' are human-judged.",
+          "driveable": false
+        },
+        {
+          "id": "T20",
+          "path": "Simultaneous double-reload (worst case)",
+          "steps": "T1 setup seated; reload BOTH tabs within ~2s of each other (background tab reload via debug navigation). Foreground each in turn during revival.",
+          "expected": "Host revives and re-advertises; guest's revived _pendJoin outlasts the host's boot (extended patience via server row, F4/F5) and re-converges; total outage under ~30s; if the host never returns, guest gets an honest fail card with REJOIN retry rather than a silent strand.",
+          "driveable": true
+        }
+      ],
+      "selfCritique": "Where my own design can still strand two players, in descending order of worry. (1) sessionStorage is PER-TAB: rr_room survives a reload but NOT 'user closed the tab and opened a new one' — the most common civilian recovery move. The URL handle only helps if they reopen via history. Mirroring to localStorage fixes that but invites cross-tab poison (two tabs fighting over one seat, stale rooms resurrecting days later); if we add it, it needs a strict TTL and a tab-ownership nonce, which I have not specced — this is the biggest residual hole against the owner's reconnect mandate. (2) The server of record is only as real as Lovable's deploy discipline: the documented failure mode is the agent declaring 'Ships' while prod 404s. I made the game fail-OPEN on preflight errors, which protects joins but silently degrades reconnect back to today's realtime-only behavior — the system can pass every game-side test while the server leg is secretly dead. The curl-verify step is procedural, not enforced. (3) F7 (challenge→room unification) rips out the most battle-scarred handshake in the file; memory shows challenge-reliability fixes were HELD across builds 145/154/155, meaning this exact area has a history of regressions and reverts. Unification is right long-term but it converts a working-if-fragile path into new code — it must ship behind its own build flag with the old rr-match path revivable. (4) room-brb honesty tax: a host who leaves for good now costs the guest a 90s hold before the truth arrives; combined with auto-start (F8) a returning-then-instantly-ready flow could shove an AFK guest into a countdown they didn't see. (5) The mutual-challenge tie-break assumes both peers see both challenges; if one 'challenge' broadcast is lost, the tie-break degenerates to the old race — the deterministic rule reduces but does not eliminate the double-accept window. (6) beforeunload is not guaranteed to fire (crash, OOM, mobile page freeze), so the guest's HOLDING state must also arm off heartbeat silence, which I implied but did not spec — without it a hard-crashed host still yields the old strand until the 75s presence expiry. (7) The harness itself lies a little: background-tab throttling on desktop Chromium is not mobile page-freezing; T17 passing does not prove a phone that fully suspends the page will hold its seat — that only T19 (two real devices) can prove. (8) Finally, the URL handle (?mproom in the live location) can collide with the site's own /game routing and the review-token param; F14 covers it, but any future site-side router change silently severs the third handle, and the game has no self-check that its URL survived — worth adding a boot telemetry event when a seat exists with no URL handle."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Map"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Design"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "map:auto-call",
+      "phaseIndex": 1,
+      "phaseTitle": "Map",
+      "agentId": "a3a78fe0201e11a3a",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783751581973,
+      "queuedAt": 1783751580423,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Auto-battle-call / ?mproom deep-link convergence",
+      "promptPreview": "OWNER MANDATE (core-essential feature): multiplayer must AGGRESSIVELY + INTELLIGENTLY rope two people into a room and a playable 1v1 game. When someone RECEIVES a battle-call they must be SHOVED DIRECTLY into a host room (no lobby limbo). If a peer does not connect or drops, there must be an EASY, intelligent way to RECONNECT to that room. Every entry path must reliably end in a live 1v1: (1) auto…",
+      "lastProgressAt": 1783751792244,
+      "tokens": 116880,
+      "toolCalls": 13,
+      "durationMs": 210267,
+      "resultPreview": "{\"path\":\"Auto-battle-call / ?mproom deep-link convergence\",\"entryFlow\":\"Owner path (1): a website battle-call is meant to deep-link BOTH peers into one server-minted room — caller to ?mproom=<rid>&mprole=host, callee to ?mproom=<rid>&mprole=guest. Game side: caller boot sets _qmBootRoom + nulls _pendingRoomJoin (multiplayer.js:300-304), auto-opens MP (7805), and on lobby SUBSCRIBED runs _qmHostFal…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "map:reconnect",
+      "phaseIndex": 1,
+      "phaseTitle": "Map",
+      "agentId": "a5d6308a20f6a3fad",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783751585421,
+      "queuedAt": 1783751580423,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Reconnection / room-rejoin after reload or dropped connecti…",
+      "promptPreview": "OWNER MANDATE (core-essential feature): multiplayer must AGGRESSIVELY + INTELLIGENTLY rope two people into a room and a playable 1v1 game. When someone RECEIVES a battle-call they must be SHOVED DIRECTLY into a host room (no lobby limbo). If a peer does not connect or drops, there must be an EASY, intelligent way to RECONNECT to that room. Every entry path must reliably end in a live 1v1: (1) auto…",
+      "lastProgressAt": 1783751783451,
+      "tokens": 137065,
+      "toolCalls": 15,
+      "durationMs": 198030,
+      "resultPreview": "{\"path\":\"Reconnection / room-rejoin after reload or dropped connection — normal 1v1 \\\"Battle Room\\\" path (the target of all 4 MP entry paths: auto-battle-call, host-panel launch, browse rooms, People→Challenge)\",\"entryFlow\":\"All four entry paths converge on the SAME normal (non-show) room object + `rr-room-<rid>` channel. Auto-battle-call: callee is SHOVED in via `_pendJoin` (deep-link `?mproom=&m…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "map:challenge",
+      "phaseIndex": 1,
+      "phaseTitle": "Map",
+      "agentId": "af30132d5e32b658a",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783751585136,
+      "queuedAt": 1783751580423,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "People → Challenge → live 1v1 (lobby-presence roster CHALLE…",
+      "promptPreview": "OWNER MANDATE (core-essential feature): multiplayer must AGGRESSIVELY + INTELLIGENTLY rope two people into a room and a playable 1v1 game. When someone RECEIVES a battle-call they must be SHOVED DIRECTLY into a host room (no lobby limbo). If a peer does not connect or drops, there must be an EASY, intelligent way to RECONNECT to that room. Every entry path must reliably end in a live 1v1: (1) auto…",
+      "lastProgressAt": 1783751875927,
+      "tokens": 127864,
+      "toolCalls": 15,
+      "durationMs": 290790,
+      "resultPreview": "{\"path\":\"People → Challenge → live 1v1 (lobby-presence roster CHALLENGE button → sendChallenge handshake → rr-match-<mid>)\",\"entryFlow\":\"Lobby-presence roster (`mpx-roster`, populated from `lobby[]` softPresence broadcast-heartbeats via onLobbySync/renderRoster, multiplayer.js:781-848) renders a per-peer CHALLENGE button wired to sendChallenge (:844). sendChallenge (:851) mints a mid, sets pending…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "map:rooms-hostpanel",
+      "phaseIndex": 1,
+      "phaseTitle": "Map",
+      "agentId": "a568e65dc0dc91b7a",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783751585516,
+      "queuedAt": 1783751580424,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "MP second-player seating — Path A (Browse Rooms) and Path B…",
+      "promptPreview": "OWNER MANDATE (core-essential feature): multiplayer must AGGRESSIVELY + INTELLIGENTLY rope two people into a room and a playable 1v1 game. When someone RECEIVES a battle-call they must be SHOVED DIRECTLY into a host room (no lobby limbo). If a peer does not connect or drops, there must be an EASY, intelligent way to RECONNECT to that room. Every entry path must reliably end in a live 1v1: (1) auto…",
+      "lastProgressAt": 1783751914606,
+      "tokens": 161888,
+      "toolCalls": 22,
+      "durationMs": 329090,
+      "resultPreview": "{\"entryFlow\":\"Two \\\"seat a 2nd player\\\" paths. (A) BROWSE ROOMS: a host opens a public room via openRoom→openRoomWithId (multiplayer.js:3780/3788), which one-shot-broadcasts room-meta via advertiseRoom (3802) into every peer's roomsDir (4217/4553). Other players discover it in the lobby LIVE NOW list (renderLiveNow, 4595) or the Browse screen (renderRooms, 4719) and click JOIN → joinRoom(rid,false…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "fable:design",
+      "phaseIndex": 2,
+      "phaseTitle": "Design",
+      "agentId": "a6e7c68ebcdf26212",
+      "model": "claude-fable-5",
+      "state": "done",
+      "startedAt": 1783751917572,
+      "queuedAt": 1783751916071,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "DIRECTOR'S THESIS: today MP has four doors but only one hal…",
+      "promptPreview": "OWNER MANDATE (core-essential feature): multiplayer must AGGRESSIVELY + INTELLIGENTLY rope two people into a room and a playable 1v1 game. When someone RECEIVES a battle-call they must be SHOVED DIRECTLY into a host room (no lobby limbo). If a peer does not connect or drops, there must be an EASY, intelligent way to RECONNECT to that room. Every entry path must reliably end in a live 1v1: (1) auto…",
+      "lastProgressAt": 1783752162077,
+      "tokens": 88429,
+      "toolCalls": 3,
+      "durationMs": 244505,
+      "resultPreview": "{\"architecture\":\"DIRECTOR'S THESIS: today MP has four doors but only one hallway that actually holds weight (show rooms/tournaments). Everything else rides one-shot broadcasts and a query param that evaporates on reload. The fix is not more patches — it is ONE FUNNEL, THREE HANDLES, A SERVER OF RECORD, AND A VISIBLE ROPE.\\n\\n1) ONE FUNNEL — every entry path ends in a normal ROOM, converged by _pen…"
+    }
+  ],
+  "totalTokens": 632126,
+  "totalToolCalls": 68
+}
