@@ -15,6 +15,27 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build175 — in-game CHALLENGE hardening: delivery PROVEN + late-accept rescue  ·  ?v=474
+
+Drove the in-game **People → Challenge** rail on the two-peer harness (both on the shared `rr-lobby` broadcast
+channel). **The challenge DELIVERS**: peer A's `sendChallenge` reached peer B and B rendered the real incoming
+duel card ("Player HOST wants to duel you — ACCEPT / ✕"). This is exactly the owner's "I pushed challenge but
+they never received it" — and it works. The build145 re-emit loop (`_chalRetry`, 5× over 8s) is what makes it
+robust to a dropped packet; **that fix has never been published** (it's in the HELD stack), so the live site
+still drops single-packet challenges — PUBLISH is the fix.
+
+The dig surfaced one real fragility and I hardened it: if the challenger has a transient stall and the 12s
+"No response" timeout fires, it nulled `pendingOut` — and then a **late ACCEPT was rejected**, stranding the
+accepter (who is still re-emitting its answer and waiting on the match channel). Added `_chalGrace`: a 24s
+window (12s wait + 12s grace) so `onChallengeAns` still honors a late accept and opens the match — as long as
+we haven't since gone into a match or issued a newer challenge. Clears any stale "No response" banner on
+connect. `node --check` clean, score `+=` still 17.
+
+NOTE on harness limits: the accept → match *convergence* can't be fully driven headless because the Browser
+pane keeps only ONE tab foregrounded, and the accept handshake has a tight 12s window (backgrounded tabs stop
+receiving realtime). Delivery + the accept card + the late-accept fix are proven; full challenge→live-match
+across two real signed-in accounts is the owner+Lovable test.
+
 ### build174 — MP room-entry SURFACE fixes + full 1v1 PROVEN on the 2-peer harness  ·  ?v=473
 
 Ran the owner-demanded proof: two real browser peers (8790 + 8791 = two origins = two anon sessions vs REAL prod

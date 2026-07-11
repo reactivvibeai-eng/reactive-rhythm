@@ -142,6 +142,7 @@
   var pendingOut = null;          // {toId,mid} a challenge I sent, awaiting answer
   var _chalT = null;              // build58: challenge-timeout — a crashed/ignoring opponent must not leave a permanent "WAITING…"
   var _chalRetry = null;          // build145: re-emit the outgoing 'challenge' broadcast a few times (a single dropped packet = a dead 12s "No response")
+  var _chalGrace = null;          // build175: {mid,toId,until} — honor a LATE 'challenge-ans' even after the 12s timeout nulled pendingOut (a transient stall on the challenger dropped the accept). The accepter re-emits its ans for ~12s and is actively WAITING on the match channel, so connecting them beats stranding them. Cleared on match open / new challenge / decline.
   var incoming = {};              // id -> {mid} (challenges TO me)
   var activeNow = false;          // is #multiplayer-screen currently .active
   // ---- v418: MP RELIABILITY + LEGIBILITY (connection chip §4.2 / call lifecycle A2 / both-ready watchdog A6) ----
@@ -852,6 +853,7 @@
     _setPhase('calling', 'challenge');   // MP-4 (observe-only): outbound challenge in flight
     pendingOut = { toId: toId, mid: newMatchId() };
     var _mid = pendingOut.mid;
+    _chalGrace = { mid: _mid, toId: toId, until: Date.now() + 24000 };   // build175: 24s window (12s wait + 12s grace) — a late accept still connects
     var _sendChal = function () { try { lobbyCh.send({ type: 'broadcast', event: 'challenge', payload: { fromId: ME.id, fromName: ME.name, toId: toId, mid: _mid } }); } catch (e) {} };
     _sendChal();
     banner('mpx-lobby-msg', 'Challenge sent — waiting for a reply…');
@@ -899,13 +901,22 @@
     delete incoming[fromId]; onLobbySync();
   }
   function onChallengeAns(p) {
-    if (!p || p.toId !== ME.id || !pendingOut || p.mid !== pendingOut.mid) return;
+    if (!p || p.toId !== ME.id) return;
+    // build175: accept a LATE ans too. The happy path is pendingOut still live; the SECOND path rescues a
+    // challenger whose 12s timeout already fired (transient stall dropped the accept) — honor it while the
+    // grace window is open AND we haven't since gone into a match / issued a newer challenge, so the accepter
+    // (still re-emitting + waiting on the match channel) isn't stranded.
+    var _live = pendingOut && p.mid === pendingOut.mid;
+    var _late = !_live && _chalGrace && p.mid === _chalGrace.mid && Date.now() < _chalGrace.until && !pendingOut && !matchLive && !matchCh;
+    if (!_live && !_late) return;
     if (_chalT) { clearTimeout(_chalT); _chalT = null; }   // build58: answered → cancel the timeout
+    _chalGrace = null;
     if (p.ok) {
       var opp = lobby[p.fromId];
-      var mid = pendingOut.mid; pendingOut = null;
+      var mid = p.mid; pendingOut = null;
+      banner('mpx-lobby-msg', '');   // build175: clear any stale "No response" the late-path may have left up
       startMatchChannel(mid, 'host', opp);       // I challenged → I am host
-    } else {
+    } else if (_live) {   // build175: only surface a decline for a challenge we were still actively waiting on
       banner('mpx-lobby-msg', 'Challenge declined.');
       pendingOut = null; onLobbySync();
     }
