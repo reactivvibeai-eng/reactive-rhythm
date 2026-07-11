@@ -2,15 +2,21 @@
 
 > Read this first. It's the whole picture for today's show in ~2 minutes.
 
-## ⚡ THE ONE THING YOU MUST DO: **PUBLISH**
+## ⚡ THE ONE THING YOU MUST DO: **RESUME LOVABLE, THEN PUBLISH**
 
-Everything below is **committed, pushed, and synced to Lovable — but NOT live until you Publish.**
-That includes the entire held stack (builds 152→179): the reconnect system, the challenge/attach
-fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**. Nothing reaches
-reactivvibeai.com without it.
+Everything below is **committed and pushed — but NOT live until you Publish.** That includes the
+entire held stack (builds 152→179): the reconnect system, the challenge/attach fixes, telemetry
+fixes, and tonight's hardening.
 
-- Game ref now staged for deploy: **`cb27d3b`** (build179, `?v=478`, branch `visual-overhaul`).
-- `public/game/` in the Lovable repo is synced to it (Lovable ran the game-sync).
+**Do it in this order:**
+1. **Open Lovable and resume its agent queue** (it's paused — you paused it before bed). Two messages
+   are waiting: the **build179 game-sync** and an **F1 edge-function redeploy + confirm**. Let them run.
+2. Confirm Lovable says `public/game/` is at **`cb27d3b`** (build179, `?v=478`) and the redeploy is done.
+3. **Publish.**
+
+> If you Publish *without* resuming the queue first, you'll ship **build178** (`5775f80`) — the last
+> completed sync. That's still fully show-safe (the review passed it too), just missing build179's
+> host-heartbeat + the four P2 polish fixes. Resuming first gets you build179.
 
 ## ✅ What's ready (multiplayer — the show's centerpiece)
 
@@ -41,9 +47,10 @@ The full "call someone into a live 1v1" path is proven and hardened:
 ## 🔌 Backend status (Lovable's side)
 
 - **F1 (room registration):** landed in the repo; the routes are confirmed **deployed** on prod
-  (probed live). I asked Lovable to **redeploy game-catalog** to guarantee the `rr_active_rooms`
-  seed edit shipped atomically — *confirmation may be pending when you read this* (check the Lovable
-  thread). If the demo ever shows a "room didn't answer," a redeploy of that edge function is the fix.
+  (probed live). My request to **redeploy game-catalog** (to guarantee the `rr_active_rooms` seed
+  shipped atomically) is **queued behind the paused Lovable queue** — it runs when you resume it
+  (step 1 above). If the demo ever shows a "room didn't answer," a redeploy of that edge function is
+  the fix.
 - **Telemetry:** the `/events` + `/clientlog` insert bugs are fixed (we can see user errors again).
 - **Notifications flow through `public.notifications`** (healthy, thousands of rows).
 
