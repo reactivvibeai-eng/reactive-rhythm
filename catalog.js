@@ -3015,7 +3015,7 @@
     livematchAnnounce, livematchEnd,   // build102x: site Navbar LIVE MATCH chip (review token stays module-local; fire-and-forget)
     matchQueue, matchStatus,           // build102x: server matchmaking queue (authed REST; throws on !ok)
     presenceOnline, challenge,         // build105: ONLINE NOW roster + direct battle-calls (authed REST; 403/409 distinguishable via the error message)
-    challengeAccept, challengeDecline, roomStatus,   // v416: battle-call ACCEPT/DECLINE + room preflight ({alive,host_online}) — join-reliability
+    challengeAccept, challengeDecline, roomStatus, roomReady,   // v416: battle-call ACCEPT/DECLINE + room preflight ({alive,host_online}); build179: roomReady host heartbeat — join-reliability
     notifRecent,                       // build105 stretch: own-rows battle-call notification probe (null = none/unavailable; self-disables on first RLS failure)
   };
 
@@ -3284,6 +3284,13 @@
   async function challengeAccept(opts) { opts = opts || {}; var b = {}; if (opts.notificationId) b.notification_id = String(opts.notificationId); if (opts.roomId) b.room_id = String(opts.roomId); return api('/challenge/accept', { method: 'POST', auth: true, body: b }); }
   async function challengeDecline(opts) { opts = opts || {}; var b = {}; if (opts.notificationId) b.notification_id = String(opts.notificationId); if (opts.roomId) b.room_id = String(opts.roomId); return api('/challenge/decline', { method: 'POST', auth: true, body: b }); }
   async function roomStatus(roomId) { return api('/room-status?room=' + encodeURIComponent(String(roomId || '')), { auth: true }); }
+  // build179 (attach-hardening): HOST heartbeat — POST /challenge/room-ready { room } upserts rr_active_rooms
+  // (host_id = auth.uid, last_seen = now). The server seeds this row on /challenge + /match/queue (F1), but the
+  // read-side freshness window is 90s; without a heartbeat the seed decays and a slow-to-accept callee's roomStatus
+  // preflight flips alive:false while the host is right there. multiplayer.js calls this every ~30s while I host a
+  // room awaiting a guest. Fire-and-forget: a missing/!live route or a 409 (room owned by another host) is a no-op
+  // and the pure-realtime convergence path is unaffected (byte-identical to today when the endpoint is down).
+  async function roomReady(roomId) { return api('/challenge/room-ready', { method: 'POST', auth: true, body: { room: String(roomId || '') } }); }
   // build105: GAME-SIDE presence heartbeat — puts in-game players on the ONLINE NOW roster too. Mirrors the site
   // hook semantics: POST /presence/ping every 60s while signed in AND the tab is visible; paused on document.hidden,
   // an immediate ping on return to visibility. Fire-and-forget, errors swallowed, no-op signed out (getToken null).

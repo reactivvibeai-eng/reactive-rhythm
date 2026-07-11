@@ -110,6 +110,7 @@
   var _roomStartRebcT = 0;    // MP-reliability FIX #3: self-cancelling re-emit of 'room-start' (idempotent on the receiver via _roomStartMid).
   var _roomStartMid = null;   // MP-reliability FIX #3: last handled room-start mid — makes onRoomStart idempotent so a re-emit can't tear down + rebuild the match channel.
   var _lateRoomStartResends = 0;  // MP FIX #20: bounded budget for the HOST-WATCHDOG re-emit of 'room-start' to a guest that missed the ~6s start burst and is STILL re-broadcasting room-ready after we went live (reconstructed from _roomStartMid + seats; self-limiting — the guest stops pinging the instant it opens the match channel). Reset each startRoomMatch + on teardown/rematch.
+  var _roomReadyHbT = 0;      // build179 (attach-hardening): HOST heartbeat interval — POST /challenge/room-ready every ~30s while I host a room awaiting a guest, so rr_active_rooms stays fresh past the server's 90s window (the F1 seed alone decays; the callee's roomStatus preflight would then flip alive:false with the host right there). Self-terminates when I no longer own a host room.
   var matchLive = false, finishedLocal = false;
   // build114: AUTHORITATIVE MP CHART — the guest's inbox for the host's broadcast note array (see resolveAndStart /
   // onChart below). Keyed by trackId+difficulty so a late/duplicate/stale broadcast from a PRIOR round can never be
@@ -908,7 +909,11 @@
     // grace window is open AND we haven't since gone into a match / issued a newer challenge, so the accepter
     // (still re-emitting + waiting on the match channel) isn't stranded.
     var _live = pendingOut && p.mid === pendingOut.mid;
-    var _late = !_live && _chalGrace && p.mid === _chalGrace.mid && Date.now() < _chalGrace.until && !pendingOut && !matchLive && !matchCh;
+    // build179 (review P2): also require !room.id && !tour.id. The late-accept rescue is ONLY for a challenger still
+    // idle in the lobby (the exact state it was built for). Without these, a challenger whose 12s timeout fired who
+    // then joined/created a room R (room.id set, pendingOut null, matchCh null) would be YANKED out of R into a fresh
+    // match by a laggy accept landing inside the 24s grace — stranding R's channel/seat in a dual state.
+    var _late = !_live && _chalGrace && p.mid === _chalGrace.mid && Date.now() < _chalGrace.until && !pendingOut && !matchLive && !matchCh && !room.id && !tour.id;
     if (!_live && !_late) return;
     if (_chalT) { clearTimeout(_chalT); _chalT = null; }   // build58: answered → cancel the timeout
     _chalGrace = null;
@@ -1235,6 +1240,23 @@
     try { if (room.id && room.ch && !room.show) room.ch.send({ type: 'broadcast', event: 'room-ready', payload: { ready: meReady, id: ME.id, settings: mySettings || null } }); } catch (e) {}
   }
   function _stopReadyRebc() { if (_readyRebcT) { clearInterval(_readyRebcT); _readyRebcT = 0; } }
+  // build179 (attach-hardening): HOST heartbeat for rr_active_rooms. The server seeds the row on /challenge +
+  // /match/queue (F1) but the read-side freshness window is 90s; without a game-side refresh the seed decays and a
+  // slow-to-accept callee's roomStatus preflight flips alive:false with the host present. So while I HOST a room
+  // awaiting a guest (not yet in a live match), POST /challenge/room-ready (host_id=auth.uid, last_seen=now) now +
+  // every ~30s. Fire-and-forget: unauthed/!live/409 all no-op and the pure-realtime convergence path is unaffected.
+  // Also covers OPEN "LIVE NOW" rooms (browse-join, no /challenge seed) so their callees preflight alive too.
+  function _hostAwaitingGuest() { return !!(supa && room.id && room.isHost && !spectating && !matchLive && window.RhythmCatalog && window.RhythmCatalog.roomReady); }
+  function _pingRoomReady() { if (!_hostAwaitingGuest()) return; try { var p = window.RhythmCatalog.roomReady(room.id); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+  function _startRoomReadyHb() {
+    _pingRoomReady();   // immediate fire on room-open so a browse-join / fast-accept callee sees alive without waiting 30s
+    if (_roomReadyHbT) return;
+    _roomReadyHbT = setInterval(function () {
+      if (!(supa && room.id && room.isHost)) { _stopRoomReadyHb(); return; }   // no longer own a host room → stop (matchLive is a no-op tick, not a stop, so a rematch resumes)
+      _pingRoomReady();
+    }, 30000);
+  }
+  function _stopRoomReadyHb() { if (_roomReadyHbT) { clearInterval(_roomReadyHbT); _roomReadyHbT = 0; } }
   // MP-reliability FIX #2/#3: self-cancelling re-emit timers for the room→match handoff.
   function _stopMatchReadyRebc() { if (_matchReadyRebcT) { clearInterval(_matchReadyRebcT); _matchReadyRebcT = 0; } }
   function _stopStartRebc() { if (_startRebcT) { clearInterval(_startRebcT); _startRebcT = 0; } }
@@ -3312,7 +3334,11 @@
       // synchronous through the leaveRoomChannel() call, so clearing the flag right after is safe (no re-emit interleaves).
       _roomResubActive = true;
       try { joinRoomChannel(room.id, seat); } finally { _roomResubActive = false; }   // leaveRoomChannel() inside tears down the old handle first (state preserved on the module-level `room`)
-      try { enterRoomWaiting(); } catch (e) {}
+      // build179 (review P2): a channel rebuild is a STATE refresh, not a navigation — repaint via paintRoomWaiting()
+      // instead of the full enterRoomWaiting(). The latter re-runs enterSetup + build174's unconditional .screen.active
+      // strip, so a routine realtime blip while the player had How-To/Leaderboard/Profile/Settings open would abruptly
+      // tear that overlay down. room state lives on the module-level `room`, so no re-enter is needed here.
+      try { paintRoomWaiting(); } catch (e) {}
       if (meReady && room.id && room.ch && !matchCh && !room.show) { try { _sendRoomReady(); } catch (e) {} }   // re-assert my READY (the 2s rebroadcast interval was cleared by the teardown)
     } else if (which === 'match') {
       if (!matchId) return;
@@ -3799,6 +3825,7 @@
     enterRoomWaiting();
     advertiseRoom();
     try { _announceMyRoom(); } catch (e) {}   // Wave-3: mint + display a shareable join-by-code (fail-soft; host-only display)
+    try { _startRoomReadyHb(); } catch (e) {}   // build179: keep rr_active_rooms alive for this host room so a callee's roomStatus preflight sees alive:true (normal/qm/deep-link/open host)
   }
   function advertiseRoom() {
     if (!lobbyCh || !room.id || !room.isHost) return;
@@ -3850,6 +3877,7 @@
     reannounce(); backToLobby();
   }
   function closeRoom(silent) {
+    try { _stopRoomReadyHb(); } catch (e) {}   // build179: closing the room stops the rr_active_rooms host heartbeat
     try { clearRoom(); } catch (e) {}   // build176 (F2): closing/leaving a room drops the reconnect handles (rr_room + ?mproom URL)
     _cancelShowOpen();   // review fix 7: a pending GO LIVE (and its 8s watchdog) dies with ANY room close — inert var writes for normal MP
     _ghostRunActive = false;   // build102y review fix C: no room, nothing to park (inert var write for normal MP)
@@ -4093,8 +4121,8 @@
   var _brbT = 0;   // build177 (F3): host-reconnecting seat-hold fallback timer
   // build177 (Fable F3): the host broadcast room-brb (it is RELOADING, not quitting — build176 F2 revives it). HOLD
   // the guest's seat + show a reconnecting cue instead of the room-gone dead card; only fail-card after an honest
-  // ~95s hold if no host ever comes back. The host's F2 revive re-advertises → presence re-converges and
-  // paintRoomWaiting clears the hold the moment the host reappears.
+  // hold if no host ever comes back (build179: ~30s, was ~95s — a real reload reconverges in seconds). The host's F2
+  // revive re-advertises → presence re-converges and paintRoomWaiting clears the hold the moment the host reappears.
   function _onRoomBrb(rid, holdMs) {
     try {
       if (!room.id || room.id !== rid || room.isHost || matchLive || spectating) return;   // only a seated guest in THIS room
@@ -4109,7 +4137,7 @@
           showFailCard({ head: 'OPPONENT LEFT', reason: 'They didn’t reconnect in time. Head back and find another match.',
             actions: [{ label: 'BACK TO LOBBY', primary: true, fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
         }
-      }, (holdMs || 90000) + 5000);
+      }, (holdMs || 25000) + 5000);   // build179: default aligned with the 25s beforeunload hold (~30s total incl. the 5s grace)
     } catch (e) {}
   }
   // direct channel join with NO room-meta — synthesizes a minimal room object off the rid alone. Host identity,
@@ -4986,6 +5014,7 @@
     enterRoomWaiting();
     advertiseRoom();
     startShowHeartbeat();
+    try { _startRoomReadyHb(); } catch (e) {}   // build179: a called-in submitter's roomStatus preflight sees this LIVE SHOW room alive (no /challenge seed on the /show/invite path)
     persistShowRoom();
     banner('mpx-setup-msg', '🔴 LIVE SHOW room open — START plays it solo; call in the artist any time.');
   }
@@ -5744,7 +5773,7 @@
       _soloRun = false; _showAtMs = 0; _inviteBusy = false; _inviteRenotified = false;
       if (P.invited) _inviteAt = P.at || Date.now();   // approximate — re-arms the NUDGE ~60s after the persist
       joinRoomChannel(P.rid, 'p1');   // channels are unregistered strings — rejoining + re-advertising revives the room; the SUBSCRIBED snap (mid:null) also recovers stranded watchers
-      reannounce(); enterRoomWaiting(); advertiseRoom(); startShowHeartbeat(); persistShowRoom();
+      reannounce(); enterRoomWaiting(); advertiseRoom(); startShowHeartbeat(); try { _startRoomReadyHb(); } catch (e) {} persistShowRoom();   // build179: re-arm the rr_active_rooms host heartbeat on show-room revive
       banner('mpx-setup-msg', 'Reconnected — your show room is back.');
     } catch (e) {}
   }
@@ -6066,6 +6095,7 @@
   function maybeReconnectTour() {
     try {
       if (tour.id || !supa || !lobbyCh) return;
+      if (/[?&]mproom=/i.test(location.search)) return;   // build179 (review P2, defensive): a URL-carried ?mproom room revive owns this boot — never layer a bracket rejoin over it (mirrors maybeReconnectRoom's guard; the boot chain is already mutually-exclusive, this is belt-and-suspenders vs. a future refactor)
       var raw = sessionStorage.getItem('rr_tour'); if (!raw) return;
       var P = JSON.parse(raw); if (!P || !P.tid) return;
       if (Date.now() - (P.ts || 0) > 90000) { clearPersistedTour(); return; }   // stale → drop
@@ -7836,7 +7866,11 @@
     // (or the softPresence expiry) if the host never comes back. A host with no reconnect armed still room-gones.
     if (room.id && room.isHost && !room.show && lobbyCh) {
       var _armed = false; try { _armed = !!sessionStorage.getItem('rr_room'); } catch (e) {}
-      lobbyCh.send({ type: 'broadcast', event: (_armed ? 'room-brb' : 'room-gone'), payload: { rid: room.id, holdMs: 90000 } });
+      // build179 (review P2): 25s (not 90s) hold. beforeunload can't tell a reload from a real quit, and rr_room is
+      // ALWAYS armed for a seated host — so a genuine tab-close was misclassified as a reload, dead-waiting the guest
+      // ~95s on a lying "reconnecting" banner. A real reload reconverges in a few seconds, so 25s+5s≈30s is ample
+      // grace while a true quit surfaces the honest "OPPONENT LEFT" card fast enough not to stall a live demo.
+      lobbyCh.send({ type: 'broadcast', event: (_armed ? 'room-brb' : 'room-gone'), payload: { rid: room.id, holdMs: 25000 } });
     } else if (room.id && room.isHost && lobbyCh) { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); }
     if (tour.id && tour.isHost && lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'tour-gone', payload: { tid: tour.id } });
     if (roomSP) roomSP.stop(); if (tourSP) tourSP.stop(); if (matchSP) matchSP.stop(); if (lobbySP) lobbySP.stop();

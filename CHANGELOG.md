@@ -15,6 +15,41 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build179 — attach-hardening: rr_active_rooms host heartbeat + adversarial-review P2 fixes  ·  ?v=478
+
+Two threads, both aimed at "make the live-show 1v1 rock-solid tomorrow."
+
+**(A) Game-side host heartbeat for `rr_active_rooms`.** The site F1 fix (Lovable) now *seeds* `rr_active_rooms`
+on `POST /challenge` + `/match/queue` so a callee's `roomStatus` preflight sees the room the instant it's minted —
+but the read-side freshness window is 90s and the game had **no** `POST /challenge/room-ready` heartbeat, so the
+seed would decay and a slow-to-accept callee's preflight could flip `alive:false` with the host right there. Added
+`RhythmCatalog.roomReady(rid)` (POST `/challenge/room-ready`) and a `multiplayer.js` interval that pings it now +
+every ~30s while I HOST a room awaiting a guest (normal / qm / deep-link / open-LIVE-NOW / live-show host).
+Fire-and-forget: unauthed / !live / 409 all no-op; the proven realtime convergence path is untouched. Verified the
+prod routes are live (`/room-status`, `/challenge/room-status`, `/challenge/room-ready` all 401-not-404 to an anon
+probe; `/challenge/room-status` has a `/room-status` alias the game already used).
+
+**(B) Adversarial show-readiness review (build173→178) — GO verdict, no P0/P1.** Folded in the safe, high-value P2
+fixes it surfaced:
+- **Challenge late-accept idle guard** — the build175 `_late` grace now also requires `!room.id && !tour.id`, so a
+  >12s-laggy accept can't yank a challenger who has since opened a room OUT of it into a surprise match.
+- **Host-quit seat-hold shortened 90s→~30s** — `beforeunload` can't tell a reload from a real quit (rr_room is
+  always armed for a seated host), so a genuine host tab-close used to strand the guest on a lying "reconnecting"
+  banner for ~95s. A real reload reconverges in seconds, so `holdMs` 90000→25000 (+5s grace ≈ 30s) surfaces the
+  honest "OPPONENT LEFT" card fast enough not to stall a demo.
+- **Room-resub no longer stomps overlays** — a routine realtime blip on the room channel re-ran the FULL
+  `enterRoomWaiting()` (incl. build174's unconditional `.screen.active` strip), tearing down a How-To / Leaderboard /
+  Profile / Settings overlay the player had open. The resub path now repaints via `paintRoomWaiting()` (state lives
+  on the module-level `room`; no re-enter needed).
+- **Tournament-revive guard (defensive)** — `maybeReconnectTour()` now bails when the URL carries `?mproom=`
+  (mirrors `maybeReconnectRoom`'s guard; the boot chain is already mutually-exclusive, this is belt-and-suspenders).
+- **DEFERRED (documented):** the address-bar URL carrying `mprole=host` (duplicate-host-on-share / untimed stale
+  revive). The reviewer's "gate on rr_room match" fix would break the *legit* auto-battle-call caller + host
+  self-reload, which share the same `?mproom&mprole=host + no-matching-rr_room` signature — not a safe pre-show
+  change. Mitigation is script discipline: share the **Copy Battle Link** (`?mproom`-only), not the raw address bar.
+
+`node --check` clean on both files, score `+=` **17** / CHART_VERSION 2 (game.js untouched).
+
 ### build178 — F2 reconnect hardening: drop the handle on an explicit MP leave  ·  ?v=477
 
 Adversarial self-review of the build176 F2 reconnect for show-readiness caught one edge: leaving MP via the back
