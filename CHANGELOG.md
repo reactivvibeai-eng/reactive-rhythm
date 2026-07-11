@@ -15,6 +15,33 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build174 — MP room-entry SURFACE fixes + full 1v1 PROVEN on the 2-peer harness  ·  ?v=473
+
+Ran the owner-demanded proof: two real browser peers (8790 + 8791 = two origins = two anon sessions vs REAL prod
+Supabase), driving the auto-battle-call / `?mproom=` deep-link end to end. **build173's convergence held every time
+— but the ROOM VIEW wasn't being surfaced**, which is exactly the owner's "I got brought to the MP UI, never put in
+the room." Root-caused + fixed three surfacing bugs, then proved a **complete 1v1: deep-link → both seated → host
+picks a track → both READY → LIVE match** (both peers `isLive:true`, `#game.active`), zero console errors.
+
+- **Guest joined but stuck behind `#menu-hub`.** `enterRoomWaiting()` PAINTS the room but never RAISED the MP screen;
+  the host path re-raises (`:5644/:7484`), the guest join path (joinRoomDirect / meta-fast-path) didn't. Proven: guest
+  had `room.p2` set, opponent visible, `spec.mounted:false` (seated, NOT spectating) — but `menu-hub` was on top.
+  FIX: `enterRoomWaiting()` now self-raises MP **exclusively** — strips EVERY other top-level `.screen.active`
+  (unconditionally, so it also clears an overlay when MP is already active) + sets `activeNow=true` FIRST (suppresses
+  the MutationObserver's `onActivated`→`step('lobby')` stomp). One choke point covers host + both guest paths.
+- **Ryo intro ignored `skipIntro=1`.** The first-run intro (index.html) played on EVERY load and its `finish()`
+  reveals the HUB — which RE-BURIES a room the deep-link just joined. FIX: the intro now bails on any site handoff
+  (`skipIntro=1 | review= | mproom= | mpqm= | mpjoin= | mptour=`), so a battle-call lands in the room instantly.
+- **First-run How-To (z-260) covered the HOST room.** `tryShowHowto` (game.js) auto-pops at boot+800ms; its guard
+  list has a race window before `#multiplayer-screen` goes active, so How-To popped and MP opened UNDER it. The
+  unconditional strip above clears it on room-entry (How-To is one-shot + guards on `#multiplayer-screen.active`).
+
+**Harness proof (rrcl711d):** both peers → `activeScreens:["multiplayer-screen"]` only, intro/howto inactive,
+`topAtCenter`=the room, opp dot `here`, roster 2 seated; host picks "Second Time Around" → guest receives the
+broadcast (`pickTitle` matches) → both READY enable → both ready → `isLive:true`. The one owner symptom NOT
+harness-provable is People→Challenge (bc:user needs authed sessions; anon peers aren't in the ONLINE roster) — that's
+the HELD stack + backend, still gated on a real 2-account authed test. `node --check` clean, score `+=` still 17.
+
 ### build173 — MP failure-cluster residuals (Fable-directed) — ⚠ CANDIDATE, pending 2-peer harness proof before publish  ·  ?v=471
 
 Owner's 2-account test failed across 4 MP paths. Fable ruled + dug: **~70% is the HELD reliability stack that's

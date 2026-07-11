@@ -4428,6 +4428,27 @@
       if (addCpu) addCpu.hidden = true;
     }
     paintRoomWaiting();
+    // build174 (owner 2-account MP proof): GUARANTEE the room view is the screen ON TOP the instant we enter a room.
+    // Proven on the 8790/8791 harness: an auto-battle-call / deep-link GUEST fully converges — room channel joined,
+    // opponent visible ("here"), room-waiting painted — but a late boot-nav to the hub left #multiplayer-screen behind
+    // #menu-hub, so the guest saw the HUB and reported "I got brought to the MP UI, never put into the room." The HOST
+    // path never showed it because its return-paths already re-raise (:5644/:7484). Raise MP EXCLUSIVELY here (strip any
+    // other top-level .screen.active so we don't stack behind the hub) and set activeNow=true FIRST so the MutationObserver
+    // suppresses onActivated's step('lobby') reset — mirroring the proven results-return re-raise. Idempotent no-op when
+    // MP is already active (host / normal open), so it can't regress those flows.
+    try {
+      // Strip UNCONDITIONALLY (not only when raising): proven on the harness that the HOST path already has MP active,
+      // but a first-run overlay that popped during the deep-link race — How-To (z-260) or the hub — can sit OVER the
+      // room (game.js tryShowHowto's guard list has a boot window before #multiplayer-screen goes active). Clearing
+      // every other top-level .screen.active on room-entry guarantees the room is the only thing showing; the How-To
+      // auto-show is one-shot + guards on #multiplayer-screen.active, so it won't re-pop while we're in the room.
+      var _others = document.querySelectorAll('.screen.active');
+      for (var _oi = 0; _oi < _others.length; _oi++) { if (_others[_oi] !== screen) _others[_oi].classList.remove('active'); }
+      if (!screen.classList.contains('active')) {
+        activeNow = true;               // suppress the observer's onActivated (would step('lobby') and stomp this room view)
+        screen.classList.add('active');
+      }
+    } catch (e) {}
   }
   function paintRoomWaiting() {
     try { refreshReadyEnabled(); } catch (e) {}   // playtest-3 fix (Bug D): every room repaint (opponent arrives/leaves, track picked) re-evaluates the READY button so it enables the moment the duel is joinable — the old code left it disabled because it only re-checked on the match channel
