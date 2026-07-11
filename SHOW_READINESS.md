@@ -2,21 +2,20 @@
 
 > Read this first. It's the whole picture for today's show in ~2 minutes.
 
-## ⚡ THE ONE THING YOU MUST DO: **RESUME LOVABLE, THEN PUBLISH**
+## ⚡ THE ONE THING YOU MUST DO: **PUBLISH**
 
-Everything below is **committed and pushed — but NOT live until you Publish.** That includes the
-entire held stack (builds 152→179): the reconnect system, the challenge/attach fixes, telemetry
-fixes, and tonight's hardening.
+Everything below is **committed, pushed, synced to Lovable, and staged — but NOT live until you
+Publish.** That includes the entire held stack (builds 152→179): the reconnect system, the
+challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
-**Do it in this order:**
-1. **Open Lovable and resume its agent queue** (it's paused — you paused it before bed). Two messages
-   are waiting: the **build179 game-sync** and an **F1 edge-function redeploy + confirm**. Let them run.
-2. Confirm Lovable says `public/game/` is at **`cb27d3b`** (build179, `?v=478`) and the redeploy is done.
-3. **Publish.**
+**Already done for you overnight (verified, no action needed):**
+- ✅ `public/game/` synced to **`cb27d3b`** (build179, `?v=478`) — Lovable hash-checked all 3 game
+  files byte-for-byte; I independently confirmed `sync-game.mjs` points at that ref.
+- ✅ `game-catalog` edge function **redeployed** (so the F1 `rr_active_rooms` seed is guaranteed live).
+- ✅ `public.notifications` + `public.rr_active_rooms` confirmed in the `supabase_realtime` publication
+  (verified by my own DB query, not just Lovable's word).
 
-> If you Publish *without* resuming the queue first, you'll ship **build178** (`5775f80`) — the last
-> completed sync. That's still fully show-safe (the review passed it too), just missing build179's
-> host-heartbeat + the four P2 polish fixes. Resuming first gets you build179.
+So the whole backend/attach path is confirmed ready. **Just Publish.**
 
 ## ✅ What's ready (multiplayer — the show's centerpiece)
 
@@ -46,11 +45,12 @@ The full "call someone into a live 1v1" path is proven and hardened:
 
 ## 🔌 Backend status (Lovable's side)
 
-- **F1 (room registration):** landed in the repo; the routes are confirmed **deployed** on prod
-  (probed live). My request to **redeploy game-catalog** (to guarantee the `rr_active_rooms` seed
-  shipped atomically) is **queued behind the paused Lovable queue** — it runs when you resume it
-  (step 1 above). If the demo ever shows a "room didn't answer," a redeploy of that edge function is
-  the fix.
+- **F1 (room registration):** landed AND **game-catalog was explicitly redeployed** overnight, so the
+  `rr_active_rooms` seed is live on prod. Routes probed live (401 not 404); publication + table schema
+  verified. If the demo ever shows a "room didn't answer," re-deploying that edge function is the fix.
+- **One honest caveat:** I could not force a *live* `rr_active_rooms` row without signing in (anon auth
+  is off, correctly). Deploy + routes + schema + source all confirm the seed writes on a real challenge
+  — the first actual authed challenge (i.e. the show) is the final proof.
 - **Telemetry:** the `/events` + `/clientlog` insert bugs are fixed (we can see user errors again).
 - **Notifications flow through `public.notifications`** (healthy, thousands of rows).
 
