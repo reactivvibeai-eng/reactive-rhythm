@@ -2596,6 +2596,19 @@
     };
     o[trackId] = rec;
     _saveRatings(o);
+    // build180 (D5, Fable-directed): also emit an ANONYMOUS rating funnel event so ENJOYMENT lands in
+    // game_funnel_events even for GUESTS. The authed /ratings POST below is signed-in-only "by design" (anti-abuse),
+    // so guests' ratings never reached the DB — which is exactly why rr_track_ratings read 0 rows in prod. This
+    // rides the legitimate-interest allow-list (no identity; just track + stars/felt/difficulty).
+    try {
+      if (window.RhythmTelemetry && window.RhythmTelemetry.event) {
+        var _rp = { trackId: trackId };
+        if (rec.stars != null) _rp.stars = rec.stars;
+        if (rec.felt != null) _rp.felt = rec.felt;
+        if (rec.difficulty != null) _rp.difficulty = rec.difficulty;
+        window.RhythmTelemetry.event('rating', _rp);
+      }
+    } catch (e) {}
     // POST body — matches the D2 contract { track_id, stars?, felt?, difficulty, accuracy? }. We queue/POST the
     // MERGED state (not just this delta) so a drain is idempotent regardless of the server's upsert-merge semantics.
     var body = { track_id: trackId, difficulty: rec.difficulty || null };

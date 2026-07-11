@@ -129,28 +129,39 @@
   var evtBuffer = [];    // pending /events rows (also the live batch queue)
   var errBuffer = [];    // pending /clientlog rows
 
+  // build180 (D5, Fable-directed): LEGITIMATE-INTEREST allow-list. These are ANONYMOUS OPERATIONAL events —
+  // pure gameplay-funnel signals with NO identity (track id, difficulty, score %, an anonymous rating) — the
+  // textbook legitimate-interest case. They flush even when consent is 'unset' (the default), STRIPPED of user_id,
+  // so we can finally SEE the play funnel (start → decode_error → fail → complete) + track enjoyment without gating
+  // the whole fleet on an explicit accept. 'declined' still sends NOTHING; 'accepted' still sends everything
+  // (incl. user_id + errors). This is the ONLY loosening — errors/identifying events keep the strict accept-gate.
+  var LEGIT_EVENTS = { song_start: 1, song_complete: 1, run_fail: 1, decode_error: 1, rating: 1 };
+
   function pushCapped(arr, row, cap) {
     arr.push(row);
     while (arr.length > cap) arr.shift();   // drop oldest on overflow
   }
 
   // ---- low-level send (fire-and-forget, never throws) ---------------------
-  function postJSON(url, payload) {
+  function postJSON(url, payload, beaconFirst) {
     if (!url) return;
     var body;
     try { body = JSON.stringify(payload); } catch (e) { return; }
-    // sendBeacon first — survives page unload (pagehide flush). It can't set the
-    // anon-key header, so we only use it when no key is required OR as a best-effort
-    // on unload; the edge fn accepts the anon key but also tolerates its absence for
-    // these public insert endpoints.
-    try {
-      if (navigator && typeof navigator.sendBeacon === 'function') {
-        var blob;
-        try { blob = new Blob([body], { type: 'application/json' }); } catch (e) { blob = body; }
-        if (navigator.sendBeacon(url, blob)) return;
-      }
-    } catch (e) {}
-    // fetch fallback (keepalive so it can still fly during unload)
+    // build180: PROMPT/LIVE flushes use FETCH (sets the anon-key header + reliably reaches the edge fn). sendBeacon
+    // is reserved for the UNLOAD path (beaconFirst=true, from pagehide/visibilitychange) where a normal fetch may be
+    // killed mid-flight. WHY: a harness probe proved beacon-sent rows silently did NOT land (the beacon can't carry
+    // the apikey header and its content-type trips the insert), while the identical fetch POST landed — so a normal
+    // song_start/complete must go out via fetch, not beacon, or the funnel stays dark.
+    if (beaconFirst) {
+      try {
+        if (navigator && typeof navigator.sendBeacon === 'function') {
+          var blob;
+          try { blob = new Blob([body], { type: 'application/json' }); } catch (e) { blob = body; }
+          if (navigator.sendBeacon(url, blob)) return;
+        }
+      } catch (e) {}
+    }
+    // fetch (keepalive so it ALSO survives unload as the beacon fallback)
     try {
       if (typeof fetch === 'function') {
         var headers = { 'Content-Type': 'application/json' };
@@ -161,23 +172,47 @@
     } catch (e) {}
   }
 
-  // ---- flush: only ever runs when consent==='accepted' --------------------
+  // ---- flush: three consent states (build180) -----------------------------
+  //   'declined'  → send NOTHING (full opt-out honored).
+  //   'accepted'  → send EVERYTHING (errors + all events, incl. user_id).  [unchanged behavior]
+  //   'unset'     → LEGITIMATE INTEREST: send only the anonymous operational allow-list (LEGIT_EVENTS),
+  //                 stripped of user_id; NON-legit events + all errors stay buffered until an explicit accept.
   function flush(useBeaconOnly) {
     try {
-      if (getConsent() !== 'accepted') return;   // strict gate
+      var consent = getConsent();
+      if (consent === 'declined') return;        // full opt-out — nothing leaves the device
       if (!netEnabled()) { return; }             // no endpoint → keep buffering (don't drop)
-      if (errBuffer.length && URLS.clientlog) {
-        // batch up to ~20 per the brief
+      var full = (consent === 'accepted');
+      // Errors can carry stack/url → potentially identifying → strict accept-gate only.
+      if (full && errBuffer.length && URLS.clientlog) {
         while (errBuffer.length) {
           var ebatch = errBuffer.splice(0, 20);
-          postJSON(URLS.clientlog, ebatch.length === 1 ? ebatch[0] : ebatch);
+          postJSON(URLS.clientlog, ebatch.length === 1 ? ebatch[0] : ebatch, useBeaconOnly);
         }
       }
       if (evtBuffer.length && URLS.events) {
-        // batch up to ~50 per the brief
-        while (evtBuffer.length) {
-          var vbatch = evtBuffer.splice(0, 50);
-          postJSON(URLS.events, vbatch.length === 1 ? vbatch[0] : vbatch);
+        if (full) {
+          // accepted → send everything (batched ~50)
+          while (evtBuffer.length) {
+            var vbatch = evtBuffer.splice(0, 50);
+            postJSON(URLS.events, vbatch.length === 1 ? vbatch[0] : vbatch, useBeaconOnly);
+          }
+        } else {
+          // unset → send only anonymized operational events; leave the rest buffered.
+          var legit = [], keep = [];
+          for (var i = 0; i < evtBuffer.length; i++) {
+            var r = evtBuffer[i];
+            if (r && LEGIT_EVENTS[r.event_name]) {
+              var a = {};
+              for (var k in r) { if (k !== 'user_id' && Object.prototype.hasOwnProperty.call(r, k)) a[k] = r[k]; }
+              legit.push(a);   // anonymized copy (user_id stripped)
+            } else { keep.push(r); }
+          }
+          evtBuffer = keep;    // module-scoped var — event()/pushCapped pick up the new array
+          while (legit.length) {
+            var lbatch = legit.splice(0, 50);
+            postJSON(URLS.events, lbatch.length === 1 ? lbatch[0] : lbatch);
+          }
         }
       }
     } catch (e) { /* never throw */ }
@@ -211,18 +246,29 @@
   function event(name, props) {
     try {
       if (!name) return;
+      // build180: normalize props so the edge fn's snake_case extractor captures the per-track dimension. The game
+      // fires trackId (camelCase); the DB column + extractor want track_id. Mirror it on a COPY (never mutate the
+      // caller's object) so a decode_error / song_start actually records WHICH track — the signal Fable wants most.
+      var _p = (props && typeof props === 'object') ? props : {};
+      if (_p.trackId != null && _p.track_id == null) {
+        var _pc = {};
+        for (var _pk in _p) { if (Object.prototype.hasOwnProperty.call(_p, _pk)) _pc[_pk] = _p[_pk]; }
+        _pc.track_id = _p.trackId;
+        _p = _pc;
+      }
       var row = {
         client_ts: new Date().toISOString(),
         session_id: SESSION_ID,
         event_name: String(name),
-        props: (props && typeof props === 'object') ? props : {},
+        props: _p,
         app_version: APP_VERSION
       };
       if (_userId) row.user_id = _userId;
       pushCapped(evtBuffer, row, EVT_CAP);
-      // live path: if consented + backend present, flush promptly (batched on the timer
-      // too, but we flush here so a single decisive event like song_complete lands fast).
-      if (getConsent() === 'accepted') flush();
+      // live path: flush promptly on a decisive event so song_complete/decode_error land fast. build180: also
+      // prompt-flush a legitimate-interest event under 'unset' (flush() self-gates: it only sends the anon
+      // allow-list there); 'declined' is a no-op inside flush().
+      if (getConsent() === 'accepted' || LEGIT_EVENTS[String(name)]) flush();
     } catch (e) { /* never throw */ }
   }
 
@@ -267,8 +313,10 @@
     });
   } catch (e) {}
 
-  // if a prior visit already accepted, go live immediately (timer + drain)
-  try { if (getConsent() === 'accepted') { startTimer(); } } catch (e) {}
+  // Start the periodic flush unless the user opted OUT. Under 'accepted' it drains everything; under 'unset' it
+  // drains only the anonymous legitimate-interest allow-list (flush() self-gates). 'declined' → timer still ticks
+  // but flush() returns immediately, so nothing leaves. build180: was accept-only, which kept the fleet dark.
+  try { if (getConsent() !== 'declined') { startTimer(); } } catch (e) {}
 
   // ---- export -------------------------------------------------------------
   window.RhythmTelemetry = {

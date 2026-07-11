@@ -15,6 +15,41 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build180 — turn the lights on: legitimate-interest funnel telemetry + anonymous ratings  ·  ?v=479
+
+Fable-directed (data-review D5), owner-selected. The prod data showed we were **flying blind**: `game_funnel_events`
+had zero client rows and `rr_track_ratings` had zero rows — every design call was forensic. Root causes, both fixed
+client-side (the funnel events + rating system already EXISTED; they just never reached the DB):
+
+- **Legitimate-interest consent path (`telemetry.js`).** `flush()` was a hard binary gate (`consent==='accepted'`),
+  and the default is `'unset'`, so the fleet was dark. Now three states: `declined` → nothing; `accepted` →
+  everything (incl. user_id + errors, unchanged); **`unset` → an anonymous operational allow-list**
+  (`song_start / song_complete / run_fail / decode_error / rating`), **stripped of user_id**, flushes under
+  legitimate interest. Errors + identifying events keep the strict accept-gate. The periodic timer now runs unless
+  the user opted out. **Proven end-to-end on the harness**: an anonymous `song_start` + `decode_error` fired under
+  `unset` consent LANDED in `game_funnel_events` (non-allow-listed + error events correctly stayed buffered).
+- **`sendBeacon` → `fetch` for live flushes.** A harness probe found beacon-sent rows silently NOT landing (a beacon
+  can't carry the `apikey` header + its content-type trips the insert). `postJSON` now uses `fetch` (with the key)
+  for prompt/live flushes and reserves `sendBeacon` for the unload path only. This is what actually made the funnel
+  land — without it D5 would have looked wired but stayed dark.
+- **`decode_error` funnel event (`game.js`).** Fires in the audio-decode catch (the dead/HLS-only/corrupt/CORS
+  path) with the track id + a coarse reason — the direct measurement of the ~62%-dead-catalog preview→play cliff
+  Fable wanted most.
+- **Anonymous rating funnel (`catalog.js`).** `rateTrack()` now also emits an anonymous `rating` event. The authed
+  `/ratings` POST is signed-in-only "by design" (anti-abuse), so GUESTS' ratings never reached the DB — exactly why
+  `rr_track_ratings` read 0. Now everyone's enjoyment/felt lands anonymously in `game_funnel_events`.
+- **`trackId`→`track_id` normalization (`telemetry.js`).** The game fires camelCase `trackId`; the edge fn extracts
+  snake_case `track_id`. `event()` now mirrors it on a copy so real (UUID) track ids populate the dedicated column.
+
+**Difficulty (D4) — investigated, deliberately NOT changed tonight.** The recon found Hard's combo wall was already
+comprehensively softened in **build141** (MINGAP 0.22→0.30, lane-jump 3→2, chord budget halved, bombs 11→48 apart,
+walls rarer) in response to this same beta data, and a **gated Expert tier already exists (Rift**, locked behind a
+Fracture clear) plus a campaign Hard-gate. Recent Hard plays (last 10d) are a single user (n=1) still grinding
+771-note charts — re-nerfing on n=1 the night before a show would be reckless. Left as-is; a proper density pass is
+a deliberate, data-fed follow-up now that the funnel can actually measure it.
+
+`node --check` clean (telemetry.js + game.js + catalog.js); score `+=` **17** / CHART_VERSION 2 (score path untouched).
+
 ### build179 — attach-hardening: rr_active_rooms host heartbeat + adversarial-review P2 fixes  ·  ?v=478
 
 Two threads, both aimed at "make the live-show 1v1 rock-solid tomorrow."

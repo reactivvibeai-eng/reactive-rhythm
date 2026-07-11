@@ -2792,6 +2792,15 @@
         // Rethrow a friendly, actionable message instead — the play() catch renders it + returns to menu. The raw
         // cause still logs for debugging. Success path is untouched (this catch only runs on fetch/decode failure).
         try { console.warn('[rr] track fetch/decode failed:', url, _derr); } catch (e) {}
+        // build180 (D5): the preview→play cliff signal. This catch fires ONLY on a dead/HLS-only/corrupt/CORS
+        // track — exactly the ~62%-dead-catalog first-impression killer. Anonymous legitimate-interest funnel event
+        // (track id + a coarse reason; NO url/identity) so we can finally MEASURE which tracks/why players bounce.
+        try {
+          if (window.RhythmTelemetry && window.RhythmTelemetry.event) {
+            var _dre = String((_derr && (_derr.name || _derr.message)) || '').slice(0, 60);
+            window.RhythmTelemetry.event('decode_error', { trackId: (meta && (meta.id || meta.trackId)) || null, reason: _dre, difficulty: difficulty });
+          }
+        } catch (e) {}
         var _fe = new Error("This track can't be played right now — try another one.");
         try { _fe.cause = _derr; } catch (e) {}
         throw _fe;
