@@ -9,13 +9,21 @@ Publish.** That includes the entire held stack (builds 152→179): the reconnect
 challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
 **Already done for you overnight (verified, no action needed):**
-- ✅ `public/game/` synced to **`cb27d3b`** (build179, `?v=478`) — Lovable hash-checked all 3 game
-  files byte-for-byte; I independently confirmed `sync-game.mjs` points at that ref.
+- ✅ `public/game/` synced to **`9c51abd`** (build180, `?v=479`) — build179 attach-hardening + build180 telemetry.
 - ✅ `game-catalog` edge function **redeployed** (so the F1 `rr_active_rooms` seed is guaranteed live).
-- ✅ `public.notifications` + `public.rr_active_rooms` confirmed in the `supabase_realtime` publication
-  (verified by my own DB query, not just Lovable's word).
+- ✅ `public.notifications` + `public.rr_active_rooms` confirmed in the `supabase_realtime` publication.
+- ✅ **Instrumentation is now LIVE** (build180) — anonymous play funnel (`song_start / decode_error / play_fail /
+  play_complete`) + anonymous song ratings land in `game_funnel_events`. **Proven end-to-end** against prod (a
+  browser-fired event landed; test rows cleaned up). Tomorrow's show will finally be measurable, not a memory.
 
-So the whole backend/attach path is confirmed ready. **Just Publish.**
+So the whole backend/attach/telemetry path is confirmed ready. **Just Publish.**
+
+> **Suno SFX:** all wired + firing (anthem, overdrive-ignite, shield-save, combo-flare, clear-fanfare, hub bed,
+> battle-call ring) with procedural fallbacks — they go live with this Publish. Only the mix levels are your call.
+
+> **Difficulty:** left as-is on purpose. Hard's combo wall was already softened in build141 and a gated Expert
+> tier (Rift) already exists; recent Hard play is one grinding user (n=1), so a re-nerf tonight would be reckless —
+> better as a deliberate pass once the new funnel gives us real difficulty data.
 
 ## ✅ What's ready (multiplayer — the show's centerpiece)
 
