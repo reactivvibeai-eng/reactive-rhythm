@@ -1173,7 +1173,12 @@
     // P0 fix: an OPEN+EMPTY seat disables the primary START (waiting for a challenger) unless the host explicitly
     // armed a solo run (_showSoloArm). 'artist' policy is unaffected — it always could start solo, by design.
     var showBlockedOnOpen = _showSeatOpenEmpty() && !_showSoloArm;
-    var ok = (oppHere || (room.show && room.isHost)) && !!sel.trackId && !showBlockedOnOpen;
+    // build173 (Fable MP-cluster 4c): a SHOW host locks the review track as sel.audioUrl with trackId:null
+    // (openShowRoom) → the old `!!sel.trackId` gate disabled START forever while the copy said "START plays it
+    // solo." Accept audioUrl for a show host. Normal rooms delete sel.audioUrl (:3779/3831/3845) so they're
+    // unaffected — the gate stays sel.trackId there.
+    var _haveTrack = !!sel.trackId || !!(room.show && sel.audioUrl);
+    var ok = (oppHere || (room.show && room.isHost)) && _haveTrack && !showBlockedOnOpen;
     var rb = $('mpx-ready'); if (rb) rb.disabled = !ok;
     var rs = $('mpx-readystate'); if (!rs) return;
     if (room.show) {   // build102s: show-room copy (song is locked to the review, host is never blocked)
@@ -4241,7 +4246,13 @@
     if (_qm.on) qmStop(true);   // v405 review fix: joining a room cancels a live matchmaking search (mirror of openRoomWithId)
     if (!meta.show) clearShowRoom();   // playtest-3 fix (Bug C): joining a NORMAL room clears any stale rr_showroom key (host-only persistence — harmless to clear as a guest); a real show-room join keeps it untouched.
     meReady = false; roomOppReady = false;   // playtest-3 fix (Bug D): fresh join = un-ready both sides
-    if (!asSpec && meta.count >= meta.max) { banner('mpx-rooms-msg', 'Room is full — spectate instead.'); return; }
+    // build173 (Fable MP-cluster S3): DON'T hard-bail a seat on a stale advertised count. roomsDir[rid].count is
+    // only as fresh as the last room-meta broadcast; a messy session (prior half-join, lobby rejoin) can leave
+    // count=2 painted on a 1-occupant room, so a legit joiner got "Room is full — spectate instead" and could only
+    // WATCH — the owner's exact report. The HOST is seat-authoritative (onRoomPeers :3961 seats the first non-spec
+    // member as p2 + re-advertises), so attempt the seat unless a match is actually LIVE (mid-match). A genuine
+    // over-capacity race resolves host-side; this only removes the false block on the common 1-occupant case.
+    if (!asSpec && meta.live) { banner('mpx-rooms-msg', 'That match is already in progress — WATCH instead.'); return; }
     room = { id: rid, name: meta.name, priv: meta.priv, combat: !!meta.combat, matched: !!meta.matched, isHost: false, ch: null, seat: asSpec ? 'spec' : 'p2', members: {}, p1: meta.hostId, p2: asSpec ? null : ME.id,
       show: !!meta.show, submitterId: null, submitterName: '', revToken: null, invited: false, pendingChal: null, declined: {} };   // build69: adopt the host's advertised room combat. build116 p3: + matched (fairness). build102s: adopt `show` (the show-snap heartbeat also late-adopts it for stale metas)
     spectating = !!asSpec;
@@ -7754,6 +7765,12 @@
   // build102x: ?mpqm=resume (site MATCH FOUND CTA / Navbar toggle) — same boot auto-open; the lobby SUBSCRIBED
   // handler then runs the one-shot qmResume() status pickup.
   else if (_pendingQmResume) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
+  // build173 (Fable MP-cluster 1b): the CALLER of a site auto-battle-call boots `?mproom=<rid>&mprole=host`,
+  // which stashes `_qmBootRoom` and NULLS `_pendingRoomJoin` (:302) — so without this branch the caller never
+  // auto-opens MP, and the lobby-SUBSCRIBED `_qmHostFallback()` that opens his room can never run (it needs the
+  // lobby channel, which needs MP open). Result: callee lands in the room, caller stuck on the hub. THE dead
+  // connection. This surfaces MP so the SUBSCRIBED handler runs _qmHostFallback → opens the room as host.
+  else if (_qmBootRoom) setTimeout(function () { try { open(); } catch (e) {} }, 1800);
   // build42: reconnect to a bracket I was in if the tab reloaded (persisted < 90s ago) — surface MP, rejoin the channel, pull the snapshot
   else { try {
     if (sessionStorage.getItem('rr_tour')) setTimeout(function () { try { open(); setTimeout(maybeReconnectTour, 800); } catch (e) {} }, 1500);

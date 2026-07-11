@@ -15,6 +15,39 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build173 — MP failure-cluster residuals (Fable-directed) — ⚠ CANDIDATE, pending 2-peer harness proof before publish  ·  ?v=471
+
+Owner's 2-account test failed across 4 MP paths. Fable ruled + dug: **~70% is the HELD reliability stack that's
+never been published** (bc:user setAuth+retry, challenge re-emit, playtest-3 Bug A/D — all already IN the code,
+just never Published), **but 4 current-code residuals survive publish**. This build fixes the game-side residuals;
+the site + backend piece went to Lovable; **nothing is proven until a full 1v1 runs on the two-peer harness.**
+
+- **1b — auto-battle-call CALLER stranded (THE dead connection).** Proven from prod: `live_match_invite` fires to
+  the callee (→ `?mproom=<rid>&mprole=guest`), but `rr_active_rooms` had ZERO rows — the caller's room was never
+  hosted, so the callee waited in an empty room and the caller sat in the MP UI. Game cause: the boot auto-open
+  chain (multiplayer.js:7748) had branches for tour/room/qm-resume but **none for `_qmBootRoom`** — a caller
+  booting `?mproom=<rid>&mprole=host` (which nulls `_pendingRoomJoin` at :302) never auto-opened MP, so the
+  lobby-SUBSCRIBED `_qmHostFallback()` that opens his room could never run. Added the `_qmBootRoom` branch. (The
+  SITE must still navigate the caller to `&mprole=host` — briefed to Lovable.)
+- **S3 — 2nd player can only WATCH.** `joinRoom` (:4244) hard-bailed a seat on a stale advertised `count>=max`
+  → "Room is full — spectate instead," so a legit joiner to a 1-occupant room could only Watch. The host is
+  seat-authoritative (`onRoomPeers` :3961 seats the first non-spec member). Now it bails to spectate ONLY when a
+  match is genuinely `live`, not on stale count.
+- **4c — show-room START stuck on "pick music."** A show host locks the track as `sel.audioUrl` with
+  `trackId:null`, but the gate (:1176) required `!!sel.trackId` → START disabled forever. Now accepts
+  `(sel.trackId || (room.show && sel.audioUrl))`; normal rooms delete `audioUrl` so they're unaffected.
+- **Disproved Fable's 4b** (stale pick paint): `paintSelection` (:1141) correctly clears to "Host picks a track"
+  when `sel.trackId` is null, and runs unconditionally at :980 — not the bug. The room-path "pick music" needs
+  the harness to disambiguate (pick-commit vs a spectator-not-p2 interaction with S3).
+
+**Held-stack verdict (Fable):** publish is the unlock, but sequence it — fix residuals → PROVE on the 8790/8791
+harness → publish ONCE + verify the live build number. Symptom 2 (in-game Challenge) = the HELD bc:user fix
+(already in code) + a P1 rail-unification/ring-card. Stability doctrine (P1): promote the versioned room-state
+snapshot to the single lifecycle authority (add mid/atMs/phase) and retire the one-shot re-emit loops.
+
+`node --check` clean; game.js untouched (score += 17, CHART_VERSION 2). NOT harness-proven yet — do not publish
+on this alone.
+
 ### build172 — NOTE TRAIL now tints the notes (Fable P1: the cosmetic finally does something)  ✅ wiring proven (id→rgb map + run-start read + live demo) · 0 console errors  ·  ?v=470
 
 Closes the honesty gap build171 flagged: equipping a NOTE TRAIL lit the tile but changed nothing in-game.
