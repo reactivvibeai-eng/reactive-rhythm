@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=481" />
+<link rel="stylesheet" href="jukebox.css?v=482" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -8052,7 +8052,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=481"></script>
+<script src="telemetry.js?v=482"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8231,17 +8231,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=481"></script>
-<script src="game.js?v=481"></script>
-<script src="procbg.js?v=481"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=481"></script>
-<script src="chat.js?v=481"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=481"></script>
-<script src="goals.js?v=481"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=481"></script>
-<script src="share.js?v=481"></script>
-<script src="replay.js?v=481"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=481"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=482"></script>
+<script src="game.js?v=482"></script>
+<script src="procbg.js?v=482"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=482"></script>
+<script src="chat.js?v=482"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=482"></script>
+<script src="goals.js?v=482"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=482"></script>
+<script src="share.js?v=482"></script>
+<script src="replay.js?v=482"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=482"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -13198,9 +13198,29 @@
           _ovLastTrigger[d[0]] = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : null;
           _focusInto(screen, d[1]);
         } else {
+          // build183 (LIVE user report, show day): restoring focus to the exact trigger armed an
+          // inescapable re-open loop — after closing the Store, focus silently returned to the hub's
+          // STORE footlink, so a rhythm player's habitual Enter/Space bounced them straight back into
+          // the Store, and every close re-armed it ("anything I click takes me to the store"; the
+          // capture shows the gold :focus-visible ring on STORE + its star burst with the cursor
+          // nowhere near it). Same loop existed for every trigger whose activation opens an overlay
+          // (results-store, locked skin tiles → openStore, …). A game hub is not a document: park
+          // focus on a NEUTRAL container instead — the trigger's own screen (its .mh-card when it's
+          // the hub), tabindex -1, so Enter/Space are inert and Tab still reaches every control.
           var t = _ovLastTrigger[d[0]];
-          if (t && document.contains(t)) { try { t.focus({ preventScroll: true }); } catch (e) { try { t.focus(); } catch (e2) {} } }
           _ovLastTrigger[d[0]] = null;
+          var park = null;
+          try {
+            if (t && document.contains(t) && t.closest) {
+              var ts = t.closest('.screen');
+              if (ts && (ts.classList.contains('active') || ts.classList.contains('visible'))) park = ts.querySelector('.mh-card') || ts;
+            }
+          } catch (e) {}
+          try { if (!park) { var av = document.querySelector('.screen.active'); if (av) park = av.querySelector('.mh-card') || av; } } catch (e) {}
+          if (park) {
+            try { if (!park.hasAttribute('tabindex')) park.setAttribute('tabindex', '-1'); } catch (e) {}
+            try { park.focus({ preventScroll: true }); } catch (e) { try { park.focus(); } catch (e2) {} }
+          }
         }
       });
       mo.observe(screen, { attributes: true, attributeFilter: ['class'] });

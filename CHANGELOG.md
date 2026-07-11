@@ -15,6 +15,29 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build183 — P0 LIVE FIX: the "everything takes me to the Store" focus trap  ·  ?v=482
+
+Live user report (AkiraScare, Discord, with screen capture): after *quickplay ×2 → weekly rift → share rift*,
+"anything I click on takes me to the store — I could not play anything." Frame-by-frame forensics of the capture
+showed the hub's STORE footlink lit with its gold `:focus-visible` ring and its star-pickup burst firing with the
+mouse cursor nowhere near it → a KEYBOARD/programmatic activation, not a pointer click.
+
+**Root cause:** the overlay a11y focus-restore (index.html OV system) returned focus to the exact trigger element
+whenever an overlay closed. Close the Store once and focus silently sat on the hub's STORE button — so a rhythm
+player's habitual **Enter/Space** re-opened the Store, and *every close re-armed the trap* (the restore fires on
+the close transition each time). Self-sustaining loop; feels like "I can't play anything." Same class of loop
+existed for every trigger whose activation opens an overlay (results-store, locked-skin tiles → openStore, a
+locked paid level card → openStore: close → focus back on the card → Enter → Store again).
+
+**Fix:** on overlay close, focus is parked on a NEUTRAL container instead of the trigger — the trigger's own
+screen (its `.mh-card` when that's the hub), `tabindex="-1"`, so Enter/Space are inert and Tab still reaches
+every control. Opening-focus behavior (`_focusInto` the card) unchanged.
+
+**Verified live (headless, real DOM):** pre-fix repro confirmed (`activeElement === #mh-store` after store close);
+post-fix — store close parks focus on `mh-card`; profile close parks on `mh-card`; programmatic openStore from
+the levels screen parks on `levels-screen` (not the level card that would relaunch→re-open); hub tiles still
+navigate; store stays closed; zero console errors.
+
 ### build182 — VFX-levels visual QA: seen, critiqued, stepped up (dawn/weave/ember)  ·  ?v=481
 
 First VISUAL review of the three Tier-I procedural backdrops done by actually LOOKING at them — drove each
