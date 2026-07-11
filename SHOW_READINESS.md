@@ -9,11 +9,11 @@ Publish.** That includes the entire held stack (builds 152→179): the reconnect
 challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
 **Already done for you overnight (verified, no action needed):**
-- ✅ Deploy ref now **`801ddf1`** (build182, `?v=481`) — adds the VFX-level visual step-up (dawn/weave/ember)
-  on top of build181's 4 show-critical fixes from the full-system
-  audit: consent bar no longer covers the mobile tap-zones mid-song (the QR audience!), previews can't play the
-  wrong audio, the show host can't be ejected by a forged broadcast, and telemetry survives tab-hide. All
-  live-verified. (Includes build179 attach-hardening + build180 telemetry.)
+- ✅ Deploy ref now **`59ff360`** (build183, `?v=482`) — **P0 live-user fix**: AkiraScare's "anything I click
+  takes me to the store" loop. The overlay focus-restore put keyboard focus back on the STORE button every time
+  the Store closed, so Enter/Space bounced players straight back in, forever. Focus now parks on a neutral
+  container — loop killed, verified live. (Also includes build182 VFX step-up, build181's 4 show-critical audit
+  fixes, build179 attach-hardening + build180 telemetry.)
 - ✅ `game-catalog` edge function **redeployed** (so the F1 `rr_active_rooms` seed is guaranteed live).
 - ✅ `public.notifications` + `public.rr_active_rooms` confirmed in the `supabase_realtime` publication.
 - ✅ **Instrumentation is now LIVE** (build180) — anonymous play funnel (`song_start / decode_error / play_fail /
