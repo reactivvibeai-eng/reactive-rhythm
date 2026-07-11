@@ -339,6 +339,19 @@
   // Used ONLY for ADDITIVE glow + ambient FX — LANE_COLORS / scoring / timing are untouched.
   let levelAccentRGB = null;     // e.g. '166,77,255' for violet, or null
   let levelAmbient = 0;          // 0..1 strength of the ambient FX layer (0 = off)
+  // build172 (Fable P1): the equipped NOTE TRAIL cosmetic recolors the falling-note TRAIL STREAK only (the note
+  // GEM stays lane-coloured — lane identity is gameplay info and is drawn elsewhere). Cosmetic-only: no scoring,
+  // no timing, no LANE_COLORS mutation. Read ONCE per run in resetScoring. Map mirrors the index.html swatches.
+  let cosmeticTrailRGB = null;   // 'r,g,b' or null (no trail equipped / Quick default)
+  const _COSMETIC_TRAIL_RGB = { embertrail: '255,154,74', embertrail_perm: '255,176,102', exclusive_15: '240,200,112' };
+  function _readCosmeticTrail() {
+    cosmeticTrailRGB = null;
+    try {
+      const C = window.RhythmCosmetics; if (!C || !C.equipped) return;
+      const id = C.equipped('noteskin') || C.equipped('notecolor');   // one trail active (panel clears the sibling)
+      if (id && _COSMETIC_TRAIL_RGB[id]) cosmeticTrailRGB = _COSMETIC_TRAIL_RGB[id];
+    } catch (e) {}
+  }
   // audio-reactive: an AnalyserNode tap on the music gain drives a beat pulse into bgPulse
   let musicAnalyser = null, musicFreq = null, beatLevel = 0;
   let energy = 0;            // smoothed musical intensity (0..1) from chart density
@@ -3395,6 +3408,7 @@
     score = 0; combo = 0; maxCombo = 0; comboTierCur = 0; scoreDisplay = 0; runFailed = false;
     try { _applyTierFrame(0); } catch (e) {}   // build168 R2: a fresh run always starts on a cold frame
     try { const _fh0 = _footerHint(); if (_fh0) { _fh0._faded = false; _fh0.classList.remove('faded'); } } catch (e) {}   // build168 R5
+    _readCosmeticTrail();   // build172 (Fable P1): pick up the equipped NOTE TRAIL for this run's note-streak tint
     _peakCombo = 0; _lastBreakPeak = 0; _clutchCount = 0; _clutchArmed = false;   // build122 p1: CLUTCH per-run state
     _missCursor = 0;   // build60 PERF: fresh run → miss-sweep cursor points at the first (unjudged) note
     counts = { perfect: 0, great: 0, good: 0, miss: 0 }; _timingSamples = []; _pendFullChord = [];
@@ -5119,6 +5133,8 @@
       strumState: () => ({ require: requireStrum(), profile: laneProfile, guitar: guitarPadId(), cfg: Object.assign({}, strumCfg), heldFrets: Array.from(_frets) }),
       // combo-tier dev hooks (stripped at content-freeze) — drive the ladder without a 500-streak run
       setCombo: (n) => { combo = Math.max(0, n | 0); if (combo > maxCombo) maxCombo = combo; const nt = comboTierIdx(combo); if (nt > comboTierCur) { comboTierCur = nt; onComboTierUp(nt, 2); } else { comboTierCur = nt; } updateHUD(); const cd = document.getElementById('combo-display'); return { combo, tier: comboTierCur, name: COMBO_TIERS[comboTierCur].name, dataTier: cd && cd.getAttribute('data-tier'), numColor: cd && cd.style.getPropertyValue('--ct-num') }; },
+      trailRGB: () => cosmeticTrailRGB,   // build172: dev hook — the equipped NOTE TRAIL colour for this run (null = none) · strip at launch
+      readTrail: () => { _readCosmeticTrail(); return cosmeticTrailRGB; },
       comboTier: () => ({ combo, idx: comboTierIdx(combo), name: COMBO_TIERS[comboTierIdx(combo)].name, cur: comboTierCur, ladder: COMBO_TIERS.map(t => t.name + '@' + t.min) }),
       chargeOd: () => { overdrive = 1; updateHUD(); return overdrive; },
       od: () => ({ overdrive: +overdrive.toFixed(2), active: odActive, timer: +odTimer.toFixed(2), ready: overdrive >= 1 && !odActive, igniteT: +odIgniteT.toFixed(3) }),   // build109 s3: igniteT exposed for the wind-up verification pass
@@ -7691,7 +7707,9 @@
       if (!held && !fxLite && !reduceMotion) {   // build71: gate the comet trail (2 gradients + shadowBlur strokes per note per frame) for perf/a11y users — matches the sibling string-glow & accent-aura gates
         const dTail = Math.min(1.10, d + 0.24);
         const tx = noteX(n.lane, dTail), ty = noteY(dTail);
-        const rgb = n.type === 'star' ? '255,150,60' : LANE_COLORS[n.lane].rgb;
+        // build172 (Fable P1): an equipped NOTE TRAIL recolours the STREAK (not the gem — the gem/head keeps its
+        // lane colour, drawn separately). Stars keep their gold. Cosmetic-only, no gameplay effect.
+        const rgb = n.type === 'star' ? '255,150,60' : (cosmeticTrailRGB || LANE_COLORS[n.lane].rgb);
         const grad = ctx.createLinearGradient(nx, ny, tx, ty);
         grad.addColorStop(0, 'rgba(' + rgb + ',' + (0.42 * sc).toFixed(3) + ')');
         grad.addColorStop(0.5, 'rgba(' + rgb + ',' + (0.15 * sc).toFixed(3) + ')');

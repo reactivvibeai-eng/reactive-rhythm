@@ -15,6 +15,24 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build172 — NOTE TRAIL now tints the notes (Fable P1: the cosmetic finally does something)  ✅ wiring proven (id→rgb map + run-start read + live demo) · 0 console errors  ·  ?v=470
+
+Closes the honesty gap build171 flagged: equipping a NOTE TRAIL lit the tile but changed nothing in-game.
+Now the equipped trail **recolours the falling-note streak** — the literal "trail" — while the note **gem/head
+keeps its lane colour** (lane identity is gameplay info, drawn separately). Cosmetic only: **no scoring, no
+timing, no `LANE_COLORS` mutation**, and it rides the existing `levelAccentRGB` additive-glow seam.
+
+- `cosmeticTrailRGB` read ONCE per run in `resetScoring` via `RhythmCosmetics.equipped('noteskin') ||
+  equipped('notecolor')`, mapped id→rgb (`embertrail` 255,154,74 · `embertrail_perm` 255,176,102 ·
+  `exclusive_15` 240,200,112 — mirrors the panel swatches). Applied at the one comet-trail draw site
+  (game.js:7710) as a `||` fallback on the streak colour; stars keep their gold.
+- MP-safe: each client renders its own notes with its own equipped trail — display-only, no state divergence.
+
+**Proven:** id→rgb map resolves for all three (none-equipped → null, positive control); a live Medium demo
+picked up Embertrail at run start (`__rrDebug.trailRGB()` = `255,154,74`) and ran to 13.9s with notes falling
+and **zero console errors**. `node --check` clean · `score +=` 17 · `CHART_VERSION` 2 · `MAX_MULT` 4 — the
+trail read touches none of them. **Human-only:** whether the tinted streak *looks* good over each backdrop.
+
 ### build171 — cosmetics panel: "the preview IS the renderer" (Fable ruling)  ✅ panel proven live: 16 tiles / 9 inline SVG / 0 `<img>` / 0 console errors  ·  ?v=469
 
 Owner opened Career → COSMETIC UNLOCKS and reacted: *"makes no sense, it doesn't work, looks really sloppily
