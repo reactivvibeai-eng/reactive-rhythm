@@ -734,6 +734,7 @@
     // build8: open-room directory advertisements (host → everyone) + close notices
     lobbyCh.on('broadcast', { event: 'room-meta' }, function (m) { onRoomMeta(m.payload); });
     lobbyCh.on('broadcast', { event: 'room-gone' }, function (m) { var p = m.payload; if (p && p.rid) { delete roomsDir[p.rid]; try { _roomGoneRescue(p.rid); } catch (e) {} renderRooms(); updateBrowseCount(); } });
+    lobbyCh.on('broadcast', { event: 'room-brb' }, function (m) { var p = m.payload; if (p && p.rid) { try { _onRoomBrb(p.rid, p.holdMs || 90000); } catch (e) {} } });   // build177 (F3): the host is reconnecting — HOLD the seat, don't kill the room
     lobbyCh.on('broadcast', { event: 'room-ping' }, function () { if (room.id && room.isHost) advertiseRoom(); if (tour.id && tour.isHost) advertiseTour(); });   // late-joiner asks; hosts re-announce
     // build9: tournament directory advertisements
     lobbyCh.on('broadcast', { event: 'tour-meta' }, function (m) { onTourMeta(m.payload); });
@@ -4089,6 +4090,28 @@
     showFailCard({ head: 'THAT ROOM IS CLOSED', reason: 'The host closed the room before you got in.',
       actions: [{ label: 'BACK TO LOBBY', primary: true, fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
   }
+  var _brbT = 0;   // build177 (F3): host-reconnecting seat-hold fallback timer
+  // build177 (Fable F3): the host broadcast room-brb (it is RELOADING, not quitting — build176 F2 revives it). HOLD
+  // the guest's seat + show a reconnecting cue instead of the room-gone dead card; only fail-card after an honest
+  // ~95s hold if no host ever comes back. The host's F2 revive re-advertises → presence re-converges and
+  // paintRoomWaiting clears the hold the moment the host reappears.
+  function _onRoomBrb(rid, holdMs) {
+    try {
+      if (!room.id || room.id !== rid || room.isHost || matchLive || spectating) return;   // only a seated guest in THIS room
+      banner('mpx-setup-msg', 'Opponent reconnecting — your seat is held…');
+      var dot = $('mpx-dot-opp'); if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'RECONNECTING…'; }
+      if (_brbT) clearTimeout(_brbT);
+      _brbT = setTimeout(function () {
+        _brbT = 0;
+        var _hostHere = !!(room.p1 && room.members[room.p1]);
+        if (room.id === rid && !room.isHost && !matchLive && !_hostHere) {   // still no host after the hold → honest fail
+          try { leaveGuestRoom(); } catch (e) {}
+          showFailCard({ head: 'OPPONENT LEFT', reason: 'They didn’t reconnect in time. Head back and find another match.',
+            actions: [{ label: 'BACK TO LOBBY', primary: true, fn: function () { clearFailCard(); step('lobby'); onLobbySync(); } }] });
+        }
+      }, (holdMs || 90000) + 5000);
+    } catch (e) {}
+  }
   // direct channel join with NO room-meta — synthesizes a minimal room object off the rid alone. Host identity,
   // name, combat/matched flags all self-heal from the host's room-meta (onRoomMeta) + presence + song broadcasts
   // once the host is online. Used only as the late-host fallback; the meta fast-path stays byte-identical.
@@ -4473,7 +4496,7 @@
     var oppId = room.isHost ? room.p2 : room.p1;
     var dot = $('mpx-dot-opp');
     if (dot) {
-      if (opp) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp.name || 'OPPONENT').slice(0, 12); }
+      if (opp) { dot.setAttribute('data-state', 'here'); dot.textContent = (opp.name || 'OPPONENT').slice(0, 12); if (_brbT) { clearTimeout(_brbT); _brbT = 0; banner('mpx-setup-msg', ''); } }   // build177 (F3): host reconnected — release the seat-hold + clear the cue
       else { dot.setAttribute('data-state', 'waiting'); dot.textContent = spectating ? 'WATCHING' : 'WAITING…'; }
     }
     // build111 s3: host mute/kick kebab on the opponent cell (room is 1v1 — the "roster row" is this one cell).
@@ -7807,7 +7830,14 @@
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
-    if (room.id && room.isHost && lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } });
+    // build177 (Fable F3): a host with the RECONNECT armed (rr_room set → build176 F2 will revive on the next boot)
+    // is almost certainly RELOADING, not quitting — so HOLD the guest's seat with room-brb instead of the room-gone
+    // death signal. The guest keeps its seat + shows "opponent reconnecting" and only fails after a 90s honest hold
+    // (or the softPresence expiry) if the host never comes back. A host with no reconnect armed still room-gones.
+    if (room.id && room.isHost && !room.show && lobbyCh) {
+      var _armed = false; try { _armed = !!sessionStorage.getItem('rr_room'); } catch (e) {}
+      lobbyCh.send({ type: 'broadcast', event: (_armed ? 'room-brb' : 'room-gone'), payload: { rid: room.id, holdMs: 90000 } });
+    } else if (room.id && room.isHost && lobbyCh) { lobbyCh.send({ type: 'broadcast', event: 'room-gone', payload: { rid: room.id } }); }
     if (tour.id && tour.isHost && lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'tour-gone', payload: { tid: tour.id } });
     if (roomSP) roomSP.stop(); if (tourSP) tourSP.stop(); if (matchSP) matchSP.stop(); if (lobbySP) lobbySP.stop();
   } catch (e) {} });

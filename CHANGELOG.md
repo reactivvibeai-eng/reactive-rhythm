@@ -15,6 +15,19 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build177 — MP reconnect (Fable F3): a host reload HOLDS the opponent's seat — PROVEN  ·  ?v=476
+
+Second half of the reconnect story (F2 was "the reloader auto-rejoins"; F3 is "the OTHER player isn't stranded").
+Before: a host reload broadcast `room-gone` → the guest got a "THAT ROOM IS CLOSED" dead card and lost the match.
+Now: when the reconnect is armed (build176 rr_room set → the host WILL revive), the host's `beforeunload` broadcasts
+`room-brb{rid, holdMs:90000}` instead — the guest keeps its seat, shows "opponent reconnecting", and only fails
+after an honest ~95s hold if the host truly never returns. `_onRoomBrb` handles it; `paintRoomWaiting` releases the
+hold the instant the host reappears. A host with no reconnect armed still `room-gone`s (correct for a real close).
+
+**Harness proof (rrf3):** host + guest converged → host `location.reload()` → guest got **NO dead card**
+(`bodyHasClosed:false`, still on `#multiplayer-screen`, seat kept) → host revived via F2 and **both reconverged**
+(guest opp dot "here", host shows guest seated as p2). `node --check` clean, score `+=` 17.
+
 ### build176 — MP RECONNECT funnel (Fable F2): a room now survives a reload — PROVEN  ·  ?v=475
 
 Executed the top P0 of the Fable-directed MP-attach plan (MP_ATTACH_HARDENING_v1.json) — the owner's #1 mandate:
