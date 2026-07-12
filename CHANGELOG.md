@@ -15,6 +15,25 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build184b — adversarial-verify round: 3 more confirmed traps closed  ·  ?v=484
+
+The 24-agent verify pass confirmed 12 findings; build184 had fixed 9 — these are the remaining 3:
+- **P0 — invisible controls were Tab-reachable from everywhere:** inactive screens are only opacity-hidden, so
+  buttons on HIDDEN screens (including store-opening controls) stayed in the tab order and were Enter/Space-
+  activatable while invisible — a stray Tab could park focus on an unseen STORE button from any screen (very
+  plausibly how the original victim's focus first landed there). Every inactive `.screen` is now `inert`
+  (out of the tab order, activation blocked), synced by the existing class observer. Verified: the hub's STORE
+  footlink relay still works through the inert library; screens un-inert the moment they activate.
+- **Library Enter under overlays:** state-menu Enter fired PLAY on the library even with Store/Settings/Profile/
+  Leaderboard stacked on top — a song launched under the overlay. Same guard as the results fix.
+- **Daily Rift permanently flipped saved difficulty to HARD** (setDifficulty persists to rr_diff) — one rift tap
+  moved a Medium player onto Hard for every later song, silently (a likely contributor to "the game got brutally
+  hard" beta feedback). The player's difficulty is captured pre-rift and restored on hub return (or instantly on
+  a failed launch); PLAY AGAIN on results correctly keeps Hard for rift replays.
+
+Verified headless: menu/store-screen inert states flip with `active`; hidden #store-open unfocusable; hub relay
+functional; rr_diff restore consumes the flag; node --check clean; score ceiling 17; zero console errors.
+
 ### build184 — P0 LIVE FIX round 2: the SECOND store-hijack mechanism + forensics  ·  ?v=483
 
 AkiraScare re-reported after build183 ("Still same issue, anything I click on sends me to the shop").

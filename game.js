@@ -5514,6 +5514,9 @@
       // excludes the title screen and the RYO intro.
       if (e.key === 'Enter') {
         try { const lib = $('menu'); if (!lib || !lib.classList.contains('active')) return; } catch (e2) {}
+        // build184b: an overlay stacked over the library owns Enter — don't launch a song underneath it
+        // (mirror of the results-state guard; the store/profile/etc. add .active without changing engine state).
+        if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active, #store-screen.active, #levels-screen.active')) return;
         if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;   // build184: Enter while TYPING (library search) must not launch a track
         e.preventDefault(); $('play-btn').click();
       }
