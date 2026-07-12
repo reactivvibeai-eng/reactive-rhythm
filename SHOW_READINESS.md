@@ -9,7 +9,7 @@ Publish.** That includes the entire held stack (builds 152→179): the reconnect
 challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
 **Already done for you overnight (verified, no action needed):**
-- ✅ Deploy ref now **`1144bc3`** (build184b, `?v=484` — adds: inert inactive screens so invisible buttons can
+- ✅ Deploy ref now **`af84efb`** (build185, `?v=485` — THE root-cause fix: an invisible hub-wide STORE click-eater from the art loader dressing the demoted footlink; verified by hit-testing. Also includes 184b/184/183 hardening — adds: inert inactive screens so invisible buttons can
   never take focus, library Enter guarded under overlays, Daily Rift no longer permanently flips difficulty to
   Hard) — **BOTH store-hijack mechanisms dead**. AkiraScare's
   "anything I click takes me to the shop" was TWO bugs: (1) the overlay focus-restore re-armed the Store on
