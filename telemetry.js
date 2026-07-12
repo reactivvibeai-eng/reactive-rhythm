@@ -56,17 +56,23 @@
   // anon key (for Supabase edge functions — same key the catalog layer uses).
   var ANON_KEY = (function () { try { return CFG.SUPABASE_KEY || ''; } catch (e) { return ''; } })();
 
-  // ---- app_version: read the live ?v=NN off game.js, else a const ---------
-  var APP_VERSION = (function () {
+  // ---- app_version: read the live ?v=NN off game.js ------------------------
+  // build184: derive LAZILY (first use) and cache. The old load-time IIFE ran while telemetry.js was still
+  // parsing in <head> — game.js's <script> tag didn't exist in the DOM yet, so EVERY build ever shipped
+  // stamped the frozen 'v308' fallback (confirmed in prod game_funnel_events: all rows say v308). With the
+  // stamp finally truthful, "which build is this user actually running" becomes answerable from telemetry.
+  var _appVersion = '';
+  function APP_VER() {
+    if (_appVersion) return _appVersion;
     try {
       var s = document.querySelector('script[src*="game.js"]');
       if (s) {
         var m = (s.getAttribute('src') || '').match(/[?&]v=([^&]+)/);
-        if (m) return 'v' + m[1];
+        if (m) { _appVersion = 'v' + m[1]; return _appVersion; }
       }
     } catch (e) {}
-    return 'v308'; // fallback build tag — keep roughly in step with the ?v in index.html (bump with ?v; build72)
-  })();
+    return 'v0'; // unresolved (script tag not in DOM yet) — do NOT cache; retry next call
+  }
 
   // ---- stable session id (per device, persisted) --------------------------
   function uuid() {
@@ -252,7 +258,7 @@
         session_id: SESSION_ID,
         event_name: String(name),
         props: _p,
-        app_version: APP_VERSION
+        app_version: APP_VER()
       };
       if (_userId) row.user_id = _userId;
       pushCapped(evtBuffer, row, EVT_CAP);
@@ -288,7 +294,7 @@
         url: _redactUrl(url || (function () { try { return location.href; } catch (e) { return ''; } })()),
         message: String(msg == null ? '' : msg).slice(0, 4000),     // cap so a log bomb can't bloat the table
         stack: String(stack || '').slice(0, 8000),
-        app_version: APP_VERSION
+        app_version: APP_VER()
       };
       if (_userId) row.user_id = _userId;
       pushCapped(errBuffer, row, ERR_CAP);
@@ -317,7 +323,7 @@
     getConsent: getConsent,
     flush: flush,
     sessionId: SESSION_ID,
-    appVersion: APP_VERSION,
+    appVersion: APP_VER,   // build184: now a FUNCTION (lazy) — the old load-time constant was frozen at the v308 fallback forever
     // diagnostics (safe to keep — read-only views of the swap-seam + buffers)
     _urls: function () { return { clientlog: URLS.clientlog, events: URLS.events, net: netEnabled() }; },
     _buffers: function () { return { events: evtBuffer.slice(), errors: errBuffer.slice() }; }

@@ -144,6 +144,13 @@
     return _isAdmin;
   }
   refreshAdmin();   // populate ASAP; index.html re-drives it on auth change for live login/logout
+  // build184: prime the ENTITLEMENTS cache at boot + keep it fresh on login/logout. ownsItem() reads a cache
+  // that was only ever filled inside the Store IIFE — so until the player happened to open the Store, every
+  // server-purchased item read UNOWNED, and the locked-item click paths (campaign paid cards, profile loadout
+  // tiles) routed clicks to the Store ("anything I click sends me to the shop" — live user report 2026-07-11).
+  // Delay lets the shared site session hydrate; the auth-change re-prime covers slow restores + real logins.
+  try { setTimeout(function () { try { getEntitlements(); } catch (e) {} }, 1200); } catch (e) {}
+  try { onAuthChange(function () { try { getEntitlements(); } catch (e) {} }); } catch (e) {}
   // build59: localhost is a full-access DEV context (the builder testing locally). Treat it as owning everything so the STORE
   // + every ownsItem-based gate (equip, launch checks) match the campaign grid, which already unlocks paid levels via ||DEV.
   // WITHOUT this, on localhost a paid level shows OWNED in the campaign but "Buy" in the store (ownsItem=false).
@@ -559,6 +566,13 @@
       const out = await api('/entitlements', { auth: true });
       // build50: tolerate BOTH shapes — the live backend returns { entitlements:[…] } but the brief asks for { owns:[…] }.
       const owns = Array.isArray(out && out.owns) ? out.owns : (Array.isArray(out && out.entitlements) ? out.entitlements : []);
+      // build184: an UNAUTHENTICATED 200-with-empty (token missing/expired mid-session — api() silently omits the
+      // Bearer when getToken() is null) must not clobber a previously-signed cache: that blackout made every paid
+      // item read LOCKED, and locked-item clicks route to the Store ("anything I click sends me to the shop").
+      // Thrown fetches already preserve the cache (below); treat unauthed-empty the same and keep what we know.
+      if (!(out && out.signed_in) && _entitlements.signed_in && _entitlements.owns.length && !owns.length) {
+        return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() };
+      }
       _setEntCache(owns, !!(out && out.signed_in));
       if (bonusServerOn() && out && out.signed_in) { try { _bonusSrvBalance(); } catch (e) {} }   // build100h: prime the authoritative Bonus balance cache once we know who's signed in
       // return the NORMALIZED cache (not the raw backend list): store consumers key on {item_type,item_id},

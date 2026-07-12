@@ -15,6 +15,46 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build184 — P0 LIVE FIX round 2: the SECOND store-hijack mechanism + forensics  ·  ?v=483
+
+AkiraScare re-reported after build183 ("Still same issue, anything I click on sends me to the shop").
+Prod telemetry reconstruction (game_funnel_events): their evening session fired `store_open` ~8s after
+FIVE consecutive fresh page loads, then in 2-second bursts — a reload-proof mechanism, so NOT the
+build183 focus loop. A 6-agent audit + adversarial verify over the whole codebase found it: there were
+TWO mechanisms all along.
+
+**Mechanism 2 (fixed here): the locked-tile instant-fling.** The player owns zero entitlements; a fresh/
+guest player sees 13 locked campaign cards + most profile guitars locked. Three surfaces converted an
+ordinary "let me play/equip this" click into an IMMEDIATE `openStore()`: campaign paid cards, profile
+loadout tiles, (+ results-store by design). Worse, `ownsItem()` reads a cache that was only ever filled
+INSIDE the store (never at boot), so even a paying player's own content read LOCKED until they happened
+to open the shop — and a 200-with-empty from an expired token clobbered a good cache permanently.
+
+Fixes:
+- **Two-click confirm** on locked-tile store routes (campaign paid card, profile loadout skin): first tap =
+  toast "…tap again to open it"; same tile again ≤5s = Store. (Same armed-confirm grammar as the store BUY.)
+- **Entitlements primed at boot + refreshed on auth change** (catalog.js); an unauthenticated empty response
+  no longer clobbers a previously-signed cache (error preserves, unauthed-empty now preserves too).
+- **Results keyboard holes** (game.js): the results-state overlay guard now includes #store-screen and
+  #levels-screen (Enter with the Store open was silently starting a run UNDER the shop); Space on results is
+  swallowed (native keyup activation was re-firing whatever button held focus — #results-store sat in that path).
+- **Esc stacking**: with the Store stacked over profile/levels/leaderboard, Esc now closes the STORE first
+  (registration order had the underlying overlay winning the capture race).
+- **Store hero** close no longer restores focus to its opening tile (the exact pattern build183 banned) — parks
+  on the store card; stale `_heroPrevFocus` cleared on store open/close.
+- **Rift launch failures re-raise the hub** (daily + weekly hid the hub BEFORE launching; a failed launch
+  stranded the player on a bare backdrop).
+- **Library search**: Enter while typing no longer launches the focused track (input/textarea exemption).
+- **FORENSICS**: every `store_open` telemetry event now carries {src, trusted, etype, etgt, ae, since_s} —
+  programmatic callers are tagged ('profile-skin' / 'level-lock' / 'results' / 'api'); if ANY hijack route
+  remains, prod telemetry names it directly. And the telemetry `build` stamp is finally TRUTHFUL: the old
+  load-time derivation ran before game.js's script tag existed in the DOM, so every build ever shipped
+  stamped the frozen 'v308' fallback — now lazy + cached ('v483').
+
+Verified headless (fresh-player sim ?asplayer=1): locked profile tile + shorty-x campaign card both need two
+clicks to reach the Store; Esc closes store-then-profile in order; focus parks hold; breadcrumb + src tags
+captured; appVersion reports v483; node --check clean ×3; score ceiling 17; zero console errors.
+
 ### build183 — P0 LIVE FIX: the "everything takes me to the Store" focus trap  ·  ?v=482
 
 Live user report (AkiraScare, Discord, with screen capture): after *quickplay ×2 → weekly rift → share rift*,

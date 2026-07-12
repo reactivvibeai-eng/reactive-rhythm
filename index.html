@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=482" />
+<link rel="stylesheet" href="jukebox.css?v=483" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -8052,7 +8052,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=482"></script>
+<script src="telemetry.js?v=483"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8231,17 +8231,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=482"></script>
-<script src="game.js?v=482"></script>
-<script src="procbg.js?v=482"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=482"></script>
-<script src="chat.js?v=482"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=482"></script>
-<script src="goals.js?v=482"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=482"></script>
-<script src="share.js?v=482"></script>
-<script src="replay.js?v=482"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=482"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=483"></script>
+<script src="game.js?v=483"></script>
+<script src="procbg.js?v=483"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=483"></script>
+<script src="chat.js?v=483"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=483"></script>
+<script src="goals.js?v=483"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=483"></script>
+<script src="share.js?v=483"></script>
+<script src="replay.js?v=483"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=483"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
@@ -8912,6 +8912,7 @@
     if (pname) pname.textContent = (sk && sk.title) || 'Default';
     if (pbg) { var lv = SKIN_LEVEL_BG[(sk && sk.id) || ''] || ''; if (lv) { pbg.style.backgroundImage = "url('" + lv + "')"; pbg.classList.add('on'); } else { pbg.classList.remove('on'); pbg.style.backgroundImage = ''; } }
   }
+  var _lockArm = { id: null, t: 0 };   // build184: locked-tile two-click confirm state (survives re-renders)
   function renderLoadout() {
     var wrap = $('profile-loadout'); if (!wrap) return;
     var cur = equippedSkinId();
@@ -8933,9 +8934,18 @@
       btn.addEventListener('focus', function () { setGuitarPreview(sk); });
       btn.addEventListener('mouseleave', function () { setGuitarPreview(skinById(equippedSkinId())); });
       btn.addEventListener('click', function () {
-        if (!skinUnlocked(sid)) {   // build99N (P-01): locked paid skin → route to the Store, never equip for free
-          try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Unlock ' + (sk && sk.title ? sk.title : 'this guitar') + ' in the Store'); } catch (e) {}
-          try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e) {}
+        if (!skinUnlocked(sid)) {   // build99N (P-01): locked paid skin never equips for free.
+          // build184: TWO-CLICK confirm before the Store opens (live report: "anything I click sends me to the
+          // shop" — a browse-y player tapping locked tiles was flung into the Store on every tap; same armed-
+          // confirm grammar the Store's own BUY button already uses). First tap = toast; same tile again ≤5s = Store.
+          var _now = Date.now();
+          if (_lockArm.id === sid && (_now - _lockArm.t) < 5000) {
+            _lockArm.id = null;
+            try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore('profile-skin'); } catch (e) {}
+          } else {
+            _lockArm.id = sid; _lockArm.t = _now;
+            try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Unlock ' + (sk && sk.title ? sk.title : 'this guitar') + ' in the Store — tap again to open it'); } catch (e) {}
+          }
           return;
         }
         try { if (sid) localStorage.setItem('rr_skin_id', sid); else localStorage.removeItem('rr_skin_id'); } catch (e) {}
@@ -8953,7 +8963,7 @@
   var rcb = $('results-career'); if (rcb) rcb.addEventListener('click', open);
   // build99N (P-09): a quiet STORE entry at the results screen — the peak "I just earned currency" moment — turns a
   // dead-end celebration into a one-tap path to spend. Classy, never blocks the next run (PLAY AGAIN stays primary).
-  var rsb = $('results-store'); if (rsb) rsb.addEventListener('click', function () { try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e) {} });
+  var rsb = $('results-store'); if (rsb) rsb.addEventListener('click', function () { try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore('results'); } catch (e) {} });
 
   // ---- SHARE CAREER — build the career-recap "Signal Card" + native share / fallback panel ----
   // Gathers the same career aggregate the overlay renders (RhythmCatalog.getCareer), the rank via
@@ -9022,7 +9032,10 @@
     disarm(); render();
   });
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+    if (e.key === 'Escape' && screen.classList.contains('active')) {
+      if (document.querySelector('#store-screen.active')) return;   // build184: the Store can stack ON TOP of this overlay (locked-tile route) — Esc must close the STORE first (this handler registered earlier, so it was winning the capture race and closing the screen UNDERNEATH the shop)
+      e.stopImmediatePropagation(); close();
+    }
   }, true);
 })();
 </script>
@@ -10288,11 +10301,21 @@
           if (!authoredUnlocked(L, readyForClick, ordered, ordered.indexOf(L))) {
             var paidLocked = L.unlock && L.unlock.entitlement && !ownsEntitlement(L.unlock.entitlement) && !DEV;
             var tierLocked = L.tier === 'hard' && !DEV && !tierCleared('medium', ordered, readyForClick);
-            var msg = paidLocked ? 'Unlock this level in the Store'
+            var msg = paidLocked ? 'Unlock this level in the Store — tap again to open it'
               : tierLocked ? ('Clear the ' + (tierLabelFor('medium') || 'Pulse') + ' tier to unlock ' + (tierLabelFor('hard') || 'Fracture'))
               : (LIVE ? 'Clear the previous level in this tier to unlock' : 'Campaign unlocks at release — free-play any song anytime');
+            // build184: a locked PAID level no longer flings the player into the Store on the FIRST tap (live
+            // report: "anything I click sends me to the shop"). First tap = toast; SAME card again ≤5s = Store.
+            if (paidLocked) {
+              var _now = Date.now();
+              if (_lvlStoreArm.id === lvId && (_now - _lvlStoreArm.t) < 5000) {
+                _lvlStoreArm.id = null;
+                try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore('level-lock'); } catch (e2) {}
+                return;
+              }
+              _lvlStoreArm.id = lvId; _lvlStoreArm.t = _now;
+            }
             try { window.RhythmGame.showToast(msg); } catch (e) {}
-            if (paidLocked) { try { if (window.RhythmLibrary && window.RhythmLibrary.openStore) window.RhythmLibrary.openStore(); } catch (e2) {} }   // build99N (P-08): a locked PAID level opens the Store (one tap to buy) instead of dead-ending on a toast
             return;
           }
           launchLevel(L, readyForClick);
@@ -10302,6 +10325,7 @@
       });
     }
   }
+  var _lvlStoreArm = { id: null, t: 0 };   // build184: paid-locked card two-click confirm state (survives rebuilds)
   function open() {
     build();
     // v253 (#89): show the player's equipped guitar as a top-right FLAIR (campaign levels still use their own themed
@@ -10491,7 +10515,10 @@
   } catch (e) {}
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+    if (e.key === 'Escape' && screen.classList.contains('active')) {
+      if (document.querySelector('#store-screen.active')) return;   // build184: the Store can stack ON TOP of this overlay (locked-tile route) — Esc must close the STORE first (this handler registered earlier, so it was winning the capture race and closing the screen UNDERNEATH the shop)
+      e.stopImmediatePropagation(); close();
+    }
   }, true);
 })();
 </script>
@@ -11100,7 +11127,10 @@
   try { if (RC() && RC().onAuthChange) RC().onAuthChange(function () { if (screen.classList.contains('active')) render(); }); } catch (e) {}
   screen.addEventListener('click', function (e) { if (e.target === screen) close(); });
   window.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && screen.classList.contains('active')) { e.stopImmediatePropagation(); close(); }
+    if (e.key === 'Escape' && screen.classList.contains('active')) {
+      if (document.querySelector('#store-screen.active')) return;   // build184: the Store can stack ON TOP of this overlay (locked-tile route) — Esc must close the STORE first (this handler registered earlier, so it was winning the capture race and closing the screen UNDERNEATH the shop)
+      e.stopImmediatePropagation(); close();
+    }
   }, true);
 })();
 </script>
@@ -11495,7 +11525,10 @@
     hero.classList.remove('show'); hero.setAttribute('aria-hidden', 'true');
     try { var _sg = $('store-grid'); if (_sg) _sg.inert = false; } catch (e) {}   // build89: restore the grid to the tab order
     _heroItem = null;
-    if (_heroPrevFocus && _heroPrevFocus.focus) try { _heroPrevFocus.focus(); } catch (e) {}
+    // build184: park focus on the store card (tabindex -1, Enter/Space inert) instead of restoring to the
+    // opening tile — restore-to-trigger is the exact re-open-loop pattern build183 banned for the overlays.
+    _heroPrevFocus = null;
+    try { var _card = screen.querySelector('.store-card'); if (_card) { if (!_card.hasAttribute('tabindex')) _card.setAttribute('tabindex', '-1'); _card.focus({ preventScroll: true }); } } catch (e) {}
   }
   function wireCards() {
     var cards = $('store-grid').querySelectorAll('.store-item');
@@ -11691,8 +11724,27 @@
   window.addEventListener('focus', recheckBalance);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) recheckBalance(); });
 
-  function open() { try { var _sg = $('store-grid'); if (_sg) _sg.inert = false; } catch (e) {} load(); screen.classList.add('active'); try { if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event('store_open', {}); } catch (e) {} }   // build90: belt-and-suspenders — never reopen with the grid stuck inert
-  function close() { _disarmBuy(); try { if ($('store-hero').classList.contains('show')) closeStoreHero(); } catch (e) {} screen.classList.remove('active'); }   // build86 (QA B83-1): clear armed buy-confirm; build90: also close the hero so #store-grid.inert can't leak permanently
+  function open(ev) {
+    try { var _sg = $('store-grid'); if (_sg) _sg.inert = false; } catch (e) {}   // build90: belt-and-suspenders — never reopen with the grid stuck inert
+    _heroPrevFocus = null;   // build184: a stale hero-focus snapshot must never leak across store sessions
+    load(); screen.classList.add('active');
+    // build184 FORENSICS: every store-open ships a breadcrumb naming its trigger (src tag for programmatic
+    // callers; event trust/type/target + focus + seconds-since-load for direct clicks). A live user twice
+    // reported "anything I click sends me to the shop" — if ANY uncovered route remains, prod telemetry
+    // now names it directly instead of us reconstructing it from video frames.
+    try {
+      var _ae = document.activeElement;
+      if (window.RhythmTelemetry && window.RhythmTelemetry.event) window.RhythmTelemetry.event('store_open', {
+        src: open._src || (ev ? 'ui' : 'api'),
+        trusted: ev ? (ev.isTrusted ? 1 : 0) : -1,
+        etype: (ev && ev.type) || '',
+        etgt: (ev && ev.target && (ev.target.id || ev.target.tagName)) || '',
+        ae: (_ae && (_ae.id || _ae.tagName)) || '',
+        since_s: Math.round(performance.now() / 1000)
+      });
+    } catch (e) {}
+  }
+  function close() { _disarmBuy(); try { if ($('store-hero').classList.contains('show')) closeStoreHero(); } catch (e) {} _heroPrevFocus = null; screen.classList.remove('active'); }   // build86 (QA B83-1): clear armed buy-confirm; build90: also close the hero so #store-grid.inert can't leak permanently
 
   var ob = $('store-open'); if (ob) ob.addEventListener('click', open);
   var cb = $('store-close'); if (cb) cb.addEventListener('click', close);
@@ -11705,7 +11757,8 @@
     if (e.key === 'Escape' && screen.classList.contains('active') && !$('store-hero').classList.contains('show')) { e.stopImmediatePropagation(); close(); }
   }, true);
 
-  try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openStore = open; } catch (e) {}
+  // build184: openStore takes an optional source tag so the store_open forensics can name programmatic callers.
+  try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.openStore = function (src) { open._src = (typeof src === 'string' && src) ? src : 'api'; try { open(); } finally { open._src = ''; } }; } catch (e) {}
 })();
 </script>
 
@@ -12636,7 +12689,7 @@
       try { window.RhythmGame.showToast && window.RhythmGame.showToast(state.done ? 'Daily Rift — replay (×3 already claimed today)' : 'Daily Rift — HARDCORE · ×3 Bonus Sparks', state.done ? 'neutral' : 'success'); } catch (e) {}
       var ok = false;
       try { ok = !!(RC.launchTrack && RC.launchTrack(t, {})); } catch (e) {}
-      if (!ok) { try { RC.setDailyRift && RC.setDailyRift(false, false); } catch (e) {} try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start today’s rift', 'error'); } catch (e2) {} }
+      if (!ok) { try { RC.setDailyRift && RC.setDailyRift(false, false); } catch (e) {} try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start today’s rift', 'error'); } catch (e2) {} try { hub.classList.add('active'); } catch (e3) {} }   // build184: the hub was hidden BEFORE launch — a failed launch must re-raise it, not strand the player on a bare backdrop
     }
     tile.addEventListener('click', launchDailyRift);
   })();
@@ -12719,7 +12772,7 @@
       // UNLIKE the daily, do NOT force a difficulty — the weekly is inclusive, played at the player's current setting.
       var ok = false;
       try { ok = !!(RC.launchTrack && RC.launchTrack(t, {})); } catch (e) {}
-      if (!ok) { window.__rrWeeklyArmedId = null; try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start this week’s rift', 'error'); } catch (e2) {} }
+      if (!ok) { window.__rrWeeklyArmedId = null; try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start this week’s rift', 'error'); } catch (e2) {} try { hub.classList.add('active'); } catch (e3) {} }   // build184: mirror of the daily-rift fix — never strand on a screenless backdrop after a failed launch
     }
     var playBtn = $('mwk-play'); if (playBtn) playBtn.addEventListener('click', launchWeeklyRift);
 

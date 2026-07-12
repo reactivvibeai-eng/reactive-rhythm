@@ -5514,6 +5514,7 @@
       // excludes the title screen and the RYO intro.
       if (e.key === 'Enter') {
         try { const lib = $('menu'); if (!lib || !lib.classList.contains('active')) return; } catch (e2) {}
+        if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;   // build184: Enter while TYPING (library search) must not launch a track
         e.preventDefault(); $('play-btn').click();
       }
       return;
@@ -5522,9 +5523,12 @@
     if (state === 'results') {
       // build65 FIX: a Career/Leaderboard/Settings/How-To overlay can open ON TOP of results WITHOUT changing `state`
       // (it just adds .active) — don't let Enter (replay) / Escape fall through to the results buttons underneath it.
-      if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active')) return;
+      // build184: + #store-screen/#levels-screen (both stack over results too — Enter with the Store open was
+      // silently starting a run UNDER the shop; part of the live "takes me to the store / can't play" report).
+      if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active, #store-screen.active, #levels-screen.active')) return;
       if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
       else if (e.key === 'Escape') { e.preventDefault(); const b = $('results-menu'); if (b) b.click(); }
+      else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); }   // build184: Space must never natively re-activate whichever results button holds focus (#results-store sat in that path)
       return;
     }
     if (state === 'playing' || state === 'paused') {
