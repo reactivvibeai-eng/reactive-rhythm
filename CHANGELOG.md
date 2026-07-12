@@ -15,6 +15,26 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build187 — RIFTFIELD: the shared Tier-I reactive particle core (owner VFX brief)  ·  ?v=487
+
+Owner brief: "an extremely large complex particle system … reacts to the sound … intensifies through the
+music … cause vertigo … react to the waveform … beauty and impressiveness with code." Aligned on 4 owner
+decisions (ONE engine/three skins · z-tunnel warp · music+player blend · visible waveform ribbon), then
+built as a shared core in procbg.js — full spec + tuning knobs in **VFX_RIFTFIELD_v1.md**.
+
+- ~1,900-particle fake-3D field (700 lite) streaming TOWARD the camera behind all three Tier-I scenes:
+  bass/mid = warp speed + density, treble = twinkle, beatPunch = surge + near-bloom, COMBO TIER caps the
+  intensity ceiling (the player earns the spectacle), comboGlow/OD add camera FOV pull (vertigo's top rung).
+- **The song's literal WAVEFORM rendered as light**: dawn = a golden helix rising out of the sun; weave = a
+  horizontal weft thread woven across the loom; ember = an off-axis fire serpent (the note corridor stays
+  clear). ~25% of particle respawns seed ON the ribbon — the field condenses around the song's shape.
+- Contracts kept: alloc only at reseed; far field = 4 bucketed fillRect passes (no path ops); near = ≤260
+  cached sprite stamps; only the ribbon strokes are paths (~300 ops); _soft sheds density→glow→near;
+  reduce-motion freezes z + pull; warm hues only; headless _feed gets a synthetic serpent for captures.
+- Verified by CAPTURE REVIEW (rest+peak × 3 themes read as images): storm depth + fly-past bokeh live on
+  all three; ribbon geometry corrected after round 1 (weave's depth-mode collapsed to a sliver → weft mode;
+  ember's center coil → off-axis + flattened). Zero console errors; node --check clean.
+
 ### build186 — Career cosmetics: layout bug fixed + glass design system (owner design review)  ·  ?v=486
 
 Owner: "this looks really bad in design — not clean or glass, feels lazy; needs review, planning and a fix

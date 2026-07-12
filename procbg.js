@@ -90,6 +90,155 @@
   // pkg3.1 earned-motion floor — combo 0 is near-still (LAW-compliant); full speed from combo 25
   function _motionFloor(st) { return 0.25 + 0.75 * clamp((st.combo || 0) / 25, 0, 1); }
 
+  // ══ build187 RIFTFIELD — the shared Tier-I particle core (owner spec, VFX-director plan: ONE engine,
+  //    three skins · Z-TUNNEL WARP vertigo · music+player BLENDED intensity · VISIBLE waveform ribbon). ══
+  //    A fake-3D field of ~1900 particles streaming TOWARD the camera: bass/mid drive speed+density,
+  //    treble drives twinkle, beatPunch surges the warp, and the COMBO TIER caps the top intensity —
+  //    the song makes it move, the player EARNS the spectacle. Camera FOV "pull" rises with comboGlow/OD
+  //    (the vertigo ladder inside the tunnel grammar). A projected time-domain WAVEFORM RIBBON (procAudio's
+  //    _wave, already captured every frame — zero new plumbing) sweeps from the vanishing point toward the
+  //    camera as a luminous serpent; ~25% of particle respawns seed ON the ribbon, so the field visibly
+  //    condenses around the song's literal shape (O(1) per spawn, alloc-free).
+  //    CONTRACTS KEPT: all pools/sprites Float32Array'd ONLY at seed; the far field is fillRect (NO path
+  //    ops) walked in 4 depth-band passes (4 fillStyle sets/frame, additive 'lighter' = order-independent,
+  //    no sorting); the near field is ≤~260 pre-rendered sprite stamps; the ONLY path ops are the ribbon's
+  //    ≤3 polylines (~300 ops) — the ≤1200 desktop budget holds. _soft sheds: density cap 0.55× → ribbon
+  //    glow pass off → near cap halved. reduce-motion: z-motion + camera pull FROZEN (the ribbon still
+  //    shows the wave — it is data, not motion). Hues ride the shared warm ramp only. Headless _feed has
+  //    no analyser _wave → a slow synthetic serpent stands in so captures exercise the ribbon path.
+  var _RF_THEMES = {   // hue band (warm 0..58) · pool scale · base speed · lateral curl · updraft · ribbon lane/amp/mode · world spread · near-sprite lightness
+    // ribMode 'depth' = the serpent recedes into the rift (ribX offsets the lane off the note highway; flat<1
+    // softens the Y-perspective dive). ribMode 'weft' = a HORIZONTAL oscilloscope thread — the waveform woven
+    // straight across the loom (capture review: the depth mode collapsed to a sliver at weave's center lane).
+    dawn:  { hue0: 34, span: 18, count: 1.00, speed: 0.30, curl: 0.10, up: -0.020, ribY: -0.14, ribX: 0,     flat: 1.0,  ribMode: 'depth', ribAmp: 0.34, spread: 1.30, nearL: 84 },
+    weave: { hue0: 28, span: 16, count: 1.00, speed: 0.34, curl: 0.16, up:  0.000, ribY: -0.06, ribX: 0,     flat: 1.0,  ribMode: 'weft',  ribAmp: 0.10, spread: 1.25, nearL: 80 },
+    ember: { hue0: 6,  span: 20, count: 0.75, speed: 0.38, curl: 0.24, up: -0.055, ribY:  0.16, ribX: -0.26, flat: 0.55, ribMode: 'depth', ribAmp: 0.34, spread: 1.20, nearL: 76 }
+  };
+  function _rfSprite(px, rgb, coreL) {   // pre-rendered additive glow stamp (seed-time only)
+    var c = document.createElement('canvas'); c.width = c.height = px;
+    var x = c.getContext('2d'), g = x.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+    g.addColorStop(0, 'rgba(255,250,240,' + (coreL / 100) + ')');
+    g.addColorStop(0.35, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0.8)');
+    g.addColorStop(1, 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',0)');
+    x.fillStyle = g; x.fillRect(0, 0, px, px); return c;
+  }
+  function _rfSeed(themeKey, lite) {
+    var T = _RF_THEMES[themeKey];
+    var N = Math.round((lite ? 620 : 1900) * T.count);
+    var R = { N: N, x: new Float32Array(N), y: new Float32Array(N), z: new Float32Array(N), ph: new Float32Array(N), sz: new Float32Array(N),
+              rib: new Float32Array(96), heatQ: -1, cols: ['', '', '', ''], spr: null, sprB: null };
+    for (var i = 0; i < N; i++) {
+      R.x[i] = (Math.random() * 2 - 1) * T.spread; R.y[i] = (Math.random() * 2 - 1) * T.spread * 0.72;
+      R.z[i] = 0.10 + Math.random() * 0.88; R.ph[i] = Math.random() * 6.2832; R.sz[i] = 0.55 + Math.random() * 0.9;
+    }
+    var mid = _hslToRgb(T.hue0 + T.span * 0.6, 88, 62);
+    R.spr = _rfSprite(18, mid, 95); R.sprB = _rfSprite(44, mid, 88);
+    return R;
+  }
+  function _rfColors(R, T, heat) {   // 4 depth-band colors, rebuilt only when the quantized heat step moves
+    var q = clamp(Math.round(heat * 4), 0, 4); if (q === R.heatQ) return; R.heatQ = q;
+    var hh = q / 4;
+    for (var b = 0; b < 4; b++) {   // b0 = deepest/dimmest … b3 = nearest fillRect band
+      var l = 30 + b * 12 + hh * 16, a = 0.20 + b * 0.16 + hh * 0.12;
+      var rgb = _hslToRgb(clamp(T.hue0 + T.span * (0.25 + 0.25 * b), 0, 58), 86 - b * 6, clamp(l, 0, 92));
+      R.cols[b] = 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + clamp(a, 0, 0.85).toFixed(2) + ')';
+    }
+  }
+  function _rfDraw(R, dt, st, themeKey) {
+    if (!R) return;
+    var T = _RF_THEMES[themeKey], reduce = _reduce(), lite = _lite();
+    var mf = _motionFloor(st), missK = st.missK || 0, calm = 1 - missK * 0.4;
+    // BLENDED intensity: the music breathes moment-to-moment; the combo tier CAPS the ceiling (earned show)
+    var tierCap = clamp(0.55 + 0.45 * clamp((st.combo || 0) / 60, 0, 1) + (st.od || 0) * 0.15, 0.55, 1.15);
+    var energy = clamp(0.30 * level + 0.55 * bassN + 0.25 * midN, 0, 1) * tierCap;
+    var pull = 1 + comboGlow * 0.10 + (st.od || 0) * 0.06 + _kick * 0.02;   // FOV pull = the top of the vertigo ladder
+    var f = Math.min(_w, _h) * 0.52 * pull;
+    var cx = _w * 0.5 + CAM.dx * 0.4, cy = _h * 0.47 + CAM.dy * 0.4;
+    // ── ribbon lateral samples: real analyser wave when live; a slow synthetic serpent under _feed/headless ──
+    var n = R.rib.length;
+    if (_wave && _wave.length && !_fed) {
+      var stride = Math.max(1, (_wave.length / n) | 0);
+      for (var ri = 0; ri < n; ri++) { var wv = (_wave[ri * stride] - 128) / 128; R.rib[ri] += (wv - R.rib[ri]) * 0.30; }
+    } else {
+      for (var rj = 0; rj < n; rj++) R.rib[rj] += (Math.sin(_t * 2.1 + rj * 0.24) * (0.25 + bassN * 0.75) - R.rib[rj]) * 0.12;
+    }
+    // ── field update + draw ──
+    var speed = reduce ? 0 : T.speed * (0.20 + energy * 1.5 + beatPunch * 0.85) * mf;
+    var frac = (0.60 + 0.40 * energy) * (_soft ? 0.55 : 1);            // density rides energy; _soft sheds
+    var actN = Math.min(R.N, Math.round(R.N * frac));
+    _rfColors(R, T, energy);
+    var prevOp = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    var i, z, sx, sy, s, band, tw = trebleN;
+    var nearCap = Math.round((lite ? 70 : 260) * (_soft ? 0.5 : 1)), nearDrawn = 0;
+    var bloom = 1 + beatPunch * 0.5;
+    for (i = 0; i < actN; i++) {                                        // advance ONCE (band passes below only draw)
+      z = R.z[i] - speed * dt * (0.7 + R.sz[i] * 0.45);
+      if (z <= 0.085) {                                                 // fly-past → respawn (25% ON the ribbon)
+        if (Math.random() < 0.25) {
+          var rr = (Math.random() * n) | 0;
+          R.x[i] = R.rib[rr] * T.ribAmp * (1 + energy) + (Math.random() - 0.5) * 0.06;
+          R.y[i] = T.ribY + (Math.random() - 0.5) * 0.07;
+          z = 0.92 - (rr / n) * 0.72;
+        } else {
+          R.x[i] = (Math.random() * 2 - 1) * T.spread; R.y[i] = (Math.random() * 2 - 1) * T.spread * 0.72; z = 0.98;
+        }
+      }
+      R.z[i] = z;
+      if (!reduce) { R.x[i] += Math.sin(_t * 0.7 + R.ph[i]) * T.curl * dt * 0.35; R.y[i] += T.up * dt * mf; }
+    }
+    for (band = 0; band < 4; band++) {                                  // 4 depth-band fillRect passes (4 fillStyle sets)
+      ctx.fillStyle = R.cols[band];
+      var z0 = 0.86 - band * 0.22, z1 = z0 + 0.22 + (band === 0 ? 0.2 : 0);   // b0 covers the deep tail
+      for (i = 0; i < actN; i++) {
+        z = R.z[i]; if (z < z0 || z >= z1) continue;
+        if (((i * 7) & 15) < 3 && Math.sin(R.ph[i] + _t * 7) < 0.6 - tw) continue;   // treble TWINKLE = strided skip, no alpha churn
+        sx = cx + (R.x[i] / z) * f; if (sx < -8 || sx > _w + 8) continue;
+        sy = cy + (R.y[i] / z) * f; if (sy < -8 || sy > _h + 8) continue;
+        s = clamp(R.sz[i] * (0.9 / z) * _dpr, 1, 5.5) * (band === 3 ? bloom : 1);
+        ctx.fillRect(sx, sy, s, s);
+      }
+    }
+    for (i = 0; i < actN && nearDrawn < nearCap; i++) {                 // NEAR fly-past sprites — the vertigo sell
+      z = R.z[i]; if (z >= 0.30) continue;
+      sx = cx + (R.x[i] / z) * f; if (sx < -60 || sx > _w + 60) continue;
+      sy = cy + (R.y[i] / z) * f; if (sy < -60 || sy > _h + 60) continue;
+      var szp = clamp(R.sz[i] * (0.055 / z) * Math.min(_w, _h) * 0.1, 5, 88) * bloom * _dpr;
+      ctx.globalAlpha = clamp((0.30 - z) * 5.5, 0, 1) * clamp(z * 9 - 0.05, 0.15, 1) * (0.5 + energy * 0.5) * calm;
+      ctx.drawImage(z < 0.16 ? R.sprB : R.spr, sx - szp / 2, sy - szp / 2, szp, szp);
+      nearDrawn++;
+    }
+    ctx.globalAlpha = 1;
+    // ── the WAVEFORM RIBBON — the song's literal shape as a serpent of light receding into the rift ──
+    var hue = clamp(T.hue0 + T.span * (0.4 + energy * 0.6) + comboHue * 0.3, 0, 58);
+    var amp = T.ribAmp * (0.55 + energy * 0.9), sway = reduce ? 0 : Math.sin(_t * 0.4) * 0.05;
+    var passes = (_soft || lite) ? 1 : 2 + ((st.od || 0) > 0.5 ? 1 : 0);
+    for (var p = 0; p < passes; p++) {
+      ctx.beginPath();
+      for (var k = 0; k < n; k++) {
+        var lx, ly;
+        if (T.ribMode === 'weft') {                                     // horizontal thread of light woven across the loom
+          lx = cx + ((k / (n - 1)) - 0.5) * _w * 0.94;
+          ly = cy + T.ribY * f + R.rib[k] * amp * f * 3.2 + (p === 2 ? 4 * _dpr : 0) + sway * f * 0.4;
+        } else {                                                        // serpent receding into the rift (dawn helix / ember off-axis coil)
+          var zr = 0.92 - (k / (n - 1)) * 0.72;
+          lx = (T.ribX + R.rib[k] * amp + sway * (1 - zr)) / zr * f + cx;
+          ly = (T.ribY + (p === 2 ? 0.03 : 0)) / zr * f * T.flat + cy;
+        }
+        if (k === 0) ctx.moveTo(lx, ly); else ctx.lineTo(lx, ly);
+      }
+      if (p === 0 && passes > 1) {                                      // wide soft glow under the core
+        ctx.strokeStyle = _hsl(hue, 88, 58, (0.07 + level * 0.14) * calm); ctx.lineWidth = 10 * _dpr;
+      } else if (p === 2) {                                             // OD echo — a second harmonic shadow
+        ctx.strokeStyle = _hsl(clamp(hue + 8, 0, 58), 92, 70, 0.16 * calm); ctx.lineWidth = 1.6 * _dpr;
+      } else {                                                          // luminous core
+        ctx.strokeStyle = _hsl(hue, 90, 62 + energy * 20, (0.26 + level * 0.44) * calm); ctx.lineWidth = 2.2 * _dpr;
+      }
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = prevOp;
+  }
+
   function $(id) { return document.getElementById(id); }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -365,6 +514,7 @@
       //   is a continuous 0..1 progress (mod-1, sin() end-fade → LOOP-SEAMLESS, no pop); drawn as ONE cheap arc().fill().
       //   xf = base column across the frame, sp = rise speed, sway/swf = lateral swirl amp+freq, ph = phase, br = brightness.
       var nR = lite ? 26 : 64; for (si = 0; si < nR; si++) S.rise.push({ xf: Math.random(), t: Math.random(), sp: 0.10 + Math.random() * 0.16, sway: 0.02 + Math.random() * 0.05, swf: 0.6 + Math.random() * 1.4, ph: Math.random() * 6.28, br: 0.5 + Math.random() * 0.7, z: Math.random() });
+      S.rf = _rfSeed('ember', lite);   // build187 RIFTFIELD — the shared z-tunnel core, ember skin (see engine block)
     }
     // ── palette-mode advance is EARNED: fires once per tier-up cutaway (never a timer). Eased, never a hard jump. ──
     if ((st.hold > 0 || st.cut > 0.9) && !_state.cutFired) {
@@ -401,6 +551,8 @@
     var gG = ctx.createLinearGradient(0, h, 0, h * 0.5);
     gG.addColorStop(0, 'rgba(' + gr0[0] + ',' + gr0[1] + ',' + gr0[2] + ',' + ((0.04 + bass * 0.12) * calm) + ')');
     gG.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gG; ctx.fillRect(-w * 0.04, h * 0.5, w * 1.08, h * 0.54);
+    // build187 RIFTFIELD — the deep z-tunnel storm streams behind the forge scene (haze/road/planes draw over it)
+    if (S.rf) _rfDraw(S.rf, dt, st, 'ember');
     // build127: layered HEAT-HAZE / SMOKE VOLUME — a few big soft smoke columns rising from the forge, drawn as
     // cached smoke puffs at column scale (VOLUME, not the dot-smoke of the MID plane). Rise loops smoothly (mod 1 →
     // fade at top/bottom so there's no pop). Rise FROZEN under reduce-motion. Dropped under _soft (heaviest add here).
@@ -610,6 +762,7 @@
       for (var iw = 0; iw < NW; iw++) W.warp.push({ xf: (iw + 0.5) / NW, ph: Math.random() * 6.28, band: Math.random() });   // xf across the frame, own sway phase, own spectrum band for its shimmer
       for (var p0 = 0; p0 < 3; p0++) W.pulses.push({ on: false, i: 0, x: 0 });                  // max 3 concurrent (ring buffer)
       if (!lite) for (var d0 = 0; d0 < 90; d0++) W.dust.push({ x: Math.random(), y: Math.random(), v: 0.004 + Math.random() * 0.01 });   // pt4: 40→90 — fills empty negative space between strings
+      W.rf = _rfSeed('weave', lite);   // build187 RIFTFIELD — the shared z-tunnel core, molten-thread skin
     }
     var frozen = st.hold > 0;                                       // held breath: freeze phase accumulators
     var sp = _spec(NS);
@@ -639,6 +792,8 @@
       ctx.fillStyle = W.lightG; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);
       ctx.globalAlpha = 1;
     }
+    // build187 RIFTFIELD — the deep z-tunnel storm streams behind the loom (haze/threads/nodes draw over it)
+    if (W.rf) _rfDraw(W.rf, dt, st, 'weave');
     if (!lite) {
       var haze = _weaveHaze(), hzA = 0.30 + comboGlow * 0.25 + level * 0.12;   // build182: +~40% — the fabric must READ
       ctx.globalAlpha = clamp(hzA, 0, 0.75);
@@ -825,6 +980,7 @@
       if (!lite) { var nRib = 3; for (var rb = 0; rb < nRib; rb++) D.ribbons.push({ yc: 0.10 + rb * 0.12, amp: 0.03 + Math.random() * 0.04, k: 1.4 + rb * 0.7, sp: (0.05 + Math.random() * 0.06) * (rb % 2 ? -1 : 1), ph: Math.random() * 6.28, hue: 6 + rb * 10 }); }
       // distant horizon LIGHTS — a row of tiny warm glints just under the horizon (city). Fixed x, twinkle on treble.
       if (!lite) { var nLi = 40; for (var li = 0; li < nLi; li++) D.lights.push({ x: Math.random(), off: Math.random() * 0.018, tw: Math.random() * 6.28, s: 0.5 + Math.random() * 0.9 }); }
+      D.rf = _rfSeed('dawn', lite);   // build187 RIFTFIELD — the shared z-tunnel core, light-mote skin
     }
     var frozen = st.hold > 0;
     // the sun eases toward the tier; the cutaway overshoots +0.2 and eases back — the sun JUMPS a notch
@@ -850,6 +1006,9 @@
     ctx.fillStyle = '#000'; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, h * 1.12);   // 3.0(B) opaque clear
     ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06); ctx.clip();   // sun/sky clipped → the sun rises BEHIND the horizon
     ctx.fillStyle = D.sky; ctx.fillRect(-w * 0.06, -h * 0.06, w * 1.12, HY + h * 0.06);
+    // build187 RIFTFIELD — the z-tunnel light-mote storm streams through the SKY (the clip above confines it
+    // over the horizon, so near motes fly past the camera and vanish behind the ridge line — real depth).
+    if (D.rf) _rfDraw(D.rf, dt, st, 'dawn');
     // build127: atmospheric SKY BANDS — 4 stratified warm bands stacked toward the horizon so the sky reads as a
     // living, layered dawn (not one flat fill). Alpha grows with elevation; hue warms band-by-band down to the horizon.
     // Cheap: 4 fillRects, source-over. LOOP-SEAMLESS — no motion, purely elevation-driven (a slow state, not a strobe).
