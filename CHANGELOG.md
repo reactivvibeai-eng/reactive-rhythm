@@ -15,6 +15,31 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build185 — THE ROOT CAUSE: invisible hub-wide STORE click-eater (owner repro on v484)  ·  ?v=485
+
+The owner reproduced "Quick Play → Store" on freshly-published v484 — and the build184 forensic breadcrumbs
+named the killer instantly: every store_open carried {etgt:'store-open', trusted:0, ae:'mh-store'} = a real
+click physically landing on #mh-store while the cursor was on Quick Play. Hit-testing on prod confirmed:
+`elementFromPoint(center of Quick Play)` returned a `.mh-art` span INSIDE #mh-store.
+
+**Root cause:** the build10 hub key-art loader still listed `mh-store` in its tile map and injected an
+absolutely-positioned `.mh-art` span (inset:0) into it — but build165's hub restructure demoted the Store
+from a positioned grid TILE to a static FOOTLINK, so the span positioned against `.mh-card` instead and
+stretched over the ENTIRE hub (measured 233×1512px vs the button's real 86×42px) at opacity 0. The whole
+hub became one invisible STORE button. This also retro-explains every prior clue: the capture's star burst
+anchored at #mh-store (trusted click, target inside it), the gold focus ring (mousedown focused it), and
+why it was reload-proof, build-proof, and hit both users + the owner deterministically. It was born with
+TODAY'S publish — the first time prod ever ran the build165 footlink alongside the old art loader — first
+user report landed minutes later. It never reproduced in our headless verification because synthetic
+`.click()` bypasses hit-testing (lesson: hit-test verification is now mandatory for click-routing fixes).
+
+**Fix:** `mh-store` removed from the art-loader map + hard guard (art may only ever dress a `.mh-tile`) +
+CSS backstop (`.mh-foot .mh-art, .mh-footlink .mh-art { display:none !important }`).
+
+**Verified with hit-testing this time:** elementFromPoint at Quick Play = `mh-quickplay`; a hit-tested click
+opens the LIBRARY and the store stays closed; no art in #mh-store; the 6 real tiles keep their key-art;
+zero console errors. (Builds 183/184/184b remain valid hardening for the real traps they each closed.)
+
 ### build184b — adversarial-verify round: 3 more confirmed traps closed  ·  ?v=484
 
 The 24-agent verify pass confirmed 12 findings; build184 had fixed 9 — these are the remaining 3:
