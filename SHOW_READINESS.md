@@ -9,11 +9,14 @@ Publish.** That includes the entire held stack (builds 152→179): the reconnect
 challenge/attach fixes, telemetry fixes, and tonight's hardening. Open Lovable → **Publish**.
 
 **Already done for you overnight (verified, no action needed):**
-- ✅ Deploy ref now **`59ff360`** (build183, `?v=482`) — **P0 live-user fix**: AkiraScare's "anything I click
-  takes me to the store" loop. The overlay focus-restore put keyboard focus back on the STORE button every time
-  the Store closed, so Enter/Space bounced players straight back in, forever. Focus now parks on a neutral
-  container — loop killed, verified live. (Also includes build182 VFX step-up, build181's 4 show-critical audit
-  fixes, build179 attach-hardening + build180 telemetry.)
+- ✅ Deploy ref now **`3fdf2ee`** (build184, `?v=483`) — **BOTH store-hijack mechanisms dead**. AkiraScare's
+  "anything I click takes me to the shop" was TWO bugs: (1) the overlay focus-restore re-armed the Store on
+  Enter/Space after every close (fixed build183); (2) locked campaign cards + locked profile guitar tiles opened
+  the Store INSTANTLY on a single click — for a player who owns nothing, that's most of the grid (fixed build184:
+  locked tiles now need a deliberate second tap; ownership cache primes at boot; results-screen Enter/Space can't
+  act under a stacked overlay; every store_open now ships a forensic breadcrumb naming its trigger). Verified
+  headless as a fresh player. (Also includes build182 VFX step-up + build181's 4 show-critical audit fixes +
+  build179 attach-hardening + build180 telemetry.)
 - ✅ `game-catalog` edge function **redeployed** (so the F1 `rr_active_rooms` seed is guaranteed live).
 - ✅ `public.notifications` + `public.rr_active_rooms` confirmed in the `supabase_realtime` publication.
 - ✅ **Instrumentation is now LIVE** (build180) — anonymous play funnel (`song_start / decode_error / play_fail /
