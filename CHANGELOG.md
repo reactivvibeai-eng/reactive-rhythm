@@ -15,6 +15,34 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build186 — Career cosmetics: layout bug fixed + glass design system (owner design review)  ·  ?v=486
+
+Owner: "this looks really bad in design — not clean or glass, feels lazy; needs review, planning and a fix
+to that whole system." Review found the ugliness was HALF BUG: the group wrapper `#profile-goals-track`
+still carries the legacy `.profile-goals-track` TILE-grid class, so ever since build171 nested the tiles
+inside `.pgt-group` sections, the auto-fill 94px grid was squeezing each whole SECTION into a skinny ragged
+column — the broken masonry in the owner's screenshot — and the mile-long card it produced stretched the
+trophy case into a giant empty tower.
+
+- **Structural fix:** `#profile-goals-track { display: block }` (id beats class; renderer untouched) —
+  category sections now span the full column and tiles flow in real rows. The trophy case gets
+  `align-self: flex-start` + `position: sticky` so it's a fixed glass vitrine that rides the scroll instead
+  of stretching into a void.
+- **Glass tile system** (shared by the guitar loadout + every cosmetic category): layered chrome-glass fill
+  + warm hairline border + inner bevel, 14px radius; hover = crimson line + lift; recessed inner "well" for
+  every preview (name/emblem/frame/trail). No backdrop-filter (perf), no new animations.
+- **State language:** EQUIPPED = lit GOLD chip + gold ring (the earned color, matching the store's equipped
+  grammar + the completed count chips) — replaces the harsh red box + red pill. LOCKED pill goes quiet smoke
+  so the two states can't be confused.
+- **Section headers** join the `.pg-head` eyebrow grammar: ◆ marker, tracked caps, tabular count CHIP
+  (gold-filled when complete), and a warm hairline ruling off the row. Weekly Goal strip gets its own glass
+  panel with a gold hairline.
+
+Verified headless at a real viewport (1280×800): wrapper is block; all 6 sections full-width; tiles flow
+3-per-row (was 1-per-row skinny stacks); showcase 444px (no tower); glass gradient + 14px radius + gold
+equipped border confirmed via computed styles; zero console errors. (Visual screenshot capture is blocked
+in the headless pane — owner eyeball after Publish is the final check.)
+
 ### build185 — THE ROOT CAUSE: invisible hub-wide STORE click-eater (owner repro on v484)  ·  ?v=485
 
 The owner reproduced "Quick Play → Store" on freshly-published v484 — and the build184 forensic breadcrumbs

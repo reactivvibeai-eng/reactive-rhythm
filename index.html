@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=485" />
+<link rel="stylesheet" href="jukebox.css?v=486" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -736,7 +736,10 @@
   /* build58: a DARK display case — a spotlight cone from above + a warm floor pool. The dark backdrop lets black-background
      guitar art blend in (no "broken box" edge) AND makes transparent cutouts pop. min-height keeps the guitar large even with
      a short stats column. */
-  .profile-showcase { flex: 0 0 330px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 10px; padding: 40px 14px 20px; border: 1px solid rgba(255,31,46,0.20); border-radius: 22px; position: relative; overflow: hidden; min-height: 460px; background: linear-gradient(180deg, #190809 0%, #0c0506 56%, #050303 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -40px 60px rgba(0,0,0,0.5); }
+  /* build186: align-self flex-start + sticky — the showcase used to STRETCH with the (very tall) right
+     column into a giant empty tower (the owner's screenshot). Now it's a fixed-height glass vitrine that
+     rides along as the cosmetics scroll. */
+  .profile-showcase { flex: 0 0 330px; align-self: flex-start; position: sticky; top: 14px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 10px; padding: 40px 14px 20px; border: 1px solid rgba(255,31,46,0.20); border-radius: 22px; overflow: hidden; min-height: 460px; background: linear-gradient(180deg, #190809 0%, #0c0506 56%, #050303 100%); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -40px 60px rgba(0,0,0,0.5); }
   .profile-showcase::before { content: ''; position: absolute; left: 50%; top: -8%; width: 130%; height: 80%; transform: translateX(-50%); background: radial-gradient(ellipse at 50% 0%, rgba(255,74,84,0.22), transparent 60%); pointer-events: none; z-index: 0; }
   .profile-showcase::after { content: ''; position: absolute; left: 50%; bottom: 9%; width: 64%; height: 46px; transform: translateX(-50%); background: radial-gradient(ellipse, rgba(255,31,46,0.34), transparent 72%); filter: blur(11px); pointer-events: none; z-index: 0; }
   .pg-trophy-label { position: absolute; top: 16px; left: 0; right: 0; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.34em; color: rgba(224,169,63,0.85); z-index: 2; }
@@ -847,26 +850,51 @@
   .profile-loadout-wrap { margin-top: 16px; }
   .pl-note { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 400; letter-spacing: 0.03em; color: var(--ink-dim); text-transform: none; margin-left: 8px; }
   .profile-loadout { display: grid; grid-template-columns: repeat(auto-fill, minmax(94px, 1fr)); gap: 8px; margin-top: 10px; }
-  .pl-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 6px 7px; background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px; cursor: pointer; transition: transform 0.1s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
-  .pl-tile:hover { transform: translateY(-2px); border-color: var(--crimson); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
-  .pl-thumb { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506); }
+  /* build186 GLASS TILE SYSTEM (owner design review: "flat boxes, not clean, not glass") — one shared
+     chrome-glass tile spec for the guitar loadout AND every cosmetic category: layered glass fill +
+     hairline warm border + inner bevel; hover = crimson line + lift; EQUIPPED = earned GOLD (matches the
+     store's equipped grammar + the gold count chips) instead of the old harsh red box + red pill. */
+  .pl-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 9px 7px 8px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.012) 46%, rgba(24,11,10,0.35)), rgba(15,9,9,0.66);
+    border: 1px solid rgba(255,122,74,0.13); border-radius: 14px; cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 22px -10px rgba(0,0,0,0.65);
+    transition: transform 0.12s ease, border-color 0.14s ease, box-shadow 0.14s ease; }
+  .pl-tile:hover { transform: translateY(-2px); border-color: rgba(255,80,90,0.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 12px 26px -8px rgba(163,6,15,0.38); }
+  .pl-thumb { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 10px;
+    background: radial-gradient(ellipse at 50% 30%, rgba(70,12,16,0.45), rgba(8,4,4,0.9) 78%), linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%), #0a0506;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,122,74,0.07); }
   .pl-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center 70%; }
   .pl-name { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; color: var(--ink); text-align: center; line-height: 1.1; }
-  .pl-tile.on { border-color: var(--crimson); box-shadow: 0 0 0 1px var(--crimson), 0 6px 18px rgba(255,31,46,0.28); }
-  .pl-tile.on .pl-thumb { box-shadow: inset 0 0 0 2px rgba(255,31,46,0.55); }
-  .pl-on { font-family: 'Chakra Petch', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #fff; background: linear-gradient(180deg, #ff2a38, #b3121f); border-radius: 5px; padding: 2px 6px; }
+  .pl-tile.on { border-color: rgba(224,169,63,0.75);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(224,169,63,0.35), 0 10px 26px -8px rgba(224,169,63,0.30); }
+  .pl-tile.on .pl-thumb { box-shadow: inset 0 0 0 1.5px rgba(224,169,63,0.5), inset 0 1px 2px rgba(0,0,0,0.6); }
+  .pl-on { font-family: 'Chakra Petch', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: #1a0f06;
+    background: linear-gradient(180deg, #ffd98a, #e0a93f); border-radius: 999px; padding: 2px 8px;
+    box-shadow: 0 2px 8px rgba(224,169,63,0.35), inset 0 1px 0 rgba(255,255,255,0.5); }
   /* build99N (P-01): locked = paid skin not yet owned — dimmed + desaturated, gold LOCKED pill, click routes to Store */
   .pl-tile.locked .pl-thumb img { filter: grayscale(0.5) brightness(0.78); transition: filter 0.12s ease; }
   .pl-tile.locked:hover .pl-thumb img { filter: grayscale(0.12) brightness(0.94); }
   .pl-tile.locked .pl-name { color: var(--ash, #b8b2ad); }
-  .pl-on.pl-lock { color: #1b1206; background: linear-gradient(180deg, #f3c969, #d99a2c); }
+  /* build186: EQUIPPED now owns the gold — the LOCKED pill goes quiet smoke so the two states can't be
+     confused at a glance (locked = recessed hint, equipped = lit gold chip). */
+  .pl-on.pl-lock { color: var(--ink-dim); background: rgba(255,255,255,0.05); border: 1px solid var(--line); box-shadow: none; }
   #profile-reset { color: var(--ink-dim); }
   /* build110 Phase 5 (spec §2.3): milestone/cosmetic track — STACKED block (this profile has no tab
      system), same vertical-list pattern as profile-badges-wrap/profile-loadout-wrap. Cosmetic tiles
      reuse .pl-tile/.pl-thumb/.pl-name/.pl-on/.pl-lock verbatim — same equip-click-locked language. */
   .profile-goals-wrap { margin-top: 16px; }
   .profile-goals-wrap[hidden] { display: none; }
-  .pgw-weekly { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  /* build186 STRUCTURAL FIX (the root of the "broken masonry" the owner flagged): the WRAPPER element
+     #profile-goals-track carries the legacy .profile-goals-track tile-grid class, so ever since build171
+     nested the tiles inside .pgt-group sections, the auto-fill 94px grid was squeezing each whole SECTION
+     into a skinny ragged column — and the mile-long card it produced is what stretched the trophy case
+     into an empty tower. The wrapper hosts full-width stacked sections; only the INNER per-group grids lay
+     out tiles. (id beats class — renderer untouched.) */
+  #profile-goals-track { display: block; }
+  .pgw-weekly { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.01) 50%, transparent), rgba(15,9,9,0.6);
+    border: 1px solid rgba(224,169,63,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05); }
   .pgw-weekly-cap { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--ink-dim); white-space: nowrap; }
   .pgw-weekly-track { flex: 1 1 auto; height: 7px; border-radius: 999px; background: rgba(255,255,255,0.06);
@@ -882,11 +910,18 @@
   @property --rpn-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
   .pcg-swatch { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
     border-radius: 8px; font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 13px; }
-  .pgt-group + .pgt-group { margin-top: 14px; }
-  .pgt-group-label { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; }
-  .pgt-count { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.06em; color: var(--ink-dim); margin-left: 4px; }
-  .pgt-count.done { color: var(--gold); text-shadow: 0 0 8px rgba(224,169,63,0.4); }
+  /* build186: section headers join the .pg-head eyebrow grammar — ◆ marker, tracked caps, count CHIP,
+     and a warm hairline that rules off the rest of the row (structure reads at a glance, not ragged). */
+  .pgt-group { margin-top: 18px; }
+  .pgt-group-label { display: flex; align-items: center; gap: 9px; font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 8px; }
+  .pgt-group-label::before { content: '◆'; font-size: 8px; color: var(--crimson); letter-spacing: 0; }
+  .pgt-group-label::after { content: ''; flex: 1 1 auto; height: 1px; background: linear-gradient(90deg, rgba(255,122,74,0.26), transparent 85%); }
+  .pgt-count { font-family: 'Oxanium', monospace; font-weight: 800; font-size: 10px; letter-spacing: 0.04em; color: var(--ink-dim);
+    background: rgba(255,255,255,0.045); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+    margin-left: 0; font-variant-numeric: tabular-nums; }
+  .pgt-count.done { color: #1a0f06; background: linear-gradient(180deg, #ffd98a, #e0a93f); border-color: transparent;
+    text-shadow: none; box-shadow: 0 0 10px rgba(224,169,63,0.35), inset 0 1px 0 rgba(255,255,255,0.5); }
   /* shared 58px thumb well (name text, note gem, emblem, frame all sit in it) */
   .pcg-nameprev, .pcg-glyph, .pcg-frameprev { width: 100%; height: 58px; display: flex; align-items: center; justify-content: center;
     border-radius: 8px; background: radial-gradient(ellipse at 50% 35%, rgba(60,8,14,0.5), #0a0506); position: relative; }
@@ -8056,7 +8091,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=485"></script>
+<script src="telemetry.js?v=486"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8235,17 +8270,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=485"></script>
-<script src="game.js?v=485"></script>
-<script src="procbg.js?v=485"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=485"></script>
-<script src="chat.js?v=485"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=485"></script>
-<script src="goals.js?v=485"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=485"></script>
-<script src="share.js?v=485"></script>
-<script src="replay.js?v=485"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=485"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=486"></script>
+<script src="game.js?v=486"></script>
+<script src="procbg.js?v=486"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=486"></script>
+<script src="chat.js?v=486"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=486"></script>
+<script src="goals.js?v=486"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=486"></script>
+<script src="share.js?v=486"></script>
+<script src="replay.js?v=486"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=486"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
