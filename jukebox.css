@@ -687,6 +687,28 @@ html.rr-reduce-motion .artist-tile:hover .at-chev { transform: none; }
   font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase;
   background: linear-gradient(180deg, rgba(28,20,8,0.92), rgba(16,11,6,0.92)); border: 1px solid rgba(224,169,63,0.55);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); color: var(--gold); text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+/* build188 — THE PLAY-TRIANGLE PROMISE (Fable ruling after the live-show incident). Gold ribbon + crimson ▶ now
+   MEAN "this launches a playable level". A watch-only film wears a CHROME "CINEMA" tag + an EYE — different, not
+   broken (it's real creator work). No heavy dimming: chrome is our second-prestige color, and these films are the
+   headline of the AI Flixs shelf either way. */
+.vc-badge.cinema { border-color: rgba(218,215,210,0.42); color: var(--chrome);
+  background: linear-gradient(180deg, rgba(24,22,21,0.92), rgba(13,12,12,0.92)); }
+.vc-play.vc-eye { background: rgba(20,18,17,0.88); box-shadow: 0 0 18px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(218,215,210,0.5);
+  color: var(--chrome); padding-left: 0; }
+.vc-play.vc-eye svg { width: 22px; height: 22px; }
+/* hover CTA strip — states the outcome in words, so the promise never rides on iconography alone */
+.vc-cta { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 7px 9px 8px; text-align: center;
+  font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: #fff; background: linear-gradient(0deg, rgba(6,4,4,0.94), rgba(6,4,4,0));
+  opacity: 0; transform: translateY(5px); transition: opacity 0.18s ease, transform 0.18s ease; pointer-events: none; }
+.video-card:hover .vc-cta, .video-card:focus-visible .vc-cta { opacity: 1; transform: none; }
+.video-card.watch-only .vc-cta { color: var(--chrome); }
+html.rr-reduce-motion .vc-cta { transition: none; }
+/* the CINEMA divider — the playable/watch-only boundary, so the top of the grid is guaranteed playable */
+.flix-divider { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; margin: 22px 2px 6px; }
+.flix-divider .fd-line { flex: 1 1 auto; height: 1px; background: linear-gradient(90deg, transparent, rgba(218,215,210,0.28), transparent); }
+.flix-divider .fd-t { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 10px; letter-spacing: 0.24em;
+  text-transform: uppercase; color: var(--chrome); opacity: 0.85; white-space: nowrap; }
 .vc-cap { display: flex; flex-direction: column; gap: 1px; padding: 0 2px; }
 .vc-title { font-family: 'Chakra Petch', monospace; font-weight: 600; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vc-sub   { font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -758,7 +780,23 @@ html.rr-reduce-motion .fm-play:hover { transform: none; }
   border: 1px solid rgba(255,31,46,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.7); }
 .fw-close { position: absolute; top: -14px; right: -14px; width: 36px; height: 36px; border-radius: 50%;
   background: var(--crimson); color: #fff; border: none; font-size: 16px; cursor: pointer; }
-.fw-cap { margin-top: 10px; text-align: center; font-family: 'Chakra Petch', monospace; color: var(--ink); }
+.fw-cap { margin-top: 6px; text-align: center; font-family: 'Chakra Petch', monospace; font-size: 12px; color: var(--ink-dim); }
+/* build188 (Fable director's flag): the naked browser-chrome <video> popup read as a BUG on stage even when it was
+   the correct fallback. It's now a branded CINEMA frame — chrome tag + film title above a letterboxed screen, and
+   an end-of-film CTA that converts the fallback back into the playable loop instead of dead-ending. */
+.fw-head { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+.fw-tag { font-family: 'Chakra Petch', monospace; font-weight: 700; font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--chrome); border: 1px solid rgba(218,215,210,0.4); border-radius: 999px; padding: 3px 10px; }
+.fw-title { font-family: 'Oxanium', sans-serif; font-weight: 800; font-size: 17px; letter-spacing: 0.01em; color: var(--ink);
+  max-width: 62vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-video { border-color: rgba(218,215,210,0.26); }
+.fw-end { margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.fw-end[hidden] { display: none; }
+.fw-end-t { font-family: 'Chakra Petch', monospace; font-size: 13px; color: var(--ink-dim); }
+.fw-end-cta { font-family: 'Chakra Petch', monospace; font-weight: 800; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #fff; cursor: pointer; padding: 10px 18px; border-radius: 999px; border: 1px solid rgba(255,80,90,0.5);
+  background: linear-gradient(180deg, #ff2a38, #b3121f); box-shadow: 0 8px 22px -6px rgba(255,31,46,0.6); }
+.fw-end-cta:hover, .fw-end-cta:focus-visible { filter: brightness(1.08); }
 
 /* grade colors (shared) */
 .g-S { color: #e0a93f; }

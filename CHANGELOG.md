@@ -15,6 +15,46 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build188 — AI Flixs: THE PLAY-TRIANGLE PROMISE (live-show incident)  ·  ?v=488
+
+Owner on a LIVE SHOW tapped an AI Flix expecting a playable level and got a video-preview modal.
+Investigated against the live catalog API before touching code — the finding is NOT a regression:
+
+- **143 of 170 films (84%) ARE playable levels** and always were — the playable path is healthy
+  (verified end-to-end: game active, `flix-mode`, Mux film attached as backdrop, 412 notes charted,
+  engine playing, video seek math exact).
+- **27 films (16%) are HLS-only**: their `audio_url` is the video `.m3u8`, which can't be decoded for
+  charting. I probed `stream.mux.com/<id>/audio.m4a` for **all 27 → 404** (control film 206), so those
+  Mux assets were ingested without audio renditions. **No client-side fix exists.** The owner's film
+  ("Preheat the Void", Alarm Clock Hero) is one of the 27.
+- **The real defect was LEGIBILITY**: every film card wore the SAME gold "★ AI FILM" badge + ▶ arrow
+  whether or not it could launch a level, and playable/watch-only were shuffled together in one grid.
+  The grid promised playability it couldn't keep — a minefield on stage.
+
+Fable 5 (creative director) ruled: **the play triangle is a promise.** Shipped:
+- `RhythmCatalog.flixPlayable(t)` — ONE synchronous discriminator (video + decodable audio) used by the
+  card, the grid sort and the sheet. **Auto-upgrades**: when Lovable backfills a film's audio rendition,
+  its card flips to playable with no code change and no flag list.
+- **Playables sort first**, with a `CINEMA · WATCH NOW · PLAYABLE SOON` divider at the boundary — the top
+  of the grid is now guaranteed playable (the single biggest live-show safeguard). The premiere hero also
+  lands on a playable film as a consequence.
+- **Card states**: playable keeps gold ★ AI FILM + ▶ + "PLAY THIS FILM"; watch-only gets a chrome CINEMA
+  tag + eye glyph + "WATCH THE FILM". No dimming — it's real creator work, just a different outcome.
+- **Sheet copy** rewritten: playable now sells the format ("The film is the level — it plays full-screen
+  behind your highway, charted live from its soundtrack"); watch-only leads with the limitation
+  ("Watch-only for now — this film's playable level is in the works…") and never shows a ▶.
+- **Branded CINEMA frame** replaces the naked browser-chrome video popup (chrome tag + film title +
+  letterbox), with an end-of-film CTA "▶ PLAY A LIVE FLIX" routing into the playable films.
+- **LOVABLE_FLIX_AUDIO_BRIEF.md** — the actual fix: all 27 track ids + the Mux `mp4_support`/audio-rendition
+  ask + an ingest gate so no future film lands watch-only.
+
+Verified headless: 143/27 split matches the API exactly; owner's film correctly reads not-playable; sort
+puts 0 playables after the boundary; divider renders once, immediately before the first CINEMA card; both
+card + both sheet states correct; playable film launches the level; zero console errors; score ceiling 17.
+**Investigated but deliberately NOT "fixed":** the backdrop video sits paused in the headless pane — proven
+to be the harness (rAF dead, `document.hidden=true`, media suspended; `play()` resolves and the seek lands
+exactly on progress×duration), not a product defect.
+
 ### build187 — RIFTFIELD: the shared Tier-I reactive particle core (owner VFX brief)  ·  ?v=487
 
 Owner brief: "an extremely large complex particle system … reacts to the sound … intensifies through the

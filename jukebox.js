@@ -689,7 +689,7 @@
   // =========================================================================
   // SONGS (searchable, sortable, lazy list)
   // =========================================================================
-  let songsBase = [], songsList = [], songsRendered = 0;
+  let songsBase = [], songsList = [], songsRendered = 0, songsDividerDone = false;   // build188: one CINEMA divider per Flixs render
   let songsIsVideo = false;   // true ONLY for the dedicated Videos view, so currentSongs doesn't filter it empty
   let songsPoster = false;    // poster-grid (AI Flixs) vs row list (music) — Phase 5
   let songsScope = 'music';   // 'music' | 'flixs' | 'all' — which media currentSongs() keeps — Phase 5
@@ -716,7 +716,17 @@
     // 'all' → no media filter (used by the global header search)
     const q = $('songs-search').value.trim().toLowerCase();
     if (q) list = list.filter(t => (t.title || '').toLowerCase().includes(q) || (t.artist_name || '').toLowerCase().includes(q) || (RC().cleanGenre(t.genre) || '').toLowerCase().includes(q));
-    return RC().sortTracks(list, $('songs-sort').value);
+    const sorted = RC().sortTracks(list, $('songs-sort').value);
+    // build188 (Fable ruling §5 — the single biggest live-show safeguard): in the Flixs grid, PLAYABLE films
+    // always sort above watch-only CINEMA films. Everything above the divider is guaranteed to launch a level, so
+    // grabbing from the top of the grid on stage can no longer land on a preview. Stable within each bucket, so
+    // the user's chosen sort (Featured/Newest/Hot/A-Z/BPM) still orders each group normally.
+    if (songsScope === 'flixs' && RC().flixPlayable) {
+      const playables = [], cinema = [];
+      for (let i = 0; i < sorted.length; i++) (RC().flixPlayable(sorted[i]) ? playables : cinema).push(sorted[i]);
+      return playables.concat(cinema);
+    }
+    return sorted;
   }
 
   function procArt(t) {
@@ -902,11 +912,26 @@
     } else { fillNoArt(fr, t); }
     const grad = document.createElement('span'); grad.className = 'vc-grad'; fr.appendChild(grad);
     if (t.duration_seconds) { const d = document.createElement('span'); d.className = 'vc-dur'; d.textContent = RC().fmtDur(t.duration_seconds); fr.appendChild(d); }
-    // build99: films are PLAYABLE now (playFlix → the music video plays full-screen behind the highway while you
-    // play the chart from its audio). Gold "AI FILM" premiere ribbon + hover ▶; the card opens the sheet, which
-    // launches "▶ Play AI Flix". (Was a stale "Soon" discovery-only chip.)
-    const badge = document.createElement('span'); badge.className = 'vc-badge'; badge.textContent = '★ AI FILM'; fr.appendChild(badge);
-    const play = document.createElement('span'); play.className = 'vc-play'; play.textContent = '▶'; fr.appendChild(play);
+    // build99: films are PLAYABLE (playFlix → the music video plays full-screen behind the highway while you play
+    // the chart from its audio). build188 — THE PLAY-TRIANGLE PROMISE (Fable 5 ruling after the live-show incident:
+    // the owner tapped a film expecting a level and got a video preview). Every card used to wear the SAME gold
+    // "★ AI FILM" ribbon + ▶ arrow whether or not it could actually launch a level — the grid promised playability
+    // to 27 of 170 films that can't deliver it. Now the exception is MARKED: a playable film keeps gold + ▶; a
+    // watch-only film gets a CHROME "CINEMA" tag + an EYE glyph. Gold + triangle now MEAN playable, everywhere.
+    const canPlay = RC().flixPlayable ? RC().flixPlayable(t) : true;
+    if (!canPlay) card.classList.add('watch-only');
+    const badge = document.createElement('span');
+    badge.className = 'vc-badge' + (canPlay ? '' : ' cinema');
+    badge.textContent = canPlay ? '★ AI FILM' : 'CINEMA';
+    fr.appendChild(badge);
+    const play = document.createElement('span');
+    play.className = 'vc-play' + (canPlay ? '' : ' vc-eye');
+    if (canPlay) play.textContent = '▶';
+    else play.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.6 12S5.5 5 12 5s10.4 7 10.4 7-3.9 7-10.4 7S1.6 12 1.6 12z"></path><circle cx="12" cy="12" r="3.1"></circle></svg>';
+    fr.appendChild(play);
+    const cta = document.createElement('span'); cta.className = 'vc-cta';
+    cta.textContent = canPlay ? 'PLAY THIS FILM' : 'WATCH THE FILM';
+    fr.appendChild(cta);
     card.appendChild(fr);
     const cap = document.createElement('span'); cap.className = 'vc-cap';
     cap.innerHTML = '<span class="vc-title">' + RC().escapeHtml(t.title || '') + '</span>' +
@@ -921,6 +946,7 @@
     const host = $('song-list');
     host.innerHTML = '';
     songsRendered = 0;
+    songsDividerDone = false;   // build188: re-arm the CINEMA divider for this render
     rebuildNearMiss();   // #17: refresh the near-miss (1-TO-S / SO-CLOSE) lookup for this list render
     songsList = currentSongs();
     $('songs-count').textContent = songsList.length + '';
@@ -984,7 +1010,19 @@
     const host = $('song-list');
     const end = Math.min(songsList.length, songsRendered + PAGE);
     const frag = document.createDocumentFragment();
-    for (let i = songsRendered; i < end; i++) frag.appendChild(songsPoster ? videoCard(songsList[i]) : songCard(songsList[i]));
+    for (let i = songsRendered; i < end; i++) {
+      // build188 (Fable ruling §2): the CINEMA divider — inserted at the exact playable→watch-only boundary the
+      // sort above created, so the grid reads as two labeled sections instead of a minefield of identical cards.
+      // Emitted inside the paged/virtualized append (the boundary can fall on any page), and only ONCE per render.
+      if (songsScope === 'flixs' && !songsDividerDone && RC().flixPlayable && !RC().flixPlayable(songsList[i]) && i > 0) {
+        songsDividerDone = true;
+        const div = document.createElement('div');
+        div.className = 'flix-divider';
+        div.innerHTML = '<span class="fd-line"></span><span class="fd-t">CINEMA · WATCH NOW · PLAYABLE SOON</span><span class="fd-line"></span>';
+        frag.appendChild(div);
+      }
+      frag.appendChild(songsPoster ? videoCard(songsList[i]) : songCard(songsList[i]));
+    }
     host.appendChild(frag);
     songsRendered = end;
   }
@@ -2060,5 +2098,5 @@
     };
   } catch (e) {}
 
-  window.RhythmLibrary = { render, showView, relayout };
+  window.RhythmLibrary = { render, showView, relayout, openSongs };   // build188: openSongs exported so the CINEMA end-of-film CTA can route into the PLAYABLE films
 })();

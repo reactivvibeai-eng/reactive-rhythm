@@ -1055,6 +1055,14 @@
   // which requires a decodable non-HLS audio file) — doing so silently hid 30 of 142 films that have no
   // decodable audio rendition (e.g. After Eve's "Straitjacket MV"), dropping them from the grid/count/search.
   function videoReady(t) { return !!t && (!!videoWatchUrl(t) || !!trackAudioUrl(t)); }
+  // build188 — THE PLAY-TRIANGLE PROMISE (Fable 5 ruling, live-show incident 2026-07-19): ONE synchronous
+  // discriminator for "is this film a PLAYABLE LEVEL?" — used by the Flixs card, the grid sort, and the sheet
+  // so the grid can never again promise a level it can't launch. A film is playable iff it carries DECODABLE
+  // (non-HLS) audio to chart in-browser. Verified against the live catalog 2026-07-19: 143 of 170 films pass;
+  // 27 are HLS-only Mux assets whose /audio.m4a rendition returns 404 (probed all 27 — see
+  // LOVABLE_FLIX_AUDIO_BRIEF.md). This AUTO-UPGRADES: the moment Lovable backfills a film's audio rendition,
+  // audio_url stops being an .m3u8 and the card flips to playable with no code change and no flag list.
+  function flixPlayable(t) { return isVideo(t) && !!trackAudioUrl(t); }
   function hasServerChart(t) { return !!t && (t.chart_status === 'ready' || t.has_chart); }
   // build126: true when the track carries its OWN decodable (non-HLS) audio_url to chart in-browser — the exact
   // discriminator the audio launch branch needs, INDEPENDENT of whether the paged live-catalog crawl has finished.
@@ -1574,23 +1582,26 @@
       const aurl = trackAudioUrl(track);
       const wsrc = videoWatchUrl(track);
       if (aurl) {
-        $('sheet-hint').textContent = 'AI Flix \u2014 the music video plays behind the highway. Tap PLAY.';
+        // build188 (Fable ruling \u00a73): the hint SELLS the format instead of just instructing a tap.
+        $('sheet-hint').textContent = 'The film is the level \u2014 it plays full-screen behind your highway, charted live from its soundtrack.';
         if (playBtn) { playBtn.disabled = false; playBtn.classList.remove('not-ready'); }
-        if (playLabel) playLabel.textContent = '\u25b6 Play AI Flix';
+        if (playLabel) playLabel.textContent = '\u25b6 PLAY AI FLIX';
         const _flixFn = () => { playFlix(track); };
         _flixFn._preview = true;   // bypass the env-picker wrapper \u2014 the flix manages its OWN #bg-video backdrop
         window.RhythmGame.setMenuPlayHandler(_flixFn);
         sheet.classList.add('open');
         return;
       }
-      // no decodable audio \u2192 Watch-only preview (the playable level needs a chartable audio track)
+      // no decodable audio \u2192 CINEMA (watch-only). build188 (Fable ruling \u00a73): the old copy buried "coming soon"
+      // mid-sentence where a skimming thumb never read it, and "preview" undersold what is actually the FULL film.
+      // Lead with the limitation, then give the watch its own dignity \u2014 this is real creator work, not a broken card.
       $('sheet-hint').textContent = wsrc
-        ? 'AI Flixs film \u2014 a playable level is coming soon. Tap Watch for a preview.'
-        : 'AI Flixs film \u2014 coming to the game soon.';
+        ? 'Watch-only for now \u2014 this film\u2019s playable level is in the works. Enjoy the full film in cinema view.'
+        : 'This film is still being prepared for cinema view.';
       if (playBtn) { playBtn.disabled = !wsrc; playBtn.classList.toggle('not-ready', !wsrc); }
-      // build100e (relatability): reserve the \u25b6 play arrow for the CHARTABLE "Play AI Flix" case. A watch-only film uses an
-      // eye + "Watch preview" so a newcomer reads playable-level vs video-preview as clearly different outcomes.
-      if (playLabel) playLabel.textContent = wsrc ? '\ud83d\udc41 Watch preview' : 'Coming soon';
+      // build100e (relatability) / build188: the \u25b6 play triangle is a PROMISE \u2014 it appears ONLY on the chartable
+      // "PLAY AI FLIX" case. Watch-only uses the eye + "WATCH FILM" so playable-level vs cinema reads instantly.
+      if (playLabel) playLabel.textContent = wsrc ? '\ud83d\udc41 WATCH FILM' : 'Coming soon';
       if (wsrc) {
         const _watchFn = () => { closeSheet(); openWatch(track, wsrc); };
         _watchFn._preview = true;
@@ -1814,20 +1825,42 @@
     let ov = document.getElementById('flix-watch');
     if (!ov) {
       ov = document.createElement('div'); ov.id = 'flix-watch'; ov.className = 'flix-watch';
+      // build188 (Fable director's flag): a bare browser-chrome <video> popup inside our black/crimson world read
+      // as a BUG on stage even when it was the correct fallback. It's now a branded CINEMA frame: chrome tag,
+      // title in Oxanium, letterboxed film, and an end-of-film CTA back into the playable loop.
       ov.innerHTML = '<div class="fw-scrim"></div>' +
         '<div class="fw-box"><button class="fw-close" type="button" aria-label="Close">✕</button>' +
+        '<div class="fw-head"><span class="fw-tag">CINEMA</span><span class="fw-title"></span></div>' +
         '<video class="fw-video" playsinline muted controls preload="metadata"></video>' +
-        '<div class="fw-cap"></div></div>';
+        '<div class="fw-cap"></div>' +
+        '<div class="fw-end" hidden><span class="fw-end-t">Want one you can PLAY?</span>' +
+        '<button class="fw-end-cta" type="button">▶ PLAY A LIVE FLIX</button></div></div>';
       document.body.appendChild(ov);
       ov.querySelector('.fw-scrim').addEventListener('click', closeWatch);
       ov.querySelector('.fw-close').addEventListener('click', closeWatch);
       // build93 (playtest): Esc closes the Watch overlay — the owner plays keyboard, and this was the lone
       // modal without a keyboard dismiss. Capture-phase + open-gated so it only fires while the overlay is up.
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ov.classList.contains('open')) { e.stopImmediatePropagation(); closeWatch(); } }, true);
+      // build188: end-of-film CTA → close the cinema and drop the player into the PLAYABLE films (the fallback
+      // now converts instead of dead-ending). Guarded: if the jukebox isn't reachable, it just closes.
+      const _endV = ov.querySelector('.fw-video');
+      if (_endV) _endV.addEventListener('ended', function () { const e2 = ov.querySelector('.fw-end'); if (e2) e2.hidden = false; });
+      const _cta = ov.querySelector('.fw-end-cta');
+      if (_cta) _cta.addEventListener('click', function () {
+        closeWatch();
+        try {
+          const playables = videoTracks().filter(flixPlayable);
+          if (playables.length && window.RhythmLibrary && window.RhythmLibrary.openSongs) {
+            window.RhythmLibrary.openSongs(playables, 'AI Flixs', 'browse', '', true, true);
+          }
+        } catch (e) {}
+      });
     }
     const v = ov.querySelector('.fw-video');
     v.poster = posterFor(track); v.src = src;
-    ov.querySelector('.fw-cap').textContent = (track.title || '') + ' — ' + (track.artist_name || '');
+    { const _t = ov.querySelector('.fw-title'); if (_t) _t.textContent = track.title || ''; }
+    { const _e = ov.querySelector('.fw-end'); if (_e) _e.hidden = true; }   // reset the end CTA for each open
+    ov.querySelector('.fw-cap').textContent = (track.artist_name || '');
     ov.classList.add('open');
     const p = v.play && v.play();
     if (p && p.catch) p.catch(() => { try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });   // HLS / autoplay-blocked → new tab
@@ -3026,7 +3059,7 @@
     // data layer for the library UI (jukebox.js)
     allTracks, allMedia, isLive: () => catalogLive, genreList, artistList, byGenre, byArtist,
     // media-type split: videos live in their own bucket, OUT of the music lists/rails/search
-    isVideo, mediaType, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer, goldenBuzzerTracks,
+    isVideo, mediaType, flixPlayable, musicTracks, videoTracks, videoCount, posterFor, goldenBuzzer, goldenBuzzerTracks,
     // Album release parties (Browse "Album Releases" shelf) — []/empty until the /release-parties route exists (graceful).
     releaseParties, albumTracks,
     playFlix, firstPlayableFlix,   // build99: launch a film as a playable level (video backdrop + charted from its audio); firstPlayableFlix = audio-reachability self-heal for the premiere hero
