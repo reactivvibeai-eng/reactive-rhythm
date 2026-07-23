@@ -1544,11 +1544,26 @@
   // flags, gates and the 24-slot spark pool. ALL reset in mountVsHud (contract rule 8: the DOM is rebuilt
   // per match, the vars are not). Gates (_tugLite/_tugRM) are read ONCE per mount (contract rule 4).
   var _tugX = 0, _tugV = 0, _prevMyScore = 0, _prevOppSc = 0, _oppImp = 0, _tugLastT = 0;
+  // build190 MOMENTUM: the seam used to rest on the CUMULATIVE score ratio, which is mathematically doomed to
+  // go inert — moving it 1% always costs ~1.98% of the leader's running total, i.e. ~52 pts at 10s in but
+  // ~915 pts at 46,000. The same PERFECT became 17.8x less visible exactly as the song got dramatic. These
+  // leaky integrators (tau 4s, units pts/s) make the bar answer "who owns the last few seconds" instead, so
+  // its sensitivity is constant from second 10 to the final chord AND it moves at ANY score gap.
+  var _rateMe = 0, _rateOp = 0, _prevCbMe = 0, _prevCbOp = 0, _tugAct = 0, _lvtEase = 0;
+  var _missCd = 0, _missCdOp = 0, _gainSide = 0, _gainT = 0;
   var _tugLite = false, _tugRM = false, _wasEnd = false, _wasPhoto = false, _tugSign = 0, _tugFlipAt = 0, _tugAriaAt = 0;
   var _tugFxCtx = null, _tugFxDirty = false, _tugClose = 0, _tugCoreT = 0;   // build128: _tugClose = eased closeness 0..1 (dead-heat=1), _tugCoreT = molten-core shimmer phase
   // build128: FRICTION-FRONT spark pool grown 24→40. Each slot carries `hot` (white-hot core particle vs a
   // colour-trailing ember) + `r` (radius) so the clash reads as molten sparks grinding off the seam, not flat pixels.
-  var _tugSpk = []; (function () { for (var i = 0; i < 40; i++) _tugSpk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false, hot: false, r: 1 }); })();
+  var _tugLastP = 50, _tugDpr = 1;   // build190: last seam % (stumble spawns there) + DPR for the FX canvas
+  var _tugSpk = []; (function () { for (var i = 0; i < 40; i++) _tugSpk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false, hot: false, r: 1, tr: false, dim: false }); })();
+  // build190: this was the ONLY canvas in the codebase never DPR-scaled, so every spark rendered soft on any
+  // HiDPI display — which is most of them. Cap 1.5 keeps the fill cost sane on a 26->34px strip.
+  function _tugSizeFx(cv, w) {
+    _tugDpr = Math.min(1.5, (window.devicePixelRatio || 1));
+    cv.width = Math.round(w * _tugDpr); cv.height = Math.round(TUG_FX_H * _tugDpr);
+    if (_tugFxCtx) { try { _tugFxCtx.setTransform(_tugDpr, 0, 0, _tugDpr, 0, 0); } catch (e) {} }
+  }
   // versus P4: opponent ghost-highway renderer state — pre-allocated sparkle pool (zero per-frame alloc)
   var _gCtx = null;
   var _spk = []; (function () { for (var i = 0; i < 48; i++) _spk.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, cr: false }); })();
@@ -1610,6 +1625,10 @@
     tug.appendChild(tTrack);
     tug.appendChild(_vsEl('div', 'vs-tug-notch'));              // the always-visible "even" datum
     var tKnot = _vsEl('div', 'vs-tug-knot'); tKnot.appendChild(_vsEl('i')); tug.appendChild(tKnot);
+    // build190 WAR FLAG — the honest cumulative lead, demoted from "the thing that moves the seam" to a chrome
+    // marker. The seam now tells the FIGHT (momentum); this tells the WAR (totals). Their convergence during the
+    // endgame truth-blend IS the photo-finish read, and it means nothing on this bar ever lies.
+    var tFlag = _vsEl('div', 'vs-tug-flag'); tFlag.appendChild(_vsEl('i')); tug.appendChild(tFlag);
     var tlO = _vsEl('span', null, 'vs-tug-lab opp'); tlO.innerHTML = oppMeta && oppMeta.name ? _rpName(_oppTrunc12(oppMeta), { compact: true }) : 'OPPONENT'; tug.appendChild(tlO);
     var tlY = _vsEl('span', null, 'vs-tug-lab you'); tlY.textContent = 'YOU'; tug.appendChild(tlY);
     var chO = _vsEl('span', null, 'vs-tug-chip opp'); chO.textContent = (oppMeta && oppMeta.bot) ? 'AI' : String((oppMeta && oppMeta.name) || 'R').slice(0, 1).toUpperCase(); tug.appendChild(chO);
@@ -1644,6 +1663,8 @@
     _ggCv = null; _ggCtx = null; _ggKey = '';   // drop the cached warped-guitar composite so it rebuilds for this mount
     // pkg2 (contract rule 8): the tug module state dies with every mount
     _tugX = 0; _tugV = 0; _prevMyScore = 0; _prevOppSc = 0; _oppImp = 0; _tugLastT = 0;
+    _rateMe = 0; _rateOp = 0; _prevCbMe = 0; _prevCbOp = 0; _tugAct = 0; _lvtEase = 0;
+    _missCd = 0; _missCdOp = 0; _gainSide = 0; _gainT = 0;
     _wasEnd = false; _wasPhoto = false; _tugSign = 0; _tugFlipAt = 0; _tugAriaAt = 0;
     _tugFxCtx = null; _tugFxDirty = false; _tugClose = 0; _tugCoreT = 0; for (var _s2 = 0; _s2 < _tugSpk.length; _s2++) _tugSpk[_s2].on = false;
     for (var _l = 0; _l < 6; _l++) { _gFlash[_l] = 0; _gFlashCr[_l] = false; } _gPrevCombo = 0; _gMissWin = 0;   // reset the rival-deck flash state
@@ -1746,25 +1767,62 @@
       var dtT = _tugLastT ? Math.min(0.05, (nowT - _tugLastT) / 1000) : 0.016; _tugLastT = nowT;
       // honest target — the SAME normalized score-lead the seam uses; 0 while either stream is pre-start.
       var lvT = (myP < 0.03 || opP < 0.03) ? 0 : Math.max(-1, Math.min(1, (stt.score - _oppEase.sc) / (Math.max(stt.score, _oppEase.sc, 1) * 0.5)));
+      // build190: the WAR FLAG keeps the honest cumulative lead visible (eased, tau ~300ms) while the seam
+      // itself now tells the FIGHT. Nothing lies: the flag is the truth marker and the seam blends back to
+      // lvT over the last 10% of the song, so the final frame is always honest.
+      _lvtEase += (lvT - _lvtEase) * Math.min(1, dtT * 3.3);
+      var _oScT = (os && typeof os.sc === 'number') ? os.sc : _prevOppSc;
+      var dsMe = Math.max(0, stt.score - _prevMyScore);
+      var dsOp = Math.max(0, _oScT - _prevOppSc);
+      var _cbMe = stt.combo | 0, _cbOp = (os && typeof os.cb === 'number') ? (os.cb | 0) : _prevCbOp;
       if (_tugRM) {                                       // reduce-motion: plain slow lerp — no impulses, no jolt
-        _tugX += (lvT - _tugX) * 0.08; _tugV = 0;
-        _prevMyScore = stt.score; _prevOppSc = (os && typeof os.sc === 'number') ? os.sc : _prevOppSc;
+        // build190: reduce-motion users get the SIGNAL fix too — only the ornament layer is motion. Momentum
+        // target, slow-lerped; no spring, no impulses, no particles.
+        var _dkR = Math.exp(-dtT / 4);
+        _rateMe = _rateMe * _dkR + dsMe / 4; _rateOp = _rateOp * _dkR + dsOp / 4;
+        var _mR = (_rateMe - _rateOp) / (_rateMe + _rateOp + 150);
+        _tugX += (Math.tanh(1.7 * _mR) - _tugX) * 0.08; _tugV = 0;
+        _prevMyScore = stt.score; _prevOppSc = _oScT; _prevCbMe = _cbMe; _prevCbOp = _cbOp;
       } else if (frozen) {
         _tugV = 0;                                        // frozen-stream honesty: kill the spring, hold position
+        // build190 BUGFIX: the frozen branch never advanced the baselines, so the first unfrozen frame saw a
+        // giant synthetic ds and slammed the impulse cap — a phantom lurch on every unfreeze.
+        _prevMyScore = stt.score; _prevOppSc = _oScT; _prevCbMe = _cbMe; _prevCbOp = _cbOp;
       } else {
-        _tugV += (lvT - _tugX) * 46 * dtT;                // spring K = 46/s² toward the honest target
+        _prevMyScore = stt.score; _prevOppSc = _oScT;
+        // --- SCORING RATE (pts/s), leaky integrator tau=4s. Steady 250 pts/s converges to 250. Zero alloc. ---
+        var _dk = Math.exp(-dtT / 4);
+        _rateMe = _rateMe * _dk + dsMe / 4;
+        _rateOp = _rateOp * _dk + dsOp / 4;
+        // --- MISS = a real event. Previously a miss produced ds=0, i.e. literally NO visual feedback: the bar
+        //     could only ever report good news. A broken combo now costs rate AND shoves the seam away. ---
+        if (_cbMe < _prevCbMe && _prevCbMe >= 4 && nowT > _missCd) { _rateMe *= 0.70; _tugV -= 0.10; _missCd = nowT + 700; _tugStumble(tug, 1); }
+        if (_cbOp < _prevCbOp && _prevCbOp >= 4 && nowT > _missCdOp) { _rateOp *= 0.70; _tugV += 0.10; _missCdOp = nowT + 700; _tugStumble(tug, -1); }
+        _prevCbMe = _cbMe; _prevCbOp = _cbOp;
+        // --- MOMENTUM: who owns the last ~4 seconds. R0=150 floor damps early-song and dead-air noise. ---
+        var _M = (_rateMe - _rateOp) / (_rateMe + _rateOp + 150);
+        var tgt = Math.tanh(1.7 * _M);
+        // --- ENDGAME TRUTH BLEND: over the last 10% of the song the seam eases back onto the honest
+        //     cumulative lead, so the bar physically settles into the verdict and the final frame never lies. ---
+        var _pMax = Math.max(myP, _oppEase.pr || 0);
+        if (_pMax > 0.9) { var _b = Math.min(1, (_pMax - 0.9) * 10); tgt = tgt * (1 - _b) + lvT * _b; }
+        _tugV += (tgt - _tugX) * 46 * dtT;                // spring K = 46/s² toward the momentum target
         _tugV *= Math.pow(0.0025, dtT);                   // ≈0.86 damping @60fps → settles ~450ms, one small overshoot
-        var dsMe = stt.score - _prevMyScore; _prevMyScore = stt.score;
-        if (dsMe > 0) { var kMe = Math.min(0.55, dsMe / 2600); _tugV += kMe * 1.4; if (kMe >= 0.28) _tugJolt(tug); }   // your hits SHOVE the front (presentation only — rest position never lies)
-        var oScT = (os && typeof os.sc === 'number') ? os.sc : _prevOppSc;
-        var dsOp = oScT - _prevOppSc; _prevOppSc = oScT;
-        if (dsOp > 0) { var kOp = Math.min(0.55, dsOp / 2600); _oppImp += kOp; if (kOp >= 0.28) _tugJolt(tug); }      // rival packets land ~13/s → accumulate…
-        var kB = _oppImp * Math.min(1, dtT * 9); _tugV -= kB * 1.4; _oppImp -= kB;                                    // …and bleed in as counter-shoves
+        // Impulse gain RE-CURVED: the old min(0.55, ds/2600) saturated on a single 4x PERFECT (1500), so every
+        // big hit produced an identical shove and the bar could not tell "he's surging" from "he landed one".
+        if (dsMe > 0) { var kMe = Math.min(0.5, Math.pow(dsMe / 1500, 0.7) * 0.30); _tugV += kMe * 1.4; if (kMe >= 0.26) { _tugJolt(tug, 1); _tugTracer(tugP, 1, dsMe); } }
+        if (dsOp > 0) { var kOp = Math.min(0.5, Math.pow(dsOp / 1500, 0.7) * 0.30); _oppImp += kOp; if (kOp >= 0.26) { _tugJolt(tug, -1); _tugTracer(tugP, -1, dsOp); } }
+        // Rival packets bleed at 20/s (tau 50ms, was 9/s = 111ms). One rope, two IDENTICAL transfer functions:
+        // at 111ms your hits punched and theirs mushed. 50ms is under perception; the smear still keeps a
+        // 3-note network packet from reading as one mega-hit.
+        var kB = _oppImp * Math.min(1, dtT * 20); _tugV -= kB * 1.4; _oppImp -= kB;
         _tugX += _tugV * dtT;
       }
       if (_tugX > 1) { _tugX = 1; _tugV = 0; } else if (_tugX < -1) { _tugX = -1; _tugV = 0; }
       tug.style.opacity = frozen ? '0.55' : '';
       var tugP = Math.max(4, Math.min(96, 50 - _tugX * 44));
+      tugP = Math.round(tugP * 20) / 20;   // build190: quantize to 0.05% — kills the 15-digit sub-pixel string churn
+      _tugLastP = tugP;
       var tOpp = $('vs-tug-opp'), tYou = $('vs-tug-you'), tKnot = $('vs-tug-knot');
       if (tOpp) tOpp.style.width = tugP + '%';
       if (tYou) tYou.style.width = (100 - tugP) + '%';
@@ -1800,35 +1858,102 @@
         var dAr = Math.round(stt.score - _oppEase.sc);
         tug.setAttribute('aria-label', 'Versus score bar: ' + (dAr > 150 ? 'you lead by ' + dAr.toLocaleString() : dAr < -150 ? 'Rival leads by ' + Math.abs(dAr).toLocaleString() : 'even'));
       }
-      // build128 (FRICTION FRONT): CLOSENESS is the master intensity — a dead-heat (seam near centre) grinds the
-      // hardest, a blowout stays calm BY DESIGN. closeness = 1-|lead|, but only while BOTH streams are actually
-      // playing (pre-start / frozen = no friction). Eased so it doesn't strobe on the spring's small overshoots.
+      // build190 (ACTIVITY, NOT CLOSENESS): build128 made CLOSENESS the master intensity, so a blowout stayed
+      // calm "by design". That design was wrong in practice — the owner's own 2-player test sat at 27,054 vs
+      // 46,224 (trailer at 58.5% of the leader), while the ambient grind needed >=61.4% and the molten core
+      // >=61.2%. Both gates were BELOW threshold for the whole match, _tugFxTick took its sleep path and
+      // CLEARED the canvas: the friction feature he was reviewing never drew a pixel. Closeness is a state a
+      // real match almost never sustains. ACTIVITY — how hard the two of them are actually scoring right now —
+      // is high whenever two humans are playing, at ANY gap, and falls to zero in dead air, which still honors
+      // the no-idle-motion law that build168 established.
       var bothLive = myP >= 0.03 && opP >= 0.03 && !frozen;
-      var closeRaw = bothLive ? Math.max(0, 1 - Math.abs(_tugX)) : 0;
-      // sharpen: only a genuinely tight contest (|lead| < ~0.55) lights up — squares the low end so a runaway calms fast
-      closeRaw = closeRaw * closeRaw;
-      _tugClose += (closeRaw - _tugClose) * Math.min(1, dtT * 6);
+      var actRaw = bothLive ? Math.min(1, (_rateMe + _rateOp) / 2800) : 0;
+      _tugAct += (actRaw - _tugAct) * Math.min(1, dtT * 6);
+      _tugClose = _tugAct;                                  // legacy name kept: it is the FX master intensity
       if (!_tugLite && !_tugRM) {                          // pooled sparks — sleeps completely (zero ctx work) at zero live sparks
-        // Emission = closeness (the grind) + a velocity kicker (a sudden shove throws extra sparks). Dead heat can
-        // fire a burst per frame; a blowout emits nothing. Reuses the SAME pool/canvas — no per-frame allocation.
+        // Emission = activity (the grind of two people playing) + a velocity kicker (a sudden shove throws
+        // extra sparks). Reuses the SAME pool/canvas — no per-frame allocation.
         var _velKick = Math.min(1, Math.abs(_tugV) / 0.6);
-        var _emit = Math.min(1, _tugClose * 1.15 + _velKick * 0.35);
-        if (_emit > 0.06) {
-          var _spawns = _emit > 0.72 ? 2 : 1;               // hottest contests double-emit (still pool-capped in the spawner)
+        var _emit = Math.min(1, _tugAct * 0.5 + _velKick * 0.35);
+        if (_emit > 0.05) {
+          var _spawns = _emit > 0.72 ? 2 : 1;               // hottest exchanges double-emit (still pool-capped in the spawner)
           for (var _e = 0; _e < _spawns; _e++) if (Math.random() < _emit) _tugSpawnClash(tugP, _emit);
         }
         _tugCoreT += dtT;                                   // molten-core shimmer clock
-        _tugFxTick(dtT * 1000, tugP, _tugClose);
+        _tugFxTick(dtT * 1000, tugP, _tugAct);
+      }
+      // build190 GAINING PULSE (the owner's "pulsing line on whoever is making more progress"). Hysteresis so
+      // it can't strobe: arms above an 18% rate advantage, releases below 8%, and dies whenever activity does.
+      // State-earned motion — it cannot run when nobody is out-scoring anybody, or when play stops.
+      var _rSum = _rateMe + _rateOp + 150;
+      var _adv = (_rateMe - _rateOp) / _rSum;
+      var _wantSide = (_tugAct > 0.12 && Math.abs(_adv) > 0.18) ? (_adv > 0 ? 1 : -1) : (Math.abs(_adv) < 0.08 || _tugAct <= 0.12 ? 0 : _gainSide);
+      if (_wantSide !== _gainSide) { _gainSide = _wantSide; _gainT = nowT; }
+      var _gOn = _gainSide !== 0 && (nowT - _gainT) >= 0;
+      if (tYou) tYou.classList.toggle('gaining', _gOn && _gainSide > 0);
+      if (tOpp) tOpp.classList.toggle('gaining', _gOn && _gainSide < 0);
+      // build190 WAR FLAG — the honest cumulative lead, demoted from "the seam" to a chrome marker. The seam
+      // tells the fight; this tells the war. When they converge in the endgame blend, that convergence IS the
+      // photo-finish read.
+      var _flag = $('vs-tug-flag');
+      if (_flag) {
+        var _fp = Math.max(6, Math.min(94, 50 - _lvtEase * 44));
+        _flag.style.left = (Math.round(_fp * 20) / 20) + '%';
+        _flag.classList.toggle('you', _lvtEase > 0.04);
+        _flag.classList.toggle('opp', _lvtEase < -0.04);
       }
     }
   }
   // pkg2 → build128 helpers — jolt shudder, lead-flip FLARE burst, friction-clash emitter, pooled spark+core tick
   // (40 slots, canvas 54px tall, ONLY for the friction FX). Colour scheme: YOU=crimson (P.cr true), RIVAL=gold.
   var TUG_FX_H = 54, TUG_SEAM_Y = 13;   // canvas height + the seam contact line the sparks grind off
-  function _tugJolt(tug) {
+  // build190: the jolt is now DIRECTIONAL. It used to be a 1.5px translateY — a vertical nudge is perpendicular
+  // to the axis of the contest and so cannot say who shoved whom. dir>0 = you shoved (bar kicks left, away from
+  // your pole), dir<0 = the rival shoved.
+  function _tugJolt(tug, dir) {
     if (_tugRM || !tug || tug._joltT) return;
-    tug.classList.add('jolt');
-    tug._joltT = setTimeout(function () { tug._joltT = 0; tug.classList.remove('jolt'); }, 110);
+    var cls = (dir < 0) ? 'jolt-r' : 'jolt-l';
+    tug.classList.add(cls);
+    tug._joltT = setTimeout(function () { tug._joltT = 0; tug.classList.remove('jolt-l'); tug.classList.remove('jolt-r'); }, 110);
+  }
+  // build190 STUMBLE — the missing NEGATIVE event. Before this a miss produced ds=0, i.e. no visual feedback at
+  // all: the bar could only ever report good news, which is half a fight. side>0 = you broke combo.
+  function _tugStumble(tug, side) {
+    if (_tugRM || !tug) return;
+    var el = $(side > 0 ? 'vs-tug-you' : 'vs-tug-opp');
+    if (el) { el.classList.remove('stumble'); void el.offsetWidth; el.classList.add('stumble');
+      setTimeout(function () { try { el.classList.remove('stumble'); } catch (e) {} }, 280); }
+    _tugJolt(tug, -side);                                   // the bar recoils TOWARD the player who didn't miss
+    if (_tugLite) return;
+    var cv = $('vs-tug-fx'); if (!cv) return;
+    var w = cv.clientWidth || 0; if (!w) return;
+    var x0 = (_tugLastP == null ? 50 : _tugLastP) / 100 * w, n = 0;
+    for (var i = 0; i < _tugSpk.length && n < 4; i++) {
+      var P = _tugSpk[i]; if (P.on) continue;
+      P.on = true; n++;
+      P.x = x0 + (Math.random() * 10 - 5); P.y = TUG_SEAM_Y;
+      P.vx = (Math.random() * 40 - 20); P.vy = 30 + Math.random() * 50;   // dark embers FALL — the shape of losing ground
+      P.max = P.life = 300; P.hot = false; P.cr = side > 0; P.r = 1.2 + Math.random() * 0.6; P.tr = false; P.dim = true;
+    }
+  }
+  // build190 TRACER — a scoring event throws a streak from the seam TOWARD the opponent's pole: a shove you can
+  // literally see leave your hand. This replaces the closeness grind as the DEFAULT spark, so the bar now reacts
+  // to play rather than to the scoreboard being tied.
+  function _tugTracer(tugP, dir, ds) {
+    if (_tugRM || _tugLite) return;
+    var cv = $('vs-tug-fx'); if (!cv) return;
+    var w = cv.clientWidth || 0; if (!w) return;
+    if (cv.width !== w * _tugDpr) { _tugSizeFx(cv, w); }
+    var x0 = tugP / 100 * w, want = ds >= 1500 ? 3 : 2, n = 0;
+    for (var i = 0; i < _tugSpk.length && n < want; i++) {
+      var P = _tugSpk[i]; if (P.on) continue;
+      P.on = true; n++;
+      P.x = x0; P.y = TUG_SEAM_Y + (Math.random() * 6 - 3);
+      P.vx = -dir * (240 + Math.random() * 180);            // dir>0 (you) pushes the front LEFT, into their half
+      P.vy = (Math.random() * 24 - 12);
+      P.max = P.life = 220 + Math.random() * 100;
+      P.hot = ds >= 1500; P.cr = dir > 0; P.r = 1.4 + Math.random() * 1.0; P.tr = true; P.dim = false;
+    }
   }
   // lead-flip FLARE — a punchy detonation of hot sparks at the moment the front changes hands. Bigger + faster than
   // the ambient grind. dir>0 = YOU took the front (crimson), dir<0 = rival took it (gold). Half the burst is white-hot
@@ -1858,7 +1983,7 @@
   function _tugSpawnClash(tugP, inten) {
     var cv = $('vs-tug-fx'); if (!cv) return;
     var w = cv.clientWidth || 0; if (!w) return;
-    if (cv.width !== w) { cv.width = w; cv.height = TUG_FX_H; }
+    if (cv.width !== w * _tugDpr) { _tugSizeFx(cv, w); }
     inten = inten || 0.4;
     var x0 = tugP / 100 * w;
     for (var i = 0; i < _tugSpk.length; i++) {
@@ -1872,6 +1997,7 @@
       P.hot = Math.random() < (0.28 + inten * 0.4);        // the closer the fight, the more white-hot cores
       // colour by the current leader; when genuinely even (|sign| tiny) split 50/50 so both hues spark off the seam
       P.cr = _tugSign > 0 ? true : _tugSign < 0 ? false : (Math.random() < 0.5);
+      P.tr = false; P.dim = false;
       P.r = P.hot ? (1.3 + Math.random() * 1.0) : (0.9 + Math.random() * 0.9);
       break;                                                // spawn exactly one slot per call (caller loops for more)
     }
@@ -1895,24 +2021,27 @@
     var cv = $('vs-tug-fx'); if (!cv) return;
     var live = 0, i, P;
     for (i = 0; i < _tugSpk.length; i++) if (_tugSpk[i].on) live++;
-    var coreOn = (close || 0) > 0.05;
+    var coreOn = (close || 0) > 0.12;   // build190: `close` is now ACTIVITY, so the core burns at ANY score gap
+                                        // while both players are actually playing, and dies in dead air.
     if (!live && !coreOn) {                               // SLEEP: no sparks AND no molten core → skip ALL ctx work
       if (_tugFxDirty && _tugFxCtx) { _tugFxCtx.clearRect(0, 0, cv.width, cv.height); _tugFxDirty = false; }
       return;
     }
     if (!_tugFxCtx) { _tugFxCtx = cv.getContext('2d'); if (!_tugFxCtx) return; }
-    var w = cv.clientWidth || 0; if (w && cv.width !== w) { cv.width = w; cv.height = TUG_FX_H; }
+    var w = cv.clientWidth || 0; if (w && cv.width !== w * _tugDpr) { _tugSizeFx(cv, w); }
     var ctx = _tugFxCtx, dt = dtMs / 1000;
-    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.clearRect(0, 0, w || cv.width, TUG_FX_H);   // CSS px — the ctx carries the DPR transform
     ctx.globalCompositeOperation = 'lighter';
     // (1) molten core at the seam — a glowing contact blob that breathes with closeness (the two forces grinding)
     if (coreOn) {
       var sprite = _tugCoreBlob();
       if (sprite) {
-        var cx = tugP / 100 * cv.width;
+        var cx = tugP / 100 * (w || cv.width);
         var shim = 0.82 + 0.18 * Math.sin(_tugCoreT * 12);   // fast molten flicker
-        var sz = (14 + close * 26) * shim;                    // dead heat = big hot core; calm = small
-        ctx.globalAlpha = Math.min(1, close * 1.1) * 0.9;
+        // build190: size tracks ACTIVITY plus how fast the seam is being shoved, so the contact point swells
+        // during a real exchange and shrinks in dead air — instead of swelling only when the scores were tied.
+        var sz = (10 + close * 20 + 14 * Math.min(1, Math.abs(_tugV) / 0.5)) * shim;
+        ctx.globalAlpha = Math.min(1, 0.25 + close * 0.7) * 0.9;
         ctx.drawImage(sprite, cx - sz, TUG_SEAM_Y - sz * 0.5, sz * 2, sz);
       }
     }
@@ -1921,12 +2050,22 @@
       P = _tugSpk[i]; if (!P.on) continue;
       P.life -= dtMs;
       if (P.life <= 0 || P.y > TUG_FX_H - 2) { P.on = false; continue; }
-      P.vy += 400 * dt; P.x += P.vx * dt; P.y += P.vy * dt;
+      if (!P.tr) P.vy += 400 * dt;                       // tracers fly flat — they are a shove, not debris
+      P.x += P.vx * dt; P.y += P.vy * dt;
       var lifeF = Math.max(0, P.life / P.max);
-      ctx.globalAlpha = lifeF;
-      // hot cores burn white→their tint as they cool; embers are the flat side colour
-      ctx.fillStyle = P.hot ? (lifeF > 0.55 ? '#fffdf6' : (P.cr ? '#ffb0b6' : '#ffe6a8'))
-                            : (P.cr ? '#ff5a64' : '#ffd98a');
+      var col = P.hot ? (lifeF > 0.55 ? '#fffdf6' : (P.cr ? '#ffb0b6' : '#ffe6a8'))
+                      : (P.cr ? '#ff5a64' : '#ffd98a');
+      if (P.tr) {
+        // build190 directional tracer: a short streak pointing back the way it came, so the eye reads
+        // "something was pushed THAT way" rather than "a dot exists here".
+        ctx.globalAlpha = lifeF * 0.9;
+        ctx.strokeStyle = col; ctx.lineWidth = P.r * (0.5 + lifeF * 0.5); ctx.lineCap = 'round';
+        var tl = Math.min(22, Math.abs(P.vx) * 0.035);
+        ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(P.x - (P.vx > 0 ? tl : -tl), P.y); ctx.stroke();
+        continue;
+      }
+      ctx.globalAlpha = P.dim ? lifeF * 0.5 : lifeF;      // stumble embers are half-lit: losing ground looks cold
+      ctx.fillStyle = col;
       var r = P.r * (0.6 + lifeF * 0.4);
       ctx.beginPath(); ctx.arc(P.x, P.y, r, 0, 6.283); ctx.fill();
     }

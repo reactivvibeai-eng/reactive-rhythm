@@ -6315,3 +6315,64 @@ Verified live at 1920x1080 / 1024x768 / 390x844: chip clears the note spawn row 
 mobile portrait chip sits 8px under `.mhud` and 6px above `.combo-display` (offset MEASURED against #mhud's
 real rect — `.mhud` already absorbs `env(safe-area-inset-top)`, so the chip adds it too); landscape
 suppressed; no console errors; no horizontal scroll.
+
+## build190 (?v=491) — the VS tug-of-war becomes a FIGHT, not a readout (owner playtest feedback)
+
+Owner after a live 2-player test: *"the battle bar at the top tug of war ... didn't feel very reactive to
+the feel of combat between the two players ... maybe a particle in between that looks like friction, or a
+pulsing line on whoever is making more progress, or an animated texture."* Fable 5 directed; diagnosis
+verified against the real code and the owner's real match numbers (27,054 vs 46,224).
+
+**ROOT CAUSE 1 — the bar was wired to the wrong question.** The seam rested on the CUMULATIVE score RATIO
+(`lvT = (m-o)/(0.5*max(m,o))`), so its sensitivity decays as 1/m: moving the seam 1% always costs ~1.98% of
+the leader's running total — **~52 points ten seconds in, ~915 points at 46,224.** The same PERFECT was
+17.8x less visible late in a song. At the owner's scores the bar was 94% saturated with 7.5% of travel left:
+mechanically decided and near-rigid. The bar was most alive when nothing was at stake and frozen at the
+climax — the drama curve, inverted.
+
+**ROOT CAUSE 2 — every effect was OFF during his test.** All FX were gated on CLOSENESS, squared. Ambient
+friction sparks needed the trailer above 61.4% of the leader and the molten core above 61.2%. He was at
+**58.5%** — below both — so `_tugFxTick` took its sleep path and CLEARED the canvas. The friction feature he
+was asked to evaluate never drew a pixel. What he saw was a static gradient parked at 13.5% with a 1.5px
+vertical twitch. build128's comment said a blowout "stays calm BY DESIGN"; that design was wrong, because
+closeness is a state a real match almost never sustains.
+
+**THE FIX — split the war from the fight.**
+- **Seam = MOMENTUM.** Two leaky integrators (tau 4s) track each player's live scoring RATE;
+  `M = (rateMe - rateOp) / (rateMe + rateOp + 150)`, seam target `tanh(1.7*M)`. Sensitivity is now constant
+  from second 10 to the final chord and the bar moves at ANY score gap. Simulated at the owner's exact match:
+  old seam pegged at 13.50%; new seam rests at 36.12%, swings 16.5% of the bar on a 1s PERFECT surge, and
+  drifts to 20.16% when the rival goes cold — with no input from him.
+- **Truth is preserved, not discarded.** The old cumulative signal survives as a chrome **WAR FLAG** pinned
+  on the bar, and over the last 10% of the song the seam blends back onto it, so the bar physically settles
+  into the verdict and the final frame never lies.
+- **MISS is now an event.** A broken combo previously produced ds=0 — literally no visual feedback; the bar
+  could only report good news. It now costs 30% of that side's rate, shoves the seam, drains that fill for
+  260ms and drops dark embers.
+- **FX gate: closeness -> ACTIVITY** (`I = (rateMe+rateOp)/2800`). High whenever two humans are actually
+  playing, at any gap; zero in dead air, which keeps the no-idle-motion law. At the owner's match I = 0.146:
+  core ON, sparks ON, where the old system showed a blank canvas.
+- **Impulse re-curved** `min(0.5, (ds/1500)^0.7 * 0.30)` — the old `min(0.55, ds/2600)` saturated on a single
+  4x PERFECT, so every big hit gave an identical shove. Rival impulses now bleed at 20/s (was 9/s): one rope,
+  two identical transfer functions, instead of your hits punching and theirs mushing.
+
+**VISUALS.** Directional **tracers** thrown from the seam toward the opponent's pole on every scoring event
+(a shove you can see leave your hand) — this replaces closeness-grind as the default spark. **GAINING pulse**
+sweeping pole-to-seam on whoever is out-scoring, armed with hysteresis (on >18% rate advantage, off <8%) and
+only while activity is live. **Two-material shear hatch** at opposing angles so the seam reads as two grains
+grinding, not one gradient (static — the pulse supplies motion only when earned). Molten core now breathes
+with activity + seam speed. Jolt made **directional** (translateX toward the push) — it was a translateY,
+perpendicular to the axis of the contest, so it could not express who shoved whom.
+
+**Fixed in passing:** fills faded to 12% alpha AT THE POLE, so winning made your own territory dimmer —
+gradients flipped. Bar 26px -> 34px (it was 2.4% of frame height carrying the whole drama). Wrapper
+`filter: drop-shadow` deleted (it forced the additive spark canvas to composite through a black blur) and
+re-homed as a track box-shadow. FX canvas was the only canvas in the codebase never DPR-scaled — now scaled
+(cap 1.5) and repositioned 18px higher so upward sparks have headroom instead of hanging below the bar.
+Frozen branch never advanced the score baselines, so the first unfrozen frame slammed the impulse cap — a
+phantom lurch on every unfreeze. Seam quantized to 0.05% to kill sub-pixel style-string churn.
+
+Verified: full stylesheet parses (2652 rules), all new selectors present, legacy `.jolt` gone, no console
+errors, `node --check` clean on both files. **The feel itself still needs a real 2-player run** — headless
+cannot produce two live score streams.
+

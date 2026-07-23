@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=490" />
+<link rel="stylesheet" href="jukebox.css?v=491" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -2085,18 +2085,55 @@
   /* build128 (VS-bar redesign — "THE FRICTION FRONT"): taller/more prevalent 26px bar. YOU = CRIMSON/hot-red,
      RIVAL = GOLD/amber (two saturated warm hues that visibly oppose). The wrapper carries a soft two-sided glow
      so the whole bar reads hot. The molten white-hot clash lives at the moving seam (knot + spark canvas). */
-  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 26px; z-index: 47; pointer-events: none;
-    filter: drop-shadow(0 2px 10px rgba(0,0,0,0.55)); }
+  /* build190: 26px -> 34px. This bar carries the whole drama of two people fighting and it was 2.4% of frame
+     height, pinned to the top edge under the browser's own chrome. The wrapper `filter: drop-shadow` is DELETED
+     and re-homed as a box-shadow on the track: a filter on the wrapper forced the additive spark canvas to
+     composite through a black blur, which is exactly backwards for `lighter` blending. */
+  #game.vs-mode #vs-tug { display: block; position: absolute; left: 0; right: 0; top: 0; height: 34px; z-index: 47; pointer-events: none; }
   #game.vs-mode .vs-tug-track { position: absolute; inset: 0; background: rgba(10,6,6,0.6); border-bottom: 1px solid rgba(0,0,0,0.5);
-    overflow: hidden; box-shadow: inset 0 0 14px rgba(0,0,0,0.55); }
+    overflow: hidden; box-shadow: inset 0 0 14px rgba(0,0,0,0.55), 0 2px 10px rgba(0,0,0,0.55); }
   /* fills — each side glows its OWN colour, hottest at the contact point (the frontier), fading back to the pole.
      YOU (right) = crimson; RIVAL/opp (left) = gold. box-shadow inset near the seam edge = the friction rim-light. */
-  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%;
-    background: linear-gradient(270deg, #ffe08a 0%, var(--gold) 34%, rgba(224,169,63,0.12) 100%);
+  /* build190: gradients FLIPPED so the bright end sits at each side's POLE. They used to fade to 12% alpha at
+     the pole, which meant the further you pushed the front the DIMMER your own territory became - winning
+     literally looked like losing. The seam keeps its rim-light; the molten core owns the contact point. */
+  #game.vs-mode #vs-tug-opp { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; overflow: hidden;
+    background: linear-gradient(270deg, rgba(224,169,63,0.30) 0%, var(--gold) 62%, #ffe08a 100%);
     box-shadow: inset -14px 0 20px -8px rgba(255,224,138,0.7); }
-  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%;
-    background: linear-gradient(90deg, #ff7b84 0%, var(--crimson) 34%, rgba(255,31,46,0.12) 100%);
+  #game.vs-mode #vs-tug-you { position: absolute; right: 0; top: 0; bottom: 0; width: 50%; overflow: hidden;
+    background: linear-gradient(90deg, rgba(255,31,46,0.30) 0%, var(--crimson) 62%, #ff8d96 100%);
     box-shadow: inset 14px 0 20px -8px rgba(255,123,132,0.7); }
+  /* TWO MATERIALS GRINDING (the owner's "animated texture"): opposing static hatches, so the seam reads as two
+     grains shearing against each other instead of one smooth gradient. STATIC on purpose - zero idle motion;
+     the .gaining sweep below supplies movement only when someone has earned it. */
+  #game.vs-mode #vs-tug-opp::after, #game.vs-mode #vs-tug-you::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.55; }
+  #game.vs-mode #vs-tug-opp::after { background: repeating-linear-gradient(18deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 7px); }
+  #game.vs-mode #vs-tug-you::after { background: repeating-linear-gradient(-18deg, rgba(255,255,255,0.07) 0 1px, transparent 1px 7px); }
+  /* GAINING PULSE - the owner's "pulsing line on whoever is making more progress". Sweeps from that side's pole
+     INTO the seam: the direction of the push. JS arms it with hysteresis (on above an 18% rate advantage, off
+     below 8%) and only while activity is live, so it can never run when nobody is out-scoring anybody. */
+  @keyframes vs-tug-gain-you { from { background-position: 140% 0; } to { background-position: -40% 0; } }
+  @keyframes vs-tug-gain-opp { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+  #game.vs-mode #vs-tug-you.gaining::before, #game.vs-mode #vs-tug-opp.gaining::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none; background-repeat: no-repeat;
+    background-size: 45% 100%;
+    background-image: linear-gradient(90deg, transparent, rgba(255,255,255,0.20), transparent); }
+  #game.vs-mode #vs-tug-you.gaining::before { animation: vs-tug-gain-you 850ms linear infinite; }
+  #game.vs-mode #vs-tug-opp.gaining::before { animation: vs-tug-gain-opp 850ms linear infinite; }
+  /* STUMBLE - a combo break drains that side's colour for 260ms. The bar could previously only report GOOD
+     news: a miss produces no score delta, so it generated no visual event at all. */
+  @keyframes vs-tug-stumble { 0% { filter: brightness(0.55) saturate(0.6); } 100% { filter: none; } }
+  #game.vs-mode #vs-tug-you.stumble, #game.vs-mode #vs-tug-opp.stumble { animation: vs-tug-stumble 260ms ease-out; }
+  /* WAR FLAG - the honest cumulative lead as a chrome tick. The seam tells the FIGHT (momentum), this tells the
+     WAR (totals). Their convergence during the endgame truth-blend is the photo-finish read. */
+  #game.vs-mode #vs-tug-flag { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; z-index: 3;
+    color: var(--chrome, #dad7d2); background: var(--chrome, #dad7d2); opacity: 0.9; pointer-events: none;
+    box-shadow: 0 0 6px rgba(0,0,0,0.8); transition: background-color 260ms ease, color 260ms ease; }
+  #game.vs-mode #vs-tug-flag > i { position: absolute; top: -1px; left: 2px; width: 8px; height: 6px;
+    background: currentColor; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+  #game.vs-mode #vs-tug-flag.you { color: #ff8d96; background: #ff8d96; }
+  #game.vs-mode #vs-tug-flag.opp { color: #ffe08a; background: #ffe08a; }
   /* the always-visible "even" datum */
   #game.vs-mode #vs-tug-notch { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; transform: translateX(-50%); background: var(--chrome, #dad7d2); opacity: 0.6; }
   /* MOLTEN clash knot — white-hot core at the contact seam (the two forces grinding together). clip-path eats
@@ -2129,12 +2166,17 @@
   #game.vs-mode #vs-tug.hot.opp-tide #vs-tug-opp { filter: brightness(1.25) saturate(1.15); }
   /* spark canvas (2.4 → build128): friction sparks + molten seam core — only mounted when !fxLite. Taller (54px)
      to give the shower vertical room now the bar is 26px, and it sits ABOVE the bar (z 48) so sparks fly over it. */
-  #game.vs-mode #vs-tug-fx { position: absolute; top: 0; left: 0; width: 100%; height: 54px; z-index: 48; pointer-events: none; }
-  /* shudder on a heavy single impulse (≥0.28) */
-  @keyframes vs-tug-jolt { 0% { transform: translateY(0); } 30% { transform: translateY(1.5px); } 60% { transform: translateY(-1px); } 100% { transform: translateY(0); } }
-  #game.vs-mode #vs-tug.jolt { animation: vs-tug-jolt 110ms ease-out; }
+  /* build190: the canvas used to start at the bar's top edge, so 100% of its headroom hung uselessly BELOW and
+     every upward spark was clipped immediately. It now starts 18px above the bar. */
+  #game.vs-mode #vs-tug-fx { position: absolute; top: -18px; left: 0; width: 100%; height: 72px; z-index: 48; pointer-events: none; }
+  /* build190: the jolt was a translateY - perpendicular to the axis of the contest, so it could not express WHO
+     shoved WHOM. It now kicks along the bar, in the direction of the push. */
+  @keyframes vs-tug-jolt-l { 0% { transform: translateX(0); } 30% { transform: translateX(-2.5px); } 60% { transform: translateX(1px); } 100% { transform: translateX(0); } }
+  @keyframes vs-tug-jolt-r { 0% { transform: translateX(0); } 30% { transform: translateX(2.5px); } 60% { transform: translateX(-1px); } 100% { transform: translateX(0); } }
+  #game.vs-mode #vs-tug.jolt-l { animation: vs-tug-jolt-l 110ms ease-out; }
+  #game.vs-mode #vs-tug.jolt-r { animation: vs-tug-jolt-r 110ms ease-out; }
   /* 2.3 endgame heat — class-triggered (allowed). A blowout stays calm — that's the design. YOU=crimson, opp=gold. */
-  #game.vs-mode #vs-tug.endgame { height: 30px; transition: height 180ms ease-out; }
+  #game.vs-mode #vs-tug.endgame { height: 38px; transition: height 180ms ease-out; }
   #game.vs-mode #vs-tug.endgame #vs-tug-you { background: linear-gradient(90deg, #ff9ea4 0%, var(--crimson) 35%, rgba(255,31,46,0.15) 100%); }
   #game.vs-mode #vs-tug.endgame #vs-tug-opp { background: linear-gradient(270deg, #ffe9b0 0%, var(--gold) 35%, rgba(224,169,63,0.15) 100%); }
   @keyframes vs-knot-pulse { 0%, 100% { transform: translate(-50%,-50%) scale(1); filter: drop-shadow(0 0 10px rgba(255,240,210,0.9)); } 50% { transform: translate(-50%,-50%) scale(1.28); filter: drop-shadow(0 0 18px rgba(255,245,220,0.98)); } }
@@ -8318,7 +8360,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=490"></script>
+<script src="telemetry.js?v=491"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8497,17 +8539,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=490"></script>
-<script src="game.js?v=490"></script>
-<script src="procbg.js?v=490"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=490"></script>
-<script src="chat.js?v=490"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=490"></script>
-<script src="goals.js?v=490"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=490"></script>
-<script src="share.js?v=490"></script>
-<script src="replay.js?v=490"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=490"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=491"></script>
+<script src="game.js?v=491"></script>
+<script src="procbg.js?v=491"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=491"></script>
+<script src="chat.js?v=491"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=491"></script>
+<script src="goals.js?v=491"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=491"></script>
+<script src="share.js?v=491"></script>
+<script src="replay.js?v=491"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=491"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
