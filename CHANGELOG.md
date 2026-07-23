@@ -6260,3 +6260,58 @@ nothing). Stage 3 = the transient clip-safe chip (needs its own `#hud-np-chip` m
 `#vs-nowplaying` only exists inside a mounted MP match). Plus R6 (delete the Vibe Channel lore block)
 and the pre-existing 901-1313px grid dead band — which must NOT be fixed by shrinking the centre track.
 
+## build189 continued (?v=490) — Stage 2 (NOW PLAYING masthead) + Stage 3 (clip-safe chip) + R6
+
+Fable 5 directed the implementation calls; findings verified live and then adversarially reviewed.
+Owner approved all three open calls (HUD_BROADCAST_v1.md §6).
+
+**Stage 2 — the masthead.** Fable's key improvement on the original plan: the brand row STAYS first and
+the masthead goes directly beneath it. That still satisfies "title top-left" while making the new Timeline
+block the left rail's last `.hud-block`, so the existing `margin-top:auto` pin keeps matching with ZERO
+selector surgery — it designs the "brand-row is not a .hud-block" blocker out of existence rather than
+fixing it. Left rail is now: brand -> NOW PLAYING -> Score -> Accuracy/Max Combo -> Timeline.
+- `game.js:3544`'s single concatenated `title + ' — ' + artist` write is split into `#hud-track-title` +
+  `#hud-track-artist`. Testing the FIELDS instead of the object also kills a latent bug: bufferedProvider
+  passes `meta || {}`, so `if (session.meta)` was always true and a meta without a title printed "undefined".
+- **Score-Y invariance** is the load-bearing requirement: the title box always reserves two lines
+  (`-webkit-line-clamp:2` + `min-height: calc(2 * 1.15em)`) and the artist one (`min-height:1.3em`, and
+  `:empty{display:none}` is BANNED here), both in `em` so they track the cqi clamp. VERIFIED: score top is
+  byte-identical at 1920x1080 and 1024x768 across short / exactly-2-line / very long / empty-artist /
+  empty-both / unbroken-55-char titles. All drifts 0.00.
+- Title sizes `clamp(19px, 8cqi, 26px)` — 26px is a cap, not a fixed size; panel content varies 258-588px.
+
+**Stage 3 — the clip-safe chip (`#hud-np-chip`).** The rails are 0% of every 9:16 crop, so nothing in them
+ever reaches a Short/Reel/TikTok. This chip is the only thing that does. STATIC markup in `.game-center`
+(JS only toggles `[hidden]`/`.show`), so no multiplayer or couch teardown sweep can delete it and there is
+no mount ordering to get wrong. Three beats, then absent: run start 5s, unpause 3s, and a one-shot when
+remaining time first drops <=10s (11s window — a share-cut is almost always the climax, so this puts the
+track name in the frames that survive). Suppressed in practice and MP. Teardown lives only in `stopGame()`,
+the one choke point every end/interrupt path already reaches.
+
+**R6.** The "Vibe Channel / // SIGNAL CONTROLLER" lore block is deleted; `#hud-diff` moved to the Timeline
+block (difficulty is run-context, like elapsed time); the freed right-rail slot is deliberately left EMPTY —
+the Overdrive READY cue already lives in `#hud-od-text` 9px above. The right pin now retargets Reality
+Stability, which is intended: left rail = identity, right rail = performance, each with a pinned foot.
+
+**Adversarial review caught 5 real defects, all fixed before commit:**
+1. **[major] Mobile online MP showed the solo chip.** `multiplayer.js` splits the mount on `vsIsMobile()`
+   and the phone branch adds neither `.vs-mode` nor `#vs-nowplaying` — so BOTH original guards were
+   desktop-only and the chip painted over the `#mp-opp` card in a live phone match. Now gated on
+   `RhythmMP.isLive()` plus an `#mp-opp` check.
+2. The fade timer only dropped `.show`, leaving a live `backdrop-filter` compositing layer at opacity 0 for
+   the rest of every run — in a pass that had just deleted a text-shadow blur for that exact reason. The
+   blur now lives on `.show` only.
+3. An unpause inside the last 10s replaced the 11s outro timer with 3s, so the chip faded BEFORE the song
+   ended and the one-shot latch meant it could never return. Resume now re-arms the full window.
+4. `.hud-block .sub.bright` became dead CSS (both consumers removed by Stage 2 and R6) — deleted.
+5. The chip was permanently `aria-hidden`, and the rails are `display:none` on mobile, so a screen-reader
+   user had no track title at any point in a run. Now `role="status" aria-live="polite"`.
+
+Review confirmed clean: no stale `#hud-track` readers anywhere, `#hud-diff`'s move breaks nothing, both
+pins resolve correctly, the final-10s trigger re-arms per run and cannot fire on unknown duration or repeat,
+and no CSS specificity collisions.
+
+Verified live at 1920x1080 / 1024x768 / 390x844: chip clears the note spawn row (bottom y=56 vs spawn 147);
+mobile portrait chip sits 8px under `.mhud` and 6px above `.combo-display` (offset MEASURED against #mhud's
+real rect — `.mhud` already absorbs `env(safe-area-inset-top)`, so the chip adds it too); landscape
+suppressed; no console errors; no horizontal scroll.

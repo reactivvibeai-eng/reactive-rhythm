@@ -181,6 +181,9 @@
   // sustain (hold) state — a struck hold note keeps paying out while its lane stays pressed
   let laneDown = Array(LANE_COUNT).fill(false); // is this lane physically held right now
   let _mpStunUntil = 0, _stunHideT = 0;          // v254: MP-combat input stun (a rival's combo shock) — deadline + overlay-hide timer
+  // build189 Stage 3: the transient now-playing chip. The timer ONLY EVER HIDES — no code path may use it
+  // to show — which makes a stale timer harmless by construction. _npChipFinalShown makes the outro a one-shot.
+  let _npChipT = 0, _npChipFinalShown = false;
   let holdNote = Array(LANE_COUNT).fill(null);  // the sustain note currently being held in this lane
   let holdScored = Array(LANE_COUNT).fill(0);   // fraction [0..1] of the active sustain already paid out
   let holdSparkT = Array(LANE_COUNT).fill(0);   // spark-emit throttle while sustaining
@@ -3538,11 +3541,14 @@
 
     // update HUD meta
     $('hud-diff').textContent = DIFFICULTY[difficulty].name;
-    if (session.meta) {
-      // guard a null/empty artist exactly like the results label (game.js ~3225): only append ' — artist'
-      // when it's truthy, else show just the title (a null artist was printing the literal "Title — null").
-      $('hud-track').textContent = session.meta.artist ? (session.meta.title + ' — ' + session.meta.artist) : session.meta.title;
-    }
+    // build189 Stage 2: title and artist are now SEPARATE nodes (#hud-track-title / #hud-track-artist) feeding
+    // the NOW PLAYING masthead — one concatenated "title — artist" string could not be styled as a hierarchy,
+    // and the title is the piece a stream viewer actually needs. The em-dash separator dies with the split.
+    // Testing the FIELDS rather than the object also kills a latent bug: bufferedProvider passes `meta || {}`,
+    // so `if (session.meta)` was always true and a meta without a title printed the literal "undefined".
+    const _m = session.meta || {};
+    $('hud-track-title').textContent = _m.title || '';
+    $('hud-track-artist').textContent = _m.artist || '';
     _updatePracticeHud();   // PRACTICE: show/hide the unmistakable "not scored" tag + section/speed readout
 
     showScreen('game');
@@ -3601,6 +3607,9 @@
       const _pOff = (_practiceOn && _practiceSection) ? Math.max(0, _practiceSection.start - _practicePreroll) : undefined;   // build141: seek to a hair BEFORE the section (musical count-in) so the first note approaches from the top
       player.play(_pOff);
       state = 'playing';
+      // build189 Stage 3 — BEAT 1 of 3: the drop. Fired here in _go() rather than at the HUD-meta write so the
+      // chip never burns its 5s during the 3-2-1 count-in, and so it is immune to the post-showScreen bail-outs.
+      _npChipFinalShown = false; _npChipShow(5000);
       // build104 s1b: SEED audio-latency compensation for devices that never calibrated. Chrome reports the real
       // hardware output latency only once the context is LIVE (0/jittery at construction — hence here, not at boot).
       // A saved manual calibration (rr_offset_ms) ALWAYS wins; the seed is session-only (never persisted) and clamped
@@ -3677,6 +3686,35 @@
     }
   }
 
+  // build189 Stage 3 — show the clip-safe now-playing chip for `ms`, then fade it.
+  // The side rails are 0% of every 9:16 crop, so this chip is the ONLY thing that puts the track name in a
+  // vertical clip. It is a ceremony (three beats per run), never standing chrome.
+  function _npChipShow(ms) {
+    try {
+      if (_practiceOn) return;                                    // the practice tag owns the centre band
+      const g = $('game');
+      // MP/couch suppression. NOTE the ordering here is deliberate: RhythmMP.isLive() is the ONLY guard that
+      // holds on mobile. multiplayer.js splits the mount on vsIsMobile() and the phone branch adds neither
+      // `.vs-mode` nor #vs-nowplaying — so the two DOM checks below are desktop-only and, alone, let the solo
+      // chip paint over the #mp-opp card in a live phone match.
+      try { if (window.RhythmMP && RhythmMP.isLive && RhythmMP.isLive()) return; } catch (e) {}
+      if (document.getElementById('mp-opp')) return;              // mobile MP/tournament opponent card is mounted
+      if (g && g.classList.contains('vs-mode')) return;           // desktop split-screen (online MP and couch)
+      if (document.getElementById('vs-nowplaying')) return;       // never stack two centre chips
+      const m = session && session.meta;
+      if (!m || !m.title) return;                                 // never show an empty chip, never print "undefined"
+      const c = document.getElementById('hud-np-chip'); if (!c) return;
+      $('hud-np-chip-t').textContent = m.title;
+      $('hud-np-chip-a').textContent = m.artist || '';
+      c.hidden = false;
+      void c.offsetWidth;   // sync reflow so the opacity transition actually runs. NOT rAF — rAF is dead when
+                            // document.hidden, which would make this silently untestable in the harness.
+      c.classList.add('show');
+      clearTimeout(_npChipT);
+      _npChipT = setTimeout(function () { c.classList.remove('show'); }, ms);
+    } catch (e) {}
+  }
+
   function stopGame() {
     state = 'menu';
     _endingLock = false;   // build108: a quit/exit DURING the fail-out wipeout beat must not leave input/scoring stuck locked for the next run
@@ -3701,6 +3739,14 @@
     // v258: clear any pending MP-combat stun so a veil + dangling hide-timer can't linger past teardown (resetScoring
     // also zeroes _mpStunUntil before the next play; this is the exit-mid-stun belt-and-suspenders).
     clearTimeout(_stunHideT); _stunHideT = 0; _mpStunUntil = 0;
+    // build189 Stage 3: the chip dies with the RUN, whatever ended it. stopGame is the single choke point every
+    // end/interrupt path reaches (including beginPlay's own pre-launch stopGame, which covers rapid relaunch), so
+    // it is NOT duplicated in failRun — failRun defers endGame by 550ms and a teardown there would fire mid-wipeout.
+    try {
+      clearTimeout(_npChipT); _npChipT = 0; _npChipFinalShown = false;
+      const _nc = document.getElementById('hud-np-chip');
+      if (_nc) { _nc.classList.remove('show'); _nc.hidden = true; }
+    } catch (e) {}
     try { const _se = document.getElementById('mp-stun'); if (_se) { _se.classList.remove('show'); _se.setAttribute('aria-hidden', 'true'); } } catch (e) {}
     // build102y review fix D: the BEAT THAT ghost target dies with the RUN, whatever ended it. It was cleared only
     // in endGame(), but the pause-menu EXIT path calls stopGame() directly — the stale target (+ #ghost-target pill)
@@ -4735,6 +4781,13 @@
   function resumeGame() {
     if (state !== 'paused') return;
     _disarmRestart();
+    // build189 Stage 3 — BEAT 2 of 3: the return. Placed ABOVE the _deferredStart early-return below, so both
+    // resume exits are covered. A deferred-start resume also fires the 5s start show from _go(), which simply
+    // resets the timer — correct, not a double-show.
+    // If the outro chip is already latched we are inside the last 10s, so restore the FULL window rather
+    // than truncating it to 3s — otherwise resuming near the end kills the one moment this chip exists for,
+    // and the one-shot latch means it can never come back.
+    _npChipShow(_npChipFinalShown ? 11000 : 3000);
     // build65 (cycle-4): a pause that landed during the pre-roll never started the song → START it now (player.resume()
     // would be a no-op on a player that never played) instead of resuming.
     if (_deferredStart) { var _f = _deferredStart; _deferredStart = null; $('pause-overlay').classList.remove('show'); _f(); return; }
@@ -7342,7 +7395,17 @@
     const pct = Math.round(p * 100);
     if (pct !== _lastPct) { _lastPct = pct; const hp = $('hud-progress'); if (hp) hp.style.width = pct + '%'; const mp = $('m-progress'); if (mp) mp.style.width = pct + '%'; }   // build71: gate the per-frame layout writes on whole-percent change (also null-safe now)
     const sec = Math.floor(t);
-    if (sec !== _lastSec) { _lastSec = sec; const ht = $('hud-time'); if (ht) ht.textContent = fmtTime(Math.max(0, t)) + ' / ' + fmtTime(songDuration); }
+    if (sec !== _lastSec) {
+      _lastSec = sec; const ht = $('hud-time'); if (ht) ht.textContent = fmtTime(Math.max(0, t)) + ' / ' + fmtTime(songDuration);
+      // build189 Stage 3 — BEAT 3 of 3: the outro, and the real mission of this chip. A 9:16 share-cut is almost
+      // always the run's climax, so naming the track over the last seconds puts it in the frames that survive the
+      // crop. One-shot; the 11s hide-timer outlives the song so it never fades early — stopGame is the real
+      // terminator. Piggybacks the existing once-per-second gate, so it costs nothing per frame.
+      if (!_npChipFinalShown && state === 'playing' && songDuration > 0) {
+        const _rem = songDuration - t;
+        if (_rem > 0 && _rem <= 10) { _npChipFinalShown = true; _npChipShow(11000); }
+      }
+    }
 
     render(dt, false);
   }

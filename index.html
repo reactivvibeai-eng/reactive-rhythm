@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=489" />
+<link rel="stylesheet" href="jukebox.css?v=490" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -2700,7 +2700,89 @@
      a deliberate FOURTH typeface someone forgot to fix. Assigning it here closes the ladder gap instead of
      widening it. (#hud-time is a number and stays Oxanium — see the type-system block.) */
   .hud-block .sub { font-size: var(--rr-fs-hud-body); color: var(--ink-dim); line-height: 1.5; text-shadow: var(--rr-hud-armor); }
-  .hud-block .sub.bright { color: var(--chrome); letter-spacing: 0.04em; }
+  /* build189: `.hud-block .sub.bright` DELETED — its only two consumers were #hud-track (moved to the
+     masthead in Stage 2) and the `// SIGNAL CONTROLLER` lore line (deleted by R6). Removed rather than
+     left to mislead the next reader, per the build168 precedent this file already follows. */
+
+  /* ============ build189 Stage 2 — NOW PLAYING MASTHEAD ============
+     SCORE-Y INVARIANCE IS THE LOAD-BEARING REQUIREMENT HERE. The title box always reserves TWO lines and
+     the artist box always reserves ONE, whatever the content, so the masthead's height is a constant at a
+     given viewport width and the score below never shifts between songs. Both reservations are in `em`,
+     NOT px — the title is cqi-clamped, so a px reservation would break at panel widths where the clamp
+     lands mid-range. `:empty { display: none }` is BANNED in this block for the same reason (it is legal
+     on the transient chip below, which has no invariance duty).
+     No font-family here — the type-system authority block owns it. No animation, ever. */
+  #hud-np .np-title {
+    font-weight: 700;
+    /* the clamp the Stage 1 token comment already promised: 26px is a CAP, not a fixed size. Panel content
+       width ranges 258-588px (2.3x), so a hard 26px truncates at ordinary desktop widths. */
+    font-size: clamp(19px, 8cqi, var(--rr-fs-hud-title));
+    line-height: 1.15;
+    color: var(--chrome);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden; overflow-wrap: anywhere;   /* anywhere = an unbroken 60-char string can't blow the panel */
+    min-height: calc(2 * 1.15em);
+    text-shadow: var(--rr-hud-armor);
+  }
+  #hud-np .np-artist {
+    font-size: var(--rr-fs-hud-body); line-height: 1.3; min-height: 1.3em;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-shadow: var(--rr-hud-armor);
+  }
+
+  /* ============ build189 Stage 3 — TRANSIENT NOW-PLAYING CHIP ============
+     WHY THIS EXISTS: the side rails are 62.9% of every 16:9 frame and 0% of every 9:16 crop, at every
+     resolution. Nothing in the rail ever reaches a TikTok/Short/Reel — so a vertical clip of this game
+     could not name the track it was promoting. This chip is the only element that does.
+     It is a CEREMONY, not chrome: it appears at three narrative beats (the drop, the return, the outro)
+     and is absent otherwise, which keeps faith with the owner's "strike line + multiplier only" decree.
+     STATIC markup by design — never created or destroyed by JS — so multiplayer's unmount sweep and
+     couch's teardown cannot delete it and there is no mount ordering to get wrong. JS only toggles
+     [hidden] and .show. z-52 = above the z-50 scanline, matching Stage 0's rails-to-51 ruling. */
+  #hud-np-chip {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+    position: absolute; left: 50%; top: 8px; transform: translateX(-50%); z-index: 52;
+    pointer-events: none; max-width: 72%; padding: 4px 16px; border-radius: 999px; text-align: center;
+    background: linear-gradient(180deg, rgba(12,8,8,0.72), rgba(12,8,8,0.4));
+    border: 1px solid rgba(218,215,210,0.18);
+    box-shadow: 0 2px 10px -4px rgba(0,0,0,0.6);
+    opacity: 0; transition: opacity 0.3s ease;   /* the ONLY animation on this element */
+  }
+  /* backdrop-filter lives on .show ONLY: the hide timer just drops the class, so an unscoped blur would
+     keep a compositing layer alive at opacity 0 for the whole remaining run — the same always-on cost this
+     pass just deleted a text-shadow blur to avoid. */
+  #hud-np-chip.show { opacity: 1; backdrop-filter: blur(2px); }
+  #hud-np-chip[hidden] { display: none; }
+  #hud-np-chip .np-chip-t {
+    font-weight: 700; font-size: var(--rr-fs-hud-body); letter-spacing: 0.05em;
+    color: #ffe7dc; text-transform: uppercase;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-shadow: var(--rr-hud-armor);
+  }
+  #hud-np-chip .np-chip-a {
+    font-size: var(--rr-fs-hud-label); letter-spacing: 0.1em; color: var(--ink-dim); text-transform: uppercase;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-shadow: var(--rr-hud-armor);
+  }
+  #hud-np-chip .np-chip-a:empty { display: none; }   /* legal HERE — the chip has no height-invariance duty */
+  html.rr-reduce-motion #hud-np-chip { transition: none; }
+  /* Mobile portrait: the rails are display:none and .mhud owns the top band, so the chip drops BELOW it.
+     Offset is measured against #mhud's real rect, not arithmetic. */
+  /* Mobile portrait: MEASURED, not derived. #mhud runs y 0 -> 81 at 390x844 and already absorbs the notch
+     itself (`padding: calc(env(safe-area-inset-top,0px) + 12px) ...`), so its height GROWS with the inset —
+     the chip must add the same inset or it collides on a notched phone. 89px = mhud's 81px + 8px of air.
+     The tighter padding is load-bearing too: .combo-display starts at y=135, and at the desktop padding the
+     chip ran to y=137 and clipped it. */
+  @media (max-width: 900px) {
+    #hud-np-chip { max-width: 86%; top: calc(env(safe-area-inset-top, 0px) + 89px); padding: 3px 12px; gap: 0; }
+    /* explicit tight leading: at the default `normal` line-height the chip measured 46px and landed exactly
+       on .combo-display's y=135 with a 0px gap — one rounding difference on a real device and they touch. */
+    #hud-np-chip .np-chip-t, #hud-np-chip .np-chip-a { line-height: 1.15; }
+  }
+  /* Mobile landscape: the gap between .mhud and the combo display effectively vanishes, and a 9:16 clip is
+     portrait by definition — so the chip has no job here. */
+  @media (max-width: 900px) and (orientation: landscape) { #hud-np-chip { display: none; } }
 
   /* progress / stability / overdrive METERS — machined inset track + glossy energy fill (game-asset feel) */
   .song-progress {
@@ -2756,6 +2838,10 @@
      #hud-diff, which this pass raised 11 -> 16px; left on JetBrains Mono they would have shipped a
      legible fourth typeface. Oxanium is for NUMBERS, so #hud-time is excluded and sits below. */
   .hud-block .sub,
+  /* build189 Stage 2/3: a song title is WORDS, so Chakra Petch — Oxanium is for numbers. (#vs-nowplaying's
+     Oxanium title is grandfathered legacy, not a precedent.) These MUST live here: a font-family declared
+     in the .np-* rules themselves is dead on arrival, because this block wins at equal specificity. */
+  #hud-np .np-title, #hud-np .np-artist, #hud-np-chip .np-chip-t, #hud-np-chip .np-chip-a,
   .mhud .m-score-lab, .mhud .m-acc-lab { font-family: 'Chakra Petch', sans-serif; }
   .hud-block .val, .jc .num, #hud-score, #hud-combo, #hud-time,
   .gauge-badge, .mhud .m-score, .mhud .m-acc { font-family: 'Oxanium', sans-serif; letter-spacing: 0.005em; }
@@ -7879,6 +7965,22 @@
         <span class="brand-name" style="font-size: 10px;">REACTIVVIBEAI.COM</span>
       </div>
 
+      <!-- build189 Stage 2 — NOW PLAYING masthead. The song title is the one string on screen that
+           MONETIZES a stream (it is how a viewer discovers a track and how the catalog gets credit) and
+           it used to be the smallest text in the game, bottom-pinned into the weakest corner. It now sits
+           second, in the panel's strongest scrim band. The brand row deliberately stays FIRST: it is 10px
+           and quiet, it carries the Overdrive gold-stamp state (#game .hud-panel.left .brand-row.od-stamp),
+           and leaving it put means the Timeline block below remains the panel's last .hud-block — so the
+           existing bottom pin keeps matching with ZERO selector surgery. Title+artist are SEPARATE nodes:
+           game.js used to write one concatenated "title — artist" string, which cannot be styled as a
+           hierarchy. Both boxes reserve fixed height (see .np-title/.np-artist) so the SCORE'S Y POSITION
+           stays invariant across all 852 tracks — a mid-run glance target must not move between songs. -->
+      <div class="hud-block" id="hud-np">
+        <span class="label">Now Playing</span>
+        <span class="np-title" id="hud-track-title">Lunar Waves</span>
+        <span class="np-artist" id="hud-track-artist">Kunning Klash</span>
+      </div>
+
       <div class="hud-block">
         <span class="label">Score</span>
         <span class="val" id="hud-score">0</span>
@@ -7896,11 +7998,19 @@
         </div>
       </div>
 
+      <!-- build189 Stage 2 + R6 — TIMELINE. Was "Track": the title/artist moved up to the masthead and
+           this block keeps what it always really was — where you are in the run. It stays the left rail's
+           LAST .hud-block so `.hud-panel.left > .hud-block:last-child { margin-top: auto }` still pins it
+           to the foot, unchanged. #hud-diff arrives here from the deleted right-rail "Vibe Channel" lore
+           block (R6): difficulty is run-context, exactly like elapsed time. Its single writer
+           (game.js:3540) targets by id and needs no change. Composition after this pass — LEFT rail =
+           identity (brand -> what's playing -> how you're doing -> where you are); RIGHT rail =
+           performance (combo -> judgments -> overdrive -> stability). -->
       <div class="hud-block">
-        <span class="label">Track</span>
-        <span class="sub bright" id="hud-track">Lunar Waves — Kunning Klash</span>
+        <span class="label">Timeline</span>
         <div class="song-progress"><i id="hud-progress"></i></div>
         <span class="sub" id="hud-time">0:00 / 0:00</span>
+        <span class="sub" id="hud-diff">PULSE — Medium</span>
       </div>
     </div>
 
@@ -7935,6 +8045,16 @@
         <span class="pt-lab">PRACTICE</span>
         <span class="pt-read" id="practice-tag-read">FULL SONG · 1×</span>
         <span class="pt-note">not scored</span>
+      </div>
+
+      <!-- build189 Stage 3 — the clip-safe now-playing chip. STATIC markup on purpose (see CSS): JS only
+           toggles [hidden]/.show, so no teardown path in multiplayer.js or couch.js can ever delete it and
+           there is no mount ordering to get wrong. Lives in .game-center (not #game) so it shares the
+           playfield's coordinate space and the mobile safe-area math holds. Measured: at 1080p it occupies
+           y 8-56 while the note SPAWN row is y=147 — it never occludes a note. -->
+      <div class="np-chip" id="hud-np-chip" role="status" aria-live="polite" hidden>
+        <span class="np-chip-t" id="hud-np-chip-t"></span>
+        <span class="np-chip-a" id="hud-np-chip-a"></span>
       </div>
 
       <!-- live multiplier (left) + overdrive (right) gauges -->
@@ -8021,11 +8141,14 @@
         <span class="sub" id="stability-text">STABLE · 100%</span>
       </div>
 
-      <div class="hud-block">
-        <span class="label">Vibe Channel</span>
-        <span class="sub bright">// SIGNAL CONTROLLER</span>
-        <span class="sub" id="hud-diff">PULSE — Medium</span>
-      </div>
+      <!-- build189 R6 — the "Vibe Channel / // SIGNAL CONTROLLER" block was DELETED here. It was
+           decoration wearing an instrument's clothes, and at the new 16px readout size it cost real
+           estate. #hud-diff moved to the left rail's Timeline block. The freed slot is deliberately
+           left EMPTY — re-filling a hole that R6 exists to open would repeat the original sin, and the
+           Overdrive READY cue already has a home in #hud-od-text inside the Overdrive block above.
+           CONSEQUENCE (intended): `.hud-panel.right > .hud-block:last-child` now retargets Reality
+           Stability, bottom-pinning it as the rail's foot — mirroring the left rail's pinned Timeline.
+           Do not add a compensating rule. -->
     </div>
 
     <div class="footer-hint">
@@ -8195,7 +8318,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=489"></script>
+<script src="telemetry.js?v=490"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8374,17 +8497,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=489"></script>
-<script src="game.js?v=489"></script>
-<script src="procbg.js?v=489"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=489"></script>
-<script src="chat.js?v=489"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=489"></script>
-<script src="goals.js?v=489"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=489"></script>
-<script src="share.js?v=489"></script>
-<script src="replay.js?v=489"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=489"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=490"></script>
+<script src="game.js?v=490"></script>
+<script src="procbg.js?v=490"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=490"></script>
+<script src="chat.js?v=490"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=490"></script>
+<script src="goals.js?v=490"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=490"></script>
+<script src="share.js?v=490"></script>
+<script src="replay.js?v=490"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=490"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */
