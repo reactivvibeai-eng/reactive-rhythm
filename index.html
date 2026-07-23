@@ -40,7 +40,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;800&family=JetBrains+Mono:wght@300;400;500;700&family=Oxanium:wght@500;600;700;800&family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@600;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet" />
 <!-- build118 p2: Orbitron/Rajdhani are OPT-IN cosmetic name-fonts (unlockable, applied only via renderPlayerName) — not used anywhere in base UI chrome, which stays Oxanium/Chakra Petch/Unbounded per brand. -->
-<link rel="stylesheet" href="jukebox.css?v=488" />
+<link rel="stylesheet" href="jukebox.css?v=489" />
 <style>
   :root {
     /* ===== RR DESIGN TOKENS (U-1 / U-4) — single source of truth =====
@@ -75,6 +75,36 @@
     --rr-fs-md: 14px;   /* body    — list titles, button text, primary control labels */
     --rr-fs-lg: 18px;   /* heading — card / section titles, sheet & modal headers */
     --rr-fs-xl: 24px;   /* display — large Unbounded headers (fixed, non-clamp) */
+
+    /* ---- build189 · HUD BROADCAST RUNGS (HUD_BROADCAST_v1 §3.1) ----------------------------------
+       The in-game HUD is consumed as VIDEO, not just as a screen: a 1080p capture re-encoded to 720p
+       and watched on a phone. Measured, the old sizes were 0.83-1.02% of frame height and rendered at
+       2.0-2.5px to a phone viewer — the song title was literally sub-pixel. These rungs are sized
+       against that pipeline, not against a desktop monitor. Do NOT hand-set px on a HUD rule; add a
+       rung here so the game keeps ONE type lever.
+         label 12px — redundant context under a number; 0.14em tracking (wide tracking dies first
+                      under h.264). NOT 14px: at 14 the label-to-readout step collapses to 1.14x and
+                      the instrument cluster reads as a wall of text.
+         body  16px — THE VIEWER FLOOR. 1.48% of frame height ~= broadcast caption minimum; survives a
+                      720p re-encode at 10.7px. Any string a viewer is expected to read sits >= this.
+         title 26px — cap, not a fixed size (see the cqi clamp on #hud-track-title).
+         stat  28px — second-read numbers (accuracy, max combo).
+         score 56px — cap for the hero numbers. Also the recorded pre-regression high-water mark. */
+    --rr-fs-hud-label: 12px;
+    --rr-fs-hud-body:  16px;
+    --rr-fs-hud-title: 26px;
+    --rr-fs-hud-stat:  28px;
+    --rr-fs-hud-score: 56px;
+    /* static glyph armor — the .mhud shadow, promoted to a token. Static, never animated: per-frame
+       glow smears under compression, which is the exact failure mode being fixed here. */
+    --rr-hud-armor: 0 1px 2px rgba(0,0,0,0.85);
+    /* The side-rail scrim, tokenized (build189). It was previously inlined in `.hud-panel { background: }`
+       ONLY, which meant the three [data-rrtheme] watermark rules — which set `background-image` longhand —
+       silently ERASED it. Those are the levels with the busiest 1080p backdrops, so the panels with the
+       weakest scrim were exactly the ones that needed it most. Themed rules now list the watermark and
+       this var as two layers. Keep the 0.64 bottom stop: raising it would bury the authored level videos
+       (~36% -> ~15% visible through the panels), and the vignette easing in Stage 0 is the real fix. */
+    --rr-hud-scrim: linear-gradient(180deg, rgba(14,7,8,0.92), rgba(20,10,11,0.64));
     /* MOTION (U-4): three duration tokens + one easing pair.
        ease-out = enter (settle), ease-in = exit. reduce-motion collapses both. */
     --rr-t-fast: 140ms;
@@ -177,10 +207,19 @@
     position: fixed; inset: 0;
     background:
       repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px),
-      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,var(--rr-vig, 0.7)) 100%);
     pointer-events: none;
     z-index: 1000;
   }
+  /* build189 (HUD_BROADCAST_v1 Stage 0): this z-1000 full-viewport vignette is the #1 measured attacker on
+     HUD legibility — it composites OVER the side rails and drags the 11px track title from 6.74:1 down to
+     3.19:1 and #hud-time to 1.58:1. It is NOT deleted on the game screen (it frames the playfield, and every
+     authored 1080p level + guitar skin was art-directed inside it — killing it washes out the outer ~30% of
+     each level). Instead it EASES to 0.25 while a run is live, which restores rail contrast and keeps the
+     frame. Hook = the `rr-ingame` class set in showScreen() (game.js), matching the existing
+     rr-reduce-motion / rr-procbg-on pattern — no :has (older app engine). Covers 'countdown' too so the
+     vignette doesn't snap between the count-in and the first note. */
+  html.rr-ingame { --rr-vig: 0.25; }
 
   #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; }   /* dvh = real mobile viewport (excludes browser chrome) */
   .screen {
@@ -1742,19 +1781,31 @@
      print in hot pink. Pure CSS data-SVGs; Quick Play untouched. */
   #game.rr-lvl-themed[data-rrtheme="bone"] .hud-panel {
     box-shadow: inset 0 0 28px rgba(224, 169, 63, 0.07);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23e0a93f' stroke-width='2.4' opacity='0.10'%3E%3Cellipse cx='32' cy='28' rx='17' ry='15'/%3E%3Ccircle cx='25' cy='26' r='4.4'/%3E%3Ccircle cx='39' cy='26' r='4.4'/%3E%3Cpath d='M26 41h12M27 41v6M32 41v7M37 41v6'/%3E%3C/g%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: 50% calc(100% - 18px); background-size: 56px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23e0a93f' stroke-width='2.4' opacity='0.10'%3E%3Cellipse cx='32' cy='28' rx='17' ry='15'/%3E%3Ccircle cx='25' cy='26' r='4.4'/%3E%3Ccircle cx='39' cy='26' r='4.4'/%3E%3Cpath d='M26 41h12M27 41v6M32 41v7M37 41v6'/%3E%3C/g%3E%3C/svg%3E"), var(--rr-hud-scrim);
+    /* build189: two layers now — watermark ON TOP of the restored scrim. Before this, the longhand
+       `background-image` above replaced the panel gradient outright and these levels ran scrim-less. */
+    background-repeat: no-repeat, no-repeat;
+    background-position: 50% calc(100% - 18px), 0 0;
+    background-size: 56px, 100% 100%;
   }
   #game.rr-lvl-themed[data-rrtheme="pink"] .hud-panel {
     box-shadow: inset 0 0 28px rgba(255, 95, 162, 0.08);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ff5fa2' opacity='0.11'%3E%3Cellipse cx='32' cy='38' rx='12' ry='10'/%3E%3Ccircle cx='18' cy='26' r='5'/%3E%3Ccircle cx='27' cy='20' r='5'/%3E%3Ccircle cx='37' cy='20' r='5'/%3E%3Ccircle cx='46' cy='26' r='5'/%3E%3C/g%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: 50% calc(100% - 18px); background-size: 54px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23ff5fa2' opacity='0.11'%3E%3Cellipse cx='32' cy='38' rx='12' ry='10'/%3E%3Ccircle cx='18' cy='26' r='5'/%3E%3Ccircle cx='27' cy='20' r='5'/%3E%3Ccircle cx='37' cy='20' r='5'/%3E%3Ccircle cx='46' cy='26' r='5'/%3E%3C/g%3E%3C/svg%3E"), var(--rr-hud-scrim);
+    /* build189: two layers now — watermark ON TOP of the restored scrim. Before this, the longhand
+       `background-image` above replaced the panel gradient outright and these levels ran scrim-less. */
+    background-repeat: no-repeat, no-repeat;
+    background-position: 50% calc(100% - 18px), 0 0;
+    background-size: 54px, 100% 100%;
   }
   /* ember (Carnival of Souls) = the carnival strongman BELL motif in ember-orange */
   #game.rr-lvl-themed[data-rrtheme="ember"] .hud-panel {
     box-shadow: inset 0 0 28px rgba(255, 122, 74, 0.08);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ff7a4a' stroke-width='2.4' opacity='0.12'%3E%3Cpath d='M32 14c-8 0-13 6-13 16 0 6-2 9-5 12h36c-3-3-5-6-5-12 0-10-5-16-13-16z'/%3E%3Cpath d='M28 42a4 4 0 0 0 8 0'/%3E%3Cpath d='M32 9v5'/%3E%3C/g%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: 50% calc(100% - 18px); background-size: 52px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23ff7a4a' stroke-width='2.4' opacity='0.12'%3E%3Cpath d='M32 14c-8 0-13 6-13 16 0 6-2 9-5 12h36c-3-3-5-6-5-12 0-10-5-16-13-16z'/%3E%3Cpath d='M28 42a4 4 0 0 0 8 0'/%3E%3Cpath d='M32 9v5'/%3E%3C/g%3E%3C/svg%3E"), var(--rr-hud-scrim);
+    /* build189: two layers now — watermark ON TOP of the restored scrim. Before this, the longhand
+       `background-image` above replaced the panel gradient outright and these levels ran scrim-less. */
+    background-repeat: no-repeat, no-repeat;
+    background-position: 50% calc(100% - 18px), 0 0;
+    background-size: 52px, 100% 100%;
   }
   /* the crimson hero readouts retint to the level accent */
   #game.rr-lvl-themed .hud-block .val.crimson {
@@ -2400,7 +2451,7 @@
     pointer-events: none;
   }
   .mhud .m-score-wrap { display: flex; flex-direction: column; gap: 1px; }
-  .mhud .m-score-lab { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.22em; color: var(--silver); text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.85); }
+  .mhud .m-score-lab { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.22em; color: var(--silver); text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.85); }
   .mhud .m-score { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 26px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
   .mhud .m-mid { display: flex; flex-direction: column; align-items: center; gap: 2px; }
   .mhud .m-acc { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; color: var(--silver); font-variant-numeric: tabular-nums; }
@@ -2490,7 +2541,11 @@
   .od-bar { position: relative; background: rgba(8,4,8,0.6); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; overflow: hidden; }
   #hud-od-fill { display: block; height: 100%; width: 0%; border-radius: 6px; background: linear-gradient(90deg, #e0a93f, #ffd98a); box-shadow: 0 0 10px rgba(224,169,63,0.6); transition: width 0.2s ease; }
   .od-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 2px), rgba(8,4,8,0.95) calc(25% - 2px), rgba(8,4,8,0.95) 25%); }
-  .od-hint { color: var(--ink-dim); font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+  /* build189: `.label` is display:flex with a 6px rotated diamond ::before, so if this hint WRAPS you get
+     a two-line label with the diamond floating against 1.5 lines. At the new 12px rung the row measures
+     ~242px against a 258px worst-case content width — it fits, but with no margin, so truncate rather
+     than reflow if a narrower panel ever appears. */
+  .od-hint { color: var(--ink-dim); font-weight: 400; letter-spacing: 0.04em; text-transform: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #hud-od-text { color: var(--ink-dim); }
   .hud-block.ready .od-bar { border-color: #ffe8b0; box-shadow: 0 0 16px rgba(255,216,138,0.85); animation: odpulse 0.7s ease-in-out infinite; }
   .hud-block.ready #hud-od-fill { background: linear-gradient(90deg, #ffd98a, #fff6e0); }
@@ -2565,9 +2620,17 @@
   .hud-panel {
     padding: 30px 26px;
     display: flex; flex-direction: column; gap: 24px;
-    background: linear-gradient(180deg, rgba(14,7,8,0.92), rgba(20,10,11,0.64));
+    background: var(--rr-hud-scrim);
     backdrop-filter: blur(4px);   /* build73: side-panel readability — was blur(10px). The level backdrop already self-blurs 8px (#game-bg filter), so the compounded ~18px made the side stats muddy. 4px + a slightly denser scrim = crisp, readable stats while the backdrop stays soft. */
     position: relative;
+    /* build189 (HUD_BROADCAST_v1 Stage 0): lift the rails above `.game-screen::after` (the 1px-period red
+       scanline at z-50). That scanline is pathological h.264 input — it burns bitrate as high-frequency
+       noise sitting directly on 9-11px glyphs, which is why the HUD reads as mush on a stream re-encode.
+       51 (not 1001) is deliberate: the pause overlay is z-100 inside a position:relative .game-center so it
+       never overlapped the rails anyway, and #mpx-ring (z-340, right:18px bottom:18px) sits UNDER the right
+       panel — a blanket high z-index would bury it. The scanline stays on the playfield where the CRT
+       flavor belongs. */
+    z-index: 51;
   }
   .hud-panel.left { border-right: 1px solid var(--line); }
   .hud-panel.right { border-left: 1px solid var(--line); }
@@ -2575,14 +2638,22 @@
   /* paired stats read as an instrument cluster, not a lonely stack */
   .hud-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
-  .hud-block { display: flex; flex-direction: column; gap: 9px; position: relative; }
+  /* build189: container-type makes each block a query container so the hero numbers and the track title
+     can size in `cqi` (see #hud-score / #hud-track-title). This is the codebase's own proven overflow
+     answer — the same mechanism already shipped on .vs-val and #mp-opp .mo-score — and it beats a fixed
+     px + `overflow:hidden`, which SILENTLY CLIPS. Panel content width varies 258-588px (a 2.3x range)
+     across viewports, so a hard 56px score would truncate at the narrow end with no visual warning. */
+  .hud-block { display: flex; flex-direction: column; gap: 9px; position: relative; container-type: inline-size; }
   /* anchor each panel's last block to the bottom — fills the height on purpose */
   .hud-panel.left > .hud-block:last-child,
   .hud-panel.right > .hud-block:last-child { margin-top: auto; }
   .hud-block .label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; letter-spacing: 0.3em;
+    font-family: 'JetBrains Mono', monospace;   /* DEAD — the type-system block below wins (Chakra Petch) */
+    /* build189: 10px -> 12px, and tracking 0.3em -> 0.14em. The tracking cut matters as much as the size:
+       wide letter-spacing is the first thing h.264 destroys, and it was also eating measure for no gain. */
+    font-size: var(--rr-fs-hud-label); letter-spacing: 0.14em;
     color: var(--ink-dim); text-transform: uppercase;
+    text-shadow: var(--rr-hud-armor);
     display: flex; align-items: center; gap: 8px;
   }
   /* crimson signal diamond before every label */
@@ -2592,23 +2663,43 @@
     box-shadow: 0 0 8px rgba(255,31,46,0.7);
   }
   .hud-block .val {
-    font-family: 'Unbounded', sans-serif;
+    /* build189 §7: the `font-family: 'Unbounded'` that stood here was DEAD — the type-system block below
+       shadows it with Oxanium. Deleted rather than left to mislead the next reader (build168 §4.2 precedent). */
     font-weight: 700;
-    font-size: 44px;
+    /* build189: 44px -> a 40-56px clamp. 56 is the cap (and the recorded pre-regression high-water mark);
+       the clamp is what keeps it honest in the narrow-panel case that `overflow:hidden` used to hide by
+       silently truncating. NOTE: `overflow:hidden` does NOT clip an element's own transform, and
+       `.pop-big` scales 1.34x — at a hard 56px a popped "9,999,999" measured 349px and ate the panel's
+       entire right padding. The clamp solves the pop overflow too. */
+    /* 20cqi (not 22) is measured, not guessed: Oxanium tabular renders ~4.646px of width per 1px of
+       font-size for "9,999,999", so a 7-digit score needs fs <= 0.215 x the container to fit. At the
+       901-1240px band the score block is only 247px, where 22cqi produced 54.3px = 252.5px of text in
+       247px of box — a silent clip. 20cqi lands 49.4px = 229px and fits with margin at every width. */
+    font-size: clamp(34px, 20cqi, var(--rr-fs-hud-score));
     line-height: 0.95;
     letter-spacing: -0.02em;
     color: var(--ink);
     font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 24px rgba(255,255,255,0.07);
+    /* build189: was `0 0 24px rgba(255,255,255,0.07)` — a 24px blur radius on an element game.js rewrites
+       EVERY FRAME during the score roll-up. Blur cost scales with painted area, so at the new size it got
+       ~1.6x more expensive to render a glow that is invisible at 7% alpha. Swapped for the static 1px
+       armor, which is what actually survives a stream re-encode. */
+    text-shadow: var(--rr-hud-armor);
     /* build108 s3a (sanity pass alongside the MP score-bleed fix): the side panel is normally wide enough that
        a fixed 44px never overflows, but this is a hard safety net — a long score/combo can never bleed out of
        the HUD block regardless of panel width. No visual change at normal sizes (44px is already < 100cqi here). */
     max-width: 100%; white-space: nowrap; overflow: hidden;
   }
-  .hud-block .val.small { font-size: 24px; font-weight: 600; }
+  .hud-block .val.small { font-size: var(--rr-fs-hud-stat); font-weight: 600; }   /* build189: 24 -> 28px (accuracy, max combo) */
   .hud-block .val.crimson { color: var(--crimson); text-shadow: 0 0 26px rgba(255,31,46,0.45); }
   .hud-block .val.chrome { color: var(--chrome); }   /* build168 §4.3: was `.val.cyan` — a legacy name from the banned palette. `.val.green` (→gold) sat beside it, unused by any markup or script; deleted rather than renamed. */
-  .hud-block .sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); line-height: 1.55; }
+  /* build189: 11px -> 16px, THE VIEWER FLOOR. This tier carries #hud-od-text (the Overdrive READY prompt —
+     the single most action-critical string in the game, previously 11px dim mono), #stability-text and
+     #hud-diff. The family is now Chakra Petch via the type-system block below: at 11px JetBrains Mono read
+     as instrument-telemetry texture and vanished, but at a legible 16px an unconverted mono face reads as
+     a deliberate FOURTH typeface someone forgot to fix. Assigning it here closes the ladder gap instead of
+     widening it. (#hud-time is a number and stays Oxanium — see the type-system block.) */
+  .hud-block .sub { font-size: var(--rr-fs-hud-body); color: var(--ink-dim); line-height: 1.5; text-shadow: var(--rr-hud-armor); }
   .hud-block .sub.bright { color: var(--chrome); letter-spacing: 0.04em; }
 
   /* progress / stability / overdrive METERS — machined inset track + glossy energy fill (game-asset feel) */
@@ -2646,8 +2737,10 @@
   .judge-bar .miss    { background: #ff1f2e; }
   .judge-counters { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 16px; }
   .jc { display: flex; flex-direction: column; gap: 3px; }
-  .jc .lab { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; color: var(--ink-dim); }
-  .jc .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 21px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  /* build189: 9px -> 12px (the hard floor; 9px was 0.83% of frame height = ~2px to a phone viewer) and
+     counts 21 -> 24px. Tracking 0.2em -> 0.14em to match the label rung. */
+  .jc .lab { font-size: var(--rr-fs-hud-label); letter-spacing: 0.14em; color: var(--ink-dim); text-shadow: var(--rr-hud-armor); }
+  .jc .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 24px; color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: var(--rr-hud-armor); }
   .jc.perfect .num { color: #dad7d2; }
   .jc.great .num { color: var(--amber); }
   .jc.good .num { color: #ff6b78; }
@@ -2655,9 +2748,16 @@
 
   /* ============ GAME-HUD TYPE SYSTEM (instrument fonts, not web fonts) ============ */
   /* readouts use Oxanium ("the scoreboard of a video game"); labels use Chakra Petch */
+  /* THIS BLOCK IS THE FONT-FAMILY AUTHORITY. It sits later in the sheet at equal specificity, so the
+     font-family declared in each element's own rule above is DEAD. Edit families HERE — a change anywhere
+     else silently no-ops. (build189 learned this the expensive way during the audit.) */
   .hud-block .label, .jc .lab, .gauge-lab,
+  /* build189: `.hud-block .sub` joins the label face. It governs #hud-od-text / #stability-text /
+     #hud-diff, which this pass raised 11 -> 16px; left on JetBrains Mono they would have shipped a
+     legible fourth typeface. Oxanium is for NUMBERS, so #hud-time is excluded and sits below. */
+  .hud-block .sub,
   .mhud .m-score-lab, .mhud .m-acc-lab { font-family: 'Chakra Petch', sans-serif; }
-  .hud-block .val, .jc .num, #hud-score, #hud-combo,
+  .hud-block .val, .jc .num, #hud-score, #hud-combo, #hud-time,
   .gauge-badge, .mhud .m-score, .mhud .m-acc { font-family: 'Oxanium', sans-serif; letter-spacing: 0.005em; }
   #judge-flash { font-family: 'Oxanium', sans-serif; font-weight: 800; letter-spacing: 0.02em; }
   #countdown { font-family: 'Oxanium', sans-serif; }
@@ -2666,13 +2766,17 @@
   #hud-score.pop { animation: rrScorePop 0.22s ease-out; }
   #hud-score.pop-big { animation: rrScorePopBig 0.4s cubic-bezier(.2,1.5,.35,1); }
   /* build85 (Phase 3.1): per-song BEST chip under the live Score (Score stays dominant) */
-  #hud-best { display: block; margin-top: 2px; font-family: 'Oxanium', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: rgba(224,169,63,0.85); text-shadow: 0 0 10px rgba(224,169,63,0.25); }
+  #hud-best { display: block; margin-top: 3px; font-family: 'Oxanium', sans-serif; font-size: var(--rr-fs-hud-body); font-weight: 700; letter-spacing: 0.08em; color: rgba(224,169,63,0.9); text-shadow: var(--rr-hud-armor); }   /* build189: 11 -> 16px (viewer floor); the 10px gold glow gave way to the static armor */
   #hud-best[hidden] { display: none; }
   #hud-best.beaten { color: var(--crimson); text-shadow: 0 0 12px rgba(255,31,46,0.4); }
   @keyframes rrScorePop { 0% { transform: scale(1); } 38% { transform: scale(1.13); } 100% { transform: scale(1); } }
+  /* build189: peak 1.34 -> 1.18. `overflow:hidden` on .val clips DESCENDANTS, never the element's own
+     transform, so at the narrow-panel width a popped score was the one thing that could spill out of
+     the rail and onto the playfield. 1.18 keeps even a 7-digit score inside the panel at 1024px while
+     still reading as a punch at 1920px, where there is 550px of room. */
   @keyframes rrScorePopBig {
     0%   { transform: scale(1);    text-shadow: none; }
-    28%  { transform: scale(1.34); text-shadow: 0 0 20px rgba(255,210,90,0.95), 0 0 8px rgba(255,80,90,0.85); }
+    28%  { transform: scale(1.18); text-shadow: 0 0 20px rgba(255,210,90,0.95), 0 0 8px rgba(255,80,90,0.85); }
     100% { transform: scale(1);    text-shadow: none; }
   }
   html.rr-reduce-motion #hud-score.pop, html.rr-reduce-motion #hud-score.pop-big { animation: none; }
@@ -8091,7 +8195,7 @@
 
 <!-- ===== TELEMETRY — load EARLY (after RHYTHM_CONFIG, before game.js) so it captures boot errors.
      Consent-gated: buffers locally until the player accepts; degrades silently if the backend is absent. ===== -->
-<script src="telemetry.js?v=488"></script>
+<script src="telemetry.js?v=489"></script>
 <script>
   // app_load funnel event (the 'load' event in TELEMETRY_BACKEND_BRIEF.md). ref = where they came from,
   // returning = has this device played before. Buffers until consent; flushes on accept. NON-PII.
@@ -8270,17 +8374,17 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 
-<script src="assets/fx/fx-player.js?v=488"></script>
-<script src="game.js?v=488"></script>
-<script src="procbg.js?v=488"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
-<script src="jukebox.js?v=488"></script>
-<script src="chat.js?v=488"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
-<script src="catalog.js?v=488"></script>
-<script src="goals.js?v=488"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
-<script src="multiplayer.js?v=488"></script>
-<script src="share.js?v=488"></script>
-<script src="replay.js?v=488"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
-<script src="couch.js?v=488"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
+<script src="assets/fx/fx-player.js?v=489"></script>
+<script src="game.js?v=489"></script>
+<script src="procbg.js?v=489"></script><!-- build66: procedural music-reactive backdrops (reads window.RhythmGame; fails soft if it loads late) -->
+<script src="jukebox.js?v=489"></script>
+<script src="chat.js?v=489"></script><!-- build111: shared text-chat filter (window.RhythmChat) — MUST load before catalog.js and multiplayer.js -->
+<script src="catalog.js?v=489"></script>
+<script src="goals.js?v=489"></script><!-- build110: XP/Level/Streak/Daily+Weekly Goals ledger — pure localStorage, no DOM. See CLAUDE.md. -->
+<script src="multiplayer.js?v=489"></script>
+<script src="share.js?v=489"></script>
+<script src="replay.js?v=489"></script><!-- RIFT REPLAY: shareable ~6s peak-combo clip (window.RhythmReplay); wired via game.js init/tick/reset/offerOnResults. Fails soft. -->
+<script src="couch.js?v=489"></script><!-- build99j: LOCAL couch split-screen co-op — claim flow + P2 shadow-scorer (RhythmGame.createEngine) + live 2nd deck + verdict (inert until invoked via ?couch=1 / MP "Local versus") -->
 <script>
 /* hub tile key-art loader (build10) — probes assets/hub/<tile>.jpg and dresses the tile
    only when the file really loads; missing art = the tile keeps its build8 living look. */

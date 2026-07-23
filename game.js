@@ -624,6 +624,12 @@
     // map, so a lingering OVERLAY (how-to / levels / leaderboard / store / profile / settings / start)
     // would otherwise stay active ON TOP of the game — the "playing kicks me back" bug. Close them all.
     try { var tgt = screens[name]; document.querySelectorAll('.screen.active').forEach(function (el) { if (el !== tgt) el.classList.remove('active'); }); } catch (e) {}
+    // build189 (HUD_BROADCAST_v1 Stage 0): `rr-ingame` eases the z-1000 body::before vignette 0.7 -> 0.25
+    // while a run is live. That vignette measured as the single worst attacker on HUD legibility — it
+    // composites OVER the side rails and drops the track title to 3.19:1 and #hud-time to 1.58:1. Covers
+    // 'countdown' so it doesn't snap between the count-in and the first note. Set at this one choke point
+    // that every entry AND exit path already flows through, so no teardown path can leak it.
+    try { document.documentElement.classList.toggle('rr-ingame', name === 'game' || name === 'countdown'); } catch (e) {}
     state = name === 'game' ? 'playing' : name;
   }
 

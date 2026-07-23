@@ -6199,3 +6199,64 @@ Owner decision: **public free-to-play release, no beta codes.**
 - **Pre-emptive fxLite on weak devices (FPS safety):** the adaptive auto-quality (`_autoLite`/`_qSample`) already lightens canvas FX once a device proves slow. Added a boot-time pre-check so a clearly-weak device (`navigator.deviceMemory <= 2`) starts in lite FX instead of stuttering through the first ~2.5s sample. **fxLite ONLY — never bgMode** (forcing the moon backdrop off hides the AI Flix + journey videos; that was the build66.10 footgun). Skipped if the player saved an fxLite preference; quiet (no toast/persist); the sampler still confirms.
 - **Support / report-a-chart link:** a mailto in the Settings footer ("Found a bug or a broken chart? Report it →") with a pre-filled report template, so a player/tester can flag a broken chart or failed purchase.
 - Verified already-done (no work): the How-To keys already route from the live keymap (build70) — the static "A S D J K" is just the pre-JS default.
+
+## build189 (?v=489) — HUD BROADCAST pass, Stage 0 + Stage 1 (AkiraScare stream feedback)
+
+Beta user AkiraScare, reviewing his own stream VODs: *"how hard it is to see some of the words…
+move the song title and artist to the top left / lower the score below it / make all the letters
+bigger."* Plan + full audit in **HUD_BROADCAST_v1.md** (6-agent code audit -> Fable 5 direction ->
+4 adversarial verification lenses). Owner approved all three calls 2026-07-22.
+
+**The diagnosis (it is not a font-size bug).** The HUD is consumed as VIDEO — a 1080p capture
+re-encoded to 720p and watched on a phone. Measured: the track title rendered at **2.5px** to a
+phone viewer, judgment labels at 2.0px, and even the 44px score at 9.9px. Worse, the title — the
+one string that monetizes a music-game stream — was the SMALLEST body text on screen, bottom-pinned
+into the corner where the scrim is thinnest and a webcam usually sits. An inverted value hierarchy.
+Contrast on the panel's own scrim was fine (ink-dim 6.74:1); the killers composited on top.
+
+**Stage 0 — compositing (do this before touching any size).**
+- `html.rr-ingame { --rr-vig: 0.25 }` — the z-1000 `body::before` vignette dragged the title to
+  3.19:1 and `#hud-time` to **1.58:1**. Now EASED (0.7 -> 0.25) while a run is live, not deleted:
+  it frames the playfield and every authored 1080p level was art-directed inside it. Hook is a
+  class set in `showScreen()` (game.js) — the one choke point every entry/exit already flows
+  through — covering `game` + `countdown` so it can't snap at the count-in.
+- `.hud-panel { z-index: 51 }` — lifts rail glyphs above the 1px-period red scanline (z-50), which
+  is pathological h.264 input sitting directly on the smallest text. 51 (not 1001) is deliberate:
+  `#mpx-ring` (z-340, bottom-right) sits under the right panel and a blanket raise would bury it.
+
+**Stage 1 — the type ladder.** Five new `--rr-fs-hud-*` rungs added to the existing token ladder
+(the HUD previously had ZERO token consumers and no single type lever). Applied in the type-system
+block, which is the font-family authority — edits anywhere else silently no-op.
+- label 10 -> **12px**, tracking 0.3em -> **0.14em** (wide tracking dies first under compression).
+  Deliberately NOT 14px: that collapses the label-to-readout step to 1.14x and the instrument
+  cluster reads as a wall.
+- `.sub` tier (OD READY prompt, stability, difficulty) 11 -> **16px**, the viewer floor, and moved
+  onto Chakra Petch — at 11px mono read as telemetry texture, at 16px it would have shipped a
+  legible fourth typeface. `#hud-time` stays Oxanium (it's a number).
+- judgment labels 9 -> **12px**, counts 21 -> **24px**; accuracy/max-combo 24 -> **28px**;
+  `#hud-best` 11 -> **16px**; mobile `.mhud` labels 10 -> **12px**.
+- score/combo 44px -> **`clamp(34px, 20cqi, 56px)`** with `container-type: inline-size` on
+  `.hud-block` — the codebase's own proven pattern (`.vs-val`, `.mo-score`). 20cqi is measured, not
+  guessed: Oxanium tabular renders ~4.646px width per 1px font-size, so a 7-digit score needs
+  <= 0.215x the container. 22cqi silently clipped at the 247px narrow-band block.
+- `.pop-big` peak 1.34 -> **1.18**. `overflow:hidden` clips descendants but NOT an element's own
+  transform, so the milestone pop was the one path that threw the score onto the playfield.
+- Static `--rr-hud-armor` text-shadow on rail text; replaced the 24px white glow on `#hud-score`
+  (a blur radius on an element rewritten EVERY FRAME during the roll-up, invisible at 7% alpha).
+
+**Latent bug fixed along the way:** the three `[data-rrtheme]` watermark rules set `background-image`
+longhand, which REPLACED the panel scrim outright — bone/pink/ember levels were rendering their rails
+with no scrim at all, only a 4px blur over raw level video. The busiest backdrops had the weakest
+scrim. Scrim is now a `--rr-hud-scrim` token listed as a second layer under each watermark.
+
+Verified live at 1920x1080, 1024x768 and 390x844: 2626 CSS rules parse (a mid-pass regression that
+truncated the sheet at 867 rules was caught and fixed), no console errors, 7-digit score fits
+statically AND popped inside the panel at every width, mobile `.mhud` path untouched, no h-scroll.
+
+**Still open (approved, not yet built):** Stage 2 = the NOW PLAYING masthead (split `game.js:3538`'s
+single concatenated `title — artist` string into two nodes, move the block to first child, brand row
+to the bottom with an EXPLICIT pin — `.brand-row` is not a `.hud-block` so `:last-child` matches
+nothing). Stage 3 = the transient clip-safe chip (needs its own `#hud-np-chip` markup + lifecycle;
+`#vs-nowplaying` only exists inside a mounted MP match). Plus R6 (delete the Vibe Channel lore block)
+and the pre-existing 901-1313px grid dead band — which must NOT be fixed by shrinking the centre track.
+
