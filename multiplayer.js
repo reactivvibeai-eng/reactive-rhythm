@@ -1385,6 +1385,7 @@
     var _oppNm = null;
     try { var _o = room.isHost ? (room.p2 && room.members[room.p2]) : (room.members[room.p1]); _oppNm = _o && _o.name; } catch (e) {}
     if (!sel.trackId) rs.textContent = amPicker() ? 'Pick a track to enable READY.' : 'Waiting for host to pick a track…';
+    else if (!oppHere && matchCh && _rmFallT) rs.textContent = 'Your opponent is back — getting the room ready…';   // build191 (RT2-1): the 3s re-seat check is pending — never claim nobody's here while the roster shows them IN ROOM
     else if (!oppHere) rs.textContent = amPicker() ? 'Waiting for a player to join — copy the invite link below and send it.' : 'Waiting for your opponent…';   // B3: link-first (there is no join-by-code input)
     else if (meReady && !peerReady) rs.textContent = 'You\'re READY ✓ — waiting for the other player to ready up…';
     else if (!meReady && peerReady) rs.textContent = 'Your opponent is READY ✓ — tap READY to start.';
