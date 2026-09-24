@@ -40,7 +40,7 @@
     gold:    '#e0a93f',
     goldHot: '#ffd27a'
   };
-  var PLAY_URL = 'https://reactivvibe.com/play';
+  var PLAY_URL = 'https://reactivvibeai.com/play';
 
   // ---- tunables ---------------------------------------------------------------------
   var CAP_FPS      = 12;    // sample rate into the ring (12fps × 6s = 72 frames; plenty for a clip, cheap on memory)
@@ -598,7 +598,7 @@
 
     // footer CTA (static — always readable)
     ctx.textAlign = 'center'; ctx.fillStyle = C.chrome; ctx.font = '700 24px "Chakra Petch"';
-    var cta = 'PLAY FREE  →  reactivvibe.com/play';
+    var cta = 'PLAY FREE  →  reactivvibeai.com/play';
     ctx.fillText(cta, W / 2, H - 70);
     var ulw = ctx.measureText(cta).width;
     ctx.strokeStyle = C.crimson; ctx.lineWidth = 2;
@@ -619,7 +619,7 @@
     ctx.fillStyle = gradeColor(es.grade); ctx.font = '800 44px Oxanium';
     ctx.fillText(fmt(es.score), 34, by + 88);
     ctx.textAlign = 'right'; ctx.fillStyle = C.crimson; ctx.font = '700 18px "Chakra Petch"';
-    ctx.fillText('reactivvibe.com/play', W - 34, by + 82);
+    ctx.fillText('reactivvibeai.com/play', W - 34, by + 82);
     ctx.textAlign = 'left';
   }
 

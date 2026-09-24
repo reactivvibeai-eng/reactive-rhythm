@@ -24,7 +24,7 @@
     gold:    '#e0a93f',
     goldHot: '#ffd27a'
   };
-  var PLAY_URL = 'https://reactivvibe.com/play';
+  var PLAY_URL = 'https://reactivvibeai.com/play';
 
   // COMBO_TIERS mirror (game.js:187-194) — name + hue so the tier cell looks "hotter".
   var COMBO_TIERS = [
@@ -407,7 +407,7 @@
     var fyy = H - (story ? 150 : 86);
     ctx.textAlign = 'center';
     ctx.fillStyle = C.chrome; ctx.font = '700 26px "Chakra Petch"';
-    var cta = 'PLAY FREE  →  reactivvibe.com/play';
+    var cta = 'PLAY FREE  →  reactivvibeai.com/play';
     ctx.fillText(cta, W / 2, fyy);
     // crimson underline rule
     var ulw = ctx.measureText(cta).width;
