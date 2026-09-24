@@ -2913,7 +2913,8 @@
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
     if (!buf) {
       buf = await _decodeInto(url);   // build191 (MATCH-2): shared single-slot decode — joins a prefetch of the same url
-      lastDecoded = { url: url, buf: buf };
+      // build191 (DECODE-CACHE): no unconditional lastDecoded write here — _decodeInto caches only while it still owns the
+      // slot, so a SUPERSEDED pre-chart (host re-picked) can't overwrite the newer track's cached buffer and force a re-decode.
     }
     const _mode = chartMode;   // build191: the analyzer mode this chart was built under (prepareChart keys on it)
     const analyzed = await analyzeChart(buf);
@@ -3523,6 +3524,7 @@
 
   let _playGen = 0;   // build57: launch-generation token — a newer beginPlay() invalidates older ones (see guards below)
   let _runIsMp = false;   // build191 (DATA-1): latched per launch in beginPlay; endGame stamps results.mp from it
+  let _nextRunMp = false; // build191 (DATA-1b): armed ONLY by the MP launch seam (startAt's timer / a live-MP restart) — the global isLive() also covers a solo song played while watching a match or from the hub mid-bracket
   let _holdRegrabUntil = 0, _regrabNote = [];   // build191 (ENGINE-8): post-resume sustain re-grab window + the per-lane hold that is waiting on it
   async function beginPlay() {
     // build35 (audit P1): make (re)launch idempotent — stop any in-flight run FIRST so a second
@@ -3536,12 +3538,13 @@
     const myGen = ++_playGen;
     // build191 (DATA-1): latch "this run is an MP round" at LAUNCH — settleIfReady can flip matchLive off synchronously
     // inside _fireSongEnd, before recordLocal reads it. Show rooms are excluded (their solo run records as a scored single).
-    try { _runIsMp = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive() && !(window.RhythmMP.isShowOpen && window.RhythmMP.isShowOpen())); } catch (e) { _runIsMp = false; }
+    try { _runIsMp = !!(_nextRunMp && window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive() && !(window.RhythmMP.isShowOpen && window.RhythmMP.isShowOpen())); } catch (e) { _runIsMp = false; }
+    _nextRunMp = false;   // build191 (DATA-1b): one-shot — only the launch the MP seam armed is an MP round
     // (re)build session — fresh play_token + player each attempt (live anti-cheat)
     // build191 (ENGINE-4): a SUPERSEDED launch's provider failure must resolve silently — otherwise play()'s catch
     // toasts the OLD track's error and showScreen('menu')s the player out of the newer run that now owns the engine.
     try { session = await provider(); }
-    catch (e) { if (myGen !== _playGen) return; throw e; }
+    catch (e) { if (myGen !== _playGen) return; _injectedNotes = null; throw e; }   // build191 (INJECT-LEAK): a failed decode never consumed the staged MP chart — drop it (only when NOT superseded, so a newer startAt's staging survives)
     if (myGen !== _playGen) return;        // superseded while fetching/decoding/charting
     beats = session.beats || [];
     songDuration = session.duration || 0;
@@ -3973,6 +3976,7 @@
     // runs — a solo PLAY AGAIN replayed the old MP song's chart), and re-arm a FRESH copy: the cached objects are the
     // ones the last run judged in place (judged/hit/dropped/hold banks), so re-injecting them gave an empty highway.
     var _mpLiveNow = false; try { _mpLiveNow = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()); } catch (e) {}
+    if (_mpLiveNow && _runIsMp) _nextRunMp = true;   // build191 (DATA-1b): a restart of a live MP round stays an MP round (a restarted SOLO run never becomes one)
     if (!_mpLiveNow) _lastInjectedNotes = null;
     else if (_lastInjectedNotes && _lastInjectedNotes.length) {
       _injectedNotes = _lastInjectedNotes.map(function (n) {
@@ -5011,6 +5015,7 @@
     const _lcBtn = $('loading-cancel');
     if (_lcBtn) _lcBtn.addEventListener('click', () => {
       _playGen++;
+      _injectedNotes = null;   // build191 (INJECT-LEAK): the cancelled launch never consumed its staged MP chart
       _disarmLoadingEscape();
       try { stopGame(); } catch (e) {}
       showScreen('menu');
@@ -10317,7 +10322,7 @@
       var _i = _startAtTs.indexOf(_h); if (_i >= 0) _startAtTs.splice(_i, 1);   // build191 (TOUR-12): fired — no longer cancellable
       try { if (_guard && !_guard()) return; } catch (e) { return; }
       try { getAC().resume(); } catch (e) {}
-      try { _injectedNotes = _notes; play(_prov); } catch (e) { _injectedNotes = null; }
+      try { _injectedNotes = _notes; _nextRunMp = true; /* build191 (DATA-1b): THIS launch is the MP round */ play(_prov); } catch (e) { _injectedNotes = null; _nextRunMp = false; }
     }, delay);
     _startAtTs.push(_h);   // build191 (TOUR-12): remember the pending handle so a lead-in LEAVE can cancel it
   };
@@ -10333,6 +10338,7 @@
   // the loading-screen CANCEL does, without firing a song-end (the round is void, not a forfeit).
   window.RhythmGame.cancelLaunch = function () {
     _playGen++;
+    _injectedNotes = null; _nextRunMp = false;   // build191 (INJECT-LEAK): a cancelled launch never consumed its staged MP chart — the next solo song must chart itself
     try { _disarmLoadingEscape(); } catch (e) {}
     try { stopGame(); } catch (e) {}
     try { showScreen('menu'); } catch (e) {}

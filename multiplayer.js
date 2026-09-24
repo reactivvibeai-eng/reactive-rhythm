@@ -127,6 +127,7 @@
   function amPicker() { return matchRole === 'host' || !!(room && room.id && room.isHost); }
   var oppMeta = null;             // {id,name,avatar}
   var oppPresent = false, oppLeft = false;
+  var _oppSeenMid = null;   // build191 (QM-SEEN): last match id whose opponent presence was ever observed (local-only)
   var sel = { trackId: null, title: null, artist: null, art: null, difficulty: 'medium', demo: false, env: '__default' };   // v262: env = the room's chosen STAGE/level (host picks; rides the song payload; applied on match start). __default = plain Arena.
   var meReady = false, oppReady = false;
   var roomOppReady = false;   // playtest-3 (Bug D): the opponent's readiness during the ROOM-waiting stage (before the match channel exists). Match-channel readiness stays in oppReady.
@@ -565,6 +566,13 @@
     if (p.sel && p.sel.trackId && !amPicker()) {
       var _same = !!(sel && sel.trackId && p.sel.trackId === sel.trackId && (p.sel.difficulty || '') === (sel.difficulty || '') && (p.sel.env || '') === (sel.env || ''));
       if (!_same) { try { onSong(p.sel); } catch (e) {} }
+    } else if (p.epoch && !p.sel && !p.started && !amPicker() && !matchCh && !_roomStartMid && sel && sel.trackId) {
+      // build191 (STALE-PICK): a reloaded (revived) host lost its pick — its authoritative snapshot says "no track". Drop
+      // my stale copy (+ my READY) so both seats read "Host picks a track" instead of a ghost pick with READY disabled.
+      // Epoch-gated: only build191+ hosts send it, so an older host's snapshot never clears anything.
+      sel = { trackId: null, title: null, artist: null, art: null, difficulty: sel.difficulty || 'medium', demo: false, env: sel.env || '__default' };
+      meReady = false; roomOppReady = false; _stopReadyRebc();
+      try { setReadyBtn(); paintSelection(); } catch (e) {}
     }
     try { refreshReadyEnabled(); } catch (e) {}
     try { paintRoomWaiting(); } catch (e) {}
@@ -784,7 +792,8 @@
     try { qmStop(true); } catch (e) {}        // build102x: leaving MP stops the server matchmaking search + clears my queue row
     try { _onlineStop(); } catch (e) {}       // build105: ONLINE NOW polling stops cold with the screen
     teardownMatch();
-    try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {}
+    try { if (lobbySP) lobbySP.stop(); } catch (e) {}
+    var _oldLobbyCh = lobbyCh; lobbyCh = null; _rmChan(_oldLobbyCh);   // build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED must fail the guard
     lobbyCh = null; lobbySP = null; lobby = {}; _clearConnResub('lobby');   // v418 (B8): leaving MP kills any pending lobby re-subscribe + drops the chip
     try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {}   // build111 s2: channel teardown clears the ring buffer — a later rejoin never leaks stale lobby chat
     try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {}   // build191 (UI-1): leaving from the winner card — the hub must not inherit the engine's stale 'results' Enter/Esc/Space
@@ -1122,6 +1131,7 @@
     var others = Object.keys(all).filter(function (k) { return k !== ME.id; });
     var wasPresent = oppPresent;
     oppPresent = others.length > 0;
+    if (oppPresent && matchId) _oppSeenMid = matchId;   // build191 (QM-SEEN): the rival DID join this mid (the ENTRY-3 no-answer timer must not treat "joined then left" as "never answered")
     var opp = oppPresent ? all[others[0]] : null;
     var oppName = (opp && opp.name) || (oppMeta && oppMeta.name) || 'Your opponent';
     var dot = $('mpx-dot-opp');
@@ -1583,7 +1593,7 @@
       var startSel = _songPayload();   // FIX 1 (P0): the start payload carries the picked track's pickUrl too, so the guest resolves the right song catalog-independently
       if (matchMatched) {
         startSel = Object.assign({}, startSel, { _matchedScroll: 1, _matchedFail: false, _matchedChart: 'musical' });   // canonical fair defaults — never the host's personal scroll/fail/chart
-        try { _mySettingsSnapshot = window.RhythmGame.getSettings(); window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
+        try { if (!_mySettingsSnapshot) _mySettingsSnapshot = window.RhythmGame.getSettings(); /* build191 (SETTINGS-ABORT): never overwrite a live snapshot with already-forced values */ window.RhythmGame.applySettings({ scroll: 1, failMode: false, chartMode: 'musical' }, { transient: true }); } catch (e) {}
       }
       var _startPl = { atMs: atMs, sel: startSel, combat: matchCombat, matched: matchMatched, hostSettings: hostSettings, v: 191 };   // build191 (REVIEW-OLDHOST): v = additive build marker (old guests ignore it)
       _lastStartPl = _startPl;   // BUG3 fix: remember the exact start payload (SAME atMs) so onReady can re-deliver it to a guest that un-readied (A6) then re-READYs AFTER we went matchLive — onStart's atMs-dedupe keeps that idempotent.
@@ -1605,6 +1615,7 @@
       try {
         if (!_roundStartFired && !(oppMeta && oppMeta.bot) && window.RhythmCatalog && RhythmCatalog.mpRoundStart) {
           _roundStartFired = true; _roundSeq++;
+          var _rsSeq = _roundSeq;   // build191 (ROUND-ABORT): a slow reply for a round aborted (and re-started) since must not clobber the fresh round's id
           RhythmCatalog.mpRoundStart({
             room_id: (room && room.id) || matchId,
             round_id: 'r' + _roundSeq,
@@ -1613,7 +1624,7 @@
             mode: (tour && tour.id) ? 'tournament' : '1v1',
             player_ids: [ME.id, oppMeta && oppMeta.id].filter(Boolean),
           }).then(function (rid) {
-            if (rid) { _serverRoundId = rid; try { if (matchCh) matchCh.send({ type: 'broadcast', event: 'round', payload: { rid: rid } }); } catch (e) {} }
+            if (rid && _roundStartFired && _rsSeq === _roundSeq) { _serverRoundId = rid; try { if (matchCh) matchCh.send({ type: 'broadcast', event: 'round', payload: { rid: rid } }); } catch (e) {} }
           });
         }
       } catch (e) {}
@@ -1632,7 +1643,7 @@
     if (p.hostSettings) _oppSettings = p.hostSettings;
     if (matchMatched && p.sel && p.sel._matchedScroll != null) {
       try {
-        _mySettingsSnapshot = window.RhythmGame.getSettings();
+        if (!_mySettingsSnapshot) _mySettingsSnapshot = window.RhythmGame.getSettings();   // build191 (SETTINGS-ABORT): never overwrite a live snapshot with already-forced values
         window.RhythmGame.applySettings({ scroll: p.sel._matchedScroll, failMode: !!p.sel._matchedFail, chartMode: p.sel._matchedChart || 'musical' }, { transient: true });
       } catch (e) {}
     }
@@ -2744,11 +2755,16 @@
     if (_mountT) { clearTimeout(_mountT); _mountT = 0; }
     if (g) g.classList.remove('vs-mode', 'vs-tour', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
+    // build191 (SETTINGS-ABORT): the aborted round's matched-room / host-chart-mode override was TRANSIENT — restore my real
+    // saved settings now (mirrors resetForRematch/teardownMatch). Otherwise the next READY snapshots the FORCED values and a
+    // later rematch/leave persists scroll 1× / fail off / musical into rr_settings. The next start re-applies the override.
+    if (_mySettingsSnapshot) { try { window.RhythmGame.applySettings(_mySettingsSnapshot); } catch (e) {} _mySettingsSnapshot = null; }
     if (tour.id) {
       screen.classList.add('active'); activeNow = true; step('tour');
       banner('mpx-tour-msg', msg || 'Could not start the track — back to the bracket.');
     } else {
       matchLive = false; screen.classList.add('active'); activeNow = true;
+      _serverRoundId = null; _roundStartFired = false;   // build191 (ROUND-ABORT): the dead round's server round is void — the next READY in this match opens a fresh one (never settles a round that never played / for another track)
       // build191 (REVIEW-READY): a forced abort returns BOTH seats to setup ("READY again") — clear the round's stale
       // READY flags so the first tap ARMS (toggleReady flips) and a stale oppReady can't auto-restart the dead track.
       if (force) { meReady = false; oppReady = false; roomOppReady = false; _stopBothReadyWd(); try { setReadyBtn(); refreshReadyEnabled(); } catch (e) {} }
@@ -2940,6 +2956,13 @@
       score: results.score, combo: results.max_combo, acc: Math.round((results.accuracy || 0) * 1000) / 10, grade: results.grade
     } : (window.RhythmGame.getLiveStats ? window.RhythmGame.getLiveStats() : { score: 0, combo: 0, acc: 0, grade: 'D' });
     myFinal = s;
+    // build191 (CPU-XP): DATA-1 made recordLocal skip every MP-latched run (its per-song path would book catalog's STALE
+    // solo currentTrack), and showWinner never calls recordMpResult for a bot — so the first-timer CPU warm-up earned
+    // nothing. Credit a COMPLETED warm-up as a cleared level (XP + daily/weekly goals), like build190 did. Never ranked,
+    // never /score, never the MP goal counter. recordLocal's _isMp early-return means this can't double-credit.
+    if (reason === 'end' && results && oppMeta && oppMeta.bot && !tour.id && !spectating && !results.failed && !results.preview && !results.practice) {
+      try { if (window.RhythmGoals && window.RhythmGoals.recordLevelComplete) { var _cpuXp = window.RhythmGoals.recordLevelComplete({ grade: results.grade, fullCombo: !!results.full_combo, songId: (sel && sel.trackId) || null }); if (_cpuXp && _cpuXp.xpEarned) results._xpEarned = _cpuXp.xpEarned; } } catch (e) {}
+    }
     // MP FIX #21: route MY final through the MP-5 retry queue (dedupe id 'final'; onFinal is idempotent — a
     // re-delivered final overwrites oppFinal with the same value and settleIfReady no-ops once matchLive is false).
     // A raw one-shot send that fell in a mid-run socket flap left the RIVAL waiting on the 8s safety → a hollow
@@ -3303,7 +3326,9 @@
     _clearOppGoneGrace();   // MP FIX #21 (B8): the opp-gone forfeit grace dies with the match
     _clearPreOppGone(); _matchRebuildAt = 0;   // build191 (TRANSPORT-4): + the setup-phase rebuild grace
     _stopRoomStateBeat(); _stopCritSweep(); _dropCritScope('match');   // MP-2/MP-5 (B8): the room-state snapshot beat + the critical-send sweep die with the match; drop any in-doubt MATCH-scope sends. The beat re-starts below if the host is still in an open room.
-    try { if (matchSP) matchSP.stop(); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
+    try { if (matchSP) matchSP.stop(); } catch (e) {}
+    var _oldMatchCh = matchCh; matchCh = null; _rmChan(_oldMatchCh);   // build191 (TRANSPORT-1b): detach BEFORE remove (sync CLOSED → false RECONNECTING…); _rmChan skips the CPU warm-up's fake channel (was an uncaught 'e.unsubscribe is not a function')
+    _clearConnResub('match');   // build191 (TRANSPORT-1b): AFTER the remove too — belt-and-braces against any CLOSED that still slipped through
     matchCh = null; matchSP = null; matchId = null; matchRole = null; oppMeta = null; oppPresent = false; oppLeft = false;
     _pendingChart = null;   // build114: a torn-down match's stray/late chart broadcast must never satisfy a LATER unrelated match that happens to pick the same track+difficulty
     _resolveGen++;          // build114 review: invalidate any in-flight pollForChart so a zombie poll can't hijack a later round
@@ -3432,6 +3457,7 @@
       }, 1500);
       setTimeout(function () {
         if (matchId !== mid || oppPresent || matchLive || room.id || tour.id) return;
+        if (_oppSeenMid === mid) return;   // build191 (QM-SEEN): the rival joined then LEFT — the normal "Opponent left" flow owns this; no auto-requeue / CPU drop / 30s bench
         QM._skip = QM._skip || {}; QM._skip[opp] = Date.now();
         try { backToLobby(); } catch (e) {}
         if (!(_qm && _qm.on)) { try { toggleQuickMatch(); } catch (e) {} }
@@ -3782,7 +3808,7 @@
       if (_bcUserCh && _bcUserId === ME.id && _bcUserLive) return;         // already LIVE (observed SUBSCRIBED) for this identity — NOT merely "the channel object exists"
       if (_bcOpening) return;                                             // a subscribe is already in flight — never double-open
       _bcOpening = true;
-      if (_bcUserCh) { try { supa.removeChannel(_bcUserCh); } catch (e) {} _bcUserCh = null; }   // tear down a stale/errored channel (identity change, or a prior attempt that never reached SUBSCRIBED)
+      if (_bcUserCh) { var _oldBc = _bcUserCh; _bcUserCh = null; _rmChan(_oldBc); }   // build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED must fail the `ch !== _bcUserCh` guard (no spurious resub)   // tear down a stale/errored channel (identity change, or a prior attempt that never reached SUBSCRIBED)
       _bcUserLive = false;
       _bcUserId = ME.id;
       var _idAtOpen = ME.id;
@@ -3897,6 +3923,15 @@
       if (st && st !== _lastConnEmit) { _lastConnEmit = st; _tel('mp_conn', { state: st }); }
     } catch (e) {}
   }
+  // build191 (TRANSPORT-1b): supabase removeChannel() fires the subscribe callback with 'CLOSED' SYNCHRONOUSLY. The
+  // TRANSPORT-1 guards compare the callback's channel against the module handle, so every teardown site must DETACH the
+  // handle (set it null) BEFORE calling this — otherwise the deliberate CLOSED passes the guard and paints a false
+  // "RECONNECTING…" that sticks (the resub then bails on !matchId / !room.id). Also skips the offline CPU/dev stub
+  // (_fake: no real socket) and swallows the async rejection removeChannel can return.
+  function _rmChan(ch) {
+    if (!ch || ch._fake || !supa) return;
+    try { var pr = supa.removeChannel(ch); if (pr && pr.then) pr.then(null, function () {}); } catch (e) {}
+  }
   function _clearConnResub(which) {   // B8: called from the teardown paths — kill any pending re-subscribe + drop the chip contribution
     if (_connResubT[which]) { clearTimeout(_connResubT[which]); _connResubT[which] = 0; }
     _connResubN[which] = 0; _conn[which] = null;
@@ -3916,11 +3951,13 @@
   function _doChannelResub(which) {
     if (!supa) return;
     if (which === 'lobby') {
-      if (!activeNow && !lobbyCh) return;
-      try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {}
-      lobbyCh = null; lobbySP = null; joinLobby();
+      if (!activeNow && !lobbyCh) { _clearConnResub('lobby'); return; }   // build191 (TRANSPORT-1b): nothing to rebuild — drop the scope instead of leaving 'resub' forever
+      try { if (lobbySP) lobbySP.stop(); } catch (e) {}
+      var _oldL = lobbyCh; lobbyCh = null; _rmChan(_oldL);   // build191 (TRANSPORT-1b): detach BEFORE remove
+      lobbySP = null; joinLobby();
     } else if (which === 'room') {
-      if (!room.id || matchLive) { if (matchLive) _setConnState('room', 'live'); return; }
+      if (!room.id) { _clearConnResub('room'); return; }   // build191 (TRANSPORT-1b): left the room — clear, never a stuck 'resub'
+      if (matchLive) { _setConnState('room', 'live'); return; }
       var seat = room.seat || (room.isHost ? 'p1' : 'p2');
       // BUG1 fix: mark this as a RESUB rebuild so joinRoomChannel's inner leaveRoomChannel() does NOT zero the bounded
       // attempt counter (_connResubN.room). Without this the ≤20 cap + growing backoff never engaged — the counter reset
@@ -3935,7 +3972,7 @@
       try { paintRoomWaiting(); } catch (e) {}
       if (meReady && room.id && room.ch && !matchCh && !room.show) { try { _sendRoomReady(); } catch (e) {} }   // re-assert my READY (the 2s rebroadcast interval was cleared by the teardown)
     } else if (which === 'match') {
-      if (!matchId) return;
+      if (!matchId) { _clearConnResub('match'); return; }   // build191 (TRANSPORT-1b): match torn down — clear, never a stuck 'resub'
       _rebuildMatchChannel();   // MP FIX #21: rebuilds mid-run too — reopens the read side so a live match survives a socket blip instead of freezing the rival + hollow-forfeiting
     }
   }
@@ -4002,7 +4039,8 @@
   function _rebuildMatchChannel() {
     if (!supa || !matchId) return;   // MP FIX #21: no matchLive guard — a live-run rebuild is exactly what reopens the read side after a blip (the fresh softPresence's empty first-emit is absorbed by onMatchPeers' opp-gone grace, so it never one-shots a forfeit)
     _matchRebuildAt = Date.now();   // build191 (TRANSPORT-4): pre-match, the fresh handle's first (me-only) roster is a rebuild artefact — onMatchPeers graces it
-    try { if (matchSP) matchSP.stop(true); if (matchCh) supa.removeChannel(matchCh); } catch (e) {}   // build191 (TRANSPORT-4): quiet stop — a rebuild is not a leave, so no 'bye' that the peer reads as "Opponent left"
+    try { if (matchSP) matchSP.stop(true); } catch (e) {}
+    var _oldM = matchCh; matchCh = null; _rmChan(_oldM);   // build191 (TRANSPORT-1b): detach BEFORE remove, so the predecessor's sync CLOSED can't schedule a second rebuild. build191 (TRANSPORT-4): quiet stop — a rebuild is not a leave, so no 'bye' that the peer reads as "Opponent left"
     matchCh = supa.channel('rr-match-' + matchId, { config: { broadcast: { self: false } } });
     matchSP = softPresence(matchCh, function () { return Object.assign({ id: ME.id, name: ME.name, role: matchRole, at: Date.now() }, _cosmeticFields()); }, onMatchPeers);
     _wireMatchHandlers(matchCh);
@@ -4191,7 +4229,7 @@
     return { label: 'IN ROOM', cls: '' };
   }
   function _oppStatus(oppId) {
-    var pr = matchCh ? oppReady : roomOppReady;
+    var pr = matchCh ? (oppReady && !finishedLocal) : roomOppReady;   // build191 (STALE-READY): on the winner card the finished round's oppReady is stale (a re-seated guest read READY ✓ while its own button said READY)
     if (pr) return { label: 'READY ✓', cls: 'gold' };
     if (!sel.trackId && !room.isHost) return { label: 'PICKING TRACK', cls: '' };
     return { label: 'IN ROOM', cls: '' };
@@ -4597,7 +4635,7 @@
       }
     });
   }
-  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); if (!_directJoinInFlight) _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _stopRoomStateBeat(); _stopCritSweep(); if (!_roomResubActive) _dropCritScope('room'); _roomStateSeen = -1; _roomStateEpoch = null; /* build191 (TRANSPORT-7) */ if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); if (room.ch) supa.removeChannel(room.ch); } catch (e) {} room.ch = null; roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
+  function leaveRoomChannel() { _stopReadyRebc(); _stopRoomStartRebc(); if (!_directJoinInFlight) _clearPendJoin(); _stopBothReadyWd(); _stopCallWatch(); _stopWaitEsc(); _stopRoomStateBeat(); _stopCritSweep(); if (!_roomResubActive) _dropCritScope('room'); _roomStateSeen = -1; _roomStateEpoch = null; /* build191 (TRANSPORT-7) */ if (!_roomResubActive) _clearConnResub('room'); if (_roomPanelCdT) { clearInterval(_roomPanelCdT); _roomPanelCdT = 0; } try { if (roomSP) roomSP.stop(); } catch (e) {} var _oldRoomCh = room.ch; room.ch = null; _rmChan(_oldRoomCh); /* build191 (TRANSPORT-1b): detach BEFORE remove (sync CLOSED) */ if (!_roomResubActive) _clearConnResub('room'); roomSP = null; try { if (window.RhythmChat && window.RhythmChat.teardownRoomChat) window.RhythmChat.teardownRoomChat(); } catch (e) {} }   // build111 s2: room channel teardown clears the chat ring buffer too — a rejoin (same or different room) never leaks a prior room's chat. v416: also stop my room-stage ready re-broadcast. v417 review-fix C: also kill any live _pendJoin tick so a user-initiated LEAVE can't get auto-yanked back into the room by a leaked interval. BUG1 fix: skip _clearConnResub('room') during a RESUB rebuild so the bounded ≤20 attempt counter survives (only a SUBSCRIBED or a genuine user leave resets it).
   function onRoomPeers(all) {
     if (!room.ch) return;
     room.members = all;
@@ -4640,7 +4678,7 @@
       var others = Object.keys(room.members).filter(function (id) { return id !== ME.id && room.members[id].seat !== 'spec'; });
       var p2 = others[0] || null;
       if (p2) { room._lastP2 = p2; if (room.members[p2] && room.members[p2].name) room._lastP2Name = String(room.members[p2].name).slice(0, 18); }   // MP-reliability FIX #3: remember the seated opponent so a transient presence lull at start-time can be recovered (startRoomMatch). FIX 2.3: + cache their name while present so the crimson LEFT chip can show it after they expire
-      if (p2 !== room.p2) { if (!p2 && room.p2 && !matchLive) { roomOppReady = false; _stopBothReadyWd(); }   // review-fix (teardown): the seated opponent left the room PRE-match — clear their stale READY + disarm the A6 watchdog so it can't fire the misleading "COULDN'T SYNC" card ~14s later (mirrors the match-channel opp-leave path)
+      if (p2 !== room.p2) { if (!p2 && room.p2 && !matchLive) { roomOppReady = false; _stopBothReadyWd(); } else if (p2 && room.p2 && !matchLive) roomOppReady = false;   // build191 (STALE-READY): a DIFFERENT player took the seat — the previous occupant's READY isn't theirs   // review-fix (teardown): the seated opponent left the room PRE-match — clear their stale READY + disarm the A6 watchdog so it can't fire the misleading "COULDN'T SYNC" card ~14s later (mirrors the match-channel opp-leave path)
         room.p2 = p2; advertiseRoom(); try { _emitRoomState('seat'); } catch (e) {} }   // MP-2: the challenger seat changed → refresh the versioned snapshot (members/p2)
     } else if (!room.p1) {
       // v416 (join-reliability): a DIRECT-joined guest with an unknown host — learn room.p1 from presence (the
@@ -5951,7 +5989,7 @@
   function endSpectate(msg) {
     stopTick();
     try { _unmountSpecStage(); } catch (e) {}   // build102t: decks + audio die with the watch channel
-    try { if (matchCh) supa.removeChannel(matchCh); } catch (e) {}
+    var _oldWatchCh = matchCh; matchCh = null; _rmChan(_oldWatchCh);   // build191 (TRANSPORT-1b): detach BEFORE remove
     matchCh = null; matchLive = false; finishedLocal = false; myFinal = null; oppFinal = null; lastOppTick = null;
     _specShowSolo = false; _specShow = false; _specDual = false; _specNormAtMs = 0; _specFinals = {};   // build121: dual-spectate flags die with the watch channel too
     if (_specVerdictT) { clearTimeout(_specVerdictT); _specVerdictT = 0; }
@@ -6678,7 +6716,8 @@
     var _g = $('game'); if (_g) _g.classList.remove('vs-mode', 'vs-tour', 'you-od-fire', 'vs-intro');
     _vsActive = false; _vsMode = false; unmountVsHud();
     Object.keys(tour._settleT).forEach(function (k) { clearTimeout(tour._settleT[k]); });
-    try { if (tourSP) tourSP.stop(); if (tour.ch) supa.removeChannel(tour.ch); } catch (e) {}
+    try { if (tourSP) tourSP.stop(); } catch (e) {}
+    var _oldTourCh = tour.ch; tour.ch = null; _rmChan(_oldTourCh);   // build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED of a bracket we left must fail the guard (no "Could not reach the bracket"); _rmChan skips the dev NPC bracket's fake channel
     tourSP = null; tour = nullTour(); reannounce();
     if (!silent) { step('lobby'); banner('mpx-lobby-msg', ''); onLobbySync(); }
   }
@@ -8198,7 +8237,8 @@
       on: function (t, o, cb) { if (t === 'broadcast' && o && o.event) { (H[o.event] = H[o.event] || []).push(cb); } return this; },
       send: function (m) { if (m && m.type === 'broadcast' && H[m.event]) { var hs = H[m.event].slice(); setTimeout(function () { hs.forEach(function (cb) { try { cb({ payload: m.payload }); } catch (e) {} }); }, 0); } return Promise.resolve('ok'); },
       subscribe: function (cb) { if (cb) setTimeout(function () { cb('SUBSCRIBED'); }, 0); return this; },
-      track: function () { return Promise.resolve('ok'); }, untrack: function () { return Promise.resolve('ok'); }
+      track: function () { return Promise.resolve('ok'); }, untrack: function () { return Promise.resolve('ok'); },
+      unsubscribe: function () { return Promise.resolve('ok'); }   // build191 (CPU-TEARDOWN): belt-and-braces — RealtimeClient.removeChannel awaits channel.unsubscribe(); _rmChan skips _fake anyway
     };
   }
   // spin up a fully offline solo bracket (no sign-in needed) — fills with NPCs, hands-free auto-run
@@ -8338,9 +8378,14 @@
         sel.trackId = t.id; sel.title = t.title; sel.artist = t.artist_credit_name || t.artist_name; sel.art = t.artwork_url; sel.demo = (t.id === 'demo');
         try { delete sel.audioUrl; delete sel.flixVideo; } catch (e) {}   // review fix 1: picking a NEW track invalidates any show/review audio riding the old sel (it would play the wrong song) (build102z p1.5: the video backdrop too)
         var pk = $('mpx-picker'); if (pk) pk.hidden = true;
+        // build191 (STALE-MATCH-PICK): the host still holds a FINISHED match channel the opponent will never rejoin (they
+        // re-entered via the room). READY gated on that channel's presence and stayed dead. Same evidence gate as REMATCH:
+        // drop the dead channel and go room-stage BEFORE the song broadcast, so it rides the room channel.
+        try { _roomRematchFallback('pick'); } catch (e) {}
         paintSelection(); broadcastSong();
         meReady = false; oppReady = false; setReadyBtn(); refreshReadyEnabled();
-        var rs = $('mpx-readystate'); if (rs) rs.textContent = 'Track locked. Hit READY.';
+        var rs = $('mpx-readystate'), rbtn = $('mpx-ready');
+        if (rs && !(rbtn && rbtn.disabled)) rs.textContent = 'Track locked. Hit READY.';   // build191 (STALE-MATCH-PICK): while READY is still gated, keep refreshReadyEnabled's truthful copy ("Waiting for …")
       });
     });
   }
@@ -8767,7 +8812,7 @@
   // heartbeat, rr_active_rooms ping and room.id all survived: a host kept advertising a room it wasn't in, a guest sat as a
   // ghost the opponent waited on). closeRoom(true): host → room-gone + heartbeat stop; guest/spectator → silent leave.
   // Also ends a pending re-seat wait (product_bugs[1]) and drops the engine's stale 'results' state (UI-1).
-  wire('mp-back', 'click', function () { try { if (_reseat) { _stopReseatWait(); clearRoom(); clearFailCard(); } } catch (e) {} try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {} try { _cancelShowOpen(); if (room.id) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too; build111 s2: lobby chat ring buffer clears too
+  wire('mp-back', 'click', function () { _clearLobbyIntent(); /* build191 (INTENT-LEAK): a PLAY NOW / OPEN ROOM queued while connecting must not fire on re-entry */ try { if (_reseat) { _stopReseatWait(); clearRoom(); clearFailCard(); } } catch (e) {} try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {} try { _cancelShowOpen(); if (room.id) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); } catch (e) {} var _oldBackL = lobbyCh; lobbyCh = null; _rmChan(_oldBackL); /* build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED painted "Could not reach the live lobby (CLOSED)" + a stuck RECONNECTING… chip */ _clearConnResub('lobby'); try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too; build111 s2: lobby chat ring buffer clears too
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
@@ -8796,7 +8841,8 @@
       activeNow = false;
       try { qmStop(true); } catch (e) {}   // build102x: NEVER keep the matchmaking poll running behind a hidden MP screen; also clears my queue row ({on:false}). No-op unless searching (matched pairs already stopped it).
       try { _onlineStop(); } catch (e) {}   // v415 review fix: the ONLINE NOW poll is MP-screen-scoped like qmStop — clear it on ANY deactivate (hub-nav away while on the lobby step never hit step()'s stop), for full interval-lifecycle symmetry.
-      if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); if (lobbyCh) supa.removeChannel(lobbyCh); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} }
+      _clearLobbyIntent();   // build191 (INTENT-LEAK): leaving the MP screen drops a queued PLAY NOW / OPEN ROOM
+      if (!matchLive && !matchCh && !tour.id) { try { if (lobbySP) lobbySP.stop(); } catch (e) {} var _oldSaL = lobbyCh; lobbyCh = null; _rmChan(_oldSaL); _clearConnResub('lobby'); /* build191 (TRANSPORT-1b): detach BEFORE remove */ lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} }
       else { try { if (window.RhythmChat && window.RhythmChat.hideLobbyChat) window.RhythmChat.hideLobbyChat(); } catch (e) {} }   // build191 (UI-3): the lobby stays alive (match / bracket) but the MP screen is gone — its fixed chat pill must not float over the game, hub or library; onActivated/showWinner restore it
     }
     // build191 (UI-3): the many direct re-raises (tour step / winner / show settle) set activeNow=true themselves, so
