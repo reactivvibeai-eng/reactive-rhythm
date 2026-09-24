@@ -42,6 +42,13 @@
 
   // ---- identity ----
   var ME = { id: localId(), name: 'Player', avatar: null, signedIn: false };
+  ME.name = _guestName(ME.id);   // build191 (RT-8): two guests both named "Player" were indistinguishable in rosters / rooms / chat
+  // build191 (RT-8): a stable, distinct guest handle derived from the per-browser rr_mp_id — same name every visit.
+  function _guestName(id) {
+    var s = String(id || ''), h = 0;
+    for (var i = 0; i < s.length; i++) { h = ((h * 31) + s.charCodeAt(i)) >>> 0; }
+    return 'Player-' + (1000 + (h % 9000));
+  }
   function localId() {
     try {
       var k = localStorage.getItem('rr_mp_id');
@@ -53,10 +60,13 @@
     try {
       if (window.RhythmCatalog && window.RhythmCatalog.getUser) {
         window.RhythmCatalog.getUser().then(function (u) {
+          var _oldId = ME.id, _wasSignedIn = ME.signedIn;
           if (u && u.id) { ME.id = u.id; ME.name = u.name || ME.name; ME.avatar = u.avatar_url || null; ME.signedIn = true; }
           paintYou();
           // if our identity changed while already in the lobby, re-announce it.
           reannounce();
+          if (_oldId !== ME.id) { try { _onMyIdChanged(_oldId); } catch (e) {} }   // build191 (ENTRY-4/TRANSPORT-3)
+          if (!_wasSignedIn && ME.signedIn) { try { _pingRoomReady(); } catch (e) {} try { if (room.id && room.isHost && !room.show && !room.shareCode && !room.codePending) _announceMyRoom(); } catch (e) {} }   // build191 (RT-7/RT-8): a guest host who signs in mid-room starts the room-ready heartbeat now + fetches a real code (replaces the guest code-slot copy)
         }).catch(function () { paintYou(); });
       }
     } catch (e) {}
@@ -74,11 +84,31 @@
     var m = String((err && err.message) || err || '');
     if (!/\b401\b|unauthorized/i.test(m)) return false;
     if (!ME.signedIn) return false;
-    ME.id = localId(); ME.name = 'Player'; ME.avatar = null; ME.signedIn = false;
+    var _oldId = ME.id;
+    ME.id = localId(); ME.name = _guestName(ME.id); ME.avatar = null; ME.signedIn = false;   // build191 (RT-8): the stable guest handle, not a bare "Player"
     try { paintYou(); } catch (e) {}
     try { refreshSigninNote(); } catch (e) {}
     try { reannounce(); } catch (e) {}
+    if (_oldId !== ME.id) { try { _onMyIdChanged(_oldId); } catch (e) {} }   // build191 (ENTRY-4/TRANSPORT-3)
     return true;
+  }
+  // build191 (ENTRY-4 / TRANSPORT-3): ME.id changed mid-session (late sign-in resolve, or a 401 demotion). softPresence
+  // only ever byes the CURRENT id, so the old one lingered ~75s as a ghost in every roster, and a room opened under it
+  // kept room.p1/p2 = the old id — startRoomMatch then sent a p1Id/p2Id that matched nobody, and the host/guest was
+  // routed to spectate its own match. Evidence = the id flip itself; render = bye + seat remap + re-advertise.
+  // Never touches a match channel or a bracket, and skips the room remap once a room-start is in flight/handled
+  // (a start already carrying the old id must not be raced).
+  function _onMyIdChanged(oldId) {
+    if (!oldId || oldId === ME.id) return;
+    try { if (lobbyCh) lobbyCh.send({ type: 'broadcast', event: 'bye', payload: { id: oldId } }); } catch (e) {}
+    if (!(room.id && room.ch) || matchLive || matchCh || _roomStartMid || spectating) return;
+    try { room.ch.send({ type: 'broadcast', event: 'bye', payload: { id: oldId } }); } catch (e) {}
+    if (room.p1 === oldId) room.p1 = ME.id;
+    if (room.p2 === oldId) room.p2 = ME.id;
+    try { if (room.members && room.members[oldId]) delete room.members[oldId]; } catch (e) {}
+    try { if (roomSP) roomSP.refresh(); } catch (e) {}
+    if (room.isHost) { try { advertiseRoom(); } catch (e) {} try { _emitRoomState('seat'); } catch (e) {} }
+    try { paintRoomWaiting(); } catch (e) {}
   }
 
   // ---- state ----
@@ -732,6 +762,7 @@
       if (window.RhythmSanctions && window.RhythmSanctions.recheckForMP) {
         window.RhythmSanctions.recheckForMP().then(function (res) {
           if (res && res.blocked) {
+            _clearLobbyIntent();   // build191 (RT-5): a sanctioned player's queued PLAY NOW must never fire
             if (res.message) banner('mpx-lobby-msg', res.message);
             roEmpty(true, res.message || 'Online play is unavailable right now.');
             return;   // don't joinLobby() while sanctioned
@@ -745,6 +776,7 @@
   }
   function leaveAll() {
     _setPhase('browsing', 'leave_all');       // MP-4 (observe-only): leaving MP entirely
+    _clearLobbyIntent();                      // build191 (RT-5): a queued PLAY NOW / OPEN ROOM dies with the screen
     try { if (_reseat) { _stopReseatWait(); clearFailCard(); } } catch (e) {}   // build191 (product_bugs[1]): leaving MP ends a pending re-seat wait (closeRoom below drops rr_room + the URL handle)
     try { closeRoom(true); } catch (e) {}    // build8: host closes / guest leaves room cleanly
     try { closeTour(true); } catch (e) {}    // build9: host dissolves / entrant forfeits the bracket
@@ -806,6 +838,7 @@
         _setConnState('lobby', 'live'); _connResubN.lobby = 0; if (_connResubT.lobby) { clearTimeout(_connResubT.lobby); _connResubT.lobby = 0; }   // A5/§4.2: lobby realtime is live
         lobbySP.start();
         if (_pendingShowRoom) _consumeShowRoom();   // build102s: GO LIVE was waiting on the lobby — open the show room now
+        if (_lobbyIntent) { try { _consumeLobbyIntent(); } catch (e) {} }   // build191 (RT-5): a PLAY NOW / OPEN ROOM tapped while connecting runs now
         // build11: invite deep-link — ask hosts to re-advertise, then join the target bracket
         if (_pendingTourJoin) {
           try { lobbyCh.send({ type: 'broadcast', event: 'room-ping', payload: { from: ME.id } }); } catch (e) {}
@@ -867,6 +900,7 @@
 
   function renderRoster(hostId) {
     var host = $('mpx-roster'); if (!host) return;
+    try { _pruneIncoming(); } catch (e) {}   // build191 (ENTRY-2): expired / busy-challenger invites revert to CHALLENGE
     var ids = Object.keys(lobby).filter(function (id) { return id !== ME.id; });
     var cnt = $('mpx-roster-count'); if (cnt) cnt.textContent = (Object.keys(lobby).length) + ' online';
     roEmpty(ids.length === 0, 'No one online yet — Play Now for a CPU warm-up.');
@@ -933,13 +967,29 @@
     }, 2000);
     onLobbySync();
   }
+  // build191 (ENTRY-2): an incoming challenge used to live forever — the challenger's own window is 12s (+12s late-accept
+  // grace = 24s from SEND), after which ACCEPT opened a match channel nobody would ever join. Keep the FIRST-receive time
+  // (the challenger re-emits the same mid every 2s — a re-receive must not refresh it) and drop it at 22s, or as soon as
+  // the challenger's presence shows them busy (in a match / seated in a room).
+  var INCOMING_TTL_MS = 22000;
+  function _pruneIncoming() {
+    var now = Date.now(), gone = false;
+    Object.keys(incoming).forEach(function (fid) {
+      var inc = incoming[fid], lp = lobby[fid];
+      if (!inc || (inc.at && now - inc.at > INCOMING_TTL_MS) || (lp && (lp.inMatch || lp.room))) { delete incoming[fid]; gone = true; }
+    });
+    return gone;
+  }
   function onChallenge(p) {
     if (!p || p.toId !== ME.id) return;          // not for me
-    incoming[p.fromId] = { mid: p.mid };
+    var prev = incoming[p.fromId];
+    incoming[p.fromId] = { mid: p.mid, at: (prev && prev.mid === p.mid && prev.at) || Date.now() };   // build191 (ENTRY-2)
+    setTimeout(function () { try { if (lobbyCh) onLobbySync(); } catch (e) {} }, INCOMING_TTL_MS + 500);   // build191 (ENTRY-2): repaint so the expired row reverts to CHALLENGE
     onLobbySync();
   }
   function acceptChallenge(fromId) {
-    var inc = incoming[fromId]; if (!inc) return;
+    _pruneIncoming();   // build191 (ENTRY-2): a stale invite can't be accepted
+    var inc = incoming[fromId]; if (!inc) { banner('mpx-lobby-msg', "That challenge expired — challenge them back."); try { onLobbySync(); } catch (e) {} return; }
     var _mid = inc.mid;
     lobbyCh.send({ type: 'broadcast', event: 'challenge-ans', payload: { fromId: ME.id, toId: fromId, mid: _mid, ok: true } });
     incoming = {};
@@ -949,11 +999,20 @@
     // eventually backed out to the MP UI ("challenging just drives us back into the Multiplayer UI"). Re-emit the
     // ans a few times until the challenger's presence lands on the match channel (oppPresent), tolerating a lost
     // broadcast. Self-cancels the instant the opponent is present, the match goes live, or the channel is torn down.
-    var _rt = 0;
+    var _rt = 0, _sawOpp = false;
     var _ansRetry = setInterval(function () {
+      if (matchId === _mid && oppPresent) _sawOpp = true;   // build191 (ENTRY-2)
       if (!lobbyCh || matchId !== _mid || !matchCh || oppPresent || matchLive || ++_rt > 6) { clearInterval(_ansRetry); return; }
       try { lobbyCh.send({ type: 'broadcast', event: 'challenge-ans', payload: { fromId: ME.id, toId: fromId, mid: _mid, ok: true } }); } catch (e) {}
     }, 2000);
+    // build191 (ENTRY-2): no-show deadline — the challenger never landed on rr-match-<mid> (gave up / left / closed the
+    // tab). Evidence = no opp presence on THIS mid for 25s; render = back to the lobby with a plain banner. Keyed on
+    // _mid so it can never touch a later match; a seen-then-gone opp is the pre-match opp-gone path's job, not ours.
+    setTimeout(function () {
+      if (matchId !== _mid || matchLive || _sawOpp || oppPresent || room.id || tour.id) return;
+      try { backToLobby(); } catch (e) {}
+      banner('mpx-lobby-msg', "They're gone — the challenge expired.");
+    }, 25000);
   }
   function declineChallenge(fromId) {
     var inc = incoming[fromId]; if (!inc) return;
@@ -1346,7 +1405,7 @@
   // every ~30s. Fire-and-forget: unauthed/!live/409 all no-op and the pure-realtime convergence path is unaffected.
   // Also covers OPEN "LIVE NOW" rooms (browse-join, no /challenge seed) so their callees preflight alive too.
   function _hostAwaitingGuest() { return !!(supa && room.id && room.isHost && !spectating && !matchLive && window.RhythmCatalog && window.RhythmCatalog.roomReady); }
-  function _pingRoomReady() { if (!_hostAwaitingGuest()) return; try { var p = window.RhythmCatalog.roomReady(room.id); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+  function _pingRoomReady() { if (!_hostAwaitingGuest()) return; if (!ME.signedIn) return; /* build191 (RT-7): /challenge/room-ready is authed — a guest host only earned a 401 every 30s (the interval keeps ticking, so a mid-room sign-in resumes it; resolveMe also pings on that edge) */ try { var p = window.RhythmCatalog.roomReady(room.id); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
   function _startRoomReadyHb() {
     _pingRoomReady();   // immediate fire on room-open so a browse-join / fast-accept callee sees alive without waiting 30s
     if (_roomReadyHbT) return;
@@ -1428,6 +1487,7 @@
     else if (meReady && !peerReady) paintWaitStatus('You\'re READY ✓ — waiting for ' + oppName + '…', true);
     else if (!meReady && peerReady) paintWaitStatus(oppName + ' is READY ✓ — tap READY to start.', true);
     else paintWaitStatus(sel.trackId ? 'Tap READY when you\'re set.' : 'Waiting for a track…');
+    try { refreshReadyEnabled(); } catch (e) {}   // build191 (RT-8): #mpx-readystate kept its pre-tap copy ("hit READY") after the tap — repaint it from the new meReady
     maybeStart();
     try { _armBothReadyWd(); } catch (e) {}   // A6: if both are now ready, arm the start watchdog (self-cancels once we go live)
   }
@@ -3281,9 +3341,35 @@
     _setPhase('browsing', 'back_to_lobby');   // MP-4 (observe-only): back at the lobby
   }
 
+  // build191 (RT-5): PLAY NOW / OPEN ROOM tapped while the lobby channel doesn't exist yet (the MP-entry sanctions check
+  // is still in flight, or a lobby rebuild is mid-way) used to say "Sign in to play online" — false for a signed-in
+  // player with a fine connection. Queue the intent instead: "Connecting…", consumed on the lobby's SUBSCRIBED, with a
+  // 12s deadline that says what really happened. Local-only state; no broadcast.
+  var _lobbyIntent = null, _lobbyIntentT = 0;
+  function _lobbyIntentMsgId(kind) { return kind === 'room' ? 'mpx-rooms-msg' : 'mpx-lobby-msg'; }
+  function _clearLobbyIntent() { _lobbyIntent = null; if (_lobbyIntentT) { clearTimeout(_lobbyIntentT); _lobbyIntentT = 0; } }
+  function _queueLobbyIntent(kind) {
+    _clearLobbyIntent();
+    _lobbyIntent = { kind: kind };
+    banner(_lobbyIntentMsgId(kind), 'Connecting…');
+    _lobbyIntentT = setTimeout(function () {
+      _lobbyIntentT = 0;
+      if (!_lobbyIntent) return;
+      var k = _lobbyIntent.kind; _lobbyIntent = null;
+      banner(_lobbyIntentMsgId(k), "Couldn't reach the live lobby — tap again.");
+    }, 12000);
+  }
+  function _consumeLobbyIntent() {
+    var it = _lobbyIntent; _clearLobbyIntent();
+    if (!it || !lobbyCh || !activeNow || matchLive || matchCh || room.id || tour.id) return;
+    banner(_lobbyIntentMsgId(it.kind), '');
+    if (it.kind === 'quick') toggleQuickMatch(); else if (it.kind === 'room') openRoom();
+  }
+
   // ===================== BUILD8: QUICK-MATCH =====================
   function toggleQuickMatch() {
     if (_qm && _qm.on) return;   // pkg1.3: the server queue owns the hero while SEARCHING — the fused pill's own click is the cancel
+    if (supa && !lobbyCh) { _queueLobbyIntent('quick'); return; }   // build191 (RT-5): connecting, not signed-out
     if (!supa || !lobbyCh) { banner('mpx-lobby-msg', 'Sign in to play online — quick-match needs a connection.'); return; }
     QM.looking = !QM.looking; QM.t = Date.now();
     paintQuickBtn(); reannounce();
@@ -3299,7 +3385,7 @@
       if (!QM.looking || matchCh || matchLive) return;
       QM.looking = false; QM._timer = null; paintQuickBtn(); reannounce();
       if (typeof devVsNpc === 'function') {
-        banner('mpx-lobby-msg', 'No one around yet — here\'s a warm-up vs CPU. We\'ll pair you with a human the moment one appears.');
+        banner('mpx-lobby-msg', 'No one around yet — here\'s a warm-up vs CPU. Tap PLAY NOW again after to look for a human.');   // build191 (ENTRY-10): the search STOPS when the CPU duel starts — the old "we'll pair you the moment one appears" promised a background search that never ran
         try { devVsNpc(); } catch (e) { banner('mpx-lobby-msg', 'No rivals online right now — open a room and invite a friend, or try Practice vs CPU.'); }
       } else {
         banner('mpx-lobby-msg', 'No rivals online right now — open a room and invite a friend, or try Practice vs CPU.');
@@ -3320,17 +3406,37 @@
   // Both sides receive qm-pair and route into the SAME match channel — no race, no double match.
   function tryQuickPair() {
     if (!QM.looking || matchCh || matchLive) return;
+    var _skipNow = Date.now();
     var cands = Object.keys(lobby).filter(function (id) {
-      var p = lobby[id]; return id !== ME.id && p && p.lf && !p.inMatch && !p.room;
+      var p = lobby[id]; return id !== ME.id && p && p.lf && !p.inMatch && !p.room &&
+        !(QM._skip && QM._skip[id] && _skipNow - QM._skip[id] < 30000);   // build191 (ENTRY-3): a peer that never answered our last qm-pair sits out 30s
     });
     if (!cands.length) return;
     cands.sort();
     var opp = cands[0];
     if (ME.id < opp) {   // I propose
       var mid = newMatchId();
-      lobbyCh.send({ type: 'broadcast', event: 'qm-pair', payload: { aId: ME.id, bId: opp, mid: mid } });
+      var _pairPl = { aId: ME.id, bId: opp, mid: mid };
+      lobbyCh.send({ type: 'broadcast', event: 'qm-pair', payload: _pairPl });
       QM.looking = false; paintQuickBtn(); reannounce();
       startMatchChannel(mid, 'host', lobby[opp]);   // proposer = host
+      // build191 (ENTRY-3): qm-pair was fire-once — ONE dropped broadcast stranded the proposer alone on rr-match-<mid>
+      // ("Waiting for your opponent…" forever) while the callee kept searching. Re-send the SAME pair (same mid — the
+      // callee's onQuickPair ignores it once it stopped looking, so a re-receive can't double-open) every 1.5s until the
+      // callee's presence lands; at 10s with no presence, give up on THIS mid, bench that peer 30s and resume searching.
+      // Keyed on mid: a later match can never be touched by this pair's timers.
+      var _pn = 0;
+      var _pairRetry = setInterval(function () {
+        if (matchId !== mid || oppPresent || matchLive || !lobbyCh || ++_pn > 5) { clearInterval(_pairRetry); return; }
+        try { lobbyCh.send({ type: 'broadcast', event: 'qm-pair', payload: _pairPl }); } catch (e) {}
+      }, 1500);
+      setTimeout(function () {
+        if (matchId !== mid || oppPresent || matchLive || room.id || tour.id) return;
+        QM._skip = QM._skip || {}; QM._skip[opp] = Date.now();
+        try { backToLobby(); } catch (e) {}
+        if (!(_qm && _qm.on)) { try { toggleQuickMatch(); } catch (e) {} }
+        banner('mpx-lobby-msg', 'Rival slipped away — still looking…');
+      }, 10000);
     }
     // else: wait — the smaller id will propose and I'll catch it in onQuickPair
   }
@@ -3600,16 +3706,56 @@
       // shared dedup with the ring poll (_ringSeen 'r:<rid>' TTL) AND a per-notification guard so the broadcast +
       // the postgres row + the poll can't triple-open the same call.
       if (_bcNotifSeen[key] && (Date.now() - _bcNotifSeen[key]) < 90000) return;
-      _bcNotifSeen[key] = Date.now();
       var ridKey = 'r:' + rid;
       if (_ringSeen[ridKey] && (Date.now() - _ringSeen[ridKey]) < 60000) return;   // the poll/ring already handled this room recently
-      _ringSeen[ridKey] = Date.now();
-      _tel('mp_ring_shown', { rail: (src === 'pg' ? 'pg' : src === 'bc' ? 'bc' : String(src || 'rt')), rid: rid });   // FIX 2.7: incoming battle-call delivered via realtime — bc-channel broadcast vs postgres-changes fallback
       var role = (p.role === 'host') ? 'host' : 'guest';   // the callee is normally the GUEST; honor an explicit host role
       var _nid = p.notification_id || p.notif_id || null;
-      try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice && _nid) window.RhythmCatalog.ackNotice(_nid); } catch (e) {}
-      _pendJoin(rid, { role: role, asSpec: false, label: 'Battle call — joining the room…', notificationId: _nid });
+      // build191 (ENTRY-5): live_match_invite is emitted when the CALLER taps (the ring), not when the callee accepts —
+      // auto-joining here dragged a player into a stranger's room without consent (and closed their own room on a
+      // seated friend via _pendJoin's closeRoom). A CHALLENGE / SHOW invite now RINGS (the #mpx-ring card: ACCEPT acks +
+      // _pendJoin with the notificationId; Decline dismisses). Auto-join stays ONLY for a matchmaking pair (the player
+      // opted into the queue) and a host-role pairing — and even those ring instead of closing a room I sit in with an
+      // opponent already seated.
+      var _kind = String(p.kind || '');
+      var _busyRoom = !!(room.id && room.id !== rid && (room.isHost ? room.p2 : true));
+      var _needRing = (_kind !== 'matchmaking' && role !== 'host') || _busyRoom;
+      if (_needRing && _ringUp) return;   // another call is ringing — don't mark it seen, so the poll rail can surface this one after
+      _bcNotifSeen[key] = Date.now();
+      _ringSeen[ridKey] = Date.now();
+      // build191 (TRANSPORT-6): every game tab of this user is subscribed to bc:user:<uuid> — without a claim, every
+      // open tab joined the same room under the same id (double song, hidden tab's ticks racing the real ones). One tab
+      // per call: a VISIBLE tab claims at once, a hidden one waits 1.5s so a visible tab wins (a lone hidden tab still
+      // proceeds — its ring tone is what calls the player back).
+      _bcClaim('r:' + rid, (document.visibilityState === 'hidden') ? 1500 : 0, function () {
+        if (!_inMenus()) { _pendingInvite = { p: p, at: Date.now() }; delete _bcNotifSeen[key]; delete _ringSeen[ridKey]; return; }   // a run started inside the claim window — defer like any mid-run invite
+        if (_needRing) {
+          if (_nid != null) _ringSeen[String(_nid)] = 1;   // the poll rail must not re-ring the same notification row
+          _showRing(String(p.caller_name || p.from_name || p.host_name || 'A player').slice(0, 22), rid, _nid);   // (_showRing emits its own mp_ring_shown)
+          return;
+        }
+        _tel('mp_ring_shown', { rail: (src === 'pg' ? 'pg' : src === 'bc' ? 'bc' : String(src || 'rt')), rid: rid });   // FIX 2.7: incoming battle-call delivered via realtime — bc-channel broadcast vs postgres-changes fallback
+        try { if (window.RhythmCatalog && window.RhythmCatalog.ackNotice && _nid) window.RhythmCatalog.ackNotice(_nid); } catch (e) {}
+        _pendJoin(rid, { role: role, asSpec: false, label: 'Battle call — joining the room…', notificationId: _nid });
+      });
     } catch (e) {}
+  }
+  // build191 (TRANSPORT-6): cross-tab claim for one battle call (same-origin localStorage). Write my tab id, re-read
+  // after 60ms — the last writer owns it; a claim by another tab for the same key inside 90s means "not mine". Any
+  // storage failure fails OPEN (today's behaviour), so a blocked localStorage can never swallow a call.
+  var _BC_TAB = 't' + Math.random().toString(36).slice(2, 10);
+  function _bcClaim(ck, delayMs, go) {
+    setTimeout(function () {
+      var K = 'rr_bc_claim';
+      try {
+        var cur = JSON.parse(localStorage.getItem(K) || 'null');
+        if (cur && cur.key === ck && cur.tab !== _BC_TAB && Date.now() - (+cur.at || 0) < 90000) return;   // another tab has it
+        localStorage.setItem(K, JSON.stringify({ key: ck, tab: _BC_TAB, at: Date.now() }));
+      } catch (e) { try { go(); } catch (e2) {} return; }
+      setTimeout(function () {
+        try { var c2 = JSON.parse(localStorage.getItem(K) || 'null'); if (c2 && c2.key === ck && c2.tab !== _BC_TAB) return; } catch (e) {}
+        try { go(); } catch (e) {}
+      }, 60);
+    }, delayMs || 0);
   }
   // MP-reliability FIX #1: read the LIVE session JWT (async — may hit storage/refresh). Always resolves (null on any
   // failure) so a caller can never wedge on it.
@@ -4273,6 +4419,7 @@
   // the server-minted matched_room — channels are unregistered strings, so any rid works). Normal openRoom behavior
   // is byte-identical: it reads the create-form exactly as before and calls the same core with a generated id.
   function openRoom() {
+    if (supa && !lobbyCh) { _queueLobbyIntent('room'); return; }   // build191 (RT-5): connecting, not signed-out
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     var nm = ($('mpx-room-name') && $('mpx-room-name').value || '').trim().slice(0, 28) || (ME.name + "'s Room");
     var priv = !!(screen.querySelector('#mpx-room-priv button.active') && screen.querySelector('#mpx-room-priv button.active').getAttribute('data-priv') === 'private');
@@ -4282,6 +4429,7 @@
   }
   function openRoomWithId(rid, opts) {
     opts = opts || {};
+    if (supa && !lobbyCh) { banner('mpx-rooms-msg', 'Still connecting to the live lobby — try again in a moment.'); return; }   // build191 (RT-5): not a sign-in problem
     if (!supa || !lobbyCh) { banner('mpx-rooms-msg', 'Sign in to play online — rooms need a connection.'); return; }
     if (_qm.on) qmStop(true);   // v405 review fix: hosting a room cancels a live matchmaking search (a match landing mid-room stomps it). No-op on the qmMatched host path (_qm.on already false, so the MATCHED pill survives).
     clearShowRoom();   // playtest-3 fix (Bug C): opening a NORMAL/qm/battle room invalidates any stale rr_showroom key, so a boot-time maybeReconnectShowRoom() can never resurrect show-seat chrome ("accept the challenge"/"being called in") on top of it. This room is not a show; startShowHeartbeat re-persists for real show rooms only.
@@ -4592,7 +4740,8 @@
   // rr-room-<rid>), then keeps re-pinging for ~40s so a host who shows up later still converges. It never
   // silently drops to the lobby/menu while a room is expected — worst case it holds a clear "Joining…" state.
   var _pendJoinT = 0, _pendJoinRid = null;
-  function _clearPendJoin() { if (_pendJoinT) { clearInterval(_pendJoinT); _pendJoinT = 0; } _pendJoinRid = null; }
+  var _pendHostT = 0;   // build191 (ENTRY-7): host-side "open the room once the lobby exists" poll
+  function _clearPendJoin() { if (_pendJoinT) { clearInterval(_pendJoinT); _pendJoinT = 0; } if (_pendHostT) { clearInterval(_pendHostT); _pendHostT = 0; } _pendJoinRid = null; }
   // MP_GUEST_CONTRACT_v1 §2: true only while joinRoomDirect() is deliberately opening the channel for the very rid
   // the _pendJoin watchdog is waiting on. joinRoomChannel() calls leaveRoomChannel(), which calls _clearPendJoin() —
   // so the direct join used to DESTROY the clock that was supposed to time it out, and the guest was then stranded in
@@ -4719,7 +4868,17 @@
         if (room.id || tour.id || matchLive) return;
         try { openRoomWithId(rid, _revive || { priv: true, name: (ME.name + "'s Match").slice(0, 28) }); } catch (e) {}
       };
-      if (lobbyCh) _openHost(); else setTimeout(_openHost, 1200);   // lobby may still be subscribing at boot
+      // build191 (ENTRY-7): was ONE retry at 1.2s — for a signed-in player the lobby channel only exists after the
+      // /sanctions/me recheck returns, so a slow check lost the race and the host never opened the room (the guest then
+      // waited ~45s for "NO HOST"). Poll every 400ms for up to 10s; stops on open / any room / bracket / live run.
+      if (lobbyCh) _openHost();
+      else {
+        var _ph = 0;
+        _pendHostT = setInterval(function () {
+          if (room.id || tour.id || matchLive || ++_ph > 25) { clearInterval(_pendHostT); _pendHostT = 0; return; }
+          if (lobbyCh) { clearInterval(_pendHostT); _pendHostT = 0; _openHost(); }
+        }, 400);
+      }
       if (_revive) { banner('mpx-setup-msg', 'Reconnected — your room is back.'); }   // build191: a revive is not a new matchmaking pair — no MATCHED pill / "rival on the way" copy
       else {
       paintQmPill('matched');
@@ -4743,6 +4902,11 @@
     var directAt = 4;   // ~10s of meta-fast-path grace (4 × 2.5s) before we force a direct channel join
     var maxTries = 18;  // ~45s baseline window
     var _roomDead = false;   // set only when the /room-status preflight explicitly says alive:false
+    // build191 (ENTRY-8): rr_active_rooms is only fed by the host's AUTHED room-ready heartbeat, so a signed-OUT host's
+    // live room reads alive:false — and only signed-in joiners run the preflight. For a player join that verdict is now
+    // SOFT: the direct join still runs, and the "no host" card comes at ~15s unless realtime host evidence lands.
+    // Spectate deep-links keep the old hard verdict (spectate byte-identity).
+    var _softDead = false;
     var _jt0 = Date.now(), _directFired = false;   // FIX 2.7: join-start clock + which path converged (meta fast-path vs direct-join fallback)
     // MP_GUEST_CONTRACT_v1 §2 — CONVERGENCE IS HOST EVIDENCE, NOT room.id.
     // joinRoomDirect() synthesizes room.id off the rid alone: a hypothesis, not a fact. Reading it as "converged"
@@ -4788,6 +4952,7 @@
           if (window.RhythmCatalog && window.RhythmCatalog.roomStatus) {
             window.RhythmCatalog.roomStatus(rid).then(function (st) {
               if (st && st.alive === false) {
+                if (!opts.asSpec) { _softDead = true; return; }   // build191 (ENTRY-8): a player join — soft verdict, no eject
                 _roomDead = true;
                 if (room.id === rid && !room.isHost && !matchCh && !(room.p1 && room.members[room.p1])) {
                   _clearPendJoin();
@@ -4801,7 +4966,7 @@
           }
         } catch (e) {}
       }
-      if ((tries >= maxTries) || (_roomDead && !room.id)) {
+      if ((tries >= maxTries) || (_roomDead && !room.id) || (_softDead && tries >= 6 && !_hostEvidence())) {   // build191 (ENTRY-8): soft-dead → ~15s no-host verdict
         _clearPendJoin();
         if (!room.id) {
           _pendingRoomJoin = null;
@@ -4900,7 +5065,7 @@
     for (var k = 0; k < 4; k++) { out += A.charAt(h % A.length); h = Math.floor(h / A.length); }
     return out;
   }
-  function roomInviteLink(rid) { return location.origin + location.pathname + '?mproom=' + encodeURIComponent(rid); }
+  function roomInviteLink(rid) { return location.origin + location.pathname + '?mproom=' + encodeURIComponent(rid) + '&skipIntro=1'; }   // build191 (ENTRY-9): + skipIntro=1 (same shape as the site battle-call URL) — an invitee lands in the room, not on the tap-to-begin title
 
   // ===================== Wave-3: JOIN-BY-CODE (server room codes) =====================
   // Two brand-new game-catalog endpoints (live now):
@@ -4943,8 +5108,13 @@
   function _paintShareCode() {
     var codeEl = $('mpx-invite-code'); if (!codeEl) return;
     if (!room.id || !room.isHost) return;
+    // build191 (RT-8): a guest host's slot read "ROOM CODE: SIGN IN" — like a code that happened to spell SIGN IN, and
+    // an instruction with no action. Say what it is (no code for guest rooms) and what works (the link).
+    var lblEl = null; try { lblEl = codeEl.parentNode && codeEl.parentNode.querySelector('.mpx-invite-lbl'); } catch (e) {}
+    var _guestSlot = !room.shareCode && !ME.signedIn;
+    if (lblEl) lblEl.textContent = _guestSlot ? 'GUEST ROOM — NO CODE' : 'ROOM CODE';
     if (room.shareCode) { codeEl.textContent = room.shareCode; codeEl.title = ''; return; }              // success
-    if (!ME.signedIn) { codeEl.textContent = 'SIGN IN'; codeEl.title = 'Room codes need sign-in — your invite link works right now.'; return; }
+    if (!ME.signedIn) { codeEl.textContent = 'USE LINK'; codeEl.title = 'Sign in for a typeable room code — your invite link works right now.'; return; }
     if (room.codePending) { codeEl.textContent = '····'; codeEl.title = ''; return; }                     // in flight (the only legal '····')
     codeEl.textContent = 'LINK ONLY'; codeEl.title = 'Couldn’t get a room code — the invite link still works.';   // failure render
   }
@@ -5133,6 +5303,9 @@
     // never over a match channel, and only for THE room we're actually in as a non-host guest.
     if (room.id && !room.isHost && !matchCh && p.rid === room.id) {
       if (!room.p1 && p.hostId) room.p1 = p.hostId;
+      // build191 (ENTRY-4): the HOST's id changed mid-room (late sign-in / 401 demotion — _onMyIdChanged byes the old
+      // id + re-advertises) → follow it, but only when the old p1 is no longer a present member (evidence it's gone).
+      else if (p.hostId && room.p1 !== p.hostId && !matchLive && !(room.members && room.members[room.p1])) room.p1 = p.hostId;
       if (p.name) room.name = String(p.name).slice(0, 28);
       if (typeof p.combat !== 'undefined') room.combat = !!p.combat;
       if (typeof p.matched !== 'undefined') room.matched = !!p.matched;
@@ -8565,7 +8738,7 @@
   wire('mpx-tour-q', 'input', function () { tourRenderPicker(this.value); });
   wire('mpx-tour-invite', 'click', function () {
     if (!tour.id) return;
-    var link = location.origin + location.pathname + '?mpjoin=' + tour.id;
+    var link = location.origin + location.pathname + '?mpjoin=' + tour.id + '&skipIntro=1';   // build191 (ENTRY-9): skip the tap-to-begin title on arrival
     var btn = $('mpx-tour-invite');
     function flash(ok) { if (!btn) return; btn.classList.toggle('copied', ok); btn.textContent = ok ? '✓ LINK COPIED — SEND IT' : 'COPY INVITE LINK'; if (ok) setTimeout(function () { btn.classList.remove('copied'); btn.textContent = 'COPY INVITE LINK'; }, 2600); }
     try { navigator.clipboard.writeText(link).then(function () { flash(true); }, function () { window.prompt('Copy the invite link:', link); }); }
