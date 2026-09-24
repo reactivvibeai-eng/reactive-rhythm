@@ -796,7 +796,7 @@
     var _oldLobbyCh = lobbyCh; lobbyCh = null; _rmChan(_oldLobbyCh);   // build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED must fail the guard
     lobbyCh = null; lobbySP = null; lobby = {}; _clearConnResub('lobby');   // v418 (B8): leaving MP kills any pending lobby re-subscribe + drops the chip
     try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {}   // build111 s2: channel teardown clears the ring buffer — a later rejoin never leaks stale lobby chat
-    try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {}   // build191 (UI-1): leaving from the winner card — the hub must not inherit the engine's stale 'results' Enter/Esc/Space
+    _releaseResults();   // build191 (UI-1 + RT2-2): leaving from the winner card — the hub must not inherit the engine's stale 'results' Enter/Esc/Space
     // hand back to the hub so the back-stack stays consistent.
     try {
       if (window.RhythmHub && window.RhythmHub.show) { window.RhythmHub.show(); return; }
@@ -3294,6 +3294,21 @@
     _tel('mp_rematch_via_room', { why: String(why || '').slice(0, 20) });
     return true;
   }
+  // build191 (RT2-1): the opponent RE-ENTERED through the room (reload / BACK TO LOBBY + invite link) while this seat is on
+  // the post-REMATCH setup step still holding the old match channel → READY stayed dead with "Waiting for a player to join"
+  // until the guest readied first. The REMATCH click / picker only convert at click time; this converts when they arrive.
+  // Evidence: a seated room member + still absent from the match channel 3s later (a transient match-channel rebuild never
+  // trips it — _roomRematchFallback re-checks every guard). Deadline: one re-check per arrival. Never on the winner card
+  // (finishedLocal) — the REMATCH click owns that moment, so the verdict screen is never yanked away.
+  var _rmFallT = 0;
+  function _armRoomRematchCheck() {
+    if (_rmFallT || !matchCh || matchLive || oppPresent || finishedLocal || !room.id || room.show || spectating) return;
+    _rmFallT = setTimeout(function () {
+      _rmFallT = 0;
+      if (oppPresent || matchLive || finishedLocal) return;
+      try { _roomRematchFallback('seat'); } catch (e) {}
+    }, 3000);
+  }
   // MP-5: mid-deduped rematch receiver. resetForRematch() nulls _lastRematchMid, so the mid is re-asserted AFTER the reset —
   // a retried/duplicate 'rematch' (same mid, re-flushed on a channel flap) then early-returns instead of resetting twice.
   function onRematch(p) {
@@ -3349,7 +3364,15 @@
     try { if (room.id && room.isHost) _startRoomStateBeat(); } catch (e) {}   // MP-2: the match ended but the room lives on (rematch) — resume the snapshot beat so a flapped guest/spectator still converges
     try { window.dispatchEvent(new Event('resize')); } catch (e) {}   // refit the engine canvas back to full width
   }
+  // build191 (RT2-2): showWinner strips #results + drops the engine out of state 'results' only inside a
+  // requestAnimationFrame. A tab whose rAF never ran (hidden/background at match end) kept #results.active + state
+  // 'results', so BACK TO LOBBY / Back + Enter launched a solo replay of the MP song. Do it synchronously on every exit.
+  function _releaseResults() {
+    try { var _rs = $('results'); if (_rs) _rs.classList.remove('active'); } catch (e) {}   // only ever called from MP exits — a leftover #results here is the finished MP run's, never a live solo one
+    try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {}
+  }
   function backToLobby() {
+    _releaseResults();   // build191 (RT2-2)
     _cancelShowOpen();   // review fix 7: backing out kills a pending GO LIVE watchdog too (inert for normal MP)
     // build102s (judge-mandated reroute): backing out of a SHOW must fully close the room — the verified
     // backToLobby zombie leaves room.id/roomSP advertising a dead LIVE room to the site-notified artist.
@@ -4694,6 +4717,10 @@
       if (!_hostPeer) { Object.keys(room.members).forEach(function (id) { if (id !== ME.id && room.members[id].seat !== 'spec' && (room.members[id].at || Infinity) === _earliest) _hostPeer = id; }); }
       if (_hostPeer) { room.p1 = _hostPeer; }
     }
+    // build191 (RT2-1): an opponent seated in the ROOM while I still hold a stale post-rematch match channel → convert
+    try {
+      if (matchCh && !matchLive && !room.show && Object.keys(room.members).some(function (id) { return id !== ME.id && room.members[id] && room.members[id].seat !== 'spec'; })) _armRoomRematchCheck();
+    } catch (e) {}
     paintRoomWaiting();
   }
   // host launches: tells both seats to spin up the SAME match channel; spectators get the mid too.
@@ -4803,6 +4830,7 @@
     _stopReseatWait();
     _clearPendJoin(); if (_pendingRoomJoin === rid) _pendingRoomJoin = null;   // the reseat wait owns this rid now (no silent pend expiry, no mid-song direct-join)
     _reseat = { rid: rid, t0: Date.now(), T: 0 };
+    try { var _cc = $('mpx-coach'); if (_cc) _cc.hidden = true; } catch (e) {}   // build191 (RT2-3): the first-visit coach opened at MP entry must not cover this card (not marked seen — it re-offers later)
     showFailCard({ stage: 'reseat_wait', head: 'MATCH IN PROGRESS', reason: 'A match is live in this room right now — you can’t join a song mid-run. Stay here and you’ll be put back in the room the moment it ends.',
       actions: [{ label: 'LEAVE', fn: function () { _stopReseatWait(); try { clearRoom(); } catch (e) {} clearFailCard(); step('lobby'); onLobbySync(); } }] });
     _reseat.T = setInterval(function () {
@@ -8406,7 +8434,10 @@
 
   // ---- build60: first-run coach card (one-time; re-openable via the header "?") ----
   function mpSeen() { try { return localStorage.getItem('rr_mp_seen') === '1'; } catch (e) { return false; } }
-  function showCoach() { var c = $('mpx-coach'); if (c) c.hidden = false; }
+  function showCoach() {
+    if (_reseat) return;   // build191 (RT2-3): never cover the "MATCH IN PROGRESS — you'll be put back" card on a mid-match reload (it re-offers on the next lobby visit)
+    var c = $('mpx-coach'); if (c) c.hidden = false;
+  }
   function dismissCoach() { var c = $('mpx-coach'); if (c) c.hidden = true; try { localStorage.setItem('rr_mp_seen', '1'); } catch (e) {} }
   wire('mpx-coach-go', 'click', dismissCoach);
   wire('mpx-help', 'click', showCoach);
@@ -8812,7 +8843,7 @@
   // heartbeat, rr_active_rooms ping and room.id all survived: a host kept advertising a room it wasn't in, a guest sat as a
   // ghost the opponent waited on). closeRoom(true): host → room-gone + heartbeat stop; guest/spectator → silent leave.
   // Also ends a pending re-seat wait (product_bugs[1]) and drops the engine's stale 'results' state (UI-1).
-  wire('mp-back', 'click', function () { _clearLobbyIntent(); /* build191 (INTENT-LEAK): a PLAY NOW / OPEN ROOM queued while connecting must not fire on re-entry */ try { if (_reseat) { _stopReseatWait(); clearRoom(); clearFailCard(); } } catch (e) {} try { if (window.RhythmGame && window.RhythmGame.toIdle) window.RhythmGame.toIdle(); } catch (e) {} try { _cancelShowOpen(); if (room.id) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); } catch (e) {} var _oldBackL = lobbyCh; lobbyCh = null; _rmChan(_oldBackL); /* build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED painted "Could not reach the live lobby (CLOSED)" + a stuck RECONNECTING… chip */ _clearConnResub('lobby'); try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too; build111 s2: lobby chat ring buffer clears too
+  wire('mp-back', 'click', function () { _clearLobbyIntent(); /* build191 (INTENT-LEAK): a PLAY NOW / OPEN ROOM queued while connecting must not fire on re-entry */ try { if (_reseat) { _stopReseatWait(); clearRoom(); clearFailCard(); } } catch (e) {} _releaseResults(); /* build191 (RT2-2) */ try { _cancelShowOpen(); if (room.id) closeRoom(true); } catch (e) {} try { closeTour(true); teardownMatch(); if (lobbySP) lobbySP.stop(); } catch (e) {} var _oldBackL = lobbyCh; lobbyCh = null; _rmChan(_oldBackL); /* build191 (TRANSPORT-1b): detach BEFORE remove — the sync CLOSED painted "Could not reach the live lobby (CLOSED)" + a stuck RECONNECTING… chip */ _clearConnResub('lobby'); try { _onlineStop(); } catch (e) {} lobbyCh = null; lobbySP = null; lobby = {}; try { if (window.RhythmChat && window.RhythmChat.teardownLobbyChat) window.RhythmChat.teardownLobbyChat(); } catch (e) {} });   // build102s: leaving the MP screen ends an open show + any pending GO LIVE watchdog (never a zombie LIVE room advertised to the artist); build105: ONLINE NOW polling stops cold too; build111 s2: lobby chat ring buffer clears too
 
   // clean up presence if the tab closes
   window.addEventListener('beforeunload', function () { try {
