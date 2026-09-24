@@ -113,7 +113,7 @@
     if (!su) return null;   // no local session → logged out
     if (API_BASE) {         // enrich from the site profile when reachable (best display name + avatar)
       try {
-        const out = await api('/me', { auth: true });
+        const out = await api('/me', { auth: true, timeoutMs: 5000 });   // build191 (DATA-6): a stalled /me falls back to the local session in ≤5s (MP identity no longer waits minutes)
         if (out && out.user && out.user.id) return { id: out.user.id, name: out.user.display_name || 'Player', email: out.user.email || null, avatar_url: out.user.avatar_url || null };
       } catch (e) { /* CORS/backend hiccup → fall through to the local session's own user (still signed in) */ }
     }
@@ -189,6 +189,9 @@
           saveSparksCache(bal);
           return bal;
         }
+        // build191 (DATA-9, minimal): signed OUT → never show the LAST account's cached cashable balance (shared PC /
+        // account switch). Zero the unscoped cache so the next account can't inherit it on a /sparks hiccup either.
+        if (supa) { saveSparksCache(0); return 0; }
       } catch (e) { /* fall through to cache */ }
     }
     return loadSparksCache();   // logged-out / backend hiccup → last cached value
@@ -577,9 +580,17 @@
       if (bonusServerOn() && out && out.signed_in) { try { _bonusSrvBalance(); } catch (e) {} }   // build100h: prime the authoritative Bonus balance cache once we know who's signed in
       // return the NORMALIZED cache (not the raw backend list): store consumers key on {item_type,item_id},
       // so handing back raw {type,id}/string rows would make a purchased item read as unowned → double charge.
+      _entRetryN = 0;   // build191 (DATA-5): a good read resets the retry budget
       return { signed_in: !!(out && out.signed_in), owns: _entitlements.owns.slice() };
-    } catch (e) { return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() }; }
+    } catch (e) {
+      // build191 (DATA-5): a thrown /entitlements (boot prime especially) left signed_in=false until the next auth event
+      // or Store open → a signed-in player's runs minted LOCAL Bonus that later vanished. Retry on a bounded backoff
+      // (5s, then 20s; one pending at a time) so the server-authoritative path is restored within seconds.
+      if (!_entRetryT && _entRetryN < 2) { _entRetryT = setTimeout(function () { _entRetryT = 0; try { getEntitlements(); } catch (e2) {} }, _entRetryN++ ? 20000 : 5000); }
+      return { signed_in: _entitlements.signed_in, owns: _entitlements.owns.slice() };
+    }
   }
+  var _entRetryT = 0, _entRetryN = 0;   // build191 (DATA-5): getEntitlements failure-retry state
   // POST /sparks/spend { item_type, item_id, idempotency_key } -> {ok,balance,granted,deduped}
   // 402 insufficient_sparks · 409 price_mismatch. Returns a normalized result the UI branches on.
   async function spendSparks(item_type, item_id, idem) {
@@ -606,7 +617,7 @@
   // onRes: optional hook called with the raw fetch Response BEFORE the body is parsed —
   // lets a caller read response headers (e.g. X-Total-Count for paged crawls) without
   // changing the return shape. Guarded: an onRes that throws must never fail the request.
-  async function api(path, { method = 'GET', body = null, auth = false, authWaitMs = 0, onRes = null } = {}) {
+  async function api(path, { method = 'GET', body = null, auth = false, authWaitMs = 0, onRes = null, timeoutMs = 0 } = {}) {
     const headers = { 'content-type': 'application/json' };
     if (auth) {
       let tk = await getToken();
@@ -616,15 +627,22 @@
       if (!tk && authWaitMs > 0) { const t0 = Date.now(); while (!tk && Date.now() - t0 < authWaitMs) { await new Promise(r => setTimeout(r, 250)); tk = await getToken(); } }
       if (tk) headers.authorization = 'Bearer ' + tk;
     }
-    const res = await fetch(API_BASE + path, {
-      method, headers, body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      let detail = ''; try { detail = (await res.json()).error || ''; } catch (e) {}
-      throw new Error('API ' + res.status + (detail ? ' · ' + detail : '') + ' (' + path + ')');
-    }
-    if (onRes) { try { onRes(res); } catch (e) {} }
-    return res.json();
+    // build191 (DATA-6): OPT-IN per-call timeout (default 0 = no timeout, byte-identical for every existing caller). A
+    // stalled edge function otherwise keeps the promise pending for minutes; only identity reads opt in (see getUser).
+    const _ctl = (timeoutMs > 0 && typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const _tmo = _ctl ? setTimeout(function () { try { _ctl.abort(); } catch (e) {} }, timeoutMs) : 0;
+    try {
+      const res = await fetch(API_BASE + path, {
+        method, headers, body: body ? JSON.stringify(body) : undefined,
+        signal: _ctl ? _ctl.signal : undefined,
+      });
+      if (!res.ok) {
+        let detail = ''; try { detail = (await res.json()).error || ''; } catch (e) {}
+        throw new Error('API ' + res.status + (detail ? ' · ' + detail : '') + ' (' + path + ')');
+      }
+      if (onRes) { try { onRes(res); } catch (e) {} }
+      return await res.json();
+    } finally { if (_tmo) clearTimeout(_tmo); }
   }
 
   // ---------- shared, gesture-unlocked <audio> element (mobile autoplay) ----------
@@ -717,7 +735,10 @@
       const a = this.audio.currentTime; const now = performance.now();
       if (a !== this._lastA) { this._lastA = a; this._lastWall = now; }
       if (this._paused) return this._lastA;
-      return this._lastA + (now - this._lastWall) / 1000;
+      // build191 (ENGINE-9): CAP the wall-clock extrapolation. It smooths the coarse currentTime between updates, but
+      // uncapped it free-ran through a buffering STALL (notes kept scrolling into silence → burst of misses → the
+      // highway snapped back). 500ms is far above any normal currentTime update gap, so smooth playback is unchanged.
+      return this._lastA + Math.min(now - this._lastWall, 500) / 1000;
     }
     getDuration() { return this.duration || this.audio.duration || 0; }
     pause() { this._paused = true; this._lastA = this.audio.currentTime; try { this.audio.pause(); } catch (e) {} }
@@ -910,14 +931,26 @@
       try {
         // --- page 0 (sequential): learn the total from X-Total-Count if the server sends it ---
         let total = NaN;
-        const first = await api('/tracks?limit=' + LIMIT + '&offset=0', {
-          onRes: (res) => {
-            try {
-              const h = res.headers && res.headers.get && res.headers.get('X-Total-Count');
-              if (h != null && h !== '') { const n = parseInt(h, 10); if (isFinite(n) && n >= 0) total = n; }
-            } catch (e) {}
-          },
-        });
+        // build191 (DATA-2): page 0 is the whole verdict (fail → samples), so a single blip at BOOT retried nothing. While
+        // no live library is loaded yet, retry it twice with a short backoff before giving up. A refresh over an already
+        // live library does not retry (a failure there keeps the loaded library — see below).
+        let first;
+        for (let _p0Try = 0; ; _p0Try++) {
+          try {
+            first = await api('/tracks?limit=' + LIMIT + '&offset=0', {
+              onRes: (res) => {
+                try {
+                  const h = res.headers && res.headers.get && res.headers.get('X-Total-Count');
+                  if (h != null && h !== '') { const n = parseInt(h, 10); if (isFinite(n) && n >= 0) total = n; }
+                } catch (e) {}
+              },
+            });
+            break;
+          } catch (_p0e) {
+            if (catalogLive || _p0Try >= 2) throw _p0e;
+            await new Promise(function (r) { setTimeout(r, _p0Try ? 2500 : 1000); });
+          }
+        }
         pushPage(first);
         const firstLen = (first && first.length) || 0;
         if (firstLen < LIMIT) {
@@ -1007,9 +1040,17 @@
       } else if (!crawlErrored) {
         // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
         try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Library is empty right now — showing samples', 'error'); } catch (e2) {}
+      } else if (catalogLive && catalogTracks.length) {
+        // build191 (DATA-2): a failed REFRESH must never replace an already-loaded REAL library with 1000 fake songs
+        // (they all play the demo, book bests under fake ids, and MP pickers offer ids no peer can resolve). Keep it.
+        try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't refresh the library — keeping what's loaded", 'error'); } catch (e2) {}
+        try { window.dispatchEvent(new CustomEvent('rr:catalog-ready')); } catch (e2) {}   // same one-signal-per-resolution contract (hub never strands on Loading…)
+        return;
       } else {
         // build58: don't silently swap in fake sample songs — tell the player the live library didn't load (the refresh icon retries).
-        try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't reach the library — showing samples", 'error'); } catch (e2) {}
+        // build191 (DATA-2): + it now retries on its own (see _armCatalogAutoRetry) — say so.
+        try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't reach the library — showing samples. Retrying…", 'error'); } catch (e2) {}
+        _armCatalogAutoRetry();
       }
     }
     catalogLive = false;
@@ -1032,6 +1073,22 @@
     reloading = true;
     try { await loadCatalog(); renderHome(); }
     finally { reloading = false; }
+  }
+  // build191 (DATA-2): the samples fallback used to be permanent until a manual refresh. Now it self-heals: ONE pending
+  // retry at a time — on the browser's 'online' event or a backoff timer (20s, 60s, 120s; then only 'online' / the
+  // refresh icon). Evidence = catalogLive (a successful crawl ends it); never runs mid-song (re-arms instead);
+  // ?mock=1 never arms it (loadCatalog skips the API there).
+  var _catRetryT = 0, _catRetryN = 0, _catRetryOnline = false;
+  function _armCatalogAutoRetry() {
+    if (_catRetryT) return;
+    var run = function () {
+      if (_catRetryT) { clearTimeout(_catRetryT); _catRetryT = 0; }
+      if (catalogLive) return;
+      try { if (document.querySelector('#game.active, #loading.active, #countdown.active')) { _catRetryT = setTimeout(run, 15000); return; } } catch (e) {}
+      Promise.resolve(reloadCatalog()).catch(function () {});
+    };
+    if (!_catRetryOnline) { _catRetryOnline = true; try { window.addEventListener('online', function () { if (!catalogLive) run(); }); } catch (e) {} }
+    if (_catRetryN < 3) { _catRetryT = setTimeout(run, [20000, 60000, 120000][_catRetryN]); _catRetryN++; }
   }
 
   // ---------- track readiness (no dead songs) ----------
@@ -1255,6 +1312,14 @@
   // ---------- per-user best scores (localStorage now; API-backed later) --------
   let _scoresCache = null;   // build58: parse rr_scores ONCE — getBest() runs per song card (1100+), the per-call JSON.parse was the list-render hot path
   function loadScores() { if (_scoresCache) return _scoresCache; try { _scoresCache = JSON.parse(localStorage.getItem('rr_scores') || '{}'); } catch (e) { _scoresCache = {}; } return _scoresCache; }
+  // build191 (DATA-7): the memo was never invalidated — a profile WIPE left the old bests in it (covers kept the grades,
+  // and the next saveBest wrote the whole stale cache back). resetLocalProgress() is the wipe seam (index.html's RESET
+  // CAREER calls it); a 'storage' event from ANOTHER tab also drops the memo so one tab can't clobber the other's bests.
+  function resetLocalProgress() {
+    _scoresCache = null;
+    try { localStorage.removeItem('rr_career'); localStorage.removeItem('rr_scores'); } catch (e) {}
+  }
+  try { window.addEventListener('storage', function (e) { if (!e || e.key === 'rr_scores' || e.key === null) _scoresCache = null; }); } catch (e) {}
   function gradeFor(acc) { return acc >= 0.95 ? 'S' : acc >= 0.88 ? 'A' : acc >= 0.75 ? 'B' : acc >= 0.60 ? 'C' : 'D'; }   // build71: align this fallback grader to the ENGINE scale (game.js endGame: S>=95/A>=88/B>=75/C>=60). Runs carry res.grade so this only affects the latent fallback (legacy rr_scores / external callers) — but a cover card and the results screen must never disagree.
   function getBest(trackId) {
     const s = loadScores(); let best = null;
@@ -2155,6 +2220,11 @@
     if ((currentTrack && currentTrack._preview) || (results && results.preview)) return;   // build100h+: host review preview — NO career/best/bonus/plays/score submit (scoring:'preview_only')
     const grade = results.grade || gradeFor(results.accuracy || 0);
     const failed = !!results.failed;
+    // build191 (DATA-1): an MP round (game.js latches results.mp at launch) never set currentTrack — it still points at
+    // the last SOLO song. Such a run keeps ONLY the lifetime career aggregate (block 1, keyed on the MP track) and
+    // returns before the per-song best, goals/XP, Bonus, Daily-Rift ×3 and /score blocks. multiplayer.js owns MP's
+    // own accounting (recordMpResult → RhythmGoals.recordMpComplete), so nothing is double-credited.
+    const _isMp = !!results.mp;
     // build110: captured by block 2 below (per-song best) for the RhythmGoals hook in block 3 — a
     // trackless/zero-score run (e.g. practice demo) never sets these, so they default to "not a first clear".
     let _rrIsFirstClear = false, _rrIsGradeUp = false;
@@ -2167,7 +2237,7 @@
     // Track-bound (not a boolean) so a quit/abandoned rift can't leak the ×3 onto a later non-matching run. A FAILED
     // daily run leaves the flag armed so a retry can still claim it; a non-matching run leaves it armed (waiting).
     try {
-      if (_dailyRiftArmedId && currentTrack && currentTrack.id === _dailyRiftArmedId && !failed) {
+      if (!_isMp && _dailyRiftArmedId && currentTrack && currentTrack.id === _dailyRiftArmedId && !failed) {   // build191 (DATA-1): an MP round never consumes the armed rift
         _rift3x = !!_dailyRiftTriple; _dailyRiftArmedId = null; _dailyRiftTriple = false;
       }
     } catch (e) {}
@@ -2194,10 +2264,13 @@
         // build99j (playtest P2): a completed run with no track id (e.g. the practice demo) used to credit runs/grade/
         // combo but NOT c.songs, so the profile read "Runs 1 / Full Combos 1 / Grade B" with "Songs Played 0".
         // Always record the run under a stable key (id → title → '_practice') so "songs played" can't lag the run count.
-        { const songKey = (currentTrack && currentTrack.id) || (currentTrack && currentTrack.title) || (results.title) || '_practice'; c.songs = c.songs || {}; c.songs[songKey] = (c.songs[songKey] || 0) + 1; }
+        { const songKey = _isMp ? (results.mpTrackId || null)   // build191 (DATA-1): an MP round is keyed on ITS track (skipped when unknown), never the stale solo song
+            : ((currentTrack && currentTrack.id) || (currentTrack && currentTrack.title) || (results.title) || '_practice');
+          if (songKey) { c.songs = c.songs || {}; c.songs[songKey] = (c.songs[songKey] || 0) + 1; } }
       }
       localStorage.setItem('rr_career', JSON.stringify(c));
     } catch (e) {}
+    if (_isMp) return;   // build191 (DATA-1): no per-song best / goals+XP / Bonus / Daily-Rift / account /score for an MP round
     // 2) per-song best + NEW BEST / GRADE UP badges (compare vs REAL saved scores, not the mock seed).
     // A failed run isn't a best — don't let a bail overwrite your saved score or fire a NEW BEST badge.
     if (!failed && currentTrack && currentTrack.id && results.score > 0) {
@@ -2335,12 +2408,13 @@
       onSubmitResult({ error: 'practice' }, results);
     } else if (API_BASE && currentTrack && currentTrack.id && currentTrack.id !== 'demo'
         && results.score > 0 && !hasServerChart(currentTrack)) {
+      const _trk = currentTrack;   // build191 (DATA-1): snapshot — the body below awaits, and a new pick meanwhile must not re-target the POST
       (async () => {
         const tk = await getToken();
         if (!tk) { onSubmitResult({ error: 'not-authed' }, results); return; }
         try {
           const out = await api('/score', { method: 'POST', auth: true, body: {
-            track_id: currentTrack.id, difficulty: results.difficulty,
+            track_id: _trk.id, difficulty: results.difficulty,
             score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
             notes_hit: results.notes_hit, notes_total: results.notes_total,
             // build104 s11: stamp the chart epoch — the buildNotes + scoring rewrite moved achievable score, so a v2
@@ -2351,13 +2425,17 @@
           // play_id, then earn server Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _rift3x carries
           // the day's-first-clear intent; the server validates it. No-op unless BONUS_SERVER + signed-in.
           var _pid = out && (out.play_id || out.id);
-          try { if (_pid && currentTrack) currentTrack.play_id = _pid; } catch (e) {}
+          try { if (_pid && _trk) _trk.play_id = _pid; } catch (e) {}
           _bonusEarnForRun(_pid, results, _rift3x);
-          try { _capturePlayStats(out, currentTrack && currentTrack.id, results.difficulty); } catch (e) {}   // Wave-3: TOP N% TODAY (display-only, read off the /score response)
+          try { _capturePlayStats(out, _trk && _trk.id, results.difficulty); } catch (e) {}   // Wave-3: TOP N% TODAY (display-only, read off the /score response)
           let board = [];
-          try { board = lbRows(await api('/leaderboard/' + currentTrack.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
+          try { board = lbRows(await api('/leaderboard/' + _trk.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
-        } catch (e) { /* backend not live yet -> stay local-only (no regression) */ }
+        } catch (e) {
+          // build191 (DATA-4): stay local-only, but SAY so (was a silent empty catch). No auto-replay: /score has no
+          // idempotency key, so re-sending after a lost response could post a duplicate leaderboard row + Bonus earn.
+          try { onSubmitResult({ error: 'network' }, results); } catch (e2) {}
+        }
       })();
     }
   }
@@ -2406,6 +2484,8 @@
       wrap.innerHTML = '<div class="lb-note">' +
         (out && out.error === 'not-authed'
           ? 'Sign in on ReactivVibe to save your score & climb the leaderboard.'
+          : out && out.error === 'network'   // build191 (DATA-4): a failed account submit is no longer silent
+          ? 'Couldn\'t reach the leaderboard - this score is saved on this device only.'
           : 'Local practice — scores aren\u2019t saved.') + '</div>';
       wrap.style.display = '';
       return;
@@ -3072,6 +3152,7 @@
     // retention / discovery data layer (derived, read-only; UI rails/cards wired in a later wave)
     getAffinity, forYouTracks, getCollectionStats, chaseTheS, freshSince, lastVisitAgeHours, dailyPicks,
     currentTrackId: () => (currentTrack && currentTrack.id) || null,   // build85 (Phase 3): HUD reads the live track for the BEST chip
+    resetLocalProgress: resetLocalProgress,   // build191 (DATA-7): profile RESET CAREER — wipes rr_career/rr_scores AND the in-memory best cache
     preview, stopPreview,
     // live waveform feed (real FFT off the preview audio) — consumed by jukebox.js
     previewSpectrum, previewBinCount, previewPlaying,

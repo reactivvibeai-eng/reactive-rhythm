@@ -149,7 +149,20 @@
   }
 
   // ---- low-level send (fire-and-forget, never throws) ---------------------
-  function postJSON(url, payload) {
+  // build191 (DATA-8): put a batch whose send never completed back at the FRONT of its buffer (it is the oldest data),
+  // still respecting the cap (overflow drops the oldest, same as pushCapped). Only for a network REJECTION (the request
+  // didn't complete) — a non-2xx is not requeued (a partially-accepted batch would duplicate on every 4s flush).
+  var _sendBackoffUntil = 0;   // build191 (DATA-8): after a rejected send, the PERIODIC flush pauses 30s (no 4s re-send storm on a dead endpoint)
+  function requeueRows(which, rows) {
+    _sendBackoffUntil = Date.now() + 30000;
+    try { if (getConsent() === 'declined') return; } catch (e) {}   // opted out while the send was in flight → drop, never re-buffer
+    try {
+      var buf = (which === 'err') ? errBuffer : evtBuffer, cap = (which === 'err') ? ERR_CAP : EVT_CAP;
+      for (var i = rows.length - 1; i >= 0; i--) buf.unshift(rows[i]);
+      while (buf.length > cap) buf.shift();
+    } catch (e) {}
+  }
+  function postJSON(url, payload, _unused, onFail) {
     if (!url) return;
     var body;
     try { body = JSON.stringify(payload); } catch (e) { return; }
@@ -164,7 +177,7 @@
         var headers = { 'Content-Type': 'application/json' };
         if (ANON_KEY) { headers['apikey'] = ANON_KEY; headers['Authorization'] = 'Bearer ' + ANON_KEY; }
         fetch(url, { method: 'POST', headers: headers, body: body, keepalive: true, mode: 'cors' })
-          .catch(function () {});   // swallow — degrade silently
+          .catch(function () { if (typeof onFail === 'function') { try { onFail(); } catch (e) {} } });   // swallow — build191 (DATA-8): + requeue when the caller asked
       }
     } catch (e) {}
   }
@@ -179,12 +192,17 @@
       var consent = getConsent();
       if (consent === 'declined') return;        // full opt-out — nothing leaves the device
       if (!netEnabled()) { return; }             // no endpoint → keep buffering (don't drop)
+      // build191 (DATA-8): offline → keep buffering (a send now can only fail and, before this, lost the batch).
+      try { if (typeof navigator !== 'undefined' && navigator.onLine === false) return; } catch (e) {}
+      if (!useBeaconOnly && Date.now() < _sendBackoffUntil) return;   // build191 (DATA-8): cooling down after a rejected send (unload flush still goes)
+      // Requeue a rejected batch on the periodic path only — the unload flush (useBeaconOnly) has no later flush to retry.
+      var _rq = function (which, rows) { return useBeaconOnly ? null : function () { requeueRows(which, rows); }; };
       var full = (consent === 'accepted');
       // Errors can carry stack/url → potentially identifying → strict accept-gate only.
       if (full && errBuffer.length && URLS.clientlog) {
         while (errBuffer.length) {
           var ebatch = errBuffer.splice(0, 20);
-          postJSON(URLS.clientlog, ebatch.length === 1 ? ebatch[0] : ebatch, useBeaconOnly);
+          postJSON(URLS.clientlog, ebatch.length === 1 ? ebatch[0] : ebatch, useBeaconOnly, _rq('err', ebatch));
         }
       }
       if (evtBuffer.length && URLS.events) {
@@ -192,7 +210,7 @@
           // accepted → send everything (batched ~50)
           while (evtBuffer.length) {
             var vbatch = evtBuffer.splice(0, 50);
-            postJSON(URLS.events, vbatch.length === 1 ? vbatch[0] : vbatch, useBeaconOnly);
+            postJSON(URLS.events, vbatch.length === 1 ? vbatch[0] : vbatch, useBeaconOnly, _rq('evt', vbatch));
           }
         } else {
           // unset → send only anonymized operational events; leave the rest buffered.
@@ -208,7 +226,7 @@
           evtBuffer = keep;    // module-scoped var — event()/pushCapped pick up the new array
           while (legit.length) {
             var lbatch = legit.splice(0, 50);
-            postJSON(URLS.events, lbatch.length === 1 ? lbatch[0] : lbatch);
+            postJSON(URLS.events, lbatch.length === 1 ? lbatch[0] : lbatch, useBeaconOnly, _rq('evt', lbatch));   // build191 (DATA-8): anonymized copies requeue as-is (user_id already stripped)
           }
         }
       }

@@ -1424,6 +1424,9 @@
      Suppress it while the game screen is live (:has(), Chrome 105+ — degrades to old behavior elsewhere);
      it re-slides in on results/menu where a decision can actually be made. */
   body:has(#game.active) #rr-consent { opacity: 0 !important; pointer-events: none !important; }
+  /* build191 (UI-5): the :has() rule above is DROPPED by the desktop app's older Chromium, leaving the consent bar over
+     the catchers/tap zones. html.rr-ingame (set by showScreen for game + countdown) is the engine-agnostic twin. */
+  html.rr-ingame #rr-consent { opacity: 0 !important; pointer-events: none !important; }
   #rr-consent .rrc-copy { flex: 1 1 280px; min-width: 240px; font-family: 'Chakra Petch', sans-serif; font-size: var(--rr-fs-sm); line-height: 1.5; letter-spacing: 0.02em; color: var(--ink, #f6eef0); }
   #rr-consent .rrc-copy a { color: var(--gold, #ffb050); text-decoration: underline; text-underline-offset: 2px; }
   #rr-consent .rrc-actions { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
@@ -9347,6 +9350,7 @@
   if (rb) rb.addEventListener('click', function () {
     if (!armed) { armed = true; rb.textContent = 'TAP AGAIN TO WIPE'; clearTimeout(armT); armT = setTimeout(disarm, 3000); return; }
     try { localStorage.removeItem('rr_career'); localStorage.removeItem('rr_scores'); } catch (e) {}
+    try { if (window.RhythmCatalog && window.RhythmCatalog.resetLocalProgress) window.RhythmCatalog.resetLocalProgress(); } catch (e) {}   // build191 (DATA-7): also drop catalog.js's memoized bests (else they come back on the next run)
     disarm(); render();
   });
   window.addEventListener('keydown', function (e) {
@@ -13397,7 +13401,23 @@
     var overlayOpen = ['levels-screen', 'store-screen', 'leaderboard-screen', 'profile-screen', 'howto-screen', 'settings-screen']
       .some(function (id) { var el = $(id); return el && el.classList.contains('active'); });
     if (overlayOpen) return;
-    if (menu.classList.contains('active') || (mp && mp.classList.contains('active'))) { showHub(); }
+    // build191 (UI-2): Esc on the MP screen used to call showHub() directly — skipping #mp-back's teardown, so the player
+    // stayed seated as a ghost in the room/match (and a room-start could later yank them in from the hub). Route it through
+    // #mp-back (its MP-side handler leaves the room/match/bracket properly, then this file's own listener shows the hub).
+    // Never while typing (lobby/room chat, join-by-code, room name) or while an MP modal owns the keyboard.
+    if (mp && mp.classList.contains('active')) {
+      var _t = e.target;
+      if (_t && (/^(input|textarea|select)$/i.test(_t.tagName || '') || _t.isContentEditable)) return;
+      var _mpModal = ['mpx-bet-overlay', 'rrc-modal-scrim', 'rrc-kmenu-live', 'mpx-ring', 'mpx-tour-picker'].some(function (id) { var el = $(id); return el && !el.hidden && el.getAttribute('aria-hidden') !== 'true'; });   // build191 (REVIEW-ESC): + the tour SEARCH picker
+      if (_mpModal) return;
+      // build191 (REVIEW-ESC): an open bracket keeps the OLD non-destructive Esc (hub only; syncActive keeps it alive) —
+      // #mp-back would dissolve it for everyone (host) or forfeit (entrant) on one keypress.
+      try { if (window.RhythmMP && window.RhythmMP.inTour && window.RhythmMP.inTour()) { showHub(); return; } } catch (err) {}
+      var _mpb = $('mp-back');
+      if (_mpb && !_mpb.disabled) { _mpb.click(); return; }
+      showHub(); return;
+    }
+    if (menu.classList.contains('active')) { showHub(); }
   });
   // build62: Settings + How-to-Play now dismiss on Escape AND backdrop-click, identical to the other four overlays
   // (they were the only two that silently ignored Esc — the global handler bails when any overlay is open, and these

@@ -129,6 +129,7 @@
   let _missCursor = 0;       // build60 PERF: monotonic miss-sweep cursor — notes[<cursor] are all definitively judged.
                               // Only advances (never rewinds) past leading judged notes; the miss loop starts here + breaks
                               // at the first note whose miss window is still future. Reset to 0 at every run start (resetScoring).
+  let _mpSoftPaused = false; // build191 (ENGINE-2): the live-MP "soft pause" overlay is up (song still running) — see pauseGame()
   let _injectedNotes = null; // build114: AUTHORITATIVE MP CHART — when set, beginPlay() skips buildNotes() and
                               // uses this array verbatim (rehydrated full note objects, not the stripped spectator
                               // shape). ALWAYS consumed + cleared by beginPlay() so it can never leak into the next
@@ -2783,10 +2784,39 @@
   // server-baked chart yet (the "fast path"). Fetch → decode → onset-analyze → play the
   // decoded buffer (sample-accurate via DemoPlayer). Needs a CORS-readable direct file.
   let lastDecoded = { url: null, buf: null };
+  // build191 (ENGINE-3/MATCH-2): PREPARE-ON-PICK decode seam. ONE background fetch+decode in flight at a time (a newer
+  // url supersedes the slot; a superseded decode still resolves for whoever awaits it but never overwrites
+  // lastDecoded), so memory stays bounded to lastDecoded + at most one in-flight buffer. bufferedProvider /
+  // chartUrlAuthoritative JOIN an in-flight decode of the same url instead of starting a second download.
+  let _decodeInflight = null;   // { url, p } | null
+  function _decodeInto(url) {
+    if (lastDecoded.url === url && lastDecoded.buf) return Promise.resolve(lastDecoded.buf);
+    if (_decodeInflight && _decodeInflight.url === url) return _decodeInflight.p;
+    const rec = { url: url, p: null };
+    rec.p = (async function () {
+      try {
+        const arr = await fetchAudio(url, { mode: 'cors' });
+        const ac = new (window.AudioContext || window.webkitAudioContext)();
+        let b;
+        try { b = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }   // always release the throwaway decode context (Chromium ~6-context cap)
+        if (_decodeInflight === rec) lastDecoded = { url: url, buf: b };
+        return b;
+      } finally { if (_decodeInflight === rec) _decodeInflight = null; }
+    })();
+    _decodeInflight = rec;
+    return rec.p;
+  }
   async function bufferedProvider(url, meta) {
     showScreen('loading');
     $('loading-stage').textContent = funnyStage();
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
+    // build191 (ENGINE-3): a background prefetch of THIS url is already running (MP guest prefetch / host pre-chart) →
+    // join it instead of downloading twice. On a prefetch failure fall through to the normal path (its catch below
+    // renders the friendly error). No prefetch in flight (every solo launch) → byte-identical to before.
+    if (!buf && _decodeInflight && _decodeInflight.url === url) {
+      setLoading('Decoding waveform', 25);
+      try { buf = await _decodeInflight.p; lastDecoded = { url: url, buf: buf }; } catch (_pe) { buf = null; }
+    }
     if (!buf) {
       try {
         setLoading('Fetching track', 8);
@@ -2815,7 +2845,10 @@
         throw _fe;
       }
     }
-    const beats = await analyzeChart(buf);
+    // build191 (ENGINE-3/product_bugs[4]): an injected MP chart (host-broadcast notes staged by startAt) makes local
+    // beats unused — skip the second full analyzeChart pass. The guest's LOCAL-FALLBACK path stages nothing
+    // (_injectedNotes null) so it still analyzes, and every solo launch is unchanged.
+    const beats = (_injectedNotes && _injectedNotes.length) ? [] : await analyzeChart(buf);
     return {
       beats: beats,
       duration: buf.duration,
@@ -2879,11 +2912,10 @@
     if (player != null || state === 'playing' || state === 'paused') throw new Error('engine busy — cannot chart for MP mid-run');
     let buf = (lastDecoded.url === url) ? lastDecoded.buf : null;
     if (!buf) {
-      const arr = await fetchAudio(url, { mode: 'cors' });
-      const ac = new (window.AudioContext || window.webkitAudioContext)();
-      try { buf = await ac.decodeAudioData(arr); } finally { try { ac.close(); } catch (e) {} }
+      buf = await _decodeInto(url);   // build191 (MATCH-2): shared single-slot decode — joins a prefetch of the same url
       lastDecoded = { url: url, buf: buf };
     }
+    const _mode = chartMode;   // build191: the analyzer mode this chart was built under (prepareChart keys on it)
     const analyzed = await analyzeChart(buf);
     if (player != null || state === 'playing' || state === 'paused') throw new Error('engine became busy during the MP chart decode');
     const snap = { beats: beats, notes: notes, difficulty: difficulty, ctx: _levelCtx, mods: _levelMods, stats: window.__rrChartStats, peak: window.__rrPeakNps };
@@ -2901,7 +2933,24 @@
       _levelCtx = snap.ctx; _levelMods = snap.mods;
       try { window.__rrChartStats = snap.stats; window.__rrPeakNps = snap.peak; } catch (e) {}
     }
-    return { notes: out, duration: buf.duration, buffer: buf };
+    return { notes: out, duration: buf.duration, buffer: buf, mode: _mode };
+  }
+  // build191 (MATCH-2 / product_bugs[0]): PREPARE ON PICK — single-slot cache of the host's authoritative chart keyed
+  // url|difficulty|chartMode. The MP layer starts it the moment the host picks a track; the synced start then reuses
+  // the (already-resolved or in-flight) promise instead of a cold fetch+decode+analyze inside the ~8s lead-in. Only
+  // {notes,duration,mode} are cached (never the AudioBuffer — that lives in the single lastDecoded slot). A failure
+  // clears the slot so the start retries cold. chartUrlFull routes through here, so a miss behaves exactly as before.
+  let _prepChart = null;   // { key, p } | null
+  function prepareChart(url, diff) {
+    const mode = chartMode, key = url + '|' + diff + '|' + mode;
+    if (_prepChart && _prepChart.key === key) return _prepChart.p;
+    const rec = { key: key, p: null };
+    rec.p = chartUrlAuthoritative(url, diff).then(function (r) {
+      if (r.mode !== mode) { if (_prepChart === rec) _prepChart = null; return chartUrlAuthoritative(url, diff).then(function (r2) { return { notes: r2.notes, duration: r2.duration, mode: r2.mode }; }); }   // chartMode flipped mid-analysis (matched-room transient) → re-chart under the live mode (decode is cached)
+      return { notes: r.notes, duration: r.duration, mode: r.mode };
+    }).catch(function (e) { if (_prepChart === rec) _prepChart = null; throw e; });
+    _prepChart = rec;
+    return rec.p;
   }
 
   // build66 (launch-audit, predicted-bug): OfflineAudioContext webkit fallback. Older iOS Safari (<14.1) + some in-app WebViews
@@ -3218,6 +3267,7 @@
     // re-assert the equipped skin at start UNLESS a per-level override is active (launchLevel sets it via applyLevelTheme before play())
     try { if (!_levelSkinActive && typeof applyEquippedSkin === 'function') applyEquippedSkin(); } catch (e) {}
     $('play-btn').disabled = true;
+    const _genBefore = _playGen;   // build191 (MATCH-1): beginPlay bumps this exactly once — any other value means a newer launch superseded this one
     try {
       await beginPlay();
     } catch (e) {
@@ -3229,6 +3279,10 @@
       // don't eject an MP/tournament player to the menu on a decode/start failure — let the MP watchdog (abortRound)
       // recover them back to the bracket; only bail to menu in single-player.
       if (!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) showScreen('menu');
+      // build191 (MATCH-1): ...but the watchdog alone could never recover a DEAD track (it only re-armed while #loading
+      // stayed up, then gave up silently) → both seats froze on the loading ring. Hand the failure to the MP layer's
+      // forced-abort path (tears the round down on BOTH seats via a keyed 'abort'). Skipped for a superseded launch.
+      else if (_playGen === _genBefore + 1) { try { if (window.RhythmMP.onLaunchFail) window.RhythmMP.onLaunchFail('fail'); } catch (_) {} }
     } finally {
       $('play-btn').disabled = false;
     }
@@ -3468,6 +3522,8 @@
   }
 
   let _playGen = 0;   // build57: launch-generation token — a newer beginPlay() invalidates older ones (see guards below)
+  let _runIsMp = false;   // build191 (DATA-1): latched per launch in beginPlay; endGame stamps results.mp from it
+  let _holdRegrabUntil = 0, _regrabNote = [];   // build191 (ENGINE-8): post-resume sustain re-grab window + the per-lane hold that is waiting on it
   async function beginPlay() {
     // build35 (audit P1): make (re)launch idempotent — stop any in-flight run FIRST so a second
     // play() / double-tap / future MP click can't spawn a SECOND self-perpetuating rAF + scoring loop
@@ -3478,8 +3534,14 @@
     // crash on `player.onended` (null) or, worse, arm onended + start a SECOND loop on the new player.
     // Bail at each await boundary if a newer launch superseded us.
     const myGen = ++_playGen;
+    // build191 (DATA-1): latch "this run is an MP round" at LAUNCH — settleIfReady can flip matchLive off synchronously
+    // inside _fireSongEnd, before recordLocal reads it. Show rooms are excluded (their solo run records as a scored single).
+    try { _runIsMp = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive() && !(window.RhythmMP.isShowOpen && window.RhythmMP.isShowOpen())); } catch (e) { _runIsMp = false; }
     // (re)build session — fresh play_token + player each attempt (live anti-cheat)
-    session = await provider();
+    // build191 (ENGINE-4): a SUPERSEDED launch's provider failure must resolve silently — otherwise play()'s catch
+    // toasts the OLD track's error and showScreen('menu')s the player out of the newer run that now owns the engine.
+    try { session = await provider(); }
+    catch (e) { if (myGen !== _playGen) return; throw e; }
     if (myGen !== _playGen) return;        // superseded while fetching/decoding/charting
     beats = session.beats || [];
     songDuration = session.duration || 0;
@@ -3633,6 +3695,13 @@
       lastFrame = performance.now();
       loop();
     };
+    // build191 (ENGINE-5): the blur/visibility auto-pause is a no-op while state is 'loading', so a player who tabbed away
+    // during the fetch/decode came back to a song already in progress. Re-check at the start line: a HIDDEN tab parks
+    // the start behind the pause overlay (resumeGame runs _go). document.hidden only — hasFocus() is false in iframes.
+    // Solo only: never in MP (cross-peer start) or while the show layer suppresses auto-pause.
+    try {
+      if (state === 'playing' && document.hidden && !_autoPauseSuppressed && !(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive())) pauseGame();
+    } catch (e) {}
     if (state === 'paused') { _deferredStart = _go; return; }
     _go();
   }
@@ -3717,6 +3786,7 @@
 
   function stopGame() {
     state = 'menu';
+    if (_mpSoftPaused) { _mpSoftPaused = false; try { $('pause-overlay').classList.remove('show'); } catch (e) {} }   // build191 (ENGINE-2): a live-MP "soft pause" overlay (song kept running) dies with the run — never strands over results/menu
     _endingLock = false;   // build108: a quit/exit DURING the fail-out wipeout beat must not leave input/scoring stuck locked for the next run
     try { window.RhythmProcBg && window.RhythmProcBg.stop(); } catch (e) {}   // build66: idle the reactive backdrop on quit / song-end
     _deferredStart = null;   // build65 (cycle-4): drop any pre-roll deferred-start so a quit during a paused pre-roll can't fire it later
@@ -3899,7 +3969,17 @@
     // so bare beginPlay() would run a FRESH local buildNotes() that can diverge from the opponent's decoder output —
     // the exact drift bug the authoritative broadcast fixes. No-op for solo/tournament/guest-local-fallback (the
     // cache is null there, so the restart re-charts locally exactly as before — no regression).
-    if (_lastInjectedNotes && _lastInjectedNotes.length) { _injectedNotes = _lastInjectedNotes; }
+    // build191 (ENGINE-1/MATCH-7): re-arm ONLY while an MP match is live (the cache otherwise survives into later solo
+    // runs — a solo PLAY AGAIN replayed the old MP song's chart), and re-arm a FRESH copy: the cached objects are the
+    // ones the last run judged in place (judged/hit/dropped/hold banks), so re-injecting them gave an empty highway.
+    var _mpLiveNow = false; try { _mpLiveNow = !!(window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()); } catch (e) {}
+    if (!_mpLiveNow) _lastInjectedNotes = null;
+    else if (_lastInjectedNotes && _lastInjectedNotes.length) {
+      _injectedNotes = _lastInjectedNotes.map(function (n) {
+        return Object.assign({}, n, { spin: 0, judged: false, hit: null, _pulsed: false, dropped: false,
+          _fuseFx: null, _warnFx: null, _hheld: false, _hres: false, _hbank: 0, _teachDone: false });
+      });
+    }
     stopGame(); beginPlay();
   }
 
@@ -3941,6 +4021,7 @@
       if (!results) return null;
       if (results.practice || results.isPractice) return null;                                   // practice drill
       if (results.preview || results._preview) return null;                                       // host-review PREVIEW (recordLocal early-returns on it)
+      if (results.mp) return null;                                                                // build191 (DATA-1): MP round latched at launch (matchLive may already be off here)
       if (window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()) return null;      // MP round
       var tid = (window.RhythmCatalog && window.RhythmCatalog.currentTrackId && window.RhythmCatalog.currentTrackId()) || null;
       return tid || null;                                                                          // demo / no real track → null
@@ -4096,6 +4177,10 @@
       // and drop it from this list; until then, playing it means playing unranked.
       // All flags default OFF → this stays exactly `_bridgeRun` on every normal load, byte-identical.
       preview: _bridgeRun || PLAYTEST_ALL || _chartShapeModified(),
+      // build191 (DATA-1): an MP round (1v1 / CPU warm-up / tournament; show rooms excluded) — latched at launch so
+      // recordLocal never books it as a solo run of catalog.js's stale currentTrack (wrong best, /score, goals, rift ×3).
+      mp: _runIsMp,
+      mpTrackId: _runIsMp ? ((session && (session.trackId || (session.meta && session.meta.id))) || null) : null,   // build191 (DATA-1): career song key for an MP round (null = unknown → not keyed)
     };
     _lastResults = results;   // expose for the Levels results-loop (NEXT/RETRY + per-level stars)
     // build148 T8: clearing FRACTURE (Hard) at ≥85% on a real (non-practice, non-failed) run UNLOCKS the RIFT
@@ -4191,7 +4276,10 @@
         if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) {
           window.RhythmCatalog.onSubmitResult(out, results);
         }
-      } catch (e) { console.warn('submit failed', e); }
+      } catch (e) {
+        console.warn('submit failed', e);
+        try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'network' }, results); } catch (e2) {}   // build191 (DATA-4): surface the lost server-chart submit instead of an empty panel
+      }
     }
     // FIRST PULSE — the bridge run's OWN results (chip + difficulty handoff). Called LAST so _bridgeRun was still
     // armed through the results object build, recordLocal, and the submit gate above; this disarms it.
@@ -4764,8 +4852,22 @@
 
   // ---------- PAUSE ----------
   let _deferredStart = null;   // build65 (cycle-4): a stashed run-start thunk, set when a pause lands during the lead-in/countdown pre-roll (before the song began); consumed by resumeGame() so we never force-start audio behind a stuck PAUSED overlay.
+  // build191 (ENGINE-2): in a LIVE HUMAN 1v1 (RhythmMP.noFreeze) a pause would freeze THIS seat's audio clock while the
+  // rival plays on → hollow forfeit verdicts on both sides. There, Esc / #mpause / pad-Start open the pause menu as a
+  // "soft pause" instead: the overlay (RESUME / RESTART / EXIT-forfeit) shows, but the song + judging keep running.
+  // Solo, CPU warm-ups, tournaments and show rooms keep the real pause (noFreeze is false there). (_mpSoftPaused is
+  // declared near the top of the module — stopGame() reads it and can run before this line.)
+  function _mpNoFreeze() { try { return !!(window.RhythmMP && window.RhythmMP.noFreeze && window.RhythmMP.noFreeze()); } catch (e) { return false; } }
+  function _mpSoftPauseToggle() {
+    const ov = $('pause-overlay'); if (!ov) return;
+    if (_mpSoftPaused) { hidePause(); return; }
+    _mpSoftPaused = true; ov.classList.add('show');
+    try { const _rs = document.getElementById('restart-section-btn'); if (_rs) _rs.hidden = true; } catch (e) {}
+    try { showToast('LIVE MATCH — the song keeps playing. RESUME to close, EXIT forfeits.', 'neutral'); } catch (e) {}
+  }
   function pauseGame() {
     if (state !== 'playing' || _endingLock) return;   // build108 review fix (critical): NEVER pause during the fail-out wipeout beat — a pause (Escape/gamepad/blur/visibilitychange all route here) would flip state off 'playing', so the deferred endGame() re-entry guard would silently swallow the only teardown call and strand the failed run (resume then continues it as if it never failed).
+    if (_mpSoftPaused || _mpNoFreeze()) { _mpSoftPauseToggle(); return; }   // build191 (ENGINE-2): never freeze one seat of a live 1v1 (a 2nd press closes the soft pause)
     state = 'paused'; player.pause(); $('pause-overlay').classList.add('show');
     // build168 (R5): the loop stops calling updateHUD while paused → restore the legend here, not there.
     try { const _fh = _footerHint(); if (_fh) { _fh._faded = false; _fh.classList.remove('faded'); } } catch (e) {}
@@ -4779,7 +4881,7 @@
   let _restartArmed = false;
   let _disarmRestart = function () {};
   function resumeGame() {
-    if (state !== 'paused') return;
+    if (state !== 'paused') { if (_mpSoftPaused) hidePause(); return; }   // build191 (ENGINE-2): RESUME on a live-MP soft pause just closes the overlay (the song never stopped)
     _disarmRestart();
     // build189 Stage 3 — BEAT 2 of 3: the return. Placed ABOVE the _deferredStart early-return below, so both
     // resume exits are covered. A deferred-start resume also fires the 5s start show from _go(), which simply
@@ -4792,12 +4894,14 @@
     // would be a no-op on a player that never played) instead of resuming.
     if (_deferredStart) { var _f = _deferredStart; _deferredStart = null; $('pause-overlay').classList.remove('show'); _f(); return; }
     player.resume(); state = 'playing';
+    try { _seedPadPrev(); } catch (e) {}   // build191 (ENGINE-7): frets pressed/held during the pause must not read as fresh edges on the first playing poll
+    _holdRegrabUntil = performance.now() + 250;   // build191 (ENGINE-8): a live sustain gets a short re-grab window after resume (see the loop's sustain block)
     try { if (anyPadConnected()) _ensureFastPoll(); } catch (e) {}   // build102w/104 s3: resume = re-arm the pad input poller (it self-disarmed on pause)
     try { window.RhythmProcBg && window.RhythmProcBg.resume(); } catch (e) {}   // build66: resume the reactive backdrop
     $('pause-overlay').classList.remove('show');
     lastFrame = performance.now();
   }
-  function hidePause() { _disarmRestart(); $('pause-overlay').classList.remove('show'); }
+  function hidePause() { _mpSoftPaused = false; _disarmRestart(); $('pause-overlay').classList.remove('show'); }   // build191 (ENGINE-2): + clear the live-MP soft-pause latch
 
   // ---------- A3 (Wave-5): CALIBRATION SURFACING ----------
   // The offset machinery (audioOffset / rr_offset_ms / the calib wizard) shipped in build104; the only gap was
@@ -4910,6 +5014,10 @@
       _disarmLoadingEscape();
       try { stopGame(); } catch (e) {}
       showScreen('menu');
+      // build191 (UI-4/MATCH-1): cancelling a LIVE MP round's load used to leave the match half-alive (matchLive +
+      // onSongEnd still armed, the rival playing alone, the watchdog later yanking a stale setup card over the
+      // library). Route it through the MP forced-abort path: both seats go back to setup, no forfeit is recorded.
+      try { if (window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive() && window.RhythmMP.onLaunchFail) window.RhythmMP.onLaunchFail('cancel'); } catch (e) {}
     });
   } catch (e) {}
   // FIRST PULSE: quitting a bridge run mid-song never reaches endGame's handoff, so disarm here — restore the
@@ -5588,6 +5696,12 @@
       // build184: + #store-screen/#levels-screen (both stack over results too — Enter with the Store open was
       // silently starting a run UNDER the shop; part of the live "takes me to the store / can't play" report).
       if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active, #store-screen.active, #levels-screen.active')) return;
+      // build191 (UI-1): an MP match ends via showScreen('results'), then multiplayer.js re-raises its own screen with
+      // class toggles, leaving state='results' while #results is NOT showing — Enter/Esc/Space were hijacked on the MP
+      // lobby/winner/hub (solo replay of the MP chart, library jump, no spaces in chat). Act only while #results is
+      // really up, and never on keys typed into a text field.
+      try { const _rsEl = $('results'); if (!_rsEl || !_rsEl.classList.contains('active')) return; } catch (e3) { return; }
+      if (e.target && (/input|textarea|select/i.test(e.target.tagName || '') || e.target.isContentEditable)) return;
       if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
       else if (e.key === 'Escape') { e.preventDefault(); const b = $('results-menu'); if (b) b.click(); }
       else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); }   // build184: Space must never natively re-activate whichever results button holds focus (#results-store sat in that path)
@@ -5615,6 +5729,17 @@
   // layer flips this ON around a show run only (beginMatch/teardownMatch); solo + normal MP keep auto-pause as-is.
   let _autoPauseSuppressed = false;
   window.RhythmGame.setAutoPauseSuppressed = function (on) { _autoPauseSuppressed = !!on; };
+  // build191 (UI-1): MP re-raises its screen over #results with class toggles (never showScreen), so the engine stayed in
+  // state 'results' and its keydown router kept treating the MP lobby/hub as the results screen. MP calls this to drop the
+  // engine back to idle. Only ever leaves 'results' (a live / paused / loading run is untouched); no DOM change — MP owns
+  // the screen. Returns true when it changed state.
+  window.RhythmGame.toIdle = function () {
+    if (state !== 'results') return false;
+    try { const _rsEl = $('results'); if (_rsEl && _rsEl.classList.contains('active')) return false; } catch (e) {}   // a genuinely visible results screen keeps its keyboard flow
+    state = 'menu';
+    try { _resetRatingsWidget(); } catch (e) {}
+    return true;
+  };
   // safety: if the window loses focus mid-hold, a keyup may never arrive — release all
   window.addEventListener('blur', () => { for (let i = 0; i < LANE_COUNT; i++) onLaneRelease(i); if (state === 'playing' && !_autoPauseSuppressed) { try { pauseGame(); } catch (e) {} } });
   // build35 (audit): some embedded / WebView Chromium builds don't emit window 'blur' on tab-switch or
@@ -5634,7 +5759,10 @@
       const bind = (input) => { input.onmidimessage = (msg) => {
         const d = msg.data || []; const cmd = d[0] & 0xf0, vel = d[2] || 0;
         // msg.timeStamp is DOMHighResTimeStamp (same clock as performance.now) — feed the real lag.
-        if (cmd === 0x90 && vel > 0) onLaneInput(laneFromMidi(d[1]), 'midi', (msg.timeStamp || performance.now()));
+        // build191 (ENGINE-6): mirror keyboard/touch/pad — note-on arms laneDown (only while playing) BEFORE judging, and
+        // note-off (0x80, or 0x90 vel 0) releases the lane. Without laneDown a struck hold head DROPPED on the next frame.
+        if (cmd === 0x90 && vel > 0) { const _ml = laneFromMidi(d[1]); if (state === 'playing') laneDown[_ml] = true; onLaneInput(_ml, 'midi', (msg.timeStamp || performance.now())); }
+        else if (cmd === 0x80 || (cmd === 0x90 && vel === 0)) { try { onLaneRelease(laneFromMidi(d[1])); } catch (e) {} }
       }; };
       access.inputs.forEach(bind); refresh();
       access.onstatechange = (e) => { if (e.port && e.port.type === 'input' && e.port.state === 'connected') bind(e.port); refresh(); };
@@ -5824,6 +5952,21 @@
         }
       }
       if (requireStrum()) pollGuitarAxes(gp, liteAxes);   // strum-axis / whammy->OD / tilt->SP (guitars only; liteAxes skips the rate-sensitive whammy block on fast-poll calls)
+    }
+  }
+  // build191 (ENGINE-7): the pad Start button (9) paused via pollGamepad but could never resume — pollGamepad and the
+  // fast poller are playing-only, so its `else resumeGame()` branch was dead. loop()'s paused branch calls this: it
+  // edge-detects ONLY button 9 (same _padPrev key, same lane-wins guard, P2's couch pad skipped), then reseeds every
+  // button's edge state so frets held through the pause can't fire phantom hits on the first playing frame.
+  function _pollPauseStart() {
+    if (state !== 'paused' || !navigator.getGamepads || padMap[9] != null) return;
+    const pads = navigator.getGamepads(); const _p2Pad = _couchP2PadIndex();
+    for (const gp of pads) {
+      if (!gp || !gp.buttons || !gp.buttons[9]) continue;
+      if (_p2Pad >= 0 && gp.index === _p2Pad) continue;
+      const key = gp.index + ':9', was = _padPrev[key], pressed = gp.buttons[9].pressed;
+      _padPrev[key] = pressed;
+      if (pressed && !was) { _seedPadPrev(); resumeGame(); return; }
     }
   }
   // build102w: LOW-LATENCY INPUT POLL — pollGamepad rode the rAF loop only (16-33ms worst case; worse on a 30fps
@@ -7143,7 +7286,7 @@
     const dt = Math.min(0.05, _rawMs / 1000);
     lastFrame = now;
 
-    if (state === 'paused') { render(dt, true); return; }
+    if (state === 'paused') { try { _pollPauseStart(); } catch (e) {} render(dt, true); return; }   // build191 (ENGINE-7): pad Start can RESUME (pollGamepad is playing-only)
     if (state !== 'playing') return;
     // RIFT REPLAY: sample the prior frame's gameplay canvas into the replay ring (fps-gated + cheap inside the
     // module). One-frame-stale is imperceptible for a 12fps clip. try/catch-wrapped so a replay failure can NEVER
@@ -7212,7 +7355,14 @@
       if (hn.type === 'rail') {                            // SLIDE RAILS: rail-aware liveness + transfer migration
         const _rr = _railSustainStep(i, hn, jt);
         if (_rr !== 'pay') continue;                       // 'migrated' / 'drop' handled inside → skip payout on lane i this frame
-      } else if (!laneDown[i]) { endHoldEarly(i); continue; }   // let go early → endHoldEarly (combo break unless past the tail grace)
+      } else if (!laneDown[i]) {
+        // build191 (ENGINE-8): a pause (blur/visibility force-release every lane) must not DROP a sustain on the first
+        // frame after RESUME — give a short re-grab window. No payout while un-held; the bank is NOT advanced (so a
+        // real let-go still resolves in its honest band), and the re-grab frame below skips the catch-up lump.
+        if (performance.now() < _holdRegrabUntil) { _regrabNote[i] = hn; continue; }
+        endHoldEarly(i); continue;   // let go early → endHoldEarly (combo break unless past the tail grace)
+      }
+      if (_regrabNote[i] === hn) { _regrabNote[i] = null; holdScored[i] = Math.max(holdScored[i], Math.max(0, Math.min(1, (jt - hn.time) / hn.hold))); continue; }   // build191 (ENGINE-8): re-grabbed → resume paying from HERE (no lump for the un-held gap)
       const frac = Math.max(0, Math.min(1, (jt - hn.time) / hn.hold));
       if (performance.now() < _mpStunUntil) { holdScored[i] = frac; continue; }   // v258: MP combat stun — advance the sustain marker WITHOUT paying out (no score banked while shocked, and no refund-lump when the stun ends)
       const gain = frac - holdScored[i];
@@ -10051,7 +10201,9 @@
     getInputStatus: () => ({ midi: midiInputs.slice(), gamepads: gamepadList(), midiSupported: !!navigator.requestMIDIAccess }),
     __buffered: (url, meta) => bufferedProvider(url, meta),   // MP tight-sync seam (deferred provider)
     chartUrl: (url, diff) => chartUrlForSpectate(url, diff),  // build102t: live-show spectator chart seam (no run started; transient difficulty)
-    chartUrlFull: (url, diff) => chartUrlAuthoritative(url, diff),  // build114: MP host-side authoritative-chart seam (full scoring-ready note shape) — see multiplayer.js resolveAndStart
+    chartUrlFull: (url, diff) => prepareChart(url, diff),  // build114: MP host-side authoritative-chart seam (full scoring-ready note shape) — see multiplayer.js resolveAndStart. build191 (MATCH-2): routed through the single-slot prepare-on-pick cache (a miss = the old cold path)
+    prepareChart: (url, diff) => prepareChart(url, diff),  // build191 (MATCH-2): host pre-charts the picked track in the background (returns the cached promise)
+    prefetchAudio: (url) => { try { if (url && !/\.m3u8(\?|$)/i.test(String(url))) _decodeInto(url).catch(function () {}); } catch (e) {} },   // build191 (ENGINE-3): guest background fetch+decode (fire-and-forget; bufferedProvider joins it)
     getLaneColors: () => LANE_COLORS.map(c => c.rgb),         // build102t: per-lane note colors for engine-less deck renderers (spectator decks)
   });
 
@@ -10069,6 +10221,7 @@
       acc: Math.round(accFrac * 1000) / 10,
       progress: Math.round(prog * 1000) / 1000,
       playing: state === 'playing',
+      paused: state === 'paused',   // build191 (TOUR-9/TOUR-1): additive — lets couch/tournament tell a PAUSE from a song end (old readers ignore it)
       overdrive: (typeof overdrive === 'number' ? overdrive : 0), odActive: !!odActive,   // build66.12: expose OD so procbg's crescendo can fire (it read undefined → od stuck at 0)
       grade: (function (p) { return p >= 95 ? 'S' : p >= 88 ? 'A' : p >= 75 ? 'B' : p >= 60 ? 'C' : 'D'; })(accFrac * 100)
     };
@@ -10121,8 +10274,12 @@
   window.RhythmGame.onSongEnd = function (cb) { if (typeof cb === 'function') _songEndCbs.push(cb); };
   function _fireSongEnd(reason) {
     var cbs = _songEndCbs.slice(); _songEndCbs.length = 0;
+    // build191 (MATCH-4): only a real song END carries results. _lastResults is never cleared at launch (Levels/couch
+    // read it after a run), so on an EXIT it still holds the PREVIOUS completed run — sending that as this round's
+    // final let a mid-match quitter "finish" with an old full score. EXIT passes null → listeners fall back to getLiveStats().
+    var res = (reason === 'exit') ? null : ((window.RhythmGame.lastResults && window.RhythmGame.lastResults()) || null);
     for (var i = 0; i < cbs.length; i++) {
-      try { cbs[i](reason, (window.RhythmGame.lastResults && window.RhythmGame.lastResults()) || null); } catch (e) {}
+      try { cbs[i](reason, res); } catch (e) {}
     }
   }
   window.RhythmGame.startAt = function (prov, opts) {
@@ -10135,10 +10292,50 @@
     // Absent (every existing caller) → _injectedNotes stays null → byte-identical to the pre-existing path.
     var _notes = (opts.notes && opts.notes.length) ? opts.notes : null;
     _lastInjectedNotes = _notes;   // build114 review: cache (or clear, for a no-notes solo launch) so a live-MP restart re-arms this exact chart
-    setTimeout(function () {
+    // build191 (MATCH-2/MATCH-5): opts.guard() — re-checked when the atMs timer fires; false = the round was aborted /
+    // superseded during the lead-in → never launch a zombie run. opts.notesWait() — a promise of the authoritative note
+    // array (or null) that may still be in flight at atMs: the launch shows #loading right away (so the MP start
+    // watchdog sees a seat that is legitimately preparing), awaits it, stages it as the injected chart, THEN runs the
+    // real provider (which skips its own analyzeChart when notes are staged). null → the provider charts locally.
+    // Both absent (every other caller) → byte-identical to before.
+    var _guard = (typeof opts.guard === 'function') ? opts.guard : null;
+    var _wait = (!_notes && typeof opts.notesWait === 'function') ? opts.notesWait : null;
+    var _prov = prov;
+    if (_wait) {
+      _prov = function () {
+        var g = _playGen;   // beginPlay already bumped it for THIS launch
+        if (_injectedNotes && _injectedNotes.length) return prov();   // a RESTART re-armed the chart already → don't wait again
+        try { showScreen('loading'); $('loading-stage').textContent = funnyStage(); setLoading('Syncing the match chart', 4); } catch (e) {}
+        return Promise.resolve().then(function () { return _wait(); }).catch(function () { return null; }).then(function (n) {
+          if (g !== _playGen) return { beats: [], duration: 0, player: null, meta: {}, live: false, submit: async () => null };   // superseded (cancel/abort) — beginPlay bails on its gen check; never decode for a dead launch
+          if (n && n.length) { _injectedNotes = n; _lastInjectedNotes = n; }
+          return prov();
+        });
+      };
+    }
+    var _h = setTimeout(function () {
+      var _i = _startAtTs.indexOf(_h); if (_i >= 0) _startAtTs.splice(_i, 1);   // build191 (TOUR-12): fired — no longer cancellable
+      try { if (_guard && !_guard()) return; } catch (e) { return; }
       try { getAC().resume(); } catch (e) {}
-      try { _injectedNotes = _notes; play(prov); } catch (e) { _injectedNotes = null; }
+      try { _injectedNotes = _notes; play(_prov); } catch (e) { _injectedNotes = null; }
     }, delay);
+    _startAtTs.push(_h);   // build191 (TOUR-12): remember the pending handle so a lead-in LEAVE can cancel it
+  };
+  // build191 (TOUR-12): cancel every still-PENDING startAt — a player who leaves during the lead-in must not be dropped
+  // into the track seconds later as a zombie solo run (belt-and-braces with the MATCH-2 guard). Already-fired starts are gone from the list.
+  var _startAtTs = [];
+  window.RhythmGame.cancelStartAt = function () {
+    var n = _startAtTs.length;
+    while (_startAtTs.length) { try { clearTimeout(_startAtTs.pop()); } catch (e) {} }
+    return n > 0;
+  };
+  // build191 (MATCH-1): the MP layer's forced abort — kill an in-flight launch (loading / countdown / run) exactly like
+  // the loading-screen CANCEL does, without firing a song-end (the round is void, not a forfeit).
+  window.RhythmGame.cancelLaunch = function () {
+    _playGen++;
+    try { _disarmLoadingEscape(); } catch (e) {}
+    try { stopGame(); } catch (e) {}
+    try { showScreen('menu'); } catch (e) {}
   };
   if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
   if (!window.RhythmGame.getMusicAnalyser) window.RhythmGame.getMusicAnalyser = function () { return musicAnalyser; };   // build66: live FFT tap (frequency + waveform) for procbg.js reactive backdrops

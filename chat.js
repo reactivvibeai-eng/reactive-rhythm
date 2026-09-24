@@ -520,6 +520,7 @@
     try {
       ch.on('broadcast', { event: 'chat-msg' }, function (m) {
         var p = m && m.payload; if (!p || !p.id || !p.text) return;
+        if (p.id === room.meId) return;   // build191 (TOUR-10): my own message was already echoed locally by sendRoomMsg — the tournament channel is broadcast self:true, so drop the server echo (rooms are self:false → never arrives there)
         pushRoomRow({ id: p.id, name: filterDisplayName(p.name), text: filterChatText(String(p.text).slice(0, 140)), at: p.at || Date.now(),
           name_color: p.name_color || '', name_font: p.name_font || '', flair_id: p.flair_id || '', frame_id: p.frame_id || '' });   // build111 review: filter the broadcast display NAME, not just escape it. build118 p2: pass through cosmetic fields
       });

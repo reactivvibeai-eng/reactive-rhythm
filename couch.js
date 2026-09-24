@@ -265,7 +265,9 @@
     // end-of-song safety net: if the engine's onSongEnd didn't fire (e.g. demo with no end cb chain),
     // detect playing→stopped and resolve the verdict from the last frames.
     if (stt) {
-      if (stt.playing) _lastDur = 1; else if (_lastDur === 1 && !_matchEnded) { onMatchEnd(p2f ? p2f.sc : (_p2 ? _p2.getP2Score() : 0)); }
+      // build191 (TOUR-9): a PAUSE (Esc / blur auto-pause) is not a song end — hold the verdict while paused. A quit
+      // from the pause menu still resolves here (state leaves 'paused' → neither playing nor paused).
+      if (stt.playing) _lastDur = 1; else if (stt.paused) { /* paused mid-song — keep waiting */ } else if (_lastDur === 1 && !_matchEnded) { onMatchEnd(p2f ? p2f.sc : (_p2 ? _p2.getP2Score() : 0)); }
     }
     renderHud(stt, p2f);
     renderP2Deck(p2f);
