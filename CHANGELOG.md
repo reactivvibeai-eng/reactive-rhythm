@@ -15,6 +15,95 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build191 — MULTIPLAYER RELIABILITY + 58-fix audit pass (owner: "hard to get into a match and keep it reliable")  ·  ?v=496
+
+A 7-lens audit found 61 problems, each checked by an adversarial verifier (1 was refuted). A live two-peer harness (two
+guest browsers on real Supabase Realtime) then reproduced the owner's complaint: **4 of 7 real match starts failed.** 58 of
+the 61 are fixed. Full list with statuses in `BUILD191_REPORT.md`.
+
+**The #1 bug: MP starts falsely aborted.**
+- Cause: the host's chart pre-pass (fetch, decode, analyze, with no `#loading` shown) outlasted the start watchdog's ~8.5s
+  budget. The host then dropped to setup while the guest played alone, and the unguarded `.then()` launched a "zombie" solo
+  run on the host seconds later. The guest's chart wait was also capped at 3.5s, so on long tracks the two seats played
+  DIFFERENT charts.
+- Fix:
+  - **Prepare-on-pick.** The host pre-charts when the track is picked, and the guest pre-decodes when it learns the track.
+  - A preparation-aware watchdog with a 45s budget.
+  - One round-generation token over every async continuation (bumped by abortRound).
+  - The host sends the chart as soon as it's ready, then re-sends it twice. The guest waits up to atMs+15s and falls back
+    to a local chart in the host's chart mode.
+  - bufferedProvider skips re-analysis when injected notes are staged.
+  - Dead or undecodable tracks and the loading-screen CANCEL now force a keyed `abort` that recovers BOTH seats.
+  - The settle safety is progress-aware, so no hollow forfeit wins while the rival is still playing.
+  - No blur/tab-hide auto-pause in a live human 1v1. Esc there is a soft pause: the song keeps running and EXIT forfeits.
+- Live result: **6/6, then 4/4, room/quick-match starts on 3–4 min .wav tracks with 0 aborts**, and the guest uses the
+  host's chart.
+
+**Lifecycle, leaving and reconnecting.**
+- Esc, Back and BACK TO LOBBY really leave the room or match, so no ghost seats are left behind.
+- Status callbacks from channels we removed on purpose no longer fire the reconnect logic. That kills the false
+  "● RECONNECTING / Connection lost" after every teardown.
+- A pre-match channel rebuild keeps the opponent's READY (grace period plus `ready-req`).
+- The tournament-watch `spectating` flag is cleared.
+- The lobby chat pill no longer floats over the highway.
+- The engine's stale 'results' state no longer hijacks Enter/Esc/Space on the MP screens (released synchronously on every
+  MP exit).
+- A guest who reloads mid-match gets a visible "MATCH IN PROGRESS — you'll be put back" card and is re-seated when the
+  match ends.
+- REMATCH works when the opponent re-entered through the room: it converts on click, on pick, or 3s after they re-seat.
+- A host reload revives the room with its real name, privacy, combat and matched settings.
+- `mprole=host` is no longer left in the address bar, so a raw URL share can't create a second host.
+
+**Entry funnel.**
+- qm-pair is re-sent for up to 10s, with a "rival slipped away" re-queue if it never lands.
+- Incoming challenges expire after 22s.
+- Realtime battle-calls now RING (ACCEPT/Decline) instead of auto-joining at ring time, and only in one tab.
+- Invite links carry skipIntro.
+- PLAY NOW / OPEN ROOM before the lobby connects now shows "Connecting…" and queues the tap, instead of a false "Sign in
+  to play online".
+- Guest hosts no longer spam 401 room-ready pings.
+- Guests get distinct names (Player-1234).
+- A mid-session id change says bye to the old id.
+
+**Tournaments.**
+- A paused or frozen duelist can't freeze the bracket, and the host now has a round deadline.
+- t-final and t-round are re-emitted, bounded.
+- Joiners no longer self-elect as host.
+- A promoted host of an OPEN bracket gets its controls.
+- A reloading host resumes as host.
+- The t-state rate is reduced.
+- Couch co-op pause no longer ends the match.
+- Tournament chat no longer doubles your own messages.
+- The spectate deck and WATCH NEXT render.
+- Leaving during the lead-in cancels its timers.
+
+**Engine and data.**
+- MP rounds are no longer recorded as a solo run of your last solo song (wrong bests, leaderboard entries and doubled
+  goals).
+- Pause → EXIT no longer sends the previous run's score.
+- Restart never re-injects a stale MP chart.
+- MIDI holds work.
+- The controller Start button now resumes.
+- A song no longer auto-starts unattended in a hidden tab.
+- Superseded launch failures stay silent.
+- A catalog refresh failure never swaps a real library for 1000 fake songs; the mock fallback now self-retries.
+- Leaderboard submit failures are now visible.
+- Entitlement reads retry, and /me has a timeout.
+- The signed-out sparks cache is zeroed.
+- The profile wipe clears the memoized scores.
+- Telemetry keeps its buffer on send failure.
+- The consent-bar `:has()` rule is replaced.
+- Media `play()` AbortErrors are no longer logged as errors.
+- Realtime traffic cut: 'state' isn't streamed when nobody consumes it (~100ms interval), and the CPU warm-up never takes
+  the network path.
+
+Deliberately NOT done (see the report): UI-6 (the phone Back button scrolls away; needs a live 390px layout test),
+DATA-3 (per-device dead-track list), ENGINE-10 (musical-charter memory; changes chart output), per-account local data
+scoping, and a /score replay queue (needs a backend idempotency key).
+Verified: `node --check` on every JS file and all 22 inline scripts; three live two-peer harness passes (every scenario
+green on the final pass). Not verifiable headless: 60fps feel and the desktop split-screen. Built in the session worktree
+(a hook now blocks edits to the main checkout from worktree sessions).
+
 ### build188 — AI Flixs: THE PLAY-TRIANGLE PROMISE (live-show incident)  ·  ?v=488
 
 Owner on a LIVE SHOW tapped an AI Flix expecting a playable level and got a video-preview modal.
