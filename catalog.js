@@ -702,8 +702,11 @@
         const ok = () => { clearTimeout(to); resolve(); };
         const fail = (msg) => { clearTimeout(to); reject(new Error(msg)); };
 
-        if (this.isHls && !nativeHls && window.Hls && window.Hls.isSupported()) {
-          // HLS via hls.js (non-Safari)
+        // build192: prefer hls.js wherever MSE exists. Chrome now answers canPlayType(mpegurl) with "maybe" yet its native
+        // player REJECTS these Mux streams (MEDIA_ERR_SRC_NOT_SUPPORTED, measured live) — canPlayType is not a safe gate.
+        // Native HLS only where hls.js can't run (old iOS Safari without MSE).
+        if (this.isHls && window.Hls && window.Hls.isSupported()) {
+          // HLS via hls.js (every MSE browser)
           const hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
           this.hls = hls;
           hls.loadSource(this.url); hls.attachMedia(audio);
@@ -1922,17 +1925,21 @@
       });
     }
     const v = ov.querySelector('.fw-video');
-    v.poster = posterFor(track); v.src = src;
+    v.poster = posterFor(track);
+    _detachVideoHls(_watchHls); _watchHls = _attachVideoSrc(v, src);   // build192: HLS films play IN the cinema frame via hls.js (Chrome's native HLS rejects Mux streams)
     { const _t = ov.querySelector('.fw-title'); if (_t) _t.textContent = track.title || ''; }
     { const _e = ov.querySelector('.fw-end'); if (_e) _e.hidden = true; }   // reset the end CTA for each open
     ov.querySelector('.fw-cap').textContent = (track.artist_name || '');
     ov.classList.add('open');
     const p = v.play && v.play();
-    if (p && p.catch) p.catch(() => { try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });   // HLS / autoplay-blocked → new tab
+    // build192: with hls.js attached, a play() rejection is an autoplay/abort hiccup, not "can't play" — the controls stay up
+    // for a tap. Only a plain-src film that truly can't play falls back to a new tab.
+    if (p && p.catch) p.catch((err) => { if (_watchHls || (err && err.name === 'AbortError')) return; try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });
     if (catalogLive && track.id) logUse(track.id, 'preview', { kind: 'watch' });
   }
   function closeWatch() {
     const ov = document.getElementById('flix-watch'); if (!ov) return;
+    _detachVideoHls(_watchHls); _watchHls = null;   // build192
     const v = ov.querySelector('.fw-video'); try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
     ov.classList.remove('open');
   }
@@ -1945,6 +1952,33 @@
   // they stay in sync. Falls back to the Watch preview only when the film has no decodable audio.
   // ============================================================================
   let _flixRaf = 0, _flixPrevSrc = null, _flixActive = false, _flixVideoUrl = '', _flixSawActive = false;
+  // build192 (owner: "picked an AI Flix level and it was just a gray background"): 230 of 239 films carry an HLS
+  // (.m3u8) video_url, and the backdrop + Watch popup fed it straight to <video src>. Chrome reports
+  // canPlayType('application/vnd.apple.mpegurl') = "maybe" but its native player rejects these Mux streams
+  // (error 4 MEDIA_ERR_SRC_NOT_SUPPORTED, readyState 0 — reproduced on the live site) → no frame ever paints → gray.
+  // ONE attach path: hls.js (already loaded for LivePlayer) wherever MSE exists; plain src for files + no-MSE browsers.
+  // Returns the Hls instance (caller destroys it) or null for a plain src.
+  function _isHlsUrl(u) { return /\.m3u8(\?|$)/i.test(String(u || '')); }
+  function _attachVideoSrc(el, url) {
+    if (_isHlsUrl(url) && window.Hls && window.Hls.isSupported()) {
+      try { el.removeAttribute('src'); } catch (e) {}
+      const hls = new window.Hls({ enableWorker: true, lowLatencyMode: false, capLevelToPlayerSize: true });
+      hls.on(window.Hls.Events.ERROR, function (_e, data) {
+        if (!data || !data.fatal) return;
+        // standard hls.js recovery: retry the network once, re-sync media once, then give up quietly (backdrop stays dark)
+        try {
+          if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && !hls.__rrNetRetry) { hls.__rrNetRetry = 1; hls.startLoad(); }
+          else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR && !hls.__rrMediaRetry) { hls.__rrMediaRetry = 1; hls.recoverMediaError(); }
+        } catch (e) {}
+      });
+      hls.loadSource(url); hls.attachMedia(el);
+      return hls;
+    }
+    el.setAttribute('src', url); try { el.load(); } catch (e) {}
+    return null;
+  }
+  function _detachVideoHls(hls) { if (hls) { try { hls.destroy(); } catch (e) {} } }
+  let _flixHls = null, _watchHls = null;
   let _flixFailT = 0;   // finding #2: stopwatch (ms) since a launched flix left the loading screen WITHOUT ever activating #game → a failed decode/chart; 0 = not counting
   // build99f (playtest P0): ~7% of the Mux-hosted films are missing their audio.m4a rendition, so a deterministic
   // featured film (or a tapped card) could 404 and dead-end on the loading screen — the worst first-impression bug
@@ -1999,7 +2033,8 @@
     _flixPrevSrc = bv.getAttribute('src') || '';
     const g = document.getElementById('game'); if (g) g.classList.add('flix-mode');
     try { bv.pause(); } catch (e) {}
-    bv.muted = true; bv.loop = false; bv.setAttribute('src', videoUrl); try { bv.load(); } catch (e) {}
+    _detachVideoHls(_flixHls); _flixHls = null;
+    bv.muted = true; bv.loop = false; _flixHls = _attachVideoSrc(bv, videoUrl);   // build192: HLS films go through hls.js (gray-backdrop fix)
     const p0 = bv.play && bv.play(); if (p0 && p0.catch) p0.catch(function () {});
     if (_flixRaf) cancelAnimationFrame(_flixRaf);
     (function frame() {
@@ -2032,8 +2067,13 @@
         }
       }
       // re-assert the flix video + class if the engine's play-setup reset #bg-video to the default backdrop.
-      if (bv.getAttribute('src') !== _flixVideoUrl) {
-        bv.muted = true; bv.loop = false; bv.setAttribute('src', _flixVideoUrl); try { bv.load(); } catch (e) {}
+      // build192: with hls.js attached the element's src is our MediaSource blob: (or empty while it attaches), never the
+      // .m3u8 — so "ours" means: an hls.js instance still bound to this element and no OTHER url written over it.
+      const _cur = bv.getAttribute('src') || '';
+      const _ours = _flixHls ? (_flixHls.media === bv && (!_cur || _cur.indexOf('blob:') === 0)) : (_cur === _flixVideoUrl);
+      if (!_ours) {
+        _detachVideoHls(_flixHls); _flixHls = null;
+        bv.muted = true; bv.loop = false; _flixHls = _attachVideoSrc(bv, _flixVideoUrl);
         const pr = bv.play && bv.play(); if (pr && pr.catch) pr.catch(function () {});
       }
       if (g2 && !g2.classList.contains('flix-mode')) g2.classList.add('flix-mode');
@@ -2058,7 +2098,8 @@
     _flixActive = false;
     if (_flixRaf) { cancelAnimationFrame(_flixRaf); _flixRaf = 0; }
     const bv = document.getElementById('bg-video');
-    if (bv) { try { bv.pause(); } catch (e) {} try { if (_flixPrevSrc) bv.setAttribute('src', _flixPrevSrc); else bv.removeAttribute('src'); bv.load(); } catch (e) {} }
+    _detachVideoHls(_flixHls); _flixHls = null;   // build192: release the HLS MediaSource before restoring the level backdrop
+    if (bv) { try { bv.pause(); } catch (e) {} try { if (_flixPrevSrc && _flixPrevSrc.indexOf('blob:') !== 0) bv.setAttribute('src', _flixPrevSrc); else bv.removeAttribute('src'); bv.load(); } catch (e) {} }
     const g = document.getElementById('game'); if (g) g.classList.remove('flix-mode');
   }
 

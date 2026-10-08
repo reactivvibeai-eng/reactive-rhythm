@@ -15,6 +15,34 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build192 — AI FLIX levels showed a GRAY background (owner bug report)  ·  ?v=498
+
+Owner: picked an AI Flix film to play as a level → "just a gray background."
+**Root cause (reproduced on the live site):** 230 of 239 films carry an HLS `.m3u8` video_url. The level backdrop
+(`_startFlixBackdrop`) and the Watch popup (`openWatch`) set it as a plain `<video src>`. Chrome now answers
+`canPlayType('application/vnd.apple.mpegurl')` with "maybe", but its native player REJECTS these Mux streams:
+`MEDIA_ERR_SRC_NOT_SUPPORTED` (error 4), readyState 0, no frame ever → gray. (The music still charted and played, because
+it comes from the separate decodable `audio.m4a`.) The Watch popup hit the same wall and bounced the player to a new tab.
+
+**Fix (catalog.js, client only):**
+- One `_attachVideoSrc(el, url)` path routes `.m3u8` through hls.js (already loaded) wherever MSE exists, with bounded
+  network/media recovery and capLevelToPlayerSize. Plain files and no-MSE browsers keep the native src.
+- The backdrop's frame loop now recognises its own MediaSource `blob:` src: it re-attaches only if another URL was written
+  over it.
+- Teardown destroys the hls instance and never restores a stale `blob:`.
+- The Watch popup plays in the cinema frame and only falls back to a new tab for a genuinely unplayable plain file.
+- LivePlayer (server-charted HLS audio) prefers hls.js the same way, since canPlayType is not a safe gate.
+- index.html: the `#bg-video-fill` mirror no longer copies a MediaSource `blob:` (one element per MediaSource →
+  ERR_FILE_NOT_FOUND).
+- The multiplayer show-room video backdrop rides the same function, so it is fixed too.
+
+**Verified on the worktree preview:**
+- Before (live site): error 4, 0×0.
+- After: readyState 4, 1280×720/1920 frames, buffer climbing, no error.
+- Pixel probe of decoded frames: real image content (std ~60–70), colour intact (NeonRec mean saturation 39).
+- Watch popup readyState 4 in-frame, with 0 new-tab fallbacks, and released on close.
+- No new console errors.
+
 ### build191 — MULTIPLAYER RELIABILITY + 58-fix audit pass (owner: "hard to get into a match and keep it reliable")  ·  ?v=496
 
 A 7-lens audit found 61 problems, each checked by an adversarial verifier (1 was refuted). A live two-peer harness (two
