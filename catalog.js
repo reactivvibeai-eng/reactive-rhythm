@@ -654,15 +654,30 @@
     if (!liveAudioEl) { liveAudioEl = new Audio(); liveAudioEl.preload = 'auto'; }
     return liveAudioEl;
   }
+  // build193 (MOBILE-1): iOS only blesses media inside touchend/click — touch pointerdown/touchstart are not activation
+  // events, so the old {once:true} pointerdown/touchstart listener burned its one shot on an iPhone. Listen on every
+  // activation-capable event and disarm after the first SUCCESSFUL blessing. Only ever touches the element while it
+  // still holds the silent wav (never a live track that LivePlayer has loaded into this shared element).
+  const _rrLiveUnlockEvs = ['pointerdown', 'touchstart', 'touchend', 'click'];
+  let _rrLiveUnlocked = false, _rrLiveUnlockBusy = false;
+  const _rrSilentWav = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  function _rrDisarmLiveUnlock() {
+    _rrLiveUnlocked = true;
+    _rrLiveUnlockEvs.forEach(ev => { try { window.removeEventListener(ev, unlockLiveAudio, { passive: true }); } catch (e) {} });
+  }
   function unlockLiveAudio() {
+    if (_rrLiveUnlocked || _rrLiveUnlockBusy) return;
     const a = getLiveAudio();
     // tiny silent wav
-    if (!a.src) a.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-    const p = a.play();
-    if (p && p.then) p.then(() => { a.pause(); try { a.currentTime = 0; } catch (e) {} }).catch(() => {});
+    if (!a.src) a.src = _rrSilentWav;
+    if (a.src !== _rrSilentWav) { _rrDisarmLiveUnlock(); return; }   // build193 (MOBILE-1): a real track owns it now — hands off
+    _rrLiveUnlockBusy = true;
+    let p = null; try { p = a.play(); } catch (e) { _rrLiveUnlockBusy = false; return; }
+    if (p && p.then) p.then(() => { _rrLiveUnlockBusy = false; if (a.src === _rrSilentWav) { a.pause(); try { a.currentTime = 0; } catch (e) {} } _rrDisarmLiveUnlock(); }).catch(() => { _rrLiveUnlockBusy = false; });
+    else { _rrLiveUnlockBusy = false; _rrDisarmLiveUnlock(); }
   }
-  ['pointerdown', 'touchstart'].forEach(ev =>
-    window.addEventListener(ev, unlockLiveAudio, { once: true, passive: true }));
+  _rrLiveUnlockEvs.forEach(ev =>
+    window.addEventListener(ev, unlockLiveAudio, { passive: true }));
 
   // ===========================================================================
   // LivePlayer — Mux HLS via hls.js OR a direct file, with a smoothed clock.
@@ -1391,10 +1406,42 @@
   }
   // deterministic pick: hash the date string (reuse hashStr) → index over the DECODABLE MUSIC pool (never a video).
   // Same formula + same catalog ⇒ same song for everyone today. Returns null until the catalog has music loaded.
+  // build193 (META-2): the index used to run over the WHOLE live pool in API (fresh-first) order, so any upload / ready-flip
+  // / partial crawl mid-period re-rolled today's Daily Rift and this week's Weekly Rift (whose best then carried onto a
+  // different song). Now the hash runs over a period-STABLE sub-pool: tracks that already existed when the period began
+  // (created_at before local midnight for a day key, before Monday 00:00 for a 'YYYY-Www' week key — unknown dates count
+  // as old), sorted by id. A new upload can no longer move the current pick. Falls back to the whole pool (id-sorted) only
+  // when that sub-pool is empty. One-time re-pick on deploy is expected. Long term: the server should pick these ids.
+  function _rrRiftPeriodStart(key) {
+    try {
+      let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key));
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+      m = /^(\d{4})-W(\d{1,2})$/.exec(String(key));
+      if (m) {
+        const j4 = new Date(+m[1], 0, 4);
+        return new Date(+m[1], 0, 4 - ((j4.getDay() + 6) % 7) + (+m[2] - 1) * 7).getTime();   // Monday 00:00 local of ISO week
+      }
+    } catch (e) {}
+    return 0;
+  }
+  let _rrRiftPoolCache = { src: null, len: -1, byKey: {} };   // per catalog version; day + week keys cached side by side
+  function _rrRiftPool(key) {
+    const all = musicTracks();
+    if (!all || !all.length) return null;
+    if (_rrRiftPoolCache.src !== all || _rrRiftPoolCache.len !== all.length) _rrRiftPoolCache = { src: all, len: all.length, byKey: {} };
+    if (_rrRiftPoolCache.byKey[key]) return _rrRiftPoolCache.byKey[key];
+    const cut = _rrRiftPeriodStart(key);
+    const _ca = function (t) { return (typeof t.created_at === 'number' ? t.created_at : Date.parse(t.created_at)) || 0; };
+    let sub = cut ? all.filter(function (t) { return _ca(t) < cut; }) : all.slice();
+    if (!sub.length) sub = all.slice();
+    sub.sort(function (a, b) { const x = String(a.id), y = String(b.id); return x < y ? -1 : (x > y ? 1 : 0); });
+    _rrRiftPoolCache.byKey[key] = sub;
+    return sub;
+  }
   function dailyRiftTrack(dateKey) {
-    const pool = musicTracks();
-    if (!pool || !pool.length) return null;
     const key = dateKey || dailyRiftToday();
+    const pool = _rrRiftPool(key);   // build193 (META-2): period-stable, id-sorted (was musicTracks() in API order)
+    if (!pool || !pool.length) return null;
     const h = (typeof hashStr === 'function') ? (hashStr('rift|' + key) >>> 0) : 0;
     return pool[h % pool.length] || null;
   }
@@ -2069,6 +2116,7 @@
     }
     closeSheet(); stopPreview(); currentTrack = track;
     _rrLastFlix = track;   // build193 (FLOW-4): remembered so a PLAY AGAIN / RESTART of this film re-arms its backdrop
+    try { window.RhythmGame.unlockForLaunch && window.RhythmGame.unlockForLaunch(); } catch (e) {}   // build193 (MOBILE-1/2): resume audio INSIDE the tap (iOS)
     // build99e (owner): a flix uses the player's EQUIPPED guitar — the clean default crimson for anyone who hasn't
     // equipped a skin (so the music video reads), and their own skin if they chose one. Drop any leftover per-level
     // skin/environment first so a film can never inherit a campaign level's guitar. (clearEnvironment sets
@@ -2181,6 +2229,9 @@
   // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
   function launchTrack(track, opts) {
     if (!track || !trackReady(track) || isVideo(track)) return false;   // never launch a video into the rhythm engine
+    // build193 (MOBILE-1/2): Levels / campaign / hub tiles launch straight into playUrl (await fetch/decode/countdown) — the
+    // engine's own resume lands far outside the tap, which iOS refuses (silent song, frozen clock). Resume inside the gesture.
+    try { window.RhythmGame.unlockForLaunch && window.RhythmGame.unlockForLaunch(); } catch (e) {}
     stopPreview();
     currentTrack = track;
     // Golden Buzzer launch flourish — one-time crowd cheer (mute/SFX-gated inside playCheer; procedural, no asset).

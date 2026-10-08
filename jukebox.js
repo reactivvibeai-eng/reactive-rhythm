@@ -416,9 +416,14 @@
         // build193 (FLOW-1): an OPEN sheet owns Enter (game.js plays it) — never re-open a sheet underneath a launch.
         try { const _sh = $('song-sheet'); if (_sh && _sh.classList.contains('open')) return; } catch (e2) {}
         // A KEYBOARD-focused button (Tab ring: tabs, header icons, Back…) keeps its native Enter activation; a mouse-
-        // focused one (no :focus-visible) still means "open the centered cover", so suppress its stray re-click.
+        // focused one still means "open the centered cover", so suppress its stray re-click. (Keyboard focus comes from
+        // game.js's Tab/Arrow focus tracker — :focus-visible turns on for a mouse-focused button after any keypress.)
         const _bt = ae && ae.closest ? ae.closest('button, a, [role="button"]') : null;
-        if (_bt) { let _kb = true; try { _kb = _bt.matches(':focus-visible'); } catch (e3) {} if (_kb) return; e.preventDefault(); }
+        if (_bt) {
+          let _kb = false;
+          try { const RG = window.RhythmGame; _kb = (RG && RG.isKbFocused) ? RG.isKbFocused(_bt) : _bt.matches(':focus-visible'); } catch (e3) {}
+          if (_kb) return; e.preventDefault();
+        }
         const t = jbList[Math.round(pos)]; if (t) RC().openSheet(t);
       }
     });

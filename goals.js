@@ -511,14 +511,30 @@
   // if the stored week key differs from the current week, reset the best to zero for the
   // fresh week. Idempotent — a reentrant call is a no-op read; the outer call owns the write.
   var _rolling = false;
+  // build193 (META-2): the ledger was keyed on the week only, so when the weekly song changed mid-week the old song's best
+  // carried onto the new one. The best now remembers its trackId; a different CURRENT weekly song (judged only against the
+  // LIVE catalog — never the mock/samples fallback or a still-loading library) resets it. Legacy ledgers without a trackId
+  // adopt the current song on their next record (no wipe on deploy).
+  function _liveWeeklyId() {
+    try {
+      var RC = window.RhythmCatalog;
+      if (!RC || !RC.isLive || !RC.isLive()) return null;
+      var t = weeklyTrack();
+      return (t && t.id != null) ? String(t.id) : null;
+    } catch (e) { return null; }
+  }
   function checkRollover() {
     if (_rolling) return load();
     _rolling = true;
     try {
       var o = load();
       var cur = isoWeekKey();
+      var tid = _liveWeeklyId();
       if (o.weekKey !== cur) {
-        o = { weekKey: cur, bestScore: 0, bestGrade: '', playedAt: 0 };
+        o = { weekKey: cur, bestScore: 0, bestGrade: '', playedAt: 0, trackId: tid };
+        save(o);
+      } else if (tid && o.trackId && String(o.trackId) !== tid) {
+        o = { weekKey: cur, bestScore: 0, bestGrade: '', playedAt: 0, trackId: tid };   // build193 (META-2): different song → fresh best
         save(o);
       }
       return o;
@@ -551,6 +567,7 @@
     var o = checkRollover();
     var prev = o.bestScore || 0;
     var isNewBest = score > prev;
+    try { var _tid = _liveWeeklyId(); if (_tid && (isNewBest || !o.playedAt)) o.trackId = _tid; } catch (e) {}   // build193 (META-2): stamp the song this best belongs to (saved below)
     if (isNewBest) {
       o.bestScore = score;
       o.bestGrade = grade || o.bestGrade || '';

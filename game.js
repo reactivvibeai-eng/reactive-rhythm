@@ -621,6 +621,9 @@
     // D1 RATINGS: leaving the results screen re-hides + resets the ratings widget so the next run starts clean
     // (also cancels any pending ~1.2s show timer). Guarded — a no-op before the widget/state exist.
     if (name !== 'results') { try { _resetRatingsWidget(); } catch (e) {} }
+    // build193 (FLOW-3): entering results drops focus left on a button from an earlier screen (opacity-hidden screens keep
+    // focus — e.g. a NEXT LEVEL clicked last run), so the results Enter/Space flow never natively fires a stale button.
+    else { try { const _ae0 = document.activeElement; if (_ae0 && _ae0 !== document.body && _ae0.blur && !/input|textarea|select/i.test(_ae0.tagName || '')) _ae0.blur(); } catch (e) {} }
     // clear any per-level visual theme ONLY when truly leaving gameplay (back to library or results).
     // NOT on 'loading' — loading happens AFTER launchLevel() applies the theme/backdrop/reactive cards,
     // so clearing here wiped the level's whole identity mid-launch (it played plain). Bug fixed.
@@ -1290,13 +1293,27 @@
   function _rrAudioSessionPlayback() {
     try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) {}
   }
+  // build193 (MOBILE-1): iOS only starts an AudioContext inside a touchend/click handler — a touch pointerdown/touchstart
+  // is NOT a user-activation event. The old {once:true} pointerdown/touchstart listener fired once on an iPhone, failed
+  // silently and never re-armed → first song from Levels/hub/AI Flix = frozen clock + silence. Now we listen on every
+  // activation-capable event and only disarm once the shared context is really 'running'. Never resumes while the
+  // engine is PAUSED (DemoPlayer.pause suspends the shared context — a stray tap must not un-pause the music).
+  const _RR_UNLOCK_EVS = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
+  let _rrUnlockArmed = true;
+  function _rrDisarmUnlock() {
+    if (!_rrUnlockArmed) return; _rrUnlockArmed = false;
+    _RR_UNLOCK_EVS.forEach(ev => { try { window.removeEventListener(ev, unlockAudio, { passive: true }); } catch (e) {} });
+  }
   function unlockAudio() {
     _rrAudioSessionPlayback();   // build193 (MOBILE-2)
+    if (state === 'paused') return;   // build193 (MOBILE-1): see above
     try {
       const ac = getAC();
       const b = ac.createBuffer(1, 1, 22050);
       const s = ac.createBufferSource();
       s.buffer = b; s.connect(ac.destination); s.start(0);
+      if (ac.state === 'running') _rrDisarmUnlock();   // build193 (MOBILE-1)
+      else if (ac.resume) { const _p = ac.resume(); if (_p && _p.then) _p.then(() => { if (ac.state === 'running') _rrDisarmUnlock(); }).catch(() => {}); }
     } catch (e) {}
     loadHitSfx();
   }
@@ -1486,8 +1503,9 @@
   window.RhythmGame.stopCelebration = () => { try { stopCelebrationOn(); } catch (e) {} };
   window.RhythmGame.shakeScreen = (amt) => { try { cameraShake = Math.max(cameraShake, (typeof amt === 'number' ? amt : 10)); } catch (e) {} };
   // first user gesture anywhere unlocks audio for the session
-  ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
-    window.addEventListener(ev, unlockAudio, { once: true, passive: true }));
+  // build193 (MOBILE-1): + touchend/click (the only touch events iOS honours), no {once} — unlockAudio disarms itself once running
+  _RR_UNLOCK_EVS.forEach(ev =>
+    window.addEventListener(ev, unlockAudio, { passive: true }));
 
   // ===========================================================================
   // PLAYER ABSTRACTION
@@ -2851,7 +2869,8 @@
         } catch (e) {}
         // build193 (DATA-3): tell the catalog this track is dead for THIS session, so random pickers (Surprise rail,
         // MP tour rollers) stop re-serving it. Shared deterministic picks (Daily Rift / Spotlight) never consult this.
-        try { window.dispatchEvent(new CustomEvent('rr:track-failed', { detail: { url: url, id: (meta && (meta.id || meta.trackId)) || null } })); } catch (e) {}
+        // (An AbortError = the player cancelled / a newer launch superseded the fetch — not a dead track, don't mark it.)
+        try { if (!(_derr && _derr.name === 'AbortError')) window.dispatchEvent(new CustomEvent('rr:track-failed', { detail: { url: url, id: (meta && (meta.id || meta.trackId)) || null } })); } catch (e) {}
         var _fe = new Error("This track can't be played right now — try another one.");
         try { _fe.cause = _derr; } catch (e) {}
         throw _fe;
@@ -5683,6 +5702,18 @@
     });
   }
 
+  // build193 (FLOW-1/FLOW-3): "did this element get focus from the KEYBOARD (Tab / arrow roving)?" — :focus-visible alone
+  // can't tell: Chrome starts matching it on a MOUSE-focused button as soon as any key is pressed, so a button clicked
+  // earlier (even on a previous results screen — opacity-hidden screens keep focus) would steal Enter/Space. Tracked
+  // here: a focus change within 400ms of a Tab/Arrow keydown is keyboard focus; anything else (mouse, script) is not.
+  let _rrKbFocusEl = null, _rrNavKeyAt = -1e9;
+  try {
+    document.addEventListener('keydown', function (e) { if (e.key === 'Tab' || /^Arrow/.test(e.key || '')) _rrNavKeyAt = performance.now(); }, true);
+    document.addEventListener('focusin', function (e) { _rrKbFocusEl = (performance.now() - _rrNavKeyAt < 400) ? e.target : null; }, true);
+  } catch (e) {}
+  function _rrKbFocused(el) { return !!el && el === _rrKbFocusEl && el === document.activeElement; }
+  window.RhythmGame.isKbFocused = function (el) { try { return _rrKbFocused(el); } catch (e) { return false; } };
+
   window.addEventListener('keydown', (e) => {
     if (calibActive) {
       if (e.code === 'Space') { e.preventDefault(); calibTap(); }
@@ -5711,10 +5742,10 @@
         // centered cover's sheet, and booked that run under the stale currentTrack.
         try { const _sh = $('song-sheet'); if (!_sh || !_sh.classList.contains('open')) return; } catch (e2) { return; }
         // ...and a KEYBOARD-focused button (Tab ring) keeps its native Enter activation (diff picker, practice, close…).
-        // A mouse-focused button (no :focus-visible) still means "play" here.
+        // A mouse-focused button still means "play" here. (Keyboard focus = _rrKbFocused, not :focus-visible — see above.)
         try {
           const _bt = e.target && e.target.closest ? e.target.closest('button, a, [role="button"]') : null;
-          if (_bt && _bt !== $('play-btn')) { let _kb = true; try { _kb = _bt.matches(':focus-visible'); } catch (e4) {} if (_kb) return; }
+          if (_bt && _bt !== $('play-btn') && _rrKbFocused(_bt)) return;
         } catch (e5) {}
         e.preventDefault(); $('play-btn').click();
       }
@@ -5735,15 +5766,13 @@
       if (e.target && (/input|textarea|select/i.test(e.target.tagName || '') || e.target.isContentEditable)) return;
       // build193 (FLOW-3): a KEYBOARD-focused results button (RETURN TO MENU, NEXT LEVEL, SHARE, rating stars/feel chips,
       // autocal APPLY…) keeps its native Enter/Space activation — the blanket hijack below turned every one of them into
-      // PLAY AGAIN. Mouse-focused buttons (no :focus-visible) keep the old Enter = replay / Space = swallowed flow, which
-      // also keeps build184's "Space must not re-fire the button the mouse just clicked" guard intact.
+      // PLAY AGAIN. Mouse-/script-focused buttons keep the old Enter = replay / Space = swallowed flow, which also keeps
+      // build184's "Space must not re-fire the button the mouse just clicked" guard intact (and showScreen('results')
+      // drops any focus left over from an earlier screen, so OD Space-spam at song end can't activate a stale button).
       if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
         try {
           const _ae = document.activeElement;
-          if (_ae && _ae !== document.body && _ae.id !== 'results-replay' && $('results').contains(_ae) && /^(BUTTON|A)$/.test(_ae.tagName)) {
-            let _kb = true; try { _kb = _ae.matches(':focus-visible'); } catch (e6) {}
-            if (_kb) return;
-          }
+          if (_ae && _ae !== document.body && _ae.id !== 'results-replay' && $('results').contains(_ae) && /^(BUTTON|A)$/.test(_ae.tagName) && _rrKbFocused(_ae)) return;
         } catch (e7) {}
       }
       if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
@@ -10387,6 +10416,9 @@
     try { showScreen('menu'); } catch (e) {}
   };
   if (!window.RhythmGame.getAC) window.RhythmGame.getAC = function () { return getAC(); };
+  // build193 (MOBILE-1/2): one call for gesture-time launchers outside game.js (catalog launchTrack / playFlix) — silent-
+  // switch-proof session + resume the shared context INSIDE the click (iOS refuses a resume after the async decode/countdown).
+  if (!window.RhythmGame.unlockForLaunch) window.RhythmGame.unlockForLaunch = function () { _rrAudioSessionPlayback(); try { getAC().resume(); } catch (e) {} };
   if (!window.RhythmGame.getMusicAnalyser) window.RhythmGame.getMusicAnalyser = function () { return musicAnalyser; };   // build66: live FFT tap (frequency + waveform) for procbg.js reactive backdrops
 
   // ===========================================================================

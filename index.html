@@ -9802,6 +9802,22 @@
   }
   try { window.RhythmLibrary = window.RhythmLibrary || {}; window.RhythmLibrary.hideLevelSplash = hideSplash; } catch (e) {}
   var _activeLevel = null;
+  // build193 (META-6): a campaign level plays at ITS tier, but setDifficulty persists rr_diff — one Warm-Up level left a
+  // Medium player on Easy (one Fracture level → Hard) for every later library song / Weekly Rift / quick-play, across
+  // reloads. Reuse the Daily Rift's pre-run stash (window.__rrRiftPrevDiff + persisted rr_rift_prev_diff): the shared
+  // _rrRestoreRiftDiff restores it on #menu activation, showHub and boot. Never overwrite an existing stash, so RETRY /
+  // NEXT LEVEL (which come back through here) keep the player's ORIGINAL tier.
+  function _rrStashDiffForLevel(tier) {
+    try {
+      if (!tier || window.__rrRiftPrevDiff) return;
+      var _held = null; try { _held = localStorage.getItem('rr_rift_prev_diff'); } catch (e) {}
+      if (_held) return;
+      var _cur = null; try { _cur = localStorage.getItem('rr_diff') || 'medium'; } catch (e) {}
+      if (!_cur || _cur === tier) return;
+      window.__rrRiftPrevDiff = _cur;
+      try { localStorage.setItem('rr_rift_prev_diff', _cur); } catch (e) {}
+    } catch (e) {}
+  }
   function launchLevel(L, ready) {
     if (!L) return;
     // build53 BETA backstop: never LAUNCH an unfinished authored level, whoever calls us (card grid, retryLevel, nextLevel's
@@ -9821,6 +9837,7 @@
     // clearEnvironment() (which nulls _activeLevel) — keeping _activeLevel=L is what lets recordLevelClear credit
     // this level's stars on completion, so it participates in the tier's sequential unlock like any other level.
     if (L.flix) {
+      _rrStashDiffForLevel(L.tier);   // build193 (META-6)
       try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
       // no applyLevelTheme/journey/level-guitar for a flix — playFlix uses the equipped/default guitar + the video backdrop
       try { window.RhythmGame.setLevelMods && window.RhythmGame.setLevelMods(null); } catch (e) {}
@@ -9838,6 +9855,7 @@
     }
     _activeLevel = L;
     try { window.RhythmGame.setLevelContext && window.RhythmGame.setLevelContext(L); } catch (e) {}
+    _rrStashDiffForLevel(L.tier);   // build193 (META-6)
     try { if (window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(L.tier); } catch (e) {}
     applyLevelTheme(L);
     showSplash(L, track);   // themed intro card over the loading screen (skippable, reduceMotion/fxLite-safe)
