@@ -1926,7 +1926,7 @@
     }
     const v = ov.querySelector('.fw-video');
     v.poster = posterFor(track);
-    _detachVideoHls(_watchHls); _watchHls = _attachVideoSrc(v, src);   // build192: HLS films play IN the cinema frame via hls.js (Chrome's native HLS rejects Mux streams)
+    _detachVideoHls(_rrWatchHls); _rrWatchHls = _attachVideoSrc(v, src);   // build192: HLS films play IN the cinema frame via hls.js (Chrome's native HLS rejects Mux streams)
     { const _t = ov.querySelector('.fw-title'); if (_t) _t.textContent = track.title || ''; }
     { const _e = ov.querySelector('.fw-end'); if (_e) _e.hidden = true; }   // reset the end CTA for each open
     ov.querySelector('.fw-cap').textContent = (track.artist_name || '');
@@ -1934,12 +1934,12 @@
     const p = v.play && v.play();
     // build192: with hls.js attached, a play() rejection is an autoplay/abort hiccup, not "can't play" — the controls stay up
     // for a tap. Only a plain-src film that truly can't play falls back to a new tab.
-    if (p && p.catch) p.catch((err) => { if (_watchHls || (err && err.name === 'AbortError')) return; try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });
+    if (p && p.catch) p.catch((err) => { if (_rrWatchHls || (err && err.name === 'AbortError')) return; try { window.open(src, '_blank', 'noopener'); closeWatch(); } catch (e) {} });
     if (catalogLive && track.id) logUse(track.id, 'preview', { kind: 'watch' });
   }
   function closeWatch() {
     const ov = document.getElementById('flix-watch'); if (!ov) return;
-    _detachVideoHls(_watchHls); _watchHls = null;   // build192
+    _detachVideoHls(_rrWatchHls); _rrWatchHls = null;   // build192
     const v = ov.querySelector('.fw-video'); try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
     ov.classList.remove('open');
   }
@@ -1978,7 +1978,7 @@
     return null;
   }
   function _detachVideoHls(hls) { if (hls) { try { hls.destroy(); } catch (e) {} } }
-  let _flixHls = null, _watchHls = null;
+  let _rrFlixHls = null, _rrWatchHls = null;   // build192b: _rr-prefixed — the site's patch-game-handoff.mjs injects its OWN `_flixHls` into this scope (a same-name let = SyntaxError that killed catalog.js on prod)
   let _flixFailT = 0;   // finding #2: stopwatch (ms) since a launched flix left the loading screen WITHOUT ever activating #game → a failed decode/chart; 0 = not counting
   // build99f (playtest P0): ~7% of the Mux-hosted films are missing their audio.m4a rendition, so a deterministic
   // featured film (or a tapped card) could 404 and dead-end on the loading screen — the worst first-impression bug
@@ -2033,8 +2033,8 @@
     _flixPrevSrc = bv.getAttribute('src') || '';
     const g = document.getElementById('game'); if (g) g.classList.add('flix-mode');
     try { bv.pause(); } catch (e) {}
-    _detachVideoHls(_flixHls); _flixHls = null;
-    bv.muted = true; bv.loop = false; _flixHls = _attachVideoSrc(bv, videoUrl);   // build192: HLS films go through hls.js (gray-backdrop fix)
+    _detachVideoHls(_rrFlixHls); _rrFlixHls = null;
+    bv.muted = true; bv.loop = false; _rrFlixHls = _attachVideoSrc(bv, videoUrl);   // build192: HLS films go through hls.js (gray-backdrop fix)
     const p0 = bv.play && bv.play(); if (p0 && p0.catch) p0.catch(function () {});
     if (_flixRaf) cancelAnimationFrame(_flixRaf);
     (function frame() {
@@ -2070,10 +2070,10 @@
       // build192: with hls.js attached the element's src is our MediaSource blob: (or empty while it attaches), never the
       // .m3u8 — so "ours" means: an hls.js instance still bound to this element and no OTHER url written over it.
       const _cur = bv.getAttribute('src') || '';
-      const _ours = _flixHls ? (_flixHls.media === bv && (!_cur || _cur.indexOf('blob:') === 0)) : (_cur === _flixVideoUrl);
+      const _ours = _rrFlixHls ? (_rrFlixHls.media === bv && (!_cur || _cur.indexOf('blob:') === 0)) : (_cur === _flixVideoUrl);
       if (!_ours) {
-        _detachVideoHls(_flixHls); _flixHls = null;
-        bv.muted = true; bv.loop = false; _flixHls = _attachVideoSrc(bv, _flixVideoUrl);
+        _detachVideoHls(_rrFlixHls); _rrFlixHls = null;
+        bv.muted = true; bv.loop = false; _rrFlixHls = _attachVideoSrc(bv, _flixVideoUrl);
         const pr = bv.play && bv.play(); if (pr && pr.catch) pr.catch(function () {});
       }
       if (g2 && !g2.classList.contains('flix-mode')) g2.classList.add('flix-mode');
@@ -2098,7 +2098,7 @@
     _flixActive = false;
     if (_flixRaf) { cancelAnimationFrame(_flixRaf); _flixRaf = 0; }
     const bv = document.getElementById('bg-video');
-    _detachVideoHls(_flixHls); _flixHls = null;   // build192: release the HLS MediaSource before restoring the level backdrop
+    _detachVideoHls(_rrFlixHls); _rrFlixHls = null;   // build192: release the HLS MediaSource before restoring the level backdrop
     if (bv) { try { bv.pause(); } catch (e) {} try { if (_flixPrevSrc && _flixPrevSrc.indexOf('blob:') !== 0) bv.setAttribute('src', _flixPrevSrc); else bv.removeAttribute('src'); bv.load(); } catch (e) {} }
     const g = document.getElementById('game'); if (g) g.classList.remove('flix-mode');
   }
