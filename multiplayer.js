@@ -3242,7 +3242,12 @@
   // absent from presence) AND they are not re-seated in this room's live presence (that case still converts through
   // _roomRematchFallback). Then the button reads FIND A NEW MATCH and goes back to the lobby; it flips back to REMATCH
   // the moment presence brings them back (onMatchPeers repaints).
-  function _rrNoOpponent() {
+  var _rrGoneSince = 0, _rrGoneT = 0;   // build193b (review polish 2): a latched leave must HOLD before the button flips
+  function _rrNoOpponentRaw() {
+    // build193b (review blocker 1): a SHOW host must never get FIND A NEW MATCH — its click/Enter runs backToLobby(), which
+    // closes the LIVE show room for every viewer (the same reason NEXT RIVAL is hidden in show rooms). REMATCH there keeps
+    // the room alive and the next START mints a fresh match.
+    if (room.id && room.show) return false;
     if (spectating) return false;
     if (oppMeta && oppMeta.bot) return false;
     if (oppPresent) return false;
@@ -3253,6 +3258,15 @@
       }
     } catch (e) {}
     return true;
+  }
+  // A one-heartbeat presence blip latches oppLeft instantly; flipping REMATCH → FIND A NEW MATCH on it made a click LEAVE
+  // the room. Require the "gone" reading to hold 4s (evidence + deadline), and repaint once when it matures.
+  function _rrNoOpponent() {
+    if (!_rrNoOpponentRaw()) { _rrGoneSince = 0; return false; }
+    if (!_rrGoneSince) _rrGoneSince = Date.now();
+    if (Date.now() - _rrGoneSince >= 4000) return true;
+    if (!_rrGoneT) _rrGoneT = setTimeout(function () { _rrGoneT = 0; try { _rrPaintRematch(); } catch (e) {} }, 4100);
+    return false;
   }
   function _rrPaintRematch() {
     var rb = $('mpx-rematch'); if (!rb) return;
