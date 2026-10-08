@@ -4765,6 +4765,7 @@
     try {
       if (matchCh && !matchLive && !room.show && Object.keys(room.members).some(function (id) { return id !== ME.id && room.members[id] && room.members[id].seat !== 'spec'; })) _armRoomRematchCheck();
     } catch (e) {}
+    try { _rrPaintRematch(); } catch (e) {}   // build193b (gate S3): a peer re-seated via the ROOM (reload / invite link) flips FIND A NEW MATCH back to REMATCH
     paintRoomWaiting();
   }
   // host launches: tells both seats to spin up the SAME match channel; spectators get the mid too.
