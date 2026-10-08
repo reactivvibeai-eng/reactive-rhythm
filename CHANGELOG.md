@@ -15,6 +15,45 @@ Held to the ROADMAP quality bar: motion, feedback, hierarchy, depth, brand, 60fp
 
 ## Changes
 
+### build193 — round-2 audit: progression, phones, everyday flow + retry-safe scores  ·  ?v=500
+
+A fresh 4-lens audit (the build191/192 code, campaign/meta, phones/long sessions, everyday flow) found 30 issues; each was
+adversarially verified. The 14 confirmed medium-or-higher ones are fixed. The 16 lows are on the polish list
+(scratchpad round2_findings).
+
+Fixed:
+- **META-1** Buying a paid campaign level no longer re-locks progress you already earned.
+- **META-2** Daily/Weekly Rift and Spotlight picks no longer re-roll when the catalog changes.
+- **META-6 / FLOW-5** Campaign levels and Daily Rift's forced HARD no longer overwrite your saved difficulty.
+- **MOBILE-1** The iOS audio unlock now runs on a real user gesture (touchend/click).
+- **MOBILE-2** iOS plays songs in the 'playback' audio session, so the ringer switch no longer mutes them.
+- **MOBILE-3** Wide touch devices (iPads, big phones in landscape) get the touch layout.
+- **MOBILE-5** Hub and library backdrop videos pause during songs.
+- **FLOW-1** Enter in the library no longer launches a stale song.
+- **FLOW-2** "Practice this section" uses the open sheet's song.
+- **FLOW-3** On the results screen, Enter/Space respect a KEYBOARD-focused button. A focus tracker replaces `:focus-visible`,
+  which mouse focus also matches.
+- **FLOW-4** PLAY AGAIN and RESTART on an AI Flix level keep the film backdrop.
+- **NEW-1** Esc during the 1v1 countdown no longer leaves the match.
+- **NEW-2** No PLAY AGAIN under the MP winner card.
+- **UI-6** The MP Back button stays reachable on phones.
+- **DATA-3** Tracks that failed to load this session are skipped by random, Surprise and MP picks.
+- **REMATCH-AFTER-LEAVE** The button reads FIND A NEW MATCH only after the opponent has really been gone for 4s, and never
+  in show rooms. It flips back when they re-seat.
+- **DATA-2** An honest "couldn't load the live library" state.
+- **DATA-4** Retry-safe score submits. POST /score and /plays carry a `run_id` (the backend dedupe in Lovable migration
+  0047 is live). A transient failure is queued per account and re-sent on boot, when back online, or after the next good
+  submit; the result panel says "queued". 16/16 node unit checks pass.
+
+**Ship gate:**
+- An independent review found 2 blockers: a show-room button could close the live show, and `?v` wasn't bumped. Both are
+  fixed.
+- The site's patch-game-handoff.mjs was simulated on base vs new: the same 9 patches apply on both, none are lost, and the
+  patched output passes the syntax check.
+- The live two-peer harness passed room and quick-match starts on 3–6 minute tracks, AI Flix + restart, solo + library
+  Enter, and the phone layout.
+- One gate find (the rematch label not repainting on a room re-seat) is fixed.
+
 ### build192 — AI FLIX levels showed a GRAY background (owner bug report)  ·  ?v=498
 
 Owner: picked an AI Flix film to play as a level → "just a gray background."
