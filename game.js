@@ -4317,7 +4317,7 @@
         }
       } catch (e) {
         console.warn('submit failed', e);
-        try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: 'network' }, results); } catch (e2) {}   // build191 (DATA-4): surface the lost server-chart submit instead of an empty panel
+        try { if (window.RhythmCatalog && window.RhythmCatalog.onSubmitResult) window.RhythmCatalog.onSubmitResult({ error: (e && e._rrQueued) ? 'queued' : 'network' }, results); } catch (e2) {}   // build191 (DATA-4): surface the lost server-chart submit instead of an empty panel; build193: 'queued' = auto-resend pending
       }
     }
     // FIRST PULSE — the bridge run's OWN results (chip + difficulty handoff). Called LAST so _bridgeRun was still

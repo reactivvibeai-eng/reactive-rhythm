@@ -346,6 +346,81 @@
     } catch (e) {}
   }
 
+  // ---------- build193 (DATA-4): retry-safe score/play submits ----------
+  // The backend now dedupes POST /score + /plays on an optional run_id (Lovable migration 0047: unique (user_id,
+  // client_run_id); a repeat returns 200 {…, duplicate:true}, never re-inserts, never re-pays — Bonus is keyed per
+  // play_id). So every submit carries a client run_id, and one that fails TRANSIENTLY (offline, timeout, 5xx/408/429)
+  // is queued in localStorage and re-sent on boot / 'online' / after the next good submit. Hard rejections (other 4xx)
+  // are dropped. Each entry is bound to the account (JWT sub) that earned it — never re-sent under another sign-in.
+  var _RR_SUBQ_KEY = 'rr_submit_q', _RR_SUBQ_MAX = 25, _RR_SUBQ_TTL = 7 * 864e5, _rrFlushing = false;
+  function _rrUuid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    var b = new Uint8Array(16), i;
+    try { crypto.getRandomValues(b); } catch (e) { for (i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256); }
+    b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    var h = Array.prototype.map.call(b, function (x) { return (x + 256).toString(16).slice(1); }).join('');
+    return h.slice(0, 8) + '-' + h.slice(8, 12) + '-' + h.slice(12, 16) + '-' + h.slice(16, 20) + '-' + h.slice(20);
+  }
+  function _rrTokSub(tk) {
+    try { var p = String(tk || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); while (p.length % 4) p += '='; return JSON.parse(atob(p)).sub || null; }
+    catch (e) { return null; }
+  }
+  function _rrSubQLoad() { try { var q = JSON.parse(localStorage.getItem(_RR_SUBQ_KEY) || '[]'); return Array.isArray(q) ? q : []; } catch (e) { return []; } }
+  function _rrSubQSave(q) { try { if (q.length) localStorage.setItem(_RR_SUBQ_KEY, JSON.stringify(q.slice(-_RR_SUBQ_MAX))); else localStorage.removeItem(_RR_SUBQ_KEY); } catch (e) {} }
+  function _rrOffline(err) { return /Failed to fetch|NetworkError|Load failed|AbortError|aborted/i.test(String((err && (err.message || err.name)) || err || '')) || !!(err && err.name === 'TypeError'); }
+  function _rrTransient(err) {
+    if (_rrOffline(err)) return true;
+    var s = /API (\d{3})/.exec(String((err && err.message) || err || ''));
+    if (!s) return true;                                   // a non-HTTP failure → assume transient
+    var c = +s[1]; return c >= 500 || c === 408 || c === 429;
+  }
+  // POST with a run_id. On a transient failure: queue it (bound to the signed-in account), flag err._rrQueued, rethrow.
+  async function _rrSubmit(path, body, meta) {
+    body = Object.assign({}, body); if (!body.run_id) body.run_id = _rrUuid();
+    try { return await api(path, { method: 'POST', auth: true, body: body, timeoutMs: 20000 }); }
+    catch (err) {
+      if (_rrTransient(err)) {
+        try {
+          var sub = _rrTokSub(await getToken());
+          if (sub) {
+            var q = _rrSubQLoad().filter(function (x) { return x && x.body && x.body.run_id !== body.run_id; });
+            q.push({ path: path, body: body, sub: sub, at: Date.now(), tries: 0, rift: !!(meta && meta.rift) });
+            _rrSubQSave(q); try { err._rrQueued = true; } catch (e) {}
+          }
+        } catch (e) {}
+      }
+      throw err;
+    }
+  }
+  async function _rrFlushSubmitQ() {
+    if (_rrFlushing || !API_BASE) return;
+    _rrFlushing = true;
+    try {
+      var q = _rrSubQLoad(); if (!q.length) return;
+      var sub = _rrTokSub(await getToken()); if (!sub) return;   // signed out → keep for later; never send anonymously
+      var keep = [], now = Date.now();
+      for (var i = 0; i < q.length; i++) {
+        var it = q[i];
+        if (!it || !it.body || now - (it.at || 0) > _RR_SUBQ_TTL || (it.tries || 0) >= 8) continue;   // expired / gave up
+        if (it.sub !== sub) { keep.push(it); continue; }                                               // another account's run
+        try {
+          var out = await api(it.path, { method: 'POST', auth: true, body: it.body, timeoutMs: 20000 });
+          // earn even on a duplicate: the lost-response case never got its play_id, and /bonus-sparks/earn pays a play_id once
+          try { _bonusEarnForRun(out && (out.play_id || out.id), null, !!it.rift); } catch (e) {}
+        } catch (err) {
+          if (!_rrTransient(err)) continue;                // a hard rejection is permanent — drop it
+          it.tries = (it.tries || 0) + 1; keep.push(it);
+          if (_rrOffline(err)) { for (var j = i + 1; j < q.length; j++) keep.push(q[j]); break; }   // still offline — stop this pass
+        }
+      }
+      _rrSubQSave(keep);
+    } catch (e) {} finally { _rrFlushing = false; }
+  }
+  try {
+    window.addEventListener('online', function () { setTimeout(_rrFlushSubmitQ, 1500); });
+    setTimeout(_rrFlushSubmitQ, 12000);                    // boot: after the shared site session has hydrated
+  } catch (e) {}
+
   // ===========================================================================
   // RHYTHM WAGER (build66) — host-run tournament PRIZE POOLS: an entry-fee pool (winner takes
   // the pot) and a parimutuel SIDE-BET (pickers split the pot). The host picks the mode + buy-in.
@@ -838,7 +913,8 @@
             play_token: playToken,
             pack_id: packId,                 // 50/50 payout reconciliation (null = freeplay)
           };
-          const out = await api('/plays', { method: 'POST', body: payload, auth: true });
+          const out = await _rrSubmit('/plays', payload, { rift: !!_runDailyRift });   // build193 (DATA-4): run_id + transient-failure retry queue
+          try { setTimeout(_rrFlushSubmitQ, 2000); } catch (e) {}                       // a good submit = we're online → drain any queued runs
           // build100i: Lovable returns { id, play_id, rank_global }. Capture the canonical play_id, then earn server
           // Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _runDailyRift carries this run's daily
           // intent (set in recordLocal); the server validates it. No-op unless BONUS_SERVER + signed-in.
@@ -2580,14 +2656,15 @@
         const tk = await getToken();
         if (!tk) { onSubmitResult({ error: 'not-authed' }, results); return; }
         try {
-          const out = await api('/score', { method: 'POST', auth: true, body: {
+          const out = await _rrSubmit('/score', {   // build193 (DATA-4): run_id + transient-failure retry queue
             track_id: _trk.id, difficulty: results.difficulty,
             score: results.score, accuracy: results.accuracy, max_combo: results.max_combo,
             notes_hit: results.notes_hit, notes_total: results.notes_total,
             // build104 s11: stamp the chart epoch — the buildNotes + scoring rewrite moved achievable score, so a v2
             // score must not rank against a v1 score. The backend can segment/label by this; an absent field = era 1.
             chart_version: (window.RhythmGame && window.RhythmGame.CHART_VERSION) || 1,
-          } });
+          }, { rift: !!_rift3x });
+          try { setTimeout(_rrFlushSubmitQ, 2000); } catch (e) {}   // a good submit = we're online → drain any queued runs
           // build100i: Lovable returns { id, play_id, rank_global } from /score (a /plays alias). Capture the canonical
           // play_id, then earn server Bonus against it (POST /bonus-sparks/earn { play_id, daily_rift }). _rift3x carries
           // the day's-first-clear intent; the server validates it. No-op unless BONUS_SERVER + signed-in.
@@ -2599,9 +2676,9 @@
           try { board = lbRows(await api('/leaderboard/' + _trk.id + '?difficulty=' + results.difficulty + '&limit=10')); } catch (e) {}
           onSubmitResult({ rank_global: out && out.rank_global, leaderboard: board }, results);
         } catch (e) {
-          // build191 (DATA-4): stay local-only, but SAY so (was a silent empty catch). No auto-replay: /score has no
-          // idempotency key, so re-sending after a lost response could post a duplicate leaderboard row + Bonus earn.
-          try { onSubmitResult({ error: 'network' }, results); } catch (e2) {}
+          // build193 (DATA-4): a transient failure is now QUEUED and re-sent automatically (run_id makes the replay
+          // duplicate-safe server-side); only a hard rejection stays local-only. Say which one happened.
+          try { onSubmitResult({ error: (e && e._rrQueued) ? 'queued' : 'network' }, results); } catch (e2) {}
         }
       })();
     }
@@ -2651,6 +2728,8 @@
       wrap.innerHTML = '<div class="lb-note">' +
         (out && out.error === 'not-authed'
           ? 'Sign in on ReactivVibe to save your score & climb the leaderboard.'
+          : out && out.error === 'queued'    // build193 (DATA-4): transient failure → queued for automatic re-send
+          ? 'Couldn\'t reach the leaderboard right now - your score is queued and will be sent automatically.'
           : out && out.error === 'network'   // build191 (DATA-4): a failed account submit is no longer silent
           ? 'Couldn\'t reach the leaderboard - this score is saved on this device only.'
           : 'Local practice — scores aren\u2019t saved.') + '</div>';
