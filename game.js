@@ -122,6 +122,8 @@
   let _bridgePrevDiff = null;  // the tier to restore if a bridge run is abandoned without clearing (typically 'easy')
   let _timingSamples = [];     // build83: per-hit signed timing error (sec) for the results early/late summary
   let provider = null;       // async () => session
+  let _rrProvFlix = false;   // build193 (FLOW-4): the current `provider` is an AI Flix run (playUrl meta.flix) — restart listeners use it
+  const _rrRestartCbs = [];  // build193 (FLOW-4): RhythmGame.onRestart listeners (persistent; fired after every restartGame relaunch)
   let session = null;        // { beats, duration, player, meta, live, submit }
   let player = null;         // current Player instance
   let beats = [];            // raw chart [{t, strength}]
@@ -1282,7 +1284,14 @@
     if (sharedAC.state === 'suspended') { try { sharedAC.resume(); } catch (e) {} }
     return sharedAC;
   }
+  // build193 (MOBILE-2): iOS files Web Audio under the 'ambient' session, which the ring/silent switch MUTES — so an
+  // iPhone on silent got a silent song + silent SFX. Opt into 'playback' (Safari 16.4+). Feature-detected: a no-op on
+  // Chrome/desktop/Android. (A looping silent <audio> fallback for iOS < 16.4 is on the polish list.)
+  function _rrAudioSessionPlayback() {
+    try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) {}
+  }
   function unlockAudio() {
+    _rrAudioSessionPlayback();   // build193 (MOBILE-2)
     try {
       const ac = getAC();
       const b = ac.createBuffer(1, 1, 22050);
@@ -2840,6 +2849,9 @@
             window.RhythmTelemetry.event('decode_error', { trackId: (meta && (meta.id || meta.trackId)) || null, reason: _dre, difficulty: difficulty });
           }
         } catch (e) {}
+        // build193 (DATA-3): tell the catalog this track is dead for THIS session, so random pickers (Surprise rail,
+        // MP tour rollers) stop re-serving it. Shared deterministic picks (Daily Rift / Spotlight) never consult this.
+        try { window.dispatchEvent(new CustomEvent('rr:track-failed', { detail: { url: url, id: (meta && (meta.id || meta.trackId)) || null } })); } catch (e) {}
         var _fe = new Error("This track can't be played right now — try another one.");
         try { _fe.cause = _derr; } catch (e) {}
         throw _fe;
@@ -3236,6 +3248,7 @@
   // ===========================================================================
   async function play(prov, opts) {
     provider = prov;
+    _rrProvFlix = false;   // build193 (FLOW-4): every launch resets it; playUrl re-sets it right after for an AI Flix run
     bossMode = !!(opts && opts.boss) || bossFlag;   // Boss Stage: Levels boss card → playBoss(), or ?boss=1 to test
     // ---- PRACTICE MODE arm/disarm (single-player ONLY). A fresh play() ALWAYS re-decides practice from opts, so
     // a normal quick-play / campaign / MP launch that passes no practice opts clears any stale practice state →
@@ -3985,6 +3998,9 @@
       });
     }
     stopGame(); beginPlay();
+    // build193 (FLOW-4): let catalog re-dress the relaunch (AI Flix film backdrop). beginPlay ran its sync prefix, so
+    // bufferedProvider's showScreen('loading') is already up → the backdrop watcher re-arms with #game inactive.
+    for (var _ri = 0; _ri < _rrRestartCbs.length; _ri++) { try { _rrRestartCbs[_ri]({ flix: _rrProvFlix }); } catch (e) {} }
   }
 
   // Boss Stage drains the meter harder — and harder still once ENRAGED (phase 2).
@@ -5690,6 +5706,16 @@
         // (mirror of the results-state guard; the store/profile/etc. add .active without changing engine state).
         if (document.querySelector('#profile-screen.active, #leaderboard-screen.active, #settings-screen.active, #howto-screen.active, #store-screen.active, #levels-screen.active')) return;
         if (e.target && /input|textarea|select/i.test(e.target.tagName)) return;   // build184: Enter while TYPING (library search) must not launch a track
+        // build193 (FLOW-1): Enter = PLAY only while a song SHEET is open. With the sheet closed this fired the STALE
+        // _menuPlayHandler (last sheet's song — or the demo on a fresh session) instead of letting jukebox.js open the
+        // centered cover's sheet, and booked that run under the stale currentTrack.
+        try { const _sh = $('song-sheet'); if (!_sh || !_sh.classList.contains('open')) return; } catch (e2) { return; }
+        // ...and a KEYBOARD-focused button (Tab ring) keeps its native Enter activation (diff picker, practice, close…).
+        // A mouse-focused button (no :focus-visible) still means "play" here.
+        try {
+          const _bt = e.target && e.target.closest ? e.target.closest('button, a, [role="button"]') : null;
+          if (_bt && _bt !== $('play-btn')) { let _kb = true; try { _kb = _bt.matches(':focus-visible'); } catch (e4) {} if (_kb) return; }
+        } catch (e5) {}
         e.preventDefault(); $('play-btn').click();
       }
       return;
@@ -5707,6 +5733,19 @@
       // really up, and never on keys typed into a text field.
       try { const _rsEl = $('results'); if (!_rsEl || !_rsEl.classList.contains('active')) return; } catch (e3) { return; }
       if (e.target && (/input|textarea|select/i.test(e.target.tagName || '') || e.target.isContentEditable)) return;
+      // build193 (FLOW-3): a KEYBOARD-focused results button (RETURN TO MENU, NEXT LEVEL, SHARE, rating stars/feel chips,
+      // autocal APPLY…) keeps its native Enter/Space activation — the blanket hijack below turned every one of them into
+      // PLAY AGAIN. Mouse-focused buttons (no :focus-visible) keep the old Enter = replay / Space = swallowed flow, which
+      // also keeps build184's "Space must not re-fire the button the mouse just clicked" guard intact.
+      if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+        try {
+          const _ae = document.activeElement;
+          if (_ae && _ae !== document.body && _ae.id !== 'results-replay' && $('results').contains(_ae) && /^(BUTTON|A)$/.test(_ae.tagName)) {
+            let _kb = true; try { _kb = _ae.matches(':focus-visible'); } catch (e6) {}
+            if (_kb) return;
+          }
+        } catch (e7) {}
+      }
       if (e.key === 'Enter') { e.preventDefault(); const b = $('results-replay'); if (b) b.click(); }
       else if (e.key === 'Escape') { e.preventDefault(); const b = $('results-menu'); if (b) b.click(); }
       else if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); }   // build184: Space must never natively re-activate whichever results button holds focus (#results-store sat in that path)
@@ -10189,7 +10228,11 @@
   Object.assign(window.RhythmGame, {
     play,                              // play(provider)
     playDemo: (opts) => play(demoProvider, opts),
-    playUrl: (url, meta, opts) => play(() => bufferedProvider(url, meta), opts),   // in-browser chart a live track (opts forwards practice/boss)
+    playUrl: (url, meta, opts) => { const _r = play(() => bufferedProvider(url, meta), opts); _rrProvFlix = !!(meta && meta.flix); return _r; },   // in-browser chart a live track (opts forwards practice/boss). build193 (FLOW-4): play() resets _rrProvFlix synchronously, then a flix launch marks it
+    // build193 (FLOW-4): restartGame (results PLAY AGAIN / pause RESTART) relaunches the SAME provider without going back
+    // through catalog.js, so catalog-owned run dressing (the AI Flix film backdrop) was lost. cb({ flix }) fires right after
+    // the relaunch (loading screen already up). Persistent listeners — register once.
+    onRestart: (cb) => { if (typeof cb === 'function') _rrRestartCbs.push(cb); },
     // PRACTICE launcher: chart a live track in-browser and drill a SECTION at a SPEED. section = {start,end} in
     // song seconds (omit/null = full song); speed ∈ 0.5..1.5. Never scores (see play()→beginPlay()→endGame gates).
     playPractice: (url, meta, section, speed) => play(() => bufferedProvider(url, meta), { mode: 'practice', section: section || null, speed: (speed != null ? speed : 1) }),
@@ -10663,6 +10706,7 @@
     // resume the audio context SYNCHRONOUSLY inside the tap gesture — iOS will
     // have re-suspended it since the last touch, and resuming after the 3s
     // countdown (outside any gesture) is too late → silent track.
+    _rrAudioSessionPlayback();   // build193 (MOBILE-2): silent-switch-proof playback session
     try { getAC().resume(); } catch (e) {}
     if (_menuPlayHandler) _menuPlayHandler();
     else play(demoProvider);

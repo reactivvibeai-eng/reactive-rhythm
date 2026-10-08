@@ -1138,6 +1138,7 @@
     if (oppPresent) {
       if (dot) { dot.setAttribute('data-state', 'here'); dot.textContent = oppName.slice(0, 12); }
       oppLeft = false;
+      try { _rrPaintRematch(); } catch (e) {}   // build193 (REMATCH-AFTER-LEAVE): opponent is back → REMATCH again
       if (_oppGoneGraceT) _unmarkOppGone();   // MP FIX #21: restore the LIVE deck label if a pending grace had flipped it to LEFT
       _clearOppGoneGrace();   // MP FIX #21: the opp re-heartbeated (recovered blip / rebuilt read-side converged) — cancel any pending forfeit-grace
       _clearPreOppGone();     // build191 (TRANSPORT-4): the opp re-appeared after a setup-phase rebuild — cancel the pre-match grace
@@ -1156,7 +1157,7 @@
       // left". The ready-req sent on the re-SUBSCRIBED makes the peer re-beat + re-send its READY; a real leave still
       // surfaces when the grace expires (_armPreOppGone re-checks oppPresent then).
       else if (_matchRebuildAt && Date.now() - _matchRebuildAt < 20000) { _armPreOppGone(); if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'RECONNECTING…'; } }
-      else { oppLeft = true; oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); }   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
+      else { oppLeft = true; oppReady = false; _stopBothReadyWd(); banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.'); try { _rrPaintRematch(); } catch (e) {} }   // build193 (REMATCH-AFTER-LEAVE): + repaint the winner card's REMATCH   // review-fix (teardown): the A6 both-ready watchdog was armed when both readied — the opponent leaving PRE-match must disarm it, or at T+14s it fires the misleading "COULDN'T SYNC THE START — tap READY again" card instead of the true "opponent left" state
     } else { if (dot) { dot.setAttribute('data-state', 'waiting'); dot.textContent = 'WAITING…'; } paintWaitStatus('Waiting for your opponent to join…', false, true); }   // FIX 2.4: escalate the opponent-join wait (elapsed count + 20s/60s copy)
     refreshReadyEnabled();
   }
@@ -2845,6 +2846,7 @@
       _preOppGoneT = 0;
       if (!matchCh || matchLive || oppPresent) return;   // torn down / started / the opp came back
       oppLeft = true; oppReady = false; _stopBothReadyWd();
+      try { _rrPaintRematch(); } catch (e) {}   // build193 (REMATCH-AFTER-LEAVE)
       var dot = $('mpx-dot-opp'); if (dot) { dot.setAttribute('data-state', 'left'); dot.textContent = 'OPPONENT LEFT'; }
       banner('mpx-setup-msg', 'Opponent left. Back to lobby to find another.'); paintWaitStatus('Your opponent left — back out to find another.');
       try { refreshReadyEnabled(); } catch (e) {}
@@ -3109,6 +3111,7 @@
     }
     var _rematchBtn = $('mpx-rematch');
     if (_rematchBtn) _rematchBtn.classList.toggle('encore-armed', !spectating && _nearMiss && !_reduceMo());
+    try { _rrPaintRematch(); } catch (e) {}   // build193 (REMATCH-AFTER-LEAVE): opponent gone → FIND A NEW MATCH
     // build109 s1: WINNER DOPAMINE — reuse the existing solo results celebration (confetti/firework via
     // fxUi + a screen punch), never rebuilt. Losses/draws keep the flat treatment on purpose (asymmetry
     // is the design — a visibly bigger win reads correctly against loss aversion). fireCelebrationOn is
@@ -3233,6 +3236,32 @@
     screen.classList.add('active'); activeNow = true;
   }
 
+  // build193 (REMATCH-AFTER-LEAVE): on the winner card REMATCH stayed a live crimson hero after the opponent left / the
+  // host closed the room — clicking it dropped you on a setup step waiting forever for nobody. Evidence of "no opponent":
+  // not a spectator, not a CPU match, and either no match channel at all or the opponent's leave is latched (oppLeft,
+  // absent from presence) AND they are not re-seated in this room's live presence (that case still converts through
+  // _roomRematchFallback). Then the button reads FIND A NEW MATCH and goes back to the lobby; it flips back to REMATCH
+  // the moment presence brings them back (onMatchPeers repaints).
+  function _rrNoOpponent() {
+    if (spectating) return false;
+    if (oppMeta && oppMeta.bot) return false;
+    if (oppPresent) return false;
+    if (matchCh && !oppLeft) return false;
+    try {
+      if (room.id && room.ch && !room.show && room.members) {
+        for (var _id in room.members) { var _m = room.members[_id]; if (_id !== ME.id && _m && _m.seat !== 'spec') return false; }
+      }
+    } catch (e) {}
+    return true;
+  }
+  function _rrPaintRematch() {
+    var rb = $('mpx-rematch'); if (!rb) return;
+    var gone = _rrNoOpponent();
+    if (gone) rb.classList.remove('encore-armed');
+    var lab = gone ? 'FIND A NEW MATCH' : 'REMATCH';
+    if (rb.textContent !== lab) rb.textContent = lab;
+    rb.setAttribute('data-noopp', gone ? '1' : '0');
+  }
   function resetForRematch() {
     _stopReadyRebc();   // v416 (symmetric-ready): drop any lingering room-stage ready re-broadcast before the fresh round
     _stopMatchReadyRebc(); _stopStartRebc(); _fromRoomArm = false;   // MP-reliability FIX #2/#3: a rematch is a fresh handshake — clear the prior round's handoff re-emit timers/arm
@@ -7080,7 +7109,7 @@
   function rollTrack() {
     if (!tour.isHost || tour.state !== 'open') return;
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
-    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)); });
+    if (RC && RC.trackReady) all = all.filter(function (t) { return RC.trackReady(t) && !(RC.isVideo && RC.isVideo(t)) && !(RC.trackFailed && RC.trackFailed(t)); });   // build193 (DATA-3): + skip tracks that failed to load this session
     var sel = null;
     if (all.length) {
       var t = all[Math.floor(Math.random() * all.length)];
@@ -7319,7 +7348,7 @@
     var RC = window.RhythmCatalog, all = (RC && RC.allTracks) ? RC.allTracks() : [];
     // build100q (#174): require DECODABLE audio (trackAudioUrl skips HLS), not just trackReady — else a random round-N
     // pick could land on an .m3u8-only track that can't chart in-browser → the round never starts → watchdog aborts.
-    if (RC) all = all.filter(function (t) { return (!RC.trackReady || RC.trackReady(t)) && !(RC.isVideo && RC.isVideo(t)) && (!RC.trackAudioUrl || !!RC.trackAudioUrl(t)); });
+    if (RC) all = all.filter(function (t) { return (!RC.trackReady || RC.trackReady(t)) && !(RC.isVideo && RC.isVideo(t)) && (!RC.trackAudioUrl || !!RC.trackAudioUrl(t)) && !(RC.trackFailed && RC.trackFailed(t)); });   // build193 (DATA-3): + skip this session's failed tracks
     if (!all.length) return tour.sel;
     var t = all[Math.floor(Math.random() * all.length)];
     return { trackId: t.id, title: t.title, artist: t.artist_credit_name || t.artist_name, art: t.artwork_url, difficulty: (tour.sel && tour.sel.difficulty) || 'medium', demo: (t.id === 'demo') };
@@ -8608,6 +8637,9 @@
   // the winner screen). resetForRematch keeps matchCh intact (it never tears down / replaces the match channel), so the
   // post-reset _critSend targets the live channel; _lastRematchMid is (re)asserted last since reset nulls it.
   wire('mpx-rematch', 'click', function () { if (_roomRematchFallback('rematch')) return;   // build191 (product_bugs[2]): opponent is back in the ROOM but not on the old match channel → room-stage handshake (fresh mid), never the dead-channel deadlock
+    // build193 (REMATCH-AFTER-LEAVE): nobody left to rematch (opponent gone / room closed) → this is FIND A NEW MATCH:
+    // back to the lobby (self-cleans the finished match) instead of a setup step that waits forever. Re-checked at click time.
+    if (_rrNoOpponent()) { try { _rrPaintRematch(); } catch (e) {} backToLobby(); return; }
     var _rmid = newMatchId(); resetForRematch(); if (matchCh) _critSend('match', 'rematch', { mid: _rmid }, 'rematch'); _lastRematchMid = _rmid; });
   wire('mpx-ready', 'click', toggleReady);
   wire('mpx-room-combat-toggle', 'click', toggleRoomCombat);   // FIX 3b (P0): host flips room.combat live
@@ -8836,6 +8868,18 @@
     else if (stepName === 'setup') { var rb = $('mpx-ready'); if (rb && !rb.disabled) { e.preventDefault(); toggleReady(); } }
     else if (stepName === 'winner') { var rm = $('mpx-rematch'); if (rm) { e.preventDefault(); rm.click(); } }
   });
+  // build193 (NEW-2): after MY song ends I sit on the engine's #results while the rival finishes (MATCH-3 can hold that
+  // up to song length + 30s) and through the 950ms verdict hold. PLAY AGAIN / Enter / the near-goal Retry there ran
+  // restartGame → a replay of the MP chart that kept playing + judging UNDER the winner card, later popped its own
+  // results over the lobby, and a further replay got an already-judged (empty) highway. Swallow those clicks in the
+  // CAPTURE phase (game.js's Enter path is $('results-replay').click(), so it lands here too) until the verdict is up.
+  document.addEventListener('click', function (e) {
+    if (spectating || !finishedLocal || !(matchLive || _settlePaceT)) return;
+    var t = e.target && e.target.closest ? e.target.closest('#results-replay, #rr-neargoal-retry') : null;
+    if (!t) return;
+    e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    try { if (t.id === 'results-replay') { t.textContent = 'WAITING FOR OPPONENT…'; t.classList.remove('encore-armed'); } } catch (err) {}   // endGame re-labels it on the next run
+  }, true);
 
   // The hub's #mp-back / Esc already route to RhythmHub.show(). During a LIVE match the
   // active screen is #game (engine), so they can't fire mid-song. We additionally guard

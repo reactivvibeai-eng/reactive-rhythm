@@ -2424,6 +2424,10 @@
      #game.active (gameplay) / #start.active (title) still show their backdrop normally. */
   #game:not(.active) #bg-video, #game:not(.active) #bg-video-fill { display: none !important; }
   #start:not(.active) #start-video { display: none !important; }
+  /* build193 (MOBILE-5): the hub + library backdrops sit in opacity-hidden screens, so the P-04 observer (offsetParent /
+     display check) never saw them hidden — both kept decoding menu-loop.mp4 through every song on top of #bg-video.
+     display:none on the inactive screen lets that observer pause them (it already watches .screen class flips). */
+  #menu-hub:not(.active) #menu-hub-video, #menu:not(.active) #menu-bg-video { display: none !important; }
   /* Leave #menu's base .screen positioning UNTOUCHED (position:absolute; inset:0; z-index:auto).
      The engine moon is killed by the :has rule above (display:none) — NOT by stacking — so #menu needs
      NO z-index. A z-index here makes #menu a stacking context that lifts its whole INACTIVE subtree
@@ -2432,6 +2436,18 @@
      title/tap area hits #start (not the library). Do NOT add position:relative either (collapses the
      screen to content height — breaks the coverflow). */
   #menu { background: #0a0706; }
+  /* build193 (DATA-2 tail): honest "these are samples" strip while the live library is unreachable (catalog.js paints it
+     inside #menu; hidden the moment a live crawl lands). Bottom-centre, under the song sheet (z-150) and the lib-bar. */
+  #rr-lib-offline { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%);
+    z-index: 40; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 32px); box-sizing: border-box;
+    padding: 7px 8px 7px 14px; border-radius: 999px; background: rgba(14,8,8,0.92); border: 1px solid rgba(255,31,46,0.45);
+    color: #dad7d2; font: 600 12px/1.3 'Chakra Petch', sans-serif; letter-spacing: 0.02em; box-shadow: 0 8px 24px -10px rgba(0,0,0,0.8); }
+  #rr-lib-offline[hidden] { display: none; }
+  #rr-lib-offline .rr-lo-t { min-width: 0; }
+  #rr-lib-offline .rr-lo-btn { flex: 0 0 auto; min-height: 32px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+    background: rgba(255,31,46,0.16); border: 1px solid rgba(255,31,46,0.6); color: #dad7d2;
+    font: 700 11px 'Oxanium', sans-serif; letter-spacing: 0.14em; }
+  #rr-lib-offline .rr-lo-btn:hover, #rr-lib-offline .rr-lo-btn:focus-visible { border-color: #ff1f2e; outline: none; box-shadow: 0 0 12px rgba(255,31,46,0.35); }
   /* full-bleed feathered video backdrop for the library — mirrors the proven #menu-hub-video recipe
      (object-fit:cover, opacity, warm filter, perf/novideo-gated, self-heal onerror). Centered cover so
      it never reads as a top-anchored banner; background:#0a0706 so any non-painting state = dark room. */
@@ -2580,6 +2596,11 @@
     #game:not(.vs-mode) #mult-gauge .gauge-lab { font-size: 10px; letter-spacing: 0.26em; }
     /* boosted (x3+/overdrive) — bigger + hotter; crimson→chrome, no gold here */
     #game:not(.vs-mode) #mult-gauge.boosted .gauge-badge { transform: scale(1.12); box-shadow: 0 0 30px rgba(255,80,50,0.7); }
+    /* build193 (MOBILE-3): touch devices wider than 900px (iPad landscape, Pro Max/Ultra landscape, touch laptops) had NO
+       on-screen Overdrive trigger — the flame lives in .gauge.od, display:none above 900px — while the canvas cue said
+       "TAP THE FLAME". Re-show it for touch, mirroring the multiplier gauge. It sits inside .game-center (the playfield
+       column), so right:28px never lands under the desktop right HUD rail. vs-mode touch OD → polish list. */
+    body.has-touch #game:not(.vs-mode) #od-gauge { display: flex; }
   }
 
   /* HUD Overdrive readout — segmented + combo-driven + a categorical READY state (research-backed clarity) */
@@ -4874,6 +4895,20 @@
   /* build53: keep BACK anchored top-left (its base absolute placement; z-70 already clears the z-0 key art).
      The old `.hub-back` override to position:relative dropped it into the centered flex flow → floated it mid-left. */
   .multiplayer-screen .mp-card { position: relative; z-index: 1; }
+  /* build193 (UI-6): on phones the lobby/room card is taller than the screen, and the absolutely-positioned BACK
+     scrolled away with it (no visible exit without scrolling back up). position:fixed is captured by the screen's
+     backdrop-filter (it becomes the containing block → still scrolls), and sticky as a FLEX ITEM would take a column
+     in the row and squeeze the card. So on ≤600px the screen lays out as a plain BLOCK (the card is already
+     `margin: 0 auto` + width min(640px,94vw) → still centered) and BACK becomes a block-level STICKY bar child pinned
+     at the same top/left it had before. margin-bottom ≈ −(button height 35px) pulls the card back up underneath it,
+     so at scrollTop 0 everything sits exactly where it did (button rect top 16 / left 16; card rect top 14), and on
+     scroll the button rect top stays at 16 while the card's goes 14 − scrollTop. z-70 keeps it over the z-1 card.
+     Desktop (>600px) is untouched. */
+  @media (max-width: 600px) {
+    .multiplayer-screen { display: block; }
+    .multiplayer-screen > #mp-back { position: -webkit-sticky; position: sticky; top: max(calc(env(safe-area-inset-top, 0px) + 12px), 16px);
+      left: auto; display: flex; width: max-content; margin: 0 0 -35px 16px; }
+  }
   .mp-card { width: min(640px, 94vw); display: flex; flex-direction: column; align-items: center;
     gap: var(--mx4, 16px); padding: 32px 24px 26px; text-align: center; border-radius: 24px;
     background: linear-gradient(180deg, rgba(28,15,16,0.80), rgba(11,7,8,0.90));
@@ -9646,7 +9681,10 @@
     var lv = flatList.filter(function (x) { return x.tier === tierD; });
     for (var i = 0; i < lv.length; i++) {
       var x = lv[i];
-      if (x.unlock && x.unlock.entitlement && !DEV && !ownsEntitlement(x.unlock.entitlement)) continue;
+      // build193 (META-1): a PAID level only ever counts TOWARD clearing a tier, never blocks it — the old
+      // `!ownsEntitlement` skip flipped on purchase, so buying e.g. Noise Complaint (0★) re-locked the whole
+      // Fracture tier the player had already earned. Owned-and-starred paid levels still satisfy the check below.
+      if (x.unlock && x.unlock.entitlement && !DEV && starsForLevel(x, levelTrack(x, ready)) < 1) continue;
       if (starsForLevel(x, levelTrack(x, ready)) < 1) return false;
     }
     return true;
@@ -9663,14 +9701,17 @@
     var pos = tierLevels.indexOf(L);
     if (pos > 0) {
       var j = pos - 1;
+      var need = (L.unlock && typeof L.unlock.stars === 'number') ? L.unlock.stars : 1;
       while (j >= 0) {
         var pj = tierLevels[j];
-        if (pj && pj.unlock && pj.unlock.entitlement && !DEV && !ownsEntitlement(pj.unlock.entitlement)) { j--; continue; }
+        // build193 (META-1): skip a paid predecessor unless it is OWNED *and* already meets `need` — buying it must not
+        // re-lock a level the player already opened via the nearest free predecessor (the old unowned-only skip flipped
+        // on purchase). Not "always skip paid": an owner who earned `need` on the paid level keeps that route open.
+        if (pj && pj.unlock && pj.unlock.entitlement && !DEV && (!ownsEntitlement(pj.unlock.entitlement) || starsForLevel(pj, levelTrack(pj, ready)) < need)) { j--; continue; }
         break;
       }
       if (j >= 0) {
         var prev = tierLevels[j];
-        var need = (L.unlock && typeof L.unlock.stars === 'number') ? L.unlock.stars : 1;
         if (starsForLevel(prev, levelTrack(prev, ready)) < need) return false;
       }
     }
@@ -12797,12 +12838,33 @@
   var $ = function (id) { return document.getElementById(id); };
   var hub = $('menu-hub'), menu = $('menu'), mp = $('multiplayer-screen');
   if (!hub) return;
+  // build193 (FLOW-5): the Daily Rift forces HARD (setDifficulty persists rr_diff). The pre-rift tier used to live only
+  // in window.__rrRiftPrevDiff and was restored only by showHub / a synchronous launch failure — RETURN TO MENU, pause
+  // EXIT, loading CANCEL and an async launch failure all land in the LIBRARY (#menu) and skipped it, and a reload lost
+  // the stash while rr_diff stayed 'hard'. Now the stash is also persisted, and it is restored on: showHub, the !ok
+  // branch, #menu becoming active (every one of those exit paths), and page boot (a reload means the rift run is over).
+  // PLAY AGAIN never activates #menu or the hub, so a rift replay still stays on Hard.
+  function _rrRestoreRiftDiff() {
+    try {
+      var p = window.__rrRiftPrevDiff || null;
+      if (!p) { try { p = localStorage.getItem('rr_rift_prev_diff'); } catch (e) {} }
+      if (p && window.RhythmGame && window.RhythmGame.setDifficulty) window.RhythmGame.setDifficulty(p);
+    } catch (e) {}
+    window.__rrRiftPrevDiff = null;
+    try { localStorage.removeItem('rr_rift_prev_diff'); } catch (e) {}
+  }
+  try { _rrRestoreRiftDiff(); } catch (e) {}   // boot: a stash that survived a reload belongs to a run that is over
+  try {
+    if (menu) new MutationObserver(function () {
+      try { if (menu.classList.contains('active') && (window.__rrRiftPrevDiff || localStorage.getItem('rr_rift_prev_diff'))) _rrRestoreRiftDiff(); } catch (e) {}
+    }).observe(menu, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
   function showHub() {
     try { ['start', 'menu', 'multiplayer-screen'].forEach(function (id) { var el = $(id); if (el) el.classList.remove('active'); }); } catch (e) {}
     hub.classList.add('active');
     // build184b: the Daily Rift forces HARD for its run — returning to the hub restores the player's saved
     // difficulty (setDifficulty persists to rr_diff, so without this one rift tap flipped them to Hard forever).
-    try { if (window.__rrRiftPrevDiff) { window.RhythmGame.setDifficulty(window.__rrRiftPrevDiff); window.__rrRiftPrevDiff = null; } } catch (e) {}
+    _rrRestoreRiftDiff();   // build193 (FLOW-5): shared restore (window stash OR the persisted one)
     try { window.RhythmGoals && window.RhythmGoals.checkRollover(); } catch (e) {}  // build112 p1: belt-and-suspenders rollover before any hub reader of RG.state()
     try { paintHubStatus(); } catch (e) {}   // build99L: slim "me" strip + Campaign CONTINUE chip (render-only; never throws)
     try { paintReclaimThread(); } catch (e) {}   // D1 (HUB_IA_v1 §3.6): quiet one-line reclaim thread on the status strip
@@ -13025,14 +13087,17 @@
       // PLAY AGAIN on results correctly KEEPS Hard (replaying the rift never passes through the hub).
       var _prevDiff = null; try { _prevDiff = localStorage.getItem('rr_diff') || 'medium'; } catch (e) {}
       try { window.RhythmGame.setDifficulty && window.RhythmGame.setDifficulty('hard'); } catch (e) {}
-      if (_prevDiff && _prevDiff !== 'hard') window.__rrRiftPrevDiff = _prevDiff;
+      if (_prevDiff && _prevDiff !== 'hard') {
+        window.__rrRiftPrevDiff = _prevDiff;
+        try { localStorage.setItem('rr_rift_prev_diff', _prevDiff); } catch (e) {}   // build193 (FLOW-5): survives a reload
+      }
       // arm the ×3 flag — triple only on the day's FIRST clear; recordLocal consumes the flag + stamps done.
       try { RC.setDailyRift && RC.setDailyRift(true, !state.done); } catch (e) {}
       hub.classList.remove('active');
       try { window.RhythmGame.showToast && window.RhythmGame.showToast(state.done ? 'Daily Rift — replay (×3 already claimed today)' : 'Daily Rift — HARDCORE · ×3 Bonus Sparks', state.done ? 'neutral' : 'success'); } catch (e) {}
       var ok = false;
       try { ok = !!(RC.launchTrack && RC.launchTrack(t, {})); } catch (e) {}
-      if (!ok) { try { RC.setDailyRift && RC.setDailyRift(false, false); } catch (e) {} try { if (window.__rrRiftPrevDiff) { window.RhythmGame.setDifficulty(window.__rrRiftPrevDiff); window.__rrRiftPrevDiff = null; } } catch (e4) {} try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start today’s rift', 'error'); } catch (e2) {} try { hub.classList.add('active'); } catch (e3) {} }   // build184: the hub was hidden BEFORE launch — a failed launch must re-raise it, not strand the player on a bare backdrop; build184b: + restore the pre-rift difficulty right away
+      if (!ok) { try { RC.setDailyRift && RC.setDailyRift(false, false); } catch (e) {} try { _rrRestoreRiftDiff(); } catch (e4) {} try { window.RhythmGame.showToast && window.RhythmGame.showToast('Couldn’t start today’s rift', 'error'); } catch (e2) {} try { hub.classList.add('active'); } catch (e3) {} }   // build184: the hub was hidden BEFORE launch — a failed launch must re-raise it, not strand the player on a bare backdrop; build184b: + restore the pre-rift difficulty right away
     }
     tile.addEventListener('click', launchDailyRift);
   })();
@@ -13419,6 +13484,10 @@
       // build191 (REVIEW-ESC): an open bracket keeps the OLD non-destructive Esc (hub only; syncActive keeps it alive) —
       // #mp-back would dissolve it for everyone (host) or forfeit (entrant) on one keypress.
       try { if (window.RhythmMP && window.RhythmMP.inTour && window.RhythmMP.inTour()) { showHub(); return; } } catch (err) {}
+      // build193 (NEW-1): during the 1v1 3·2·1 lead-in (matchLive, MP screen still up) Esc is a pause reflex — routing it
+      // to #mp-back closed the room + forfeited with no confirm. Ignore it while live; the explicit BACK button still works.
+      // isLive() is false on the WINNER/SETUP steps, so UI-2's Esc-teardown there is unchanged.
+      try { if (window.RhythmMP && window.RhythmMP.isLive && window.RhythmMP.isLive()) return; } catch (err) {}
       var _mpb = $('mp-back');
       if (_mpb && !_mpb.disabled) { _mpb.click(); return; }
       showHub(); return;

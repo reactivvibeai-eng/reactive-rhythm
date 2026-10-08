@@ -412,7 +412,15 @@
       if (ae && /^(input|textarea|select)$/i.test(ae.tagName)) return;
       if (e.key === 'ArrowLeft') { goTo(Math.round(pos) - 1); }
       else if (e.key === 'ArrowRight') { goTo(Math.round(pos) + 1); }
-      else if (e.key === 'Enter') { const t = jbList[Math.round(pos)]; if (t) RC().openSheet(t); }
+      else if (e.key === 'Enter') {
+        // build193 (FLOW-1): an OPEN sheet owns Enter (game.js plays it) — never re-open a sheet underneath a launch.
+        try { const _sh = $('song-sheet'); if (_sh && _sh.classList.contains('open')) return; } catch (e2) {}
+        // A KEYBOARD-focused button (Tab ring: tabs, header icons, Back…) keeps its native Enter activation; a mouse-
+        // focused one (no :focus-visible) still means "open the centered cover", so suppress its stray re-click.
+        const _bt = ae && ae.closest ? ae.closest('button, a, [role="button"]') : null;
+        if (_bt) { let _kb = true; try { _kb = _bt.matches(':focus-visible'); } catch (e3) {} if (_kb) return; e.preventDefault(); }
+        const t = jbList[Math.round(pos)]; if (t) RC().openSheet(t);
+      }
     });
   }
 

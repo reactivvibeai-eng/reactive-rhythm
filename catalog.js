@@ -1039,10 +1039,12 @@
         // so the Daily/Weekly Rift tiles + status strip strand on "Loading…" until the hub is manually re-entered.
         // Emit a completion signal so a hub listener (in index.html — we ONLY emit here) can repaint. One per crawl.
         try { window.dispatchEvent(new CustomEvent('rr:catalog-ready')); } catch (e2) {}
+        _rrPaintLibOffline(null);   // build193 (DATA-2 tail): live library is in → drop the "samples" strip
         return;
       } else if (!crawlErrored) {
         // build72: a 200-but-EMPTY library would silently fall through to the 1000 mock songs with no signal — mirror the catch-branch toast so the player knows these are samples (the refresh icon retries)
         try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast('Library is empty right now — showing samples', 'error'); } catch (e2) {}
+        _rrPaintLibOffline('The live library is empty right now — these are sample songs.');   // build193 (DATA-2 tail)
       } else if (catalogLive && catalogTracks.length) {
         // build191 (DATA-2): a failed REFRESH must never replace an already-loaded REAL library with 1000 fake songs
         // (they all play the demo, book bests under fake ids, and MP pickers offer ids no peer can resolve). Keep it.
@@ -1054,6 +1056,7 @@
         // build191 (DATA-2): + it now retries on its own (see _armCatalogAutoRetry) — say so.
         try { if (window.RhythmGame && window.RhythmGame.showToast) window.RhythmGame.showToast("Couldn't reach the library — showing samples. Retrying…", 'error'); } catch (e2) {}
         _armCatalogAutoRetry();
+        _rrPaintLibOffline('Couldn’t load the live library — retrying. These are sample songs.');   // build193 (DATA-2 tail): persistent + honest
       }
     }
     catalogLive = false;
@@ -1092,6 +1095,27 @@
     };
     if (!_catRetryOnline) { _catRetryOnline = true; try { window.addEventListener('online', function () { if (!catalogLive) run(); }); } catch (e) {} }
     if (_catRetryN < 3) { _catRetryT = setTimeout(run, [20000, 60000, 120000][_catRetryN]); _catRetryN++; }
+  }
+  // build193 (DATA-2 tail): the samples fallback was announced by ONE transient toast, then the 1000 mock songs sat in the
+  // library looking like the real catalog. Keep a small, honest, persistent strip in the LIBRARY (#menu) while the
+  // fallback is showing — with a RETRY tap — and remove it the moment a live crawl lands. ?mock=1 never paints it
+  // (loadCatalog skips the API branch there, and only the API branch calls this).
+  function _rrPaintLibOffline(msg) {
+    try {
+      var el = document.getElementById('rr-lib-offline');
+      if (!msg) { if (el) el.hidden = true; return; }
+      var host = document.getElementById('menu'); if (!host) return;
+      if (!el) {
+        el = document.createElement('div'); el.id = 'rr-lib-offline'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+        var t = document.createElement('span'); t.className = 'rr-lo-t'; el.appendChild(t);
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'rr-lo-btn'; b.textContent = 'RETRY';
+        b.addEventListener('click', function () { try { Promise.resolve(reloadCatalog()).catch(function () {}); } catch (e) {} });
+        el.appendChild(b);
+        host.appendChild(el);
+      }
+      el.querySelector('.rr-lo-t').textContent = msg;
+      el.hidden = false;
+    } catch (e) {}
   }
 
   // ---------- track readiness (no dead songs) ----------
@@ -1436,6 +1460,23 @@
     try { var t = spotlightTrack(); return !!(t && String(t.id) === String(trackId)); } catch (e) { return false; }
   }
 
+  // build193 (DATA-3): tracks whose fetch/decode FAILED this session (in-memory only — a reload, or a fixed backend
+  // rendition, gets a fresh chance). Keyed by track id AND audio url (the engine reports both when it knows them).
+  // ONLY random pickers consult it (Surprise rail below, MP tour rollers via trackFailed) — never trackReady, never the
+  // Daily Rift / Spotlight / dailyPicks pools, whose picks must stay identical across players.
+  const _rrFailedTracks = new Set();
+  function trackFailed(t) {
+    if (!t || !_rrFailedTracks.size) return false;
+    if (t.id != null && _rrFailedTracks.has('id:' + String(t.id))) return true;
+    let u = null; try { u = trackAudioUrl(t); } catch (e) {}
+    return !!(u && _rrFailedTracks.has('url:' + u));
+  }
+  function markTrackFailed(id, url) {
+    if (id != null && id !== 'demo') _rrFailedTracks.add('id:' + String(id));
+    if (url) _rrFailedTracks.add('url:' + String(url));
+  }
+  try { window.addEventListener('rr:track-failed', function (e) { try { const d = (e && e.detail) || {}; markTrackFailed(d.id, d.url); } catch (e2) {} }); } catch (e) {}
+
   // ---------- catalog query helpers (consumed by the library UI) --------------
   function allTracks() { return catalogTracks; }
   function allMedia() { return catalogTracks.concat(catalogVideos); }   // music + videos, for cross-search (Phase 5)
@@ -1469,9 +1510,17 @@
     return a;
   }
   let _sectionsCache = null;   // build58: sections() recomputed 4 full sorts + a reshuffle on EVERY coverflow tab tap. Memoize per
+  let _rrSurpriseView = null;  // build193 (DATA-3): { base, n, out } — the Surprise rail minus this session's failed tracks
   function sections() {        // catalog version (invalidated in loadCatalog) so tabbing is free and Surprise stays STABLE (no re-roll on tab-back).
-    if (_sectionsCache) return _sectionsCache;
-    return (_sectionsCache = _computeSections());
+    if (!_sectionsCache) _sectionsCache = _computeSections();
+    // build193 (DATA-3): drop session-failed tracks from the random Surprise rail WITHOUT re-rolling it (filter the
+    // memoized order; re-memoize per failure count so tab-backs stay identity-stable). Other rails are curated, not random.
+    if (!_rrFailedTracks.size) return _sectionsCache;
+    if (!_rrSurpriseView || _rrSurpriseView.base !== _sectionsCache || _rrSurpriseView.n !== _rrFailedTracks.size) {
+      const _keep = _sectionsCache.surprise.filter(function (t) { return !trackFailed(t); });
+      _rrSurpriseView = { base: _sectionsCache, n: _rrFailedTracks.size, out: Object.assign({}, _sectionsCache, { surprise: _keep.length ? _keep : _sectionsCache.surprise }) };
+    }
+    return _rrSurpriseView.out;
   }
   function _computeSections() {
     // ready tracks lead every rail so the jukebox always opens on something playable. Only lightly float
@@ -1610,9 +1659,11 @@
   // SONG SHEET
   // ===========================================================================
   const sheet = $('song-sheet');
+  let _rrSheetTrack = null;   // build193 (FLOW-2): set by openSheet; read by launchPractice (_rr prefix: site-patch collision law)
 
   function openSheet(track) {
     const artEl = $('sheet-art');
+    _rrSheetTrack = track;   // build193 (FLOW-2): the track whose sheet is OPEN — launchPractice drills THIS, not the last-played currentTrack
     if (track.artwork_url) {
       artEl.innerHTML = '<img src="' + escapeHtml(track.artwork_url) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:14px;" onerror="this.parentNode.textContent=\'♪\'" />';
     } else {
@@ -1657,6 +1708,7 @@
         const _flixFn = () => { playFlix(track); };
         _flixFn._preview = true;   // bypass the env-picker wrapper \u2014 the flix manages its OWN #bg-video backdrop
         window.RhythmGame.setMenuPlayHandler(_flixFn);
+        setupPracticePanel(track, true);   // build193 (FLOW-2): a film sheet never shows the previous music sheet's Practice button
         sheet.classList.add('open');
         return;
       }
@@ -1674,6 +1726,7 @@
         const _watchFn = () => { closeSheet(); openWatch(track, wsrc); };
         _watchFn._preview = true;
         window.RhythmGame.setMenuPlayHandler(_watchFn);
+        setupPracticePanel(track, true);   // build193 (FLOW-2): watch-only film → no Practice button
         sheet.classList.add('open');
         return;
       }
@@ -1851,7 +1904,9 @@
   }
   let _ppDur = 0;
   function launchPractice() {
-    const track = currentTrack;
+    // build193 (FLOW-2): practise the song whose sheet is OPEN (was the stale last-played currentTrack — wrong song, or
+    // "can't be practiced" on a fresh session). currentTrack stays the fallback for any caller outside the sheet.
+    const track = _rrSheetTrack || currentTrack;
     if (!track || !isLaunchable(track)) { window.RhythmGame && window.RhythmGame.showToast && window.RhythmGame.showToast('This track can’t be practiced', 'error'); return; }
     const startEl = document.getElementById('pp-start');
     const endEl = document.getElementById('pp-end');
@@ -2013,6 +2068,7 @@
       return;
     }
     closeSheet(); stopPreview(); currentTrack = track;
+    _rrLastFlix = track;   // build193 (FLOW-4): remembered so a PLAY AGAIN / RESTART of this film re-arms its backdrop
     // build99e (owner): a flix uses the player's EQUIPPED guitar — the clean default crimson for anyone who hasn't
     // equipped a skin (so the music video reads), and their own skin if they chose one. Drop any leftover per-level
     // skin/environment first so a film can never inherit a campaign level's guitar. (clearEnvironment sets
@@ -2102,6 +2158,25 @@
     if (bv) { try { bv.pause(); } catch (e) {} try { if (_flixPrevSrc && _flixPrevSrc.indexOf('blob:') !== 0) bv.setAttribute('src', _flixPrevSrc); else bv.removeAttribute('src'); bv.load(); } catch (e) {} }
     const g = document.getElementById('game'); if (g) g.classList.remove('flix-mode');
   }
+
+  // build193 (FLOW-4): results PLAY AGAIN + pause RESTART relaunch via game.js restartGame() (stopGame+beginPlay), never
+  // through playFlix — so the film backdrop (already torn down by onSongEnd, or about to be by the watcher's
+  // was-active→inactive rule) was never re-armed and the replay ran over the default backdrop. game.js tells us the
+  // relaunched provider is a flix run; re-arm the same film. A live watcher is stopped FIRST so _flixPrevSrc captures
+  // the real level backdrop (not the film's own src) for the eventual restore. (Kept clear of the site-patch anchors.)
+  let _rrLastFlix = null;
+  try {
+    if (window.RhythmGame && window.RhythmGame.onRestart) window.RhythmGame.onRestart(function (info) {
+      try {
+        if (!info || !info.flix || !_rrLastFlix || currentTrack !== _rrLastFlix) return;
+        const _vu = videoWatchUrl(_rrLastFlix) || trackAudioUrl(_rrLastFlix);
+        if (!_vu) return;
+        if (_flixActive) _stopFlixBackdrop();
+        _startFlixBackdrop(_vu);
+        try { window.RhythmGame.onSongEnd && window.RhythmGame.onSongEnd(function () { _stopFlixBackdrop(); }); } catch (e) {}
+      } catch (e) {}
+    });
+  } catch (e) {}
 
   // launch a track directly at the engine's current difficulty (used by the Levels picker — no sheet)
   function launchTrack(track, opts) {
@@ -3201,6 +3276,7 @@
     // readiness (no dead songs)
     trackReady, trackStatus, statusLabel, readyCount, reloadCatalog, trackAudioUrl,   // build100q: expose the HLS-skipping audio resolver so MP resolveAndStart never feeds an .m3u8 to the in-browser decoder (→ round never starts → watchdog aborts everyone to the room)
     totalCount: () => catalogTracks.length, rawCount,
+    trackFailed, markTrackFailed,   // build193 (DATA-3): session memory of dead tracks — random pickers skip them (never Daily Rift/Spotlight)
     // revenue attribution
     getPackId, logUse,
     showInvite,   // build102s (Phase-2 C1): live-show artist call-in — POST /show/invite (token stays module-local here)
